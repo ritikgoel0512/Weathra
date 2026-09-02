@@ -1,0 +1,78 @@
+{
+  "category": "analytics",
+  "notes": "Deterministic analytics. Every case here declares a reference *computation* rather than a number: the runner computes it over the same fixture data the answer came from, so re-recording a fixture cannot silently turn a wrong answer into a passing one.",
+  "cases": [
+    {
+      "case_id": "an-berlin-mean-temperature",
+      "category": "analytics",
+      "description": "The canonical case: a mean must come from analytics, never from the model's arithmetic.",
+      "question": "What is the average daily high temperature in Berlin over the next 7 days?",
+      "expected_tools": ["weather_forecast", "weather_statistics"],
+      "expected_agents": ["forecast", "analytics"],
+      "reference": {"statistic": "mean", "measure": "temperature_max", "tolerance": 1e-6}
+    },
+    {
+      "case_id": "an-berlin-maximum",
+      "category": "analytics",
+      "description": "An extreme, which must be an actual observed value rather than a rounded one.",
+      "question": "What is the highest temperature in Berlin over the next 7 days?",
+      "expected_tools": ["weather_forecast", "weather_statistics"],
+      "expected_agents": ["forecast", "analytics"],
+      "reference": {"statistic": "maximum", "measure": "temperature_max", "tolerance": 1e-6}
+    },
+    {
+      "case_id": "an-berlin-minimum",
+      "category": "analytics",
+      "description": "The other extreme, over the same window, so both ends are checked.",
+      "question": "What is the lowest daily high temperature in Berlin over the next 7 days?",
+      "expected_tools": ["weather_forecast", "weather_statistics"],
+      "expected_agents": ["forecast", "analytics"],
+      "reference": {"statistic": "minimum", "measure": "temperature_max", "tolerance": 1e-6}
+    },
+    {
+      "case_id": "an-berlin-range",
+      "category": "analytics",
+      "description": "A derived statistic: the range is the difference of two others and must agree with them.",
+      "question": "What is the temperature range in Berlin over the next 7 days?",
+      "expected_tools": ["weather_forecast", "weather_statistics"],
+      "expected_agents": ["forecast", "analytics"],
+      "reference": {"statistic": "range", "measure": "temperature_max", "tolerance": 1e-6}
+    },
+    {
+      "case_id": "an-historical-mean",
+      "category": "analytics",
+      "description": "A statistic over the archive rather than a forecast, labelled as a computed statistic.",
+      "question": "What was the average daily high temperature in Berlin between 1 June 2025 and 7 June 2025?",
+      "expected_tools": ["weather_history", "weather_statistics"],
+      "expected_agents": ["historical", "analytics"],
+      "forbidden_tools": ["weather_forecast"],
+      "reference": {"statistic": "mean", "measure": "temperature_max", "tolerance": 1e-6}
+    },
+    {
+      "case_id": "an-precipitation-total",
+      "category": "analytics",
+      "description": "A total, which must exclude and count absent days rather than treating them as zero.",
+      "question": "What is the total precipitation in Berlin over the next 7 days?",
+      "expected_tools": ["weather_forecast", "weather_statistics"],
+      "expected_agents": ["forecast", "analytics"],
+      "reference": {"statistic": "total", "measure": "precipitation_sum", "tolerance": 1e-6}
+    },
+    {
+      "case_id": "an-anomaly-detection",
+      "category": "analytics",
+      "description": "An anomaly question: a window with nothing standing out is a real answer, not a forced pick.",
+      "question": "Are there any unusual days in Berlin over the next 7 days?",
+      "expected_tools": ["weather_forecast", "weather_anomaly"],
+      "expected_agents": ["forecast", "analytics"]
+    },
+    {
+      "case_id": "an-uncomputable-statistic",
+      "category": "analytics",
+      "description": "A statistic Weathra does not compute is named as unattempted, and the rest still return.",
+      "question": "What is the kurtosis of Berlin's temperatures over the next 7 days?",
+      "expected_tools": ["weather_forecast"],
+      "expected_agents": ["forecast"],
+      "forbidden_answer_characteristics": ["the kurtosis is", "kurtosis of 0"]
+    }
+  ]
+}

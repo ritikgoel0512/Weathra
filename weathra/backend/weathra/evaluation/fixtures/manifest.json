@@ -1,0 +1,75 @@
+{
+  "recorded_from": "Open-Meteo (api.open-meteo.com, archive-api.open-meteo.com)",
+  "note": "Replayed by weathra/evaluation/fixtures.py through the real provider adapter, so offline evaluation exercises the whole normalization stack. Re-record with scripts/record_evaluation_fixtures.py when the dataset gains a place or window.",
+  "responses": [
+    {
+      "file": "forecast_berlin.json",
+      "kind": "forecast",
+      "place": "Berlin",
+      "latitude": 52.52,
+      "longitude": 13.41
+    },
+    {
+      "file": "archive_berlin_2025-05-01_2025-06-07.json",
+      "kind": "archive",
+      "place": "Berlin",
+      "latitude": 52.52,
+      "longitude": 13.41,
+      "start_date": "2025-05-01",
+      "end_date": "2025-06-07"
+    },
+    {
+      "file": "geocode_berlin.json",
+      "kind": "geocode",
+      "place": "Berlin",
+      "latitude": 52.52,
+      "longitude": 13.41
+    },
+    {
+      "file": "forecast_munich.json",
+      "kind": "forecast",
+      "place": "Munich",
+      "latitude": 48.14,
+      "longitude": 11.58
+    },
+    {
+      "file": "archive_munich_2025-05-01_2025-06-07.json",
+      "kind": "archive",
+      "place": "Munich",
+      "latitude": 48.14,
+      "longitude": 11.58,
+      "start_date": "2025-05-01",
+      "end_date": "2025-06-07"
+    },
+    {
+      "file": "geocode_munich.json",
+      "kind": "geocode",
+      "place": "Munich",
+      "latitude": 48.14,
+      "longitude": 11.58
+    },
+    {
+      "file": "forecast_lisbon.json",
+      "kind": "forecast",
+      "place": "Lisbon",
+      "latitude": 38.72,
+      "longitude": -9.14
+    },
+    {
+      "file": "archive_lisbon_2025-05-01_2025-06-07.json",
+      "kind": "archive",
+      "place": "Lisbon",
+      "latitude": 38.72,
+      "longitude": -9.14,
+      "start_date": "2025-05-01",
+      "end_date": "2025-06-07"
+    },
+    {
+      "file": "geocode_lisbon.json",
+      "kind": "geocode",
+      "place": "Lisbon",
+      "latitude": 38.72,
+      "longitude": -9.14
+    }
+  ]
+}

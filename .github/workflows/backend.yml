@@ -1,0 +1,116 @@
+name: backend
+
+on:
+  pull_request:
+    paths:
+      - "weathra/backend/**"
+      - ".github/workflows/backend.yml"
+  push:
+    branches: [main]
+    paths:
+      - "weathra/backend/**"
+      - ".github/workflows/backend.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: weathra/backend
+
+env:
+  # Enough to construct Settings. No real project, no real credential: the offline suite reaches
+  # neither Supabase nor an inference provider, which is the property task 1.5 and group 4 assert.
+  SUPABASE_URL: https://ci.supabase.co
+  PYTHONDONTWRITEBYTECODE: "1"
+
+jobs:
+  lint-and-test:
+    name: lint, type-check, and test
+    runs-on: ubuntu-latest
+
+    # Task 3.5: an ephemeral PostgreSQL with pgvector, so `db`-marked tests run in CI with no
+    # local database installed anywhere. The image ships the extension; the migration enables it.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: weathra_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Lint
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Type-check
+        run: mypy
+
+      - name: Test (offline)
+        run: pytest
+
+      - name: Migrate the ephemeral database
+        env:
+          WEATHRA_RUNTIME_MODE: privileged
+          DATABASE_URL_PRIVILEGED: postgresql://postgres:postgres@localhost:5432/weathra_test
+        run: alembic upgrade head
+
+      - name: Test (database-backed)
+        env:
+          WEATHRA_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/weathra_test
+        run: pytest -m db
+
+      - name: Verify the migrations downgrade cleanly
+        env:
+          WEATHRA_RUNTIME_MODE: privileged
+          DATABASE_URL_PRIVILEGED: postgresql://postgres:postgres@localhost:5432/weathra_test
+        run: |
+          alembic downgrade base
+          alembic upgrade head
+
+      # Group 22: the acceptance run, offline. It needs no inference credential and reaches no
+      # network — the weather is replayed from recorded Open-Meteo payloads and the tokens are
+      # minted locally — so it can gate every pull request rather than only a release.
+      #
+      # `weathra-evaluate` exits non-zero when a threshold is missed, which is what makes this a
+      # gate rather than a report. A missed threshold is reported and never adjusted.
+      - name: Evaluate (offline acceptance run)
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/weathra_test
+          DATABASE_URL_PRIVILEGED: postgresql://postgres:postgres@localhost:5432/weathra_test
+          MCP_TRANSPORT: in-process
+          EMBEDDING_MODEL_ID: weathra-hashing-v1
+        run: weathra-evaluate --output evaluation-run.json
+
+      # Kept whether the run passed or failed: a failing run's per-case evidence is what makes the
+      # failure diagnosable, and it is gone once the runner exits.
+      - name: Keep the evaluation run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-run
+          path: weathra/backend/evaluation-run.json
+          if-no-files-found: warn

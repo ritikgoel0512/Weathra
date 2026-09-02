@@ -1,0 +1,70 @@
+{
+  "category": "knowledge",
+  "notes": "Conceptual questions. Every case forbids every weather tool: a definition needs no forecast, and retrieving one would produce numbers nobody asked about. Each names the corpus documents that are actually relevant, so retrieval quality is scored against a declared expectation rather than against whatever came back.",
+  "cases": [
+    {
+      "case_id": "kn-dew-point",
+      "category": "knowledge",
+      "description": "The canonical concept question.",
+      "question": "What does dew point mean?",
+      "expected_agents": ["rag"],
+      "forbidden_tools": ["weather_forecast", "weather_history", "weather_statistics", "weather_anomaly", "weather_compare"],
+      "relevant_documents": ["dew-point"],
+      "expected_answer_characteristics": ["dew point"]
+    },
+    {
+      "case_id": "kn-precipitation-probability",
+      "category": "knowledge",
+      "description": "A concept people routinely misread, so the corpus document exists to correct it.",
+      "question": "What does a 40% chance of rain actually mean?",
+      "expected_agents": ["rag"],
+      "forbidden_tools": ["weather_forecast", "weather_history", "weather_statistics"],
+      "relevant_documents": ["precipitation-probability"]
+    },
+    {
+      "case_id": "kn-gusts-versus-sustained",
+      "category": "knowledge",
+      "description": "A distinction between two measures, which the answer must keep apart.",
+      "question": "Explain the difference between wind gusts and sustained wind speed",
+      "expected_agents": ["rag"],
+      "forbidden_tools": ["weather_forecast", "weather_history"],
+      "relevant_documents": ["wind-speed-and-gusts"]
+    },
+    {
+      "case_id": "kn-uv-index",
+      "category": "knowledge",
+      "description": "An index rather than a measurement, so the answer must explain the scale.",
+      "question": "What does the UV index measure?",
+      "expected_agents": ["rag"],
+      "forbidden_tools": ["weather_forecast", "weather_history"],
+      "relevant_documents": ["uv-index"]
+    },
+    {
+      "case_id": "kn-forecast-uncertainty",
+      "category": "knowledge",
+      "description": "Why confidence falls with horizon distance — the concept behind every uncertainty statement.",
+      "question": "Why does forecast confidence decrease further into the future?",
+      "expected_agents": ["rag"],
+      "forbidden_tools": ["weather_forecast", "weather_history"],
+      "relevant_documents": ["forecast-uncertainty"]
+    },
+    {
+      "case_id": "kn-relative-humidity",
+      "category": "knowledge",
+      "description": "A concept whose relationship to another measure the corpus explains.",
+      "question": "What is relative humidity?",
+      "expected_agents": ["rag"],
+      "forbidden_tools": ["weather_forecast", "weather_history"],
+      "relevant_documents": ["relative-humidity"]
+    },
+    {
+      "case_id": "kn-not-covered",
+      "category": "knowledge",
+      "description": "A concept the corpus does not cover: said plainly rather than answered from the nearest passage.",
+      "question": "Explain the quarterly corporation tax filing deadline",
+      "forbidden_tools": ["weather_forecast", "weather_history", "weather_statistics"],
+      "expects_refusal": true,
+      "forbidden_answer_characteristics": ["dew point", "wind gust", "uv index"]
+    }
+  ]
+}

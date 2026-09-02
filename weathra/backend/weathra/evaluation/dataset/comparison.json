@@ -1,0 +1,60 @@
+{
+  "category": "comparison",
+  "notes": "Multi-location comparison. Each case names every place it wants ranked, so a comparison quietly shorter than the question is detectable.",
+  "cases": [
+    {
+      "case_id": "cp-berlin-munich-warmest",
+      "category": "comparison",
+      "description": "Two places on the most common criterion.",
+      "question": "Which is warmer over the next 3 days, Berlin or Munich?",
+      "expected_tools": ["weather_forecast"],
+      "expected_agents": ["forecast"],
+      "forbidden_tools": ["weather_history"],
+      "expected_answer_characteristics": ["berlin", "munich"],
+      "expected_resolution": {
+        "locations": ["Berlin", "Munich"],
+        "location_source": "request"
+      }
+    },
+    {
+      "case_id": "cp-three-cities-driest",
+      "category": "comparison",
+      "description": "Three places, so a ranking of two would be visibly incomplete.",
+      "question": "Which is driest over the next 5 days: Berlin, Munich, or Lisbon?",
+      "expected_tools": ["weather_forecast"],
+      "expected_agents": ["forecast"],
+      "expected_answer_characteristics": ["berlin", "munich", "lisbon"],
+      "expected_resolution": {
+        "locations": ["Berlin", "Munich", "Lisbon"],
+        "location_source": "request"
+      }
+    },
+    {
+      "case_id": "cp-historical-comparison",
+      "category": "comparison",
+      "description": "A comparison from the archive, which must be labelled as observations throughout.",
+      "question": "Which was wetter between 1 June 2025 and 7 June 2025, Berlin or Lisbon?",
+      "expected_tools": ["weather_history"],
+      "expected_agents": ["historical"],
+      "forbidden_tools": ["weather_forecast"],
+      "expected_answer_characteristics": ["berlin", "lisbon"]
+    },
+    {
+      "case_id": "cp-least-windy",
+      "category": "comparison",
+      "description": "A criterion whose best value is the lowest, so the ranking direction matters.",
+      "question": "Which is least windy over the next 3 days, Berlin or Lisbon?",
+      "expected_tools": ["weather_forecast"],
+      "expected_agents": ["forecast"],
+      "expected_answer_characteristics": ["berlin", "lisbon"]
+    },
+    {
+      "case_id": "cp-one-place-unresolvable",
+      "category": "comparison",
+      "description": "One unresolvable place in a comparison: named, not silently dropped from the ranking.",
+      "question": "Which is warmer over the next 3 days, Berlin or Atlantisborough?",
+      "expects_clarification": true,
+      "forbidden_answer_characteristics": ["atlantisborough is warmer", "atlantisborough is cooler"]
+    }
+  ]
+}

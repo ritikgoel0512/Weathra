@@ -216,3 +216,20 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ------------------------------------------------------------------ Weathra
+
+# The template above is the Python .gitignore. Two of its unanchored patterns — `lib/` and
+# `build/` — would otherwise swallow real frontend source, so anchor them to the backend and
+# re-include what the frontend owns.
+!frontend/lib/
+!frontend/lib/**
+
+# Frontend build output and tooling artifacts.
+frontend/.next/
+frontend/out/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
+frontend/next-env.d.ts
+frontend/node_modules/

@@ -1,0 +1,5459 @@
+{
+  "components": {
+    "schemas": {
+      "AccountDeletionReport": {
+        "additionalProperties": false,
+        "description": "What a whole-account deletion removed, per table.\n\n``specs/http-api`` requires the response to *confirm what was removed*, so the counts are the\nproduct here rather than a diagnostic.",
+        "properties": {
+          "agent_runs": {
+            "minimum": 0.0,
+            "title": "Agent Runs",
+            "type": "integer"
+          },
+          "preferences": {
+            "minimum": 0.0,
+            "title": "Preferences",
+            "type": "integer"
+          },
+          "profile": {
+            "minimum": 0.0,
+            "title": "Profile",
+            "type": "integer"
+          },
+          "saved_locations": {
+            "minimum": 0.0,
+            "title": "Saved Locations",
+            "type": "integer"
+          },
+          "thread_checkpoints_cleared": {
+            "minimum": 0.0,
+            "title": "Thread Checkpoints Cleared",
+            "type": "integer"
+          },
+          "threads": {
+            "minimum": 0.0,
+            "title": "Threads",
+            "type": "integer"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "threads",
+          "thread_checkpoints_cleared",
+          "saved_locations",
+          "preferences",
+          "agent_runs",
+          "profile"
+        ],
+        "title": "AccountDeletionReport",
+        "type": "object"
+      },
+      "AgentName": {
+        "description": "The four specialized agents, plus the two nodes that frame a run.\n\nKept as an enum because ``specs/agent-orchestration`` requires each agent's responsibility to\nstay separately identifiable in the execution record, not merged into a free-text label.",
+        "enum": [
+          "supervisor",
+          "forecast",
+          "historical",
+          "analytics",
+          "rag",
+          "synthesis"
+        ],
+        "title": "AgentName",
+        "type": "string"
+      },
+      "AgentStep": {
+        "additionalProperties": false,
+        "description": "One agent's turn in the run, in order, with what it cost.",
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentName"
+          },
+          "duration_ms": {
+            "minimum": 0.0,
+            "title": "Duration Ms",
+            "type": "number"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the supervisor selected it, or why it failed or was skipped.",
+            "title": "Reason"
+          },
+          "sequence": {
+            "minimum": 1.0,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StepStatus"
+          }
+        },
+        "required": [
+          "sequence",
+          "agent",
+          "status",
+          "started_at",
+          "duration_ms"
+        ],
+        "title": "AgentStep",
+        "type": "object"
+      },
+      "AmbiguousResponse": {
+        "additionalProperties": false,
+        "description": "Several places matched and no qualifier chose between them.\n\nA 200, not an error: the request was fine and the answer is \"these two\". Each candidate carries\nits region and country so they can actually be told apart.",
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/Location"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "kind": {
+            "const": "ambiguous",
+            "default": "ambiguous",
+            "title": "Kind",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "candidates",
+          "message"
+        ],
+        "title": "AmbiguousResponse",
+        "type": "object"
+      },
+      "AnalysisResponse": {
+        "additionalProperties": false,
+        "description": "A composed, self-describing analysis of one forecast window.",
+        "properties": {
+          "anomalies": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnomalyReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "data_class": {
+            "$ref": "#/components/schemas/DataClass"
+          },
+          "findings": {
+            "description": "Every computed figure, each with its method, unit, and point count.",
+            "items": {
+              "$ref": "#/components/schemas/StatisticResult"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "from_cache": {
+            "title": "From Cache",
+            "type": "boolean"
+          },
+          "horizon_days": {
+            "minimum": 1.0,
+            "title": "Horizon Days",
+            "type": "integer"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "period": {
+            "$ref": "#/components/schemas/Period"
+          },
+          "provider": {
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "summary": {
+            "description": "Written by code, from the findings only. No model involved.",
+            "minLength": 1,
+            "title": "Summary",
+            "type": "string"
+          },
+          "thresholds": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ThresholdReport"
+            },
+            "title": "Thresholds",
+            "type": "array"
+          },
+          "trend": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrendReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "uncertainty": {
+            "$ref": "#/components/schemas/UncertaintyStatement"
+          },
+          "units": {
+            "$ref": "#/components/schemas/UnitSystem"
+          }
+        },
+        "required": [
+          "location",
+          "provider",
+          "units",
+          "data_class",
+          "period",
+          "horizon_days",
+          "from_cache",
+          "findings",
+          "uncertainty",
+          "summary"
+        ],
+        "title": "AnalysisResponse",
+        "type": "object"
+      },
+      "AnomalyPoint": {
+        "additionalProperties": false,
+        "description": "One entry that stood out, with how far out it stood.",
+        "properties": {
+          "deviation": {
+            "description": "Signed distance from the series median, in the measure's own unit.",
+            "title": "Deviation",
+            "type": "number"
+          },
+          "deviation_score": {
+            "description": "Deviation in median-absolute-deviations \u2014 what the threshold is compared to.",
+            "title": "Deviation Score",
+            "type": "number"
+          },
+          "time_local": {
+            "format": "date-time",
+            "title": "Time Local",
+            "type": "string"
+          },
+          "time_utc": {
+            "format": "date-time",
+            "title": "Time Utc",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "time_utc",
+          "time_local",
+          "value",
+          "deviation",
+          "deviation_score"
+        ],
+        "title": "AnomalyPoint",
+        "type": "object"
+      },
+      "AnomalyReport": {
+        "additionalProperties": false,
+        "description": "What stood out in a window, by a stated method, with the extremes always reported.\n\nThe method is median-absolute-deviation rather than standard deviation on purpose\n(design.md decision 9): a seven-point window containing one extreme has its own SD inflated by\nthat extreme, which suppresses exactly the outlier the spec wants surfaced. A flat window has\nzero MAD and reports extremes only.",
+        "properties": {
+          "anomalies": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AnomalyPoint"
+            },
+            "title": "Anomalies",
+            "type": "array"
+          },
+          "data_class": {
+            "const": "computed_statistic",
+            "default": "computed_statistic",
+            "title": "Data Class",
+            "type": "string"
+          },
+          "maximum": {
+            "$ref": "#/components/schemas/StatisticResult",
+            "description": "Always reported, anomalies or not."
+          },
+          "measure": {
+            "$ref": "#/components/schemas/Measure"
+          },
+          "median": {
+            "title": "Median",
+            "type": "number"
+          },
+          "median_absolute_deviation": {
+            "minimum": 0.0,
+            "title": "Median Absolute Deviation",
+            "type": "number"
+          },
+          "method": {
+            "minLength": 1,
+            "title": "Method",
+            "type": "string"
+          },
+          "minimum": {
+            "$ref": "#/components/schemas/StatisticResult",
+            "description": "Always reported, anomalies or not."
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stated when the method could not run \u2014 a flat window, for instance.",
+            "title": "Note"
+          },
+          "points_excluded": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Points Excluded",
+            "type": "integer"
+          },
+          "points_used": {
+            "minimum": 0.0,
+            "title": "Points Used",
+            "type": "integer"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/Provenance"
+          },
+          "threshold": {
+            "description": "Deviation score beyond which an entry is anomalous.",
+            "title": "Threshold",
+            "type": "number"
+          },
+          "unit": {
+            "description": "Empty when the measure was not supplied at all; `note` then says so.",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "measure",
+          "minimum",
+          "maximum",
+          "method",
+          "threshold",
+          "median",
+          "median_absolute_deviation",
+          "unit",
+          "points_used",
+          "provenance"
+        ],
+        "title": "AnomalyReport",
+        "type": "object"
+      },
+      "AnswerEnvelope": {
+        "additionalProperties": false,
+        "description": "The response an answer-bearing endpoint returns.\n\nThe division of labour is the design: ``answer_prose`` is model-written and labelled AI\ninterpretation; every figure, label, and attribution in the other fields was placed there by\ncode. The model has no authority over the envelope.",
+        "properties": {
+          "answer_prose": {
+            "description": "Model-written interpretation of results it did not compute. Empty when the hard grounding guard withheld it.",
+            "title": "Answer Prose",
+            "type": "string"
+          },
+          "attribution": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/weathra__domain__evidence__Attribution"
+            },
+            "title": "Attribution",
+            "type": "array"
+          },
+          "clarification_question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set instead of an answer when a reference could not be resolved \u2014 asked rather than assumed.",
+            "title": "Clarification Question"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/EvidenceRecord"
+          },
+          "findings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Finding"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "grounding": {
+            "$ref": "#/components/schemas/GroundingReport"
+          },
+          "llm_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Model"
+          },
+          "llm_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Provider"
+          },
+          "prose_data_class": {
+            "const": "ai_interpretation",
+            "default": "ai_interpretation",
+            "title": "Prose Data Class",
+            "type": "string"
+          },
+          "request_id": {
+            "minLength": 1,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "resolved": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolvedContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Id"
+          },
+          "unanswered_parts": {
+            "default": [],
+            "description": "Parts of a multi-part question that could not be answered, named explicitly rather than silently dropped.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Unanswered Parts",
+            "type": "array"
+          },
+          "uncertainty": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UncertaintyStatement"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Present whenever the answer contains a forecast figure."
+          }
+        },
+        "required": [
+          "request_id",
+          "answer_prose",
+          "grounding",
+          "evidence"
+        ],
+        "title": "AnswerEnvelope",
+        "type": "object"
+      },
+      "AskRequest": {
+        "additionalProperties": false,
+        "description": "A question, and optionally the conversation it belongs to.",
+        "properties": {
+          "create_thread": {
+            "default": false,
+            "description": "Start a new thread for this question and return its id in the response.",
+            "title": "Create Thread",
+            "type": "boolean"
+          },
+          "question": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One of *your* threads, to resolve a follow-up against. A thread you do not own is refused as not found.",
+            "title": "Thread Id"
+          },
+          "units": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnitSystem"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides your saved preference for this question only."
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "AskRequest",
+        "type": "object"
+      },
+      "AskResponse": {
+        "additionalProperties": false,
+        "description": "The answer envelope, plus where the evidence was stored.",
+        "properties": {
+          "answer": {
+            "$ref": "#/components/schemas/AnswerEnvelope"
+          },
+          "evidence_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The stored record's identifier, for /evidence/{id}. Null when the record could not be stored \u2014 the answer is still complete and its evidence travels inside it.",
+            "title": "Evidence Id"
+          },
+          "memory_available": {
+            "description": "False when conversation memory was unreachable for this run.",
+            "title": "Memory Available",
+            "type": "boolean"
+          },
+          "memory_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Note"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Id"
+          }
+        },
+        "required": [
+          "answer",
+          "memory_available"
+        ],
+        "title": "AskResponse",
+        "type": "object"
+      },
+      "Baseline": {
+        "additionalProperties": false,
+        "description": "A multi-year baseline for one location and calendar period, computed by Weathra.",
+        "properties": {
+          "calendar_period": {
+            "$ref": "#/components/schemas/Period",
+            "description": "The calendar window the baseline describes."
+          },
+          "coverage_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when fewer years were available than requested.",
+            "title": "Coverage Note"
+          },
+          "data_class": {
+            "$ref": "#/components/schemas/DataClass",
+            "default": "computed_statistic"
+          },
+          "labelling": {
+            "minLength": 1,
+            "title": "Labelling",
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "maximum": {
+            "$ref": "#/components/schemas/StatisticResult"
+          },
+          "mean": {
+            "$ref": "#/components/schemas/StatisticResult"
+          },
+          "measure": {
+            "$ref": "#/components/schemas/Measure"
+          },
+          "minimum": {
+            "$ref": "#/components/schemas/StatisticResult"
+          },
+          "provider": {
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "standard_deviation": {
+            "$ref": "#/components/schemas/StatisticResult"
+          },
+          "unit_system": {
+            "$ref": "#/components/schemas/UnitSystem"
+          },
+          "years_requested": {
+            "minimum": 1.0,
+            "title": "Years Requested",
+            "type": "integer"
+          },
+          "years_used": {
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1,
+            "title": "Years Used",
+            "type": "array"
+          }
+        },
+        "required": [
+          "location",
+          "measure",
+          "calendar_period",
+          "years_requested",
+          "years_used",
+          "mean",
+          "standard_deviation",
+          "minimum",
+          "maximum",
+          "provider",
+          "unit_system",
+          "labelling"
+        ],
+        "title": "Baseline",
+        "type": "object"
+      },
+      "ComparisonCandidate": {
+        "additionalProperties": false,
+        "description": "One ranked candidate \u2014 a location, or a day at one location \u2014 with its evidence.",
+        "properties": {
+          "contributions": {
+            "default": [],
+            "description": "Populated for the composite criterion; empty for a single-measure one.",
+            "items": {
+              "$ref": "#/components/schemas/ComponentContribution"
+            },
+            "title": "Contributions",
+            "type": "array"
+          },
+          "label": {
+            "description": "What to call it: a place name, or a local date.",
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "period": {
+            "$ref": "#/components/schemas/Period",
+            "description": "Evaluated in this candidate's own local time, which the result states."
+          },
+          "rank": {
+            "description": "Shared by tied candidates rather than broken arbitrarily.",
+            "minimum": 1.0,
+            "title": "Rank",
+            "type": "integer"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "supporting": {
+            "description": "The analytics results that produced the score.",
+            "items": {
+              "$ref": "#/components/schemas/StatisticResult"
+            },
+            "minItems": 1,
+            "title": "Supporting",
+            "type": "array"
+          },
+          "tied": {
+            "default": false,
+            "title": "Tied",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "label",
+          "location",
+          "period",
+          "rank",
+          "score",
+          "supporting"
+        ],
+        "title": "ComparisonCandidate",
+        "type": "object"
+      },
+      "ComparisonMode": {
+        "description": "What is being compared.",
+        "enum": [
+          "locations",
+          "days"
+        ],
+        "title": "ComparisonMode",
+        "type": "string"
+      },
+      "ComparisonRequest": {
+        "additionalProperties": false,
+        "description": "What to compare, on what criterion, over what window.\n\nA POST body rather than a query string: a comparison names several places, and repeated query\nparameters for a list of names is the kind of interface that produces bug reports about commas.",
+        "properties": {
+          "criterion": {
+            "$ref": "#/components/schemas/Criterion",
+            "description": "What 'best' means for this comparison."
+          },
+          "days": {
+            "anyOf": [
+              {
+                "maximum": 365.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Forecast horizon.",
+            "title": "Days"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One place, for a day-level comparison within its window.",
+            "title": "Location"
+          },
+          "locations": {
+            "default": [],
+            "description": "Two or more place names, for a comparison across places. Omit and supply one location to compare the days within a single place's window instead.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Locations",
+            "type": "array"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A registered provider. The configured default if omitted.",
+            "title": "Provider"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "With `end`, compares archive observations instead.",
+            "title": "Start"
+          },
+          "units": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnitSystem"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides your saved preference for this request only."
+          }
+        },
+        "required": [
+          "criterion"
+        ],
+        "title": "ComparisonRequest",
+        "type": "object"
+      },
+      "ComparisonResult": {
+        "additionalProperties": false,
+        "description": "A completed comparison: the ranking, the shared basis, and what was left out.",
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/ComparisonCandidate"
+            },
+            "minItems": 1,
+            "title": "Candidates",
+            "type": "array"
+          },
+          "criterion": {
+            "$ref": "#/components/schemas/Criterion"
+          },
+          "data_class": {
+            "$ref": "#/components/schemas/DataClass",
+            "description": "Which class every candidate was evaluated from. Never mixed."
+          },
+          "excluded": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ExcludedCandidate"
+            },
+            "title": "Excluded",
+            "type": "array"
+          },
+          "local_time_basis": {
+            "default": true,
+            "description": "Whether the window was applied in each candidate's own local time.",
+            "title": "Local Time Basis",
+            "type": "boolean"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/ComparisonMode"
+          },
+          "period": {
+            "$ref": "#/components/schemas/Period",
+            "description": "The shared window, applied in each candidate's local time."
+          },
+          "provider": {
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "statistics_applied": {
+            "description": "The same statistics were applied to every candidate.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Statistics Applied",
+            "type": "array"
+          },
+          "tie_tolerance": {
+            "description": "Scores within this are reported tied at the same rank.",
+            "minimum": 0.0,
+            "title": "Tie Tolerance",
+            "type": "number"
+          },
+          "unit_system": {
+            "$ref": "#/components/schemas/UnitSystem"
+          },
+          "weighting_disclosure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required for the composite criterion: whose heuristic the weights are.",
+            "title": "Weighting Disclosure"
+          }
+        },
+        "required": [
+          "mode",
+          "criterion",
+          "data_class",
+          "period",
+          "unit_system",
+          "provider",
+          "statistics_applied",
+          "candidates",
+          "tie_tolerance"
+        ],
+        "title": "ComparisonResult",
+        "type": "object"
+      },
+      "ComponentContribution": {
+        "additionalProperties": false,
+        "description": "One measure's part in a composite score: which way it counts, how much, and to what effect.\n\nRequired by ``specs/location-comparison`` for the composite criterion, so a reader can see\nthat \"best for being outdoors\" is an arithmetic combination and not an opinion.",
+        "properties": {
+          "contribution": {
+            "description": "Weighted points this component added to the score.",
+            "title": "Contribution",
+            "type": "number"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/Direction",
+            "description": "ABOVE when a higher value scores better, BELOW when a lower one does."
+          },
+          "measure": {
+            "$ref": "#/components/schemas/Measure"
+          },
+          "supporting": {
+            "$ref": "#/components/schemas/StatisticResult",
+            "description": "The analytics result the value came from."
+          },
+          "unit": {
+            "minLength": 1,
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "description": "The measured input, in `unit`.",
+            "title": "Value",
+            "type": "number"
+          },
+          "weight": {
+            "description": "This component's share of the score.",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "measure",
+          "value",
+          "unit",
+          "direction",
+          "weight",
+          "contribution",
+          "supporting"
+        ],
+        "title": "ComponentContribution",
+        "type": "object"
+      },
+      "ConfidenceBand": {
+        "description": "How much assurance a forecast figure deserves, by distance into the horizon.\n\nA band, not a probability: with one provider there is no consensus signal to derive a\nprobability from, and presenting one would overstate what the system knows.",
+        "enum": [
+          "high",
+          "moderate",
+          "low"
+        ],
+        "title": "ConfidenceBand",
+        "type": "string"
+      },
+      "Criterion": {
+        "description": "The supported ways to rank. Anything else is rejected with this list.",
+        "enum": [
+          "warmest",
+          "coolest",
+          "driest",
+          "wettest",
+          "least_windy",
+          "outdoor_suitability"
+        ],
+        "title": "Criterion",
+        "type": "string"
+      },
+      "Crossing": {
+        "additionalProperties": false,
+        "description": "One transition into the condition, with the reading at that point.",
+        "properties": {
+          "time_local": {
+            "format": "date-time",
+            "title": "Time Local",
+            "type": "string"
+          },
+          "time_utc": {
+            "format": "date-time",
+            "title": "Time Utc",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "time_utc",
+          "time_local",
+          "value"
+        ],
+        "title": "Crossing",
+        "type": "object"
+      },
+      "CurrentResponse": {
+        "additionalProperties": false,
+        "description": "Current conditions. Labelled ``current`` and never as a forecast.",
+        "properties": {
+          "attribution": {
+            "$ref": "#/components/schemas/weathra__api__routers__weather__Attribution"
+          },
+          "observed_at_local": {
+            "description": "The same instant, at the location.",
+            "format": "date-time",
+            "title": "Observed At Local",
+            "type": "string"
+          },
+          "observed_at_utc": {
+            "description": "The instant these values describe.",
+            "format": "date-time",
+            "title": "Observed At Utc",
+            "type": "string"
+          },
+          "units": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Units",
+            "type": "object"
+          },
+          "values": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "description": "Per measure. Null means 'not reported' and is never a zero.",
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "attribution",
+          "observed_at_utc",
+          "observed_at_local",
+          "values",
+          "units"
+        ],
+        "title": "CurrentResponse",
+        "type": "object"
+      },
+      "DataClass": {
+        "description": "What kind of thing a reported value is.\n\nCarried from the provider layer to the response envelope and rendered in the UI. An answer\ncombining classes labels each part; a class is never conflated with another\n(``specs/safety-grounding``).",
+        "enum": [
+          "current",
+          "forecast",
+          "historical_observation",
+          "computed_statistic",
+          "ai_interpretation"
+        ],
+        "title": "DataClass",
+        "type": "string"
+      },
+      "DeletionResponse": {
+        "additionalProperties": false,
+        "description": "What the deletion removed, per table, and what it deliberately did not.",
+        "properties": {
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "removed": {
+            "$ref": "#/components/schemas/AccountDeletionReport"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "removed",
+          "total",
+          "note"
+        ],
+        "title": "DeletionResponse",
+        "type": "object"
+      },
+      "DependencyStatus": {
+        "additionalProperties": false,
+        "description": "One dependency: what it is, whether it is configured, and whether it answered.",
+        "properties": {
+          "configured": {
+            "description": "Whether the deployment supplies what it needs.",
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What an operator needs to act. Never a credential.",
+            "title": "Detail"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reachable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether it answered just now. Null when not checked \u2014 either because it is not configured, or because checking it would cost more than the report is worth.",
+            "title": "Reachable"
+          },
+          "required": {
+            "default": true,
+            "description": "False for a dependency whose absence leaves the service usable.",
+            "title": "Required",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "configured"
+        ],
+        "title": "DependencyStatus",
+        "type": "object"
+      },
+      "Direction": {
+        "description": "Which way is \"better\" for a measure under a criterion, and which way a threshold points.",
+        "enum": [
+          "above",
+          "below"
+        ],
+        "title": "Direction",
+        "type": "string"
+      },
+      "EvidenceRecord": {
+        "additionalProperties": false,
+        "description": "Everything the run did, sufficient to check every figure without re-running it.",
+        "properties": {
+          "agents": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AgentStep"
+            },
+            "title": "Agents",
+            "type": "array"
+          },
+          "analytics_results": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/StatisticResult"
+            },
+            "title": "Analytics Results",
+            "type": "array"
+          },
+          "anomaly_reports": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AnomalyReport"
+            },
+            "title": "Anomaly Reports",
+            "type": "array"
+          },
+          "attributions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/weathra__domain__evidence__Attribution"
+            },
+            "title": "Attributions",
+            "type": "array"
+          },
+          "citations": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeCitation"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "title": "Completed At",
+            "type": "string"
+          },
+          "data_classes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DataClass"
+            },
+            "title": "Data Classes",
+            "type": "array"
+          },
+          "llm_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Model"
+          },
+          "llm_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the run answered without a model.",
+            "title": "Llm Provider"
+          },
+          "partial": {
+            "default": false,
+            "description": "True when a budget was exhausted before a complete answer.",
+            "title": "Partial",
+            "type": "boolean"
+          },
+          "partial_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partial Reason"
+          },
+          "question": {
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          },
+          "request_id": {
+            "minLength": 1,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "routing_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the supervisor chose the agents it chose.",
+            "title": "Routing Reason"
+          },
+          "routing_source": {
+            "default": "model",
+            "enum": [
+              "model",
+              "deterministic_fallback"
+            ],
+            "title": "Routing Source",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "steps_used": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Steps Used",
+            "type": "integer"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Id"
+          },
+          "tool_calls": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ToolCall"
+            },
+            "title": "Tool Calls",
+            "type": "array"
+          },
+          "tool_results": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ToolResult"
+            },
+            "title": "Tool Results",
+            "type": "array"
+          },
+          "total_duration_ms": {
+            "minimum": 0.0,
+            "title": "Total Duration Ms",
+            "type": "number"
+          },
+          "trend_reports": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/TrendReport"
+            },
+            "title": "Trend Reports",
+            "type": "array"
+          }
+        },
+        "required": [
+          "request_id",
+          "question",
+          "started_at",
+          "completed_at",
+          "total_duration_ms"
+        ],
+        "title": "EvidenceRecord",
+        "type": "object"
+      },
+      "EvidenceResponse": {
+        "additionalProperties": false,
+        "description": "One stored run: the question, the answer, and everything behind it.",
+        "properties": {
+          "answer_prose": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Prose"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "duration_ms": {
+            "title": "Duration Ms",
+            "type": "number"
+          },
+          "envelope": {
+            "additionalProperties": true,
+            "description": "The response as it was returned.",
+            "title": "Envelope",
+            "type": "object"
+          },
+          "evidence": {
+            "additionalProperties": true,
+            "description": "The full audit trail: agents, tool calls and results, analytics, citations.",
+            "title": "Evidence",
+            "type": "object"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "llm_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Model"
+          },
+          "llm_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Provider"
+          },
+          "partial": {
+            "title": "Partial",
+            "type": "boolean"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thread Id"
+          },
+          "weather_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weather Provider"
+          }
+        },
+        "required": [
+          "id",
+          "request_id",
+          "question",
+          "envelope",
+          "evidence",
+          "duration_ms",
+          "partial",
+          "created_at"
+        ],
+        "title": "EvidenceResponse",
+        "type": "object"
+      },
+      "ExcludedCandidate": {
+        "additionalProperties": false,
+        "description": "A candidate whose data could not be retrieved, listed with why.\n\nExcluding rather than failing is what lets a three-city comparison still answer when one city\nis unavailable \u2014 provided at least two survive.",
+        "properties": {
+          "code": {
+            "description": "The stable error code behind the exclusion.",
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "label": {
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Location"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Absent when the exclusion was a resolution failure."
+          },
+          "reason": {
+            "description": "Stated plainly, with no raw upstream payload.",
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "reason",
+          "code"
+        ],
+        "title": "ExcludedCandidate",
+        "type": "object"
+      },
+      "Finding": {
+        "additionalProperties": false,
+        "description": "One structured value the answer rests on, with everything needed to check it.\n\nFindings are what the UI renders as data, next to but visually distinct from the prose. A\nfigure in the prose that has no matching finding is what the numeric audit reports.",
+        "properties": {
+          "attribution": {
+            "$ref": "#/components/schemas/weathra__domain__evidence__Attribution"
+          },
+          "data_class": {
+            "$ref": "#/components/schemas/DataClass"
+          },
+          "label": {
+            "description": "What this figure is, in plain words.",
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set for a computed statistic; null for a retrieved reading.",
+            "title": "Method"
+          },
+          "points_used": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Points Used"
+          },
+          "supporting": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatisticResult"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The analytics result this finding was taken from, verbatim."
+          },
+          "text_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a non-numeric finding: a direction sector, a trend.",
+            "title": "Text Value"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why there is no value. Required when there is none.",
+            "title": "Unavailable Reason"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null states 'unavailable' \u2014 never a filled-in estimate.",
+            "title": "Value"
+          }
+        },
+        "required": [
+          "label",
+          "data_class",
+          "attribution"
+        ],
+        "title": "Finding",
+        "type": "object"
+      },
+      "ForecastResponse": {
+        "additionalProperties": false,
+        "description": "A forecast, with its horizon, its series, and its uncertainty.",
+        "properties": {
+          "attribution": {
+            "$ref": "#/components/schemas/weathra__api__routers__weather__Attribution"
+          },
+          "daily": {
+            "$ref": "#/components/schemas/Series"
+          },
+          "horizon_days": {
+            "minimum": 1.0,
+            "title": "Horizon Days",
+            "type": "integer"
+          },
+          "hourly": {
+            "$ref": "#/components/schemas/Series"
+          },
+          "period": {
+            "$ref": "#/components/schemas/Period"
+          },
+          "uncertainty": {
+            "$ref": "#/components/schemas/UncertaintyStatement",
+            "description": "Required on every forecast: confidence by horizon distance, and the basis."
+          }
+        },
+        "required": [
+          "attribution",
+          "period",
+          "horizon_days",
+          "daily",
+          "hourly",
+          "uncertainty"
+        ],
+        "title": "ForecastResponse",
+        "type": "object"
+      },
+      "Granularity": {
+        "description": "The time resolution of a series.",
+        "enum": [
+          "hourly",
+          "daily"
+        ],
+        "title": "Granularity",
+        "type": "string"
+      },
+      "GroundingReport": {
+        "additionalProperties": false,
+        "description": "What the grounding layers found (design.md decision 15).\n\nDeliberately a *report* rather than a gate for the numeric audit: a false positive \u2014 a\nlegitimately rounded or unit-converted value \u2014 must not destroy a correct answer. So an\nunmatched figure is listed with ``verified: false`` instead of suppressing the response. The\nzero-retrieval case is different and is hard-blocked before this report is built.",
+        "properties": {
+          "figures_checked": {
+            "minimum": 0.0,
+            "title": "Figures Checked",
+            "type": "integer"
+          },
+          "method": {
+            "description": "How figures were extracted and matched, including the rounding tolerance.",
+            "minLength": 1,
+            "title": "Method",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "prose_discarded": {
+            "default": false,
+            "description": "True when the hard zero-retrieval guard fired and the prose was withheld.",
+            "title": "Prose Discarded",
+            "type": "boolean"
+          },
+          "ungrounded_figures": {
+            "default": [],
+            "description": "Figures found in the prose that the evidence does not support.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Ungrounded Figures",
+            "type": "array"
+          },
+          "verified": {
+            "description": "True when every figure in the prose matched a finding or evidence value.",
+            "title": "Verified",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "verified",
+          "method",
+          "figures_checked"
+        ],
+        "title": "GroundingReport",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "additionalProperties": false,
+        "description": "Liveness. Deliberately depends on nothing.",
+        "properties": {
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "environment": {
+            "title": "Environment",
+            "type": "string"
+          },
+          "status": {
+            "default": "ok",
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "environment",
+          "checked_at"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "HistoryResponse": {
+        "additionalProperties": false,
+        "description": "Observed weather over a past range. Labelled as observations, never as a forecast.",
+        "properties": {
+          "covered_period": {
+            "$ref": "#/components/schemas/Period",
+            "description": "What the response actually covers. Shorter than the request when the range runs into the archive's reporting lag \u2014 never quietly, see `unavailable_note`."
+          },
+          "daily": {
+            "$ref": "#/components/schemas/Series"
+          },
+          "data_class": {
+            "$ref": "#/components/schemas/DataClass",
+            "description": "Always 'historical_observation'. What happened, not what is expected."
+          },
+          "hourly": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Series"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "partial": {
+            "description": "True when part of the requested range is not yet in the archive.",
+            "title": "Partial",
+            "type": "boolean"
+          },
+          "provider": {
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "requested_period": {
+            "$ref": "#/components/schemas/Period"
+          },
+          "retrieved_at": {
+            "format": "date-time",
+            "title": "Retrieved At",
+            "type": "string"
+          },
+          "unavailable_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which part of the range is unavailable, and why.",
+            "title": "Unavailable Note"
+          },
+          "units": {
+            "$ref": "#/components/schemas/UnitSystem"
+          }
+        },
+        "required": [
+          "location",
+          "provider",
+          "units",
+          "data_class",
+          "requested_period",
+          "covered_period",
+          "retrieved_at",
+          "daily",
+          "partial"
+        ],
+        "title": "HistoryResponse",
+        "type": "object"
+      },
+      "HorizonPoint": {
+        "additionalProperties": false,
+        "description": "How far into the horizon one figure sits, and the band that follows from it.",
+        "properties": {
+          "confidence": {
+            "$ref": "#/components/schemas/ConfidenceBand"
+          },
+          "hours_ahead": {
+            "description": "From the reference time, not from 'now'.",
+            "minimum": 0.0,
+            "title": "Hours Ahead",
+            "type": "number"
+          },
+          "time_local": {
+            "format": "date-time",
+            "title": "Time Local",
+            "type": "string"
+          },
+          "time_utc": {
+            "format": "date-time",
+            "title": "Time Utc",
+            "type": "string"
+          }
+        },
+        "required": [
+          "time_utc",
+          "time_local",
+          "hours_ahead",
+          "confidence"
+        ],
+        "title": "HorizonPoint",
+        "type": "object"
+      },
+      "KnowledgeCitation": {
+        "additionalProperties": false,
+        "description": "A retrieved knowledge chunk the answer drew on.",
+        "properties": {
+          "chunk_position": {
+            "minimum": 0.0,
+            "title": "Chunk Position",
+            "type": "integer"
+          },
+          "document_id": {
+            "minLength": 1,
+            "title": "Document Id",
+            "type": "string"
+          },
+          "score": {
+            "description": "Relevance score. Only above-threshold chunks are cited.",
+            "title": "Score",
+            "type": "number"
+          },
+          "text": {
+            "description": "The chunk as retrieved. Data, not instruction.",
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "title": {
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
+          }
+        },
+        "required": [
+          "document_id",
+          "title",
+          "chunk_position",
+          "score",
+          "text"
+        ],
+        "title": "KnowledgeCitation",
+        "type": "object"
+      },
+      "Location": {
+        "additionalProperties": false,
+        "description": "A resolved place: where it is, what it is called, and what time it is there.",
+        "properties": {
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "country_code": {
+            "anyOf": [
+              {
+                "maxLength": 2,
+                "minLength": 2,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country Code"
+          },
+          "display_name": {
+            "description": "What a person reads, e.g. 'Reykjav\u00edk'.",
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "elevation_metres": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elevation Metres"
+          },
+          "latitude": {
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Latitude",
+            "type": "number"
+          },
+          "longitude": {
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Longitude",
+            "type": "number"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "First-order administrative area.",
+            "title": "Region"
+          },
+          "timezone": {
+            "description": "IANA identifier, e.g. 'Atlantic/Reykjavik'. Every window is resolved to UTC bounds from this, never from the server's own timezone.",
+            "minLength": 1,
+            "title": "Timezone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "display_name",
+          "latitude",
+          "longitude",
+          "timezone"
+        ],
+        "title": "Location",
+        "type": "object"
+      },
+      "MeResponse": {
+        "additionalProperties": false,
+        "description": "Who you are, as far as Weathra is concerned. No credential material.\n\nThere is deliberately no field that could carry one: the model forbids extras, and every field\nhere is either the token's own subject, the email it reported, a timestamp, or a preference.",
+        "properties": {
+          "created_now": {
+            "description": "True when this request is the one that created your Weathra profile.",
+            "title": "Created Now",
+            "type": "boolean"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "As reported by your access token. Weathra does not store it \u2014 Supabase Auth owns your contact details.",
+            "title": "Email"
+          },
+          "email_verified": {
+            "title": "Email Verified",
+            "type": "boolean"
+          },
+          "last_seen_at": {
+            "format": "date-time",
+            "title": "Last Seen At",
+            "type": "string"
+          },
+          "preferences": {
+            "$ref": "#/components/schemas/PreferenceView"
+          },
+          "profile_created_at": {
+            "format": "date-time",
+            "title": "Profile Created At",
+            "type": "string"
+          },
+          "user_id": {
+            "description": "Your Supabase Auth subject. Weathra's only identifier for you.",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "email_verified",
+          "profile_created_at",
+          "last_seen_at",
+          "created_now",
+          "preferences"
+        ],
+        "title": "MeResponse",
+        "type": "object"
+      },
+      "Measure": {
+        "description": "Every measure the normalized model defines.\n\nThe instantaneous measures are the twelve named in ``specs/weather-providers``. The daily\naggregates are the per-measure daily summaries a provider may additionally supply.",
+        "enum": [
+          "temperature",
+          "apparent_temperature",
+          "precipitation",
+          "precipitation_probability",
+          "wind_speed",
+          "wind_gust",
+          "wind_direction",
+          "relative_humidity",
+          "dew_point",
+          "surface_pressure",
+          "cloud_cover",
+          "uv_index",
+          "temperature_max",
+          "temperature_min",
+          "temperature_mean",
+          "apparent_temperature_max",
+          "apparent_temperature_min",
+          "precipitation_sum",
+          "precipitation_hours",
+          "precipitation_probability_max",
+          "precipitation_probability_mean",
+          "wind_speed_max",
+          "wind_gust_max",
+          "wind_direction_dominant",
+          "relative_humidity_mean",
+          "dew_point_mean",
+          "surface_pressure_mean",
+          "cloud_cover_mean",
+          "uv_index_max"
+        ],
+        "title": "Measure",
+        "type": "string"
+      },
+      "Period": {
+        "additionalProperties": false,
+        "description": "A half-open time window ``[start_utc, end_utc)``, resolved from a location's timezone.\n\nWindowing is always done in UTC; the local bounds are carried alongside for display. The\nserver's own timezone is never consulted.",
+        "properties": {
+          "end_local": {
+            "format": "date-time",
+            "title": "End Local",
+            "type": "string"
+          },
+          "end_utc": {
+            "format": "date-time",
+            "title": "End Utc",
+            "type": "string"
+          },
+          "start_local": {
+            "format": "date-time",
+            "title": "Start Local",
+            "type": "string"
+          },
+          "start_utc": {
+            "format": "date-time",
+            "title": "Start Utc",
+            "type": "string"
+          },
+          "timezone": {
+            "description": "IANA identifier the local bounds are in.",
+            "minLength": 1,
+            "title": "Timezone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start_utc",
+          "end_utc",
+          "start_local",
+          "end_local",
+          "timezone"
+        ],
+        "title": "Period",
+        "type": "object"
+      },
+      "PeriodComparison": {
+        "additionalProperties": false,
+        "description": "Two past periods, their aggregates, and the signed differences between them.",
+        "properties": {
+          "basis": {
+            "description": "The shared basis, stated in the result.",
+            "minLength": 1,
+            "title": "Basis",
+            "type": "string"
+          },
+          "data_class": {
+            "$ref": "#/components/schemas/DataClass",
+            "default": "historical_observation"
+          },
+          "deltas": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/StatisticResult"
+            },
+            "title": "Deltas",
+            "type": "array"
+          },
+          "earlier": {
+            "items": {
+              "$ref": "#/components/schemas/StatisticResult"
+            },
+            "minItems": 1,
+            "title": "Earlier",
+            "type": "array"
+          },
+          "earlier_period": {
+            "$ref": "#/components/schemas/Period"
+          },
+          "later": {
+            "items": {
+              "$ref": "#/components/schemas/StatisticResult"
+            },
+            "minItems": 1,
+            "title": "Later",
+            "type": "array"
+          },
+          "later_period": {
+            "$ref": "#/components/schemas/Period"
+          },
+          "lengths_differ": {
+            "title": "Lengths Differ",
+            "type": "boolean"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "percentage_changes": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Percentage Changes",
+            "type": "object"
+          },
+          "provider": {
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "statistics_applied": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Statistics Applied",
+            "type": "array"
+          },
+          "unit_system": {
+            "$ref": "#/components/schemas/UnitSystem"
+          }
+        },
+        "required": [
+          "location",
+          "earlier_period",
+          "later_period",
+          "provider",
+          "unit_system",
+          "statistics_applied",
+          "earlier",
+          "later",
+          "lengths_differ",
+          "basis"
+        ],
+        "title": "PeriodComparison",
+        "type": "object"
+      },
+      "PointValue": {
+        "additionalProperties": false,
+        "description": "One timestamped value in a series-shaped result: a per-day total, a rolling mean.",
+        "properties": {
+          "time_local": {
+            "format": "date-time",
+            "title": "Time Local",
+            "type": "string"
+          },
+          "time_utc": {
+            "format": "date-time",
+            "title": "Time Utc",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null where the window had nothing usable.",
+            "title": "Value"
+          }
+        },
+        "required": [
+          "time_utc",
+          "time_local",
+          "value"
+        ],
+        "title": "PointValue",
+        "type": "object"
+      },
+      "PreferenceSource": {
+        "description": "Where a reported preference value came from. Half the point of the response.",
+        "enum": [
+          "chosen",
+          "default"
+        ],
+        "title": "PreferenceSource",
+        "type": "string"
+      },
+      "PreferenceUpdate": {
+        "additionalProperties": false,
+        "description": "A preference change. Every field is an explicit choice you are making.\n\nOmitting a field leaves it as it was; sending ``null`` clears it back to the documented\ndefault. Those are genuinely different requests, and a shape that could not express both would\nmake \"reset my units\" impossible to say (``specs/memory``).",
+        "properties": {
+          "clear_default_location": {
+            "default": false,
+            "title": "Clear Default Location",
+            "type": "boolean"
+          },
+          "clear_forecast_horizon": {
+            "default": false,
+            "title": "Clear Forecast Horizon",
+            "type": "boolean"
+          },
+          "clear_unit_system": {
+            "default": false,
+            "description": "Clear the unit preference back to the documented default.",
+            "title": "Clear Unit System",
+            "type": "boolean"
+          },
+          "default_location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A place name. Resolved and stored canonically.",
+            "title": "Default Location"
+          },
+          "forecast_horizon_days": {
+            "anyOf": [
+              {
+                "maximum": 16.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forecast Horizon Days"
+          },
+          "unit_system": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnitSystem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "PreferenceUpdate",
+        "type": "object"
+      },
+      "PreferenceView": {
+        "additionalProperties": false,
+        "description": "The acting user's effective preferences, each labelled chosen or default.",
+        "properties": {
+          "default_location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Location"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "forecast_horizon_days": {
+            "maximum": 16.0,
+            "minimum": 1.0,
+            "title": "Forecast Horizon Days",
+            "type": "integer"
+          },
+          "sources": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PreferenceSource"
+            },
+            "description": "Per field: whether the person chose this value or Weathra assumed it.",
+            "title": "Sources",
+            "type": "object"
+          },
+          "unit_system": {
+            "$ref": "#/components/schemas/UnitSystem"
+          }
+        },
+        "required": [
+          "unit_system",
+          "forecast_horizon_days",
+          "sources"
+        ],
+        "title": "PreferenceView",
+        "type": "object"
+      },
+      "Provenance": {
+        "additionalProperties": false,
+        "description": "Where the numbers behind a result came from.\n\nCarried on every result so attribution reaches the response envelope as a field rather than\nsomething a model has to remember to mention.",
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "period": {
+            "$ref": "#/components/schemas/Period"
+          },
+          "provider": {
+            "description": "Whose data was analysed.",
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "retrieved_at": {
+            "description": "When that series was obtained from upstream.",
+            "format": "date-time",
+            "title": "Retrieved At",
+            "type": "string"
+          },
+          "source_data_class": {
+            "$ref": "#/components/schemas/DataClass",
+            "description": "What the analysed series was \u2014 a forecast, or a historical observation."
+          },
+          "unit_system": {
+            "$ref": "#/components/schemas/UnitSystem"
+          }
+        },
+        "required": [
+          "location",
+          "period",
+          "provider",
+          "unit_system",
+          "source_data_class",
+          "retrieved_at"
+        ],
+        "title": "Provenance",
+        "type": "object"
+      },
+      "ReadinessResponse": {
+        "additionalProperties": false,
+        "description": "What is configured, what is reachable, and whether the service can serve.",
+        "properties": {
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/DependencyStatus"
+            },
+            "title": "Dependencies",
+            "type": "array"
+          },
+          "environment": {
+            "title": "Environment",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "ready": {
+            "description": "True when every *required* dependency is reachable. An unconfigured inference provider does not make the service unready: every other capability still works.",
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ready",
+          "version",
+          "environment",
+          "checked_at",
+          "dependencies"
+        ],
+        "title": "ReadinessResponse",
+        "type": "object"
+      },
+      "ResolvedContext": {
+        "additionalProperties": false,
+        "description": "What the run decided the question was actually about.\n\n``specs/agent-orchestration`` requires an answer to *state* which location and window it\nresolved to, and where a default came from \u2014 so a person can tell \"you used my saved default\"\nfrom \"you guessed\".",
+        "properties": {
+          "criterion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Criterion"
+          },
+          "location_source": {
+            "default": "request",
+            "enum": [
+              "request",
+              "thread",
+              "preferences",
+              "none"
+            ],
+            "title": "Location Source",
+            "type": "string"
+          },
+          "locations": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Location"
+            },
+            "title": "Locations",
+            "type": "array"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Period"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The plain sentence shown to the reader.",
+            "title": "Statement"
+          },
+          "unit_system": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit System"
+          },
+          "units_source": {
+            "default": "default",
+            "enum": [
+              "request",
+              "thread",
+              "preferences",
+              "default"
+            ],
+            "title": "Units Source",
+            "type": "string"
+          }
+        },
+        "title": "ResolvedContext",
+        "type": "object"
+      },
+      "ResolvedResponse": {
+        "additionalProperties": false,
+        "description": "Exactly one place matched.",
+        "properties": {
+          "kind": {
+            "const": "resolved",
+            "default": "resolved",
+            "title": "Kind",
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "location"
+        ],
+        "title": "ResolvedResponse",
+        "type": "object"
+      },
+      "SavedLocationRecord": {
+        "additionalProperties": false,
+        "description": "One saved location as a caller sees it.",
+        "properties": {
+          "created_now": {
+            "default": false,
+            "description": "Whether this save created the entry or matched one already there.",
+            "title": "Created Now",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The person's own name for it, if any.",
+            "title": "Label"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location",
+            "description": "The canonical resolved location."
+          }
+        },
+        "required": [
+          "id",
+          "location"
+        ],
+        "title": "SavedLocationRecord",
+        "type": "object"
+      },
+      "SavedLocationRequest": {
+        "additionalProperties": false,
+        "description": "A place to save, by name or by coordinates, with an optional label of your own.",
+        "properties": {
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "maximum": 90.0,
+                "minimum": -90.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "maximum": 180.0,
+                "minimum": -180.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
+          }
+        },
+        "title": "SavedLocationRequest",
+        "type": "object"
+      },
+      "SavedLocationsResponse": {
+        "additionalProperties": false,
+        "description": "Your saved locations, and the limit they count against.",
+        "properties": {
+          "count": {
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "limit": {
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "locations": {
+            "items": {
+              "$ref": "#/components/schemas/SavedLocationRecord"
+            },
+            "title": "Locations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "limit",
+          "locations"
+        ],
+        "title": "SavedLocationsResponse",
+        "type": "object"
+      },
+      "SearchResponse": {
+        "additionalProperties": false,
+        "description": "Ranked candidates for a partial query. An empty list is a real answer.",
+        "properties": {
+          "count": {
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/Location"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "query",
+          "count",
+          "results"
+        ],
+        "title": "SearchResponse",
+        "type": "object"
+      },
+      "Series": {
+        "additionalProperties": false,
+        "description": "An ordered run of entries at one granularity, with one units map for the whole series.",
+        "properties": {
+          "entries": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SeriesEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "granularity": {
+            "$ref": "#/components/schemas/Granularity"
+          },
+          "units": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Every measure the series declares, and the unit it is expressed in.",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Measure"
+            },
+            "title": "Units",
+            "type": "object"
+          }
+        },
+        "required": [
+          "granularity",
+          "units"
+        ],
+        "title": "Series",
+        "type": "object"
+      },
+      "SeriesEntry": {
+        "additionalProperties": false,
+        "description": "One point in a series: the instant, in both forms, and its measured values.",
+        "properties": {
+          "time_local": {
+            "description": "What a person reads. Carries the offset.",
+            "format": "date-time",
+            "title": "Time Local",
+            "type": "string"
+          },
+          "time_utc": {
+            "description": "Used by every window, threshold, and comparison.",
+            "format": "date-time",
+            "title": "Time Utc",
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "description": "A null means the provider did not supply the measure \u2014 never zero.",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Measure"
+            },
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "time_utc",
+          "time_local",
+          "values"
+        ],
+        "title": "SeriesEntry",
+        "type": "object"
+      },
+      "SpreadPoint": {
+        "additionalProperties": false,
+        "description": "A provider-supplied range around a figure, where the provider supplies one.",
+        "properties": {
+          "lower": {
+            "title": "Lower",
+            "type": "number"
+          },
+          "measure": {
+            "$ref": "#/components/schemas/Measure"
+          },
+          "time_utc": {
+            "format": "date-time",
+            "title": "Time Utc",
+            "type": "string"
+          },
+          "upper": {
+            "title": "Upper",
+            "type": "number"
+          }
+        },
+        "required": [
+          "time_utc",
+          "measure",
+          "lower",
+          "upper"
+        ],
+        "title": "SpreadPoint",
+        "type": "object"
+      },
+      "Statistic": {
+        "description": "Every statistic the deterministic engine produces.",
+        "enum": [
+          "minimum",
+          "maximum",
+          "mean",
+          "range",
+          "total",
+          "daily_totals",
+          "wet_entry_count",
+          "probability_maximum",
+          "probability_mean",
+          "probability_exceedance",
+          "mean_speed",
+          "maximum_sustained_speed",
+          "maximum_gust",
+          "prevailing_direction",
+          "rolling_mean",
+          "percentile",
+          "delta",
+          "z_score",
+          "standard_deviation",
+          "anomalies",
+          "trend",
+          "baseline"
+        ],
+        "title": "Statistic",
+        "type": "string"
+      },
+      "StatisticResult": {
+        "additionalProperties": false,
+        "description": "One computed \u2014 or explicitly not-computable \u2014 statistic, fully self-describing.\n\n``status`` is the whole point of the model: ``not_computable`` is a first-class outcome\ncarrying the reason and the counts, so a partial analysis reports precisely what it could not\ndo instead of omitting it or inventing it.",
+        "properties": {
+          "data_class": {
+            "const": "computed_statistic",
+            "default": "computed_statistic",
+            "title": "Data Class",
+            "type": "string"
+          },
+          "measure": {
+            "$ref": "#/components/schemas/Measure"
+          },
+          "method": {
+            "description": "How it was computed, stated rather than implied \u2014 'arithmetic mean of usable points', 'linear interpolation (numpy default)', 'least-squares slope'.",
+            "minLength": 1,
+            "title": "Method",
+            "type": "string"
+          },
+          "minimum_points": {
+            "description": "The declared minimum this statistic needs to be computable.",
+            "minimum": 0.0,
+            "title": "Minimum Points",
+            "type": "integer"
+          },
+          "occurred_at_local": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At Local"
+          },
+          "occurred_at_utc": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When an extreme occurred. Set for minima, maxima, and gusts.",
+            "title": "Occurred At Utc"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "description": "What the caller asked for: window length, level, k.",
+            "title": "Parameters",
+            "type": "object"
+          },
+          "points_excluded": {
+            "default": 0,
+            "description": "Points excluded because the value was absent \u2014 never zeroed.",
+            "minimum": 0.0,
+            "title": "Points Excluded",
+            "type": "integer"
+          },
+          "points_used": {
+            "description": "Usable points that went into the value.",
+            "minimum": 0.0,
+            "title": "Points Used",
+            "type": "integer"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/Provenance"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it was not computable. Required when it was not.",
+            "title": "Reason"
+          },
+          "statistic": {
+            "$ref": "#/components/schemas/Statistic"
+          },
+          "status": {
+            "default": "computed",
+            "enum": [
+              "computed",
+              "not_computable"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tied": {
+            "default": false,
+            "description": "Whether the extreme was shared by more than one entry.",
+            "title": "Tied",
+            "type": "boolean"
+          },
+          "tied_at": {
+            "default": [],
+            "description": "Every tied timestamp, earliest first, when an extreme was tied.",
+            "items": {
+              "format": "date-time",
+              "type": "string"
+            },
+            "title": "Tied At",
+            "type": "array"
+          },
+          "unit": {
+            "description": "The unit the value is expressed in. Empty only for a not-computable result whose measure the series never declared \u2014 there is no unit to state for a measure the provider does not supply.",
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The scalar result, for scalar statistics.",
+            "title": "Value"
+          },
+          "values": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PointValue"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The sequence, for series-shaped statistics.",
+            "title": "Values"
+          }
+        },
+        "required": [
+          "statistic",
+          "measure",
+          "unit",
+          "method",
+          "points_used",
+          "minimum_points",
+          "provenance"
+        ],
+        "title": "StatisticResult",
+        "type": "object"
+      },
+      "StepStatus": {
+        "description": "How a step ended. ``skipped`` covers a step a budget cut short.",
+        "enum": [
+          "succeeded",
+          "failed",
+          "skipped"
+        ],
+        "title": "StepStatus",
+        "type": "string"
+      },
+      "ThreadSummary": {
+        "additionalProperties": false,
+        "description": "One of your conversation threads, as a sidebar lists it.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "expires_at": {
+            "description": "When bounded retention will remove it, unless it is used again.",
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "last_activity_at": {
+            "format": "date-time",
+            "title": "Last Activity At",
+            "type": "string"
+          },
+          "locations": {
+            "default": [],
+            "description": "The places this conversation has established.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Locations",
+            "type": "array"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "last_activity_at",
+          "expires_at"
+        ],
+        "title": "ThreadSummary",
+        "type": "object"
+      },
+      "ThreadsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "threads": {
+            "items": {
+              "$ref": "#/components/schemas/ThreadSummary"
+            },
+            "title": "Threads",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "threads"
+        ],
+        "title": "ThreadsResponse",
+        "type": "object"
+      },
+      "ThresholdCondition": {
+        "additionalProperties": false,
+        "description": "What the caller wants to know about: a measure, a direction, and a value.",
+        "properties": {
+          "direction": {
+            "$ref": "#/components/schemas/Direction"
+          },
+          "measure": {
+            "$ref": "#/components/schemas/Measure"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "measure",
+          "direction",
+          "value"
+        ],
+        "title": "ThresholdCondition",
+        "type": "object"
+      },
+      "ThresholdReport": {
+        "additionalProperties": false,
+        "description": "Whether and when a condition was met across the window.",
+        "properties": {
+          "condition": {
+            "$ref": "#/components/schemas/ThresholdCondition"
+          },
+          "crossed": {
+            "title": "Crossed",
+            "type": "boolean"
+          },
+          "crossings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Crossing"
+            },
+            "title": "Crossings",
+            "type": "array"
+          },
+          "data_class": {
+            "$ref": "#/components/schemas/DataClass"
+          },
+          "method": {
+            "minLength": 1,
+            "title": "Method",
+            "type": "string"
+          },
+          "points_excluded": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Points Excluded",
+            "type": "integer"
+          },
+          "points_used": {
+            "minimum": 0.0,
+            "title": "Points Used",
+            "type": "integer"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/Provenance"
+          },
+          "statement": {
+            "description": "The plain sentence a reader sees.",
+            "minLength": 1,
+            "title": "Statement",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "condition",
+          "crossed",
+          "unit",
+          "data_class",
+          "statement",
+          "points_used",
+          "method",
+          "provenance"
+        ],
+        "title": "ThresholdReport",
+        "type": "object"
+      },
+      "ToolCall": {
+        "additionalProperties": false,
+        "description": "A tool invocation as it was actually made.",
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentName"
+          },
+          "arguments": {
+            "additionalProperties": true,
+            "description": "What was passed. Never a credential.",
+            "title": "Arguments",
+            "type": "object"
+          },
+          "duration_ms": {
+            "minimum": 0.0,
+            "title": "Duration Ms",
+            "type": "number"
+          },
+          "sequence": {
+            "description": "Execution order within the run.",
+            "minimum": 1.0,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "tool": {
+            "minLength": 1,
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sequence",
+          "tool",
+          "agent",
+          "started_at",
+          "duration_ms"
+        ],
+        "title": "ToolCall",
+        "type": "object"
+      },
+      "ToolResult": {
+        "additionalProperties": false,
+        "description": "What a tool returned, or the coded reason it did not.\n\nA failure is a failure here: ``specs/mcp-weather-server`` forbids returning a success carrying\nempty or zeroed weather values, and this model cannot express that.",
+        "properties": {
+          "attribution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/weathra__domain__evidence__Attribution"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "data_class": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DataClass"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the result was. Null for an error."
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "payload": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The normalized result. Never a raw upstream payload.",
+            "title": "Payload"
+          },
+          "sequence": {
+            "description": "Matches the ToolCall it answers.",
+            "minimum": 1.0,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "tool": {
+            "minLength": 1,
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sequence",
+          "tool",
+          "ok"
+        ],
+        "title": "ToolResult",
+        "type": "object"
+      },
+      "TrendDirection": {
+        "description": "The classification a trend slope falls into, against its insignificance margin.",
+        "enum": [
+          "rising",
+          "falling",
+          "steady"
+        ],
+        "title": "TrendDirection",
+        "type": "string"
+      },
+      "TrendReport": {
+        "additionalProperties": false,
+        "description": "Which way a measure moved across a window, by least-squares slope.\n\nSlope rather than first-versus-last, so a single spike at either end does not read as a trend\n(design.md decision 9). Variation inside the per-measure insignificance margin is steady.",
+        "properties": {
+          "data_class": {
+            "const": "computed_statistic",
+            "default": "computed_statistic",
+            "title": "Data Class",
+            "type": "string"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/TrendDirection"
+          },
+          "insignificance_margin_per_day": {
+            "description": "Below this slope the movement is reported as steady.",
+            "minimum": 0.0,
+            "title": "Insignificance Margin Per Day",
+            "type": "number"
+          },
+          "magnitude": {
+            "description": "Total modelled change across the window, in the measure's unit.",
+            "minimum": 0.0,
+            "title": "Magnitude",
+            "type": "number"
+          },
+          "measure": {
+            "$ref": "#/components/schemas/Measure"
+          },
+          "method": {
+            "minLength": 1,
+            "title": "Method",
+            "type": "string"
+          },
+          "minimum_points": {
+            "minimum": 0.0,
+            "title": "Minimum Points",
+            "type": "integer"
+          },
+          "points_excluded": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Points Excluded",
+            "type": "integer"
+          },
+          "points_used": {
+            "minimum": 0.0,
+            "title": "Points Used",
+            "type": "integer"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/Provenance"
+          },
+          "slope_per_day": {
+            "title": "Slope Per Day",
+            "type": "number"
+          },
+          "unit": {
+            "minLength": 1,
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "measure",
+          "direction",
+          "slope_per_day",
+          "magnitude",
+          "unit",
+          "insignificance_margin_per_day",
+          "method",
+          "points_used",
+          "minimum_points",
+          "provenance"
+        ],
+        "title": "TrendReport",
+        "type": "object"
+      },
+      "UncertaintyStatement": {
+        "additionalProperties": false,
+        "description": "What a forecast figure's confidence rests on, disclosed rather than implied.\n\n``specs/forecast-analysis`` and ``specs/safety-grounding`` both require the *basis* to be\nstated: with a single provider, confidence comes from horizon distance and whatever spread the\nprovider supplies \u2014 it is not a multi-provider consensus, and the statement says so every time.",
+        "properties": {
+          "basis": {
+            "description": "The disclosure a reader sees: confidence decreases with horizon distance, and the signal is derived from one provider's output and its supplied spread only.",
+            "minLength": 1,
+            "title": "Basis",
+            "type": "string"
+          },
+          "horizon": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/HorizonPoint"
+            },
+            "title": "Horizon",
+            "type": "array"
+          },
+          "multi_provider_consensus": {
+            "const": false,
+            "default": false,
+            "title": "Multi Provider Consensus",
+            "type": "boolean"
+          },
+          "provider": {
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_spread": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SpreadPoint"
+            },
+            "title": "Provider Spread",
+            "type": "array"
+          },
+          "reference_time_utc": {
+            "description": "The instant horizon distances are measured from.",
+            "format": "date-time",
+            "title": "Reference Time Utc",
+            "type": "string"
+          },
+          "spread_available": {
+            "description": "False when the provider supplies no spread, stated rather than inferred.",
+            "title": "Spread Available",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "provider",
+          "reference_time_utc",
+          "spread_available",
+          "basis"
+        ],
+        "title": "UncertaintyStatement",
+        "type": "object"
+      },
+      "UnitSystem": {
+        "description": "The unit system a result is expressed in. Metric unless a caller says otherwise.",
+        "enum": [
+          "metric",
+          "imperial"
+        ],
+        "title": "UnitSystem",
+        "type": "string"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "weathra__api__routers__weather__Attribution": {
+        "additionalProperties": false,
+        "description": "Where a figure came from, in the structured fields a reader needs.\n\nNot a credit line: a client renders these next to the numbers, and the evaluation suite reads\nthem to check that an answer's provenance is complete.",
+        "properties": {
+          "data_class": {
+            "$ref": "#/components/schemas/DataClass"
+          },
+          "from_cache": {
+            "description": "Whether this came from Weathra's cache rather than the provider just now.",
+            "title": "From Cache",
+            "type": "boolean"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "provider": {
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "retrieved_at": {
+            "format": "date-time",
+            "title": "Retrieved At",
+            "type": "string"
+          },
+          "units": {
+            "$ref": "#/components/schemas/UnitSystem"
+          },
+          "units_source": {
+            "description": "'request', 'preferences', or 'default' \u2014 what decided the units.",
+            "title": "Units Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location",
+          "provider",
+          "units",
+          "retrieved_at",
+          "from_cache",
+          "data_class",
+          "units_source"
+        ],
+        "title": "Attribution",
+        "type": "object"
+      },
+      "weathra__domain__evidence__Attribution": {
+        "additionalProperties": false,
+        "description": "Who supplied a piece of data, for where, for when, and when it was fetched.\n\nOne per source. A forecast-plus-historical answer carries two, because\n``specs/safety-grounding`` requires each part to carry its own provider, period, and retrieval\ntime rather than one blended credit line.",
+        "properties": {
+          "data_class": {
+            "$ref": "#/components/schemas/DataClass"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Period"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a window. Null when the datum is a single instant."
+          },
+          "provider": {
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "retrieved_at": {
+            "format": "date-time",
+            "title": "Retrieved At",
+            "type": "string"
+          },
+          "timestamp_utc": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a single instant, such as current conditions.",
+            "title": "Timestamp Utc"
+          }
+        },
+        "required": [
+          "provider",
+          "location",
+          "data_class",
+          "retrieved_at"
+        ],
+        "title": "Attribution",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "SupabaseAccessToken": {
+        "bearerFormat": "JWT",
+        "description": "A Supabase Auth access token, presented as `Authorization: Bearer <token>`. Weathra validates the signature against the project's published signing keys and never issues, stores, or refreshes a credential of its own.",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "Agentic weather intelligence. Every figure in a Weathra answer is retrieved from a named provider\nor computed by deterministic code, and every answer carries the evidence record to prove it.\n\nEndpoints are classified **public** or **protected**. A public endpoint takes parameters and\nreturns weather; it reads no user-owned data, except that it applies a signed-in caller's unit\npreference. A protected endpoint requires a Supabase access token as a Bearer credential and\noperates on the acting user's own data.\n",
+    "title": "Weathra",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/agent/ask": {
+      "post": {
+        "description": "**Protected.** Uses and writes the acting user's thread memory and stores an owned evidence record.\n\nAnswer one question, with the evidence for every figure in it.\n\nReturns 503 naming the missing configuration when no inference credential is set. Every public\nweather endpoint keeps working in that case, which is why the client is constructed here rather\nthan at startup.",
+        "operationId": "ask_api_v1_agent_ask_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AskResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Ask a weather question",
+        "tags": [
+          "agent"
+        ]
+      }
+    },
+    "/api/v1/agent/stream": {
+      "post": {
+        "description": "**Protected.** The same run, streamed. Same memory and same owned record.\n\nThe same run, reported as it happens.\n\n**Authentication happens before anything starts.** ``RequiredPrincipal`` resolves as a\ndependency, so an unauthenticated request gets a 401 with the normal error envelope and no run\nis begun \u2014 rather than a 200 whose first event is an error, which is what happens if a stream\nauthenticates inside its own generator.\n\nOwnership is checked before the stream opens too, for the same reason: a 404 is a better answer\nto a foreign thread id than a stream whose only event says so.",
+        "operationId": "stream_api_v1_agent_stream_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Ask a weather question, streamed",
+        "tags": [
+          "agent"
+        ]
+      }
+    },
+    "/api/v1/evidence/{evidence_id}": {
+      "get": {
+        "description": "**Protected.** One of the acting user's stored evidence records.\n\nOne of *your* stored evidence records.\n\nThe query carries the ownership predicate explicitly, and Row Level Security is the second gate\nbehind it. Either would be enough on its own; both is the point (design.md decision 5).",
+        "operationId": "evidence_api_v1_evidence__evidence_id__get",
+        "parameters": [
+          {
+            "description": "The record's identifier.",
+            "in": "path",
+            "name": "evidence_id",
+            "required": true,
+            "schema": {
+              "description": "The record's identifier.",
+              "title": "Evidence Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "One evidence record",
+        "tags": [
+          "evidence"
+        ]
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "description": "**Public.** Liveness. A load balancer cannot present a token.\n\nWhether this process is running. Checks nothing else, on purpose.\n\nA health check that queried the database would report the *database's* health, and a rolling\ndeploy would then kill instances that were perfectly able to serve cached weather.",
+        "operationId": "health_api_v1_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [],
+        "summary": "Liveness",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/v1/locations/resolve": {
+      "get": {
+        "description": "**Public.** Resolving one place from a name or coordinates. Reads no user-owned row.\n\nResolve a place name, or a coordinate pair, to one canonical location.\n\nExactly one form is required. Accepting both would leave the question of which wins, and any\nanswer to that is a surprise to somebody.",
+        "operationId": "resolve_api_v1_locations_resolve_get",
+        "parameters": [
+          {
+            "description": "A place name.",
+            "in": "query",
+            "name": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A place name.",
+              "title": "Query"
+            }
+          },
+          {
+            "in": "query",
+            "name": "latitude",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 90.0,
+                  "minimum": -90.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Latitude"
+            }
+          },
+          {
+            "in": "query",
+            "name": "longitude",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 180.0,
+                  "minimum": -180.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Longitude"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ResolvedResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AmbiguousResponse"
+                    }
+                  ],
+                  "title": "Response Resolve Api V1 Locations Resolve Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [],
+        "summary": "Resolve one location",
+        "tags": [
+          "locations"
+        ]
+      }
+    },
+    "/api/v1/locations/search": {
+      "get": {
+        "description": "**Public.** Geocoding a free-text query. Reads no user-owned row.\n\nRanked candidates for a free-text query.",
+        "operationId": "search_api_v1_locations_search_get",
+        "parameters": [
+          {
+            "description": "What to search for.",
+            "in": "query",
+            "name": "query",
+            "required": true,
+            "schema": {
+              "description": "What to search for.",
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Query",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 25,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [],
+        "summary": "Search locations",
+        "tags": [
+          "locations"
+        ]
+      }
+    },
+    "/api/v1/me": {
+      "get": {
+        "description": "**Protected.** The acting user's own profile and effective preferences.\n\nYour profile and your effective preferences, creating the profile on first use.",
+        "operationId": "me_api_v1_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "The acting user",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/v1/me/data": {
+      "delete": {
+        "description": "**Protected.** Deletes the acting user's Weathra application data.\n\nRemove every Weathra record you own, and confirm what went.\n\n**What this does not touch, and why.** The knowledge corpus and the location-keyed forecast\nsnapshots are nobody's personal data \u2014 the snapshots are keyed by *place*, deliberately, so\nthat Weathra holds no browsing trail (design.md decision 10). Sweeping them would degrade What\nChanged? and knowledge retrieval for everyone else while removing nothing whatsoever about you.\n\n**Your login is not Weathra's to delete.** Supabase Auth owns the account itself. This removes\nthe application data; removing the account is a separate action in Auth.",
+        "operationId": "delete_my_data_api_v1_me_data_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Delete your Weathra data",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/v1/me/locations": {
+      "get": {
+        "description": "**Protected.** Lists and adds the acting user's saved locations.\n\nYour saved locations, oldest first.",
+        "operationId": "list_locations_api_v1_me_locations_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedLocationsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "List your saved locations",
+        "tags": [
+          "account"
+        ]
+      },
+      "post": {
+        "description": "**Protected.** Lists and adds the acting user's saved locations.\n\nSave a place. Saving the same place twice updates its label rather than duplicating it.",
+        "operationId": "save_location_api_v1_me_locations_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavedLocationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedLocationRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Save a location",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/v1/me/locations/{saved_id}": {
+      "delete": {
+        "description": "**Protected.** Removes one of the acting user's saved locations.\n\nRemove one of your saved locations.\n\nAn identifier that is not yours produces the same not-found response as one that does not\nexist, because \"that exists but is not yours\" is itself a disclosure.",
+        "operationId": "remove_location_api_v1_me_locations__saved_id__delete",
+        "parameters": [
+          {
+            "description": "The saved location's identifier.",
+            "in": "path",
+            "name": "saved_id",
+            "required": true,
+            "schema": {
+              "description": "The saved location's identifier.",
+              "title": "Saved Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Remove a saved location",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/v1/me/preferences": {
+      "delete": {
+        "description": "**Protected.** Reads, updates, and deletes the acting user's preferences.\n\nRemove your preferences, and return the defaults that now apply.\n\nReturning the defaults rather than nothing: \"your preferences were cleared\" and \"metric now\napplies, as the default\" are the same fact, and a response carrying only the first invites you\nto wonder about the second.",
+        "operationId": "delete_preferences_api_v1_me_preferences_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferenceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Clear your preferences",
+        "tags": [
+          "account"
+        ]
+      },
+      "get": {
+        "description": "**Protected.** Reads, updates, and deletes the acting user's preferences.\n\nYour preferences, each labelled ``chosen`` or ``default``.\n\nThe labels are half the response: a value shown identically whether you picked it or Weathra\nassumed it would be telling you that you made a decision you never made.",
+        "operationId": "read_preferences_api_v1_me_preferences_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferenceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Read your preferences",
+        "tags": [
+          "account"
+        ]
+      },
+      "put": {
+        "description": "**Protected.** Reads, updates, and deletes the acting user's preferences.\n\nRecord an explicit choice. Nothing here is ever inferred from how you use Weathra.",
+        "operationId": "update_preferences_api_v1_me_preferences_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferenceUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferenceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Update your preferences",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/v1/ready": {
+      "get": {
+        "description": "**Public.** Readiness. Reports what is configured and reachable, and no credential material.\n\nWhat is configured, what answered, and whether Weathra can serve.\n\nEach check is cheap and bounded. The database check is a ``SELECT 1``; the vector-store check\nreads the stored index's identity, which is one row; the MCP check reads the catalog the client\ndiscovered at startup rather than making a call. A readiness endpoint that took a second to\nanswer would be scraped every ten seconds and cost more than it reports.",
+        "operationId": "ready_api_v1_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [],
+        "summary": "Readiness",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/v1/threads": {
+      "get": {
+        "description": "**Protected.** The acting user's conversation threads.\n\nYour threads, most recently active first.",
+        "operationId": "threads_api_v1_threads_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Your conversation threads",
+        "tags": [
+          "evidence"
+        ]
+      }
+    },
+    "/api/v1/threads/{thread_id}": {
+      "delete": {
+        "description": "**Protected.** One of the acting user's threads, and its deletion.\n\nDelete a conversation and its memory.\n\nBoth halves: the ``threads`` row that is the ownership gate, and the checkpoints, which live in\ntables with no foreign key to it and which no cascade would reach.",
+        "operationId": "remove_thread_api_v1_threads__thread_id__delete",
+        "parameters": [
+          {
+            "description": "The thread's identifier.",
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "description": "The thread's identifier.",
+              "title": "Thread Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Delete one of your threads",
+        "tags": [
+          "evidence"
+        ]
+      },
+      "get": {
+        "description": "**Protected.** One of the acting user's threads, and its deletion.\n\nOne of your threads. A thread you do not own is refused as not found.",
+        "operationId": "thread_api_v1_threads__thread_id__get",
+        "parameters": [
+          {
+            "description": "The thread's identifier.",
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "description": "The thread's identifier.",
+              "title": "Thread Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "One of your threads",
+        "tags": [
+          "evidence"
+        ]
+      }
+    },
+    "/api/v1/weather/analysis": {
+      "get": {
+        "description": "**Public.** Deterministic analytics over a supplied window. Reads no user-owned row.\n\nStatistics, extremes, anomalies, trend, and thresholds over one forecast window.\n\nEvery figure is computed in Python from the retrieved series. No language model is involved,\nwhich is why this endpoint works with no inference credential configured.",
+        "operationId": "analysis_api_v1_weather_analysis_get",
+        "parameters": [
+          {
+            "description": "A place name.",
+            "in": "query",
+            "name": "location",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A place name.",
+              "title": "Location"
+            }
+          },
+          {
+            "in": "query",
+            "name": "latitude",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 90.0,
+                  "minimum": -90.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Latitude"
+            }
+          },
+          {
+            "in": "query",
+            "name": "longitude",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 180.0,
+                  "minimum": -180.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Longitude"
+            }
+          },
+          {
+            "description": "Overrides your saved preference for this request only.",
+            "in": "query",
+            "name": "units",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/UnitSystem"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Overrides your saved preference for this request only.",
+              "title": "Units"
+            }
+          },
+          {
+            "description": "A registered provider. The configured default if omitted.",
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A registered provider. The configured default if omitted.",
+              "title": "Provider"
+            }
+          },
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 365,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Days"
+            }
+          },
+          {
+            "description": "Thresholds as 'measure:value', e.g. temperature_max:25. Repeatable.",
+            "in": "query",
+            "name": "above",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Thresholds as 'measure:value', e.g. temperature_max:25. Repeatable.",
+              "title": "Above"
+            }
+          },
+          {
+            "description": "Thresholds as 'measure:value', e.g. precipitation:1. Repeatable.",
+            "in": "query",
+            "name": "below",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Thresholds as 'measure:value', e.g. precipitation:1. Repeatable.",
+              "title": "Below"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [],
+        "summary": "Analyse a forecast window",
+        "tags": [
+          "analysis"
+        ]
+      }
+    },
+    "/api/v1/weather/comparison": {
+      "post": {
+        "description": "**Public.** Ranking supplied candidates. Reads no user-owned row.\n\nRank places against each other, or the days within one place's window.\n\nEvery candidate that could not be scored appears in ``excluded`` with the reason, so a ranking\nis never quietly shorter than the question.",
+        "operationId": "comparison_api_v1_weather_comparison_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComparisonRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComparisonResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [],
+        "summary": "Compare places or days",
+        "tags": [
+          "comparison"
+        ]
+      }
+    },
+    "/api/v1/weather/current": {
+      "get": {
+        "description": "**Public.** Current conditions for supplied parameters. Applies the caller's units when signed in.\n\nWhat it is doing right now at one place.",
+        "operationId": "current_api_v1_weather_current_get",
+        "parameters": [
+          {
+            "description": "A place name.",
+            "in": "query",
+            "name": "location",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A place name.",
+              "title": "Location"
+            }
+          },
+          {
+            "in": "query",
+            "name": "latitude",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 90.0,
+                  "minimum": -90.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Latitude"
+            }
+          },
+          {
+            "in": "query",
+            "name": "longitude",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 180.0,
+                  "minimum": -180.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Longitude"
+            }
+          },
+          {
+            "description": "Overrides your saved preference for this request only.",
+            "in": "query",
+            "name": "units",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/UnitSystem"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Overrides your saved preference for this request only.",
+              "title": "Units"
+            }
+          },
+          {
+            "description": "A registered provider. The configured default if omitted.",
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A registered provider. The configured default if omitted.",
+              "title": "Provider"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [],
+        "summary": "Current conditions",
+        "tags": [
+          "weather"
+        ]
+      }
+    },
+    "/api/v1/weather/forecast": {
+      "get": {
+        "description": "**Public.** A forecast for supplied parameters. Applies the caller's units when signed in.\n\nThe days ahead at one place, with the uncertainty that goes with them.",
+        "operationId": "forecast_api_v1_weather_forecast_get",
+        "parameters": [
+          {
+            "description": "A place name.",
+            "in": "query",
+            "name": "location",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A place name.",
+              "title": "Location"
+            }
+          },
+          {
+            "in": "query",
+            "name": "latitude",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 90.0,
+                  "minimum": -90.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Latitude"
+            }
+          },
+          {
+            "in": "query",
+            "name": "longitude",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 180.0,
+                  "minimum": -180.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Longitude"
+            }
+          },
+          {
+            "description": "Overrides your saved preference for this request only.",
+            "in": "query",
+            "name": "units",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/UnitSystem"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Overrides your saved preference for this request only.",
+              "title": "Units"
+            }
+          },
+          {
+            "description": "A registered provider. The configured default if omitted.",
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A registered provider. The configured default if omitted.",
+              "title": "Provider"
+            }
+          },
+          {
+            "description": "Horizon in days. A horizon beyond the provider's maximum is refused with that maximum stated, never shortened. Your saved preference applies when omitted.",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 365,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Horizon in days. A horizon beyond the provider's maximum is refused with that maximum stated, never shortened. Your saved preference applies when omitted.",
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForecastResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [],
+        "summary": "Forecast",
+        "tags": [
+          "weather"
+        ]
+      }
+    },
+    "/api/v1/weather/history": {
+      "get": {
+        "description": "**Public.** Archive observations for a supplied range. Reads no user-owned row.\n\nWhat actually happened at one place over a past range.",
+        "operationId": "history_api_v1_weather_history_get",
+        "parameters": [
+          {
+            "description": "First day of the range, inclusive (YYYY-MM-DD).",
+            "in": "query",
+            "name": "start",
+            "required": true,
+            "schema": {
+              "description": "First day of the range, inclusive (YYYY-MM-DD).",
+              "format": "date",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Last day of the range, inclusive (YYYY-MM-DD).",
+            "in": "query",
+            "name": "end",
+            "required": true,
+            "schema": {
+              "description": "Last day of the range, inclusive (YYYY-MM-DD).",
+              "format": "date",
+              "title": "End",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A place name.",
+            "in": "query",
+            "name": "location",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A place name.",
+              "title": "Location"
+            }
+          },
+          {
+            "in": "query",
+            "name": "latitude",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 90.0,
+                  "minimum": -90.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Latitude"
+            }
+          },
+          {
+            "in": "query",
+            "name": "longitude",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 180.0,
+                  "minimum": -180.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Longitude"
+            }
+          },
+          {
+            "description": "Overrides your saved preference for this request only.",
+            "in": "query",
+            "name": "units",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/UnitSystem"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Overrides your saved preference for this request only.",
+              "title": "Units"
+            }
+          },
+          {
+            "description": "A registered provider. The configured default if omitted.",
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A registered provider. The configured default if omitted.",
+              "title": "Provider"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [],
+        "summary": "Historical observations",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/v1/weather/history/baseline": {
+      "get": {
+        "description": "**Public.** A baseline over supplied years. Reads no user-owned row.\n\nThe typical value for a calendar period, over as many past years as the archive covers.",
+        "operationId": "baseline_api_v1_weather_history_baseline_get",
+        "parameters": [
+          {
+            "description": "First day of the range, inclusive (YYYY-MM-DD).",
+            "in": "query",
+            "name": "start",
+            "required": true,
+            "schema": {
+              "description": "First day of the range, inclusive (YYYY-MM-DD).",
+              "format": "date",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Last day of the range, inclusive (YYYY-MM-DD).",
+            "in": "query",
+            "name": "end",
+            "required": true,
+            "schema": {
+              "description": "Last day of the range, inclusive (YYYY-MM-DD).",
+              "format": "date",
+              "title": "End",
+              "type": "string"
+            }
+          },
+          {
+            "description": "How many past years to average over. A year the archive cannot serve is dropped and reported; the result states which years went into it.",
+            "in": "query",
+            "name": "years",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "description": "How many past years to average over. A year the archive cannot serve is dropped and reported; the result states which years went into it.",
+              "maximum": 50,
+              "minimum": 2,
+              "title": "Years",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Which measure to baseline.",
+            "in": "query",
+            "name": "measure",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Measure",
+              "default": "temperature_mean",
+              "description": "Which measure to baseline."
+            }
+          },
+          {
+            "description": "A place name.",
+            "in": "query",
+            "name": "location",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A place name.",
+              "title": "Location"
+            }
+          },
+          {
+            "in": "query",
+            "name": "latitude",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 90.0,
+                  "minimum": -90.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Latitude"
+            }
+          },
+          {
+            "in": "query",
+            "name": "longitude",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 180.0,
+                  "minimum": -180.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Longitude"
+            }
+          },
+          {
+            "description": "Overrides your saved preference for this request only.",
+            "in": "query",
+            "name": "units",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/UnitSystem"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Overrides your saved preference for this request only.",
+              "title": "Units"
+            }
+          },
+          {
+            "description": "A registered provider. The configured default if omitted.",
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A registered provider. The configured default if omitted.",
+              "title": "Provider"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Baseline"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [],
+        "summary": "Baseline for a period",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/v1/weather/history/comparison": {
+      "get": {
+        "description": "**Public.** Compares two supplied past periods. Reads no user-owned row.\n\nCompare two past periods on a shared basis.\n\nBoth periods are observations. This is not a measure of forecast accuracy, and the response's\nown data class says so.",
+        "operationId": "comparison_api_v1_weather_history_comparison_get",
+        "parameters": [
+          {
+            "description": "First day of the range, inclusive (YYYY-MM-DD).",
+            "in": "query",
+            "name": "earlier_start",
+            "required": true,
+            "schema": {
+              "description": "First day of the range, inclusive (YYYY-MM-DD).",
+              "format": "date",
+              "title": "Earlier Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Last day of the range, inclusive (YYYY-MM-DD).",
+            "in": "query",
+            "name": "earlier_end",
+            "required": true,
+            "schema": {
+              "description": "Last day of the range, inclusive (YYYY-MM-DD).",
+              "format": "date",
+              "title": "Earlier End",
+              "type": "string"
+            }
+          },
+          {
+            "description": "First day of the later period.",
+            "in": "query",
+            "name": "later_start",
+            "required": true,
+            "schema": {
+              "description": "First day of the later period.",
+              "format": "date",
+              "title": "Later Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Last day of the later period.",
+            "in": "query",
+            "name": "later_end",
+            "required": true,
+            "schema": {
+              "description": "Last day of the later period.",
+              "format": "date",
+              "title": "Later End",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A place name.",
+            "in": "query",
+            "name": "location",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A place name.",
+              "title": "Location"
+            }
+          },
+          {
+            "in": "query",
+            "name": "latitude",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 90.0,
+                  "minimum": -90.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Latitude"
+            }
+          },
+          {
+            "in": "query",
+            "name": "longitude",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 180.0,
+                  "minimum": -180.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Longitude"
+            }
+          },
+          {
+            "description": "Overrides your saved preference for this request only.",
+            "in": "query",
+            "name": "units",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/UnitSystem"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Overrides your saved preference for this request only.",
+              "title": "Units"
+            }
+          },
+          {
+            "description": "A registered provider. The configured default if omitted.",
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A registered provider. The configured default if omitted.",
+              "title": "Provider"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeriodComparison"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [],
+        "summary": "Compare two past periods",
+        "tags": [
+          "history"
+        ]
+      }
+    }
+  }
+}
