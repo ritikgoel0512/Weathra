@@ -21,13 +21,17 @@ from pydantic import BaseModel
 
 from weathra.config import Settings
 
-REPO = Path(__file__).resolve().parents[2]
-DOCS = REPO / "docs"
-PACKAGE = REPO / "backend" / "weathra"
+# The `weathra/` project directory. Every path a document names is relative to it, because the
+# documents sit inside it alongside the applications they describe. The README is the exception:
+# it belongs to the repository, one level up.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = PROJECT_ROOT.parent
+DOCS = PROJECT_ROOT / "docs"
+PACKAGE = PROJECT_ROOT / "backend" / "weathra"
 
 
 def _read(name: str) -> str:
-    path = DOCS / name if name != "README.md" else REPO / "README.md"
+    path = DOCS / name if name != "README.md" else REPO_ROOT / "README.md"
     assert path.is_file(), f"{name} is missing"
     text = path.read_text()
     assert "> Placeholder" not in text, f"{name} is still a placeholder"
@@ -98,7 +102,9 @@ def test_every_documented_module_exists(architecture: str) -> None:
 
     assert len(modules) > 60, "the layout block parsed as almost nothing; check its formatting"
     for path in sorted(modules | packages):
-        assert (REPO / path).exists(), f"docs/architecture.md names {path}, which does not exist"
+        assert (PROJECT_ROOT / path).exists(), (
+            f"docs/architecture.md names {path}, which does not exist"
+        )
 
 
 def test_every_subpackage_is_documented(architecture: str) -> None:
@@ -238,7 +244,13 @@ def test_every_authentication_requirement_is_addressed(authentication: str) -> N
     pass on anything or fail on a rewording.
     """
     spec = (
-        REPO / "openspec" / "changes" / "weathra-mvp" / "specs" / "authentication" / "spec.md"
+        PROJECT_ROOT
+        / "openspec"
+        / "changes"
+        / "weathra-mvp"
+        / "specs"
+        / "authentication"
+        / "spec.md"
     ).read_text()
     requirements = re.findall(r"^### Requirement: (.+)$", spec, re.MULTILINE)
     assert len(requirements) >= 15
@@ -323,7 +335,7 @@ def test_every_route_is_documented_with_its_access() -> None:
     the backend is undocumented until somebody documents it.
     """
     text = _read("api.md")
-    schema = json.loads((REPO / "backend" / "openapi.json").read_text())
+    schema = json.loads((PROJECT_ROOT / "backend" / "openapi.json").read_text())
     documented = {row[1].strip("`"): row for row in _table_rows(text, "Method")}
 
     for path, operations in schema["paths"].items():
@@ -543,7 +555,13 @@ def test_every_safety_requirement_is_addressed() -> None:
     `specs/authentication` for why.
     """
     spec = (
-        REPO / "openspec" / "changes" / "weathra-mvp" / "specs" / "safety-grounding" / "spec.md"
+        PROJECT_ROOT
+        / "openspec"
+        / "changes"
+        / "weathra-mvp"
+        / "specs"
+        / "safety-grounding"
+        / "spec.md"
     ).read_text()
     requirements = re.findall(r"^### Requirement: (.+)$", spec, re.MULTILINE)
     assert len(requirements) >= 10
@@ -635,7 +653,7 @@ def test_the_roadmap_and_part_b_agree() -> None:
     Part B is the change's own record of what the architecture keeps room for. Two lists that
     disagree are worse than one: a reader cannot tell which is the plan.
     """
-    tasks = (REPO / "openspec" / "changes" / "weathra-mvp" / "tasks.md").read_text()
+    tasks = (PROJECT_ROOT / "openspec" / "changes" / "weathra-mvp" / "tasks.md").read_text()
     part_b = tasks.split("# Part B")[1]
     items = re.findall(r"^- \*{0,2}(.+?)\*{0,2}(?: —|\.|$)", part_b, re.MULTILINE)
     assert len(items) >= 20, "Part B parsed as almost nothing; check its formatting"

@@ -6,7 +6,7 @@ Supabase instance, and every automated step runs on a hosted runner.
 
 > **Status.** The workflows and configuration described in this document are the target topology.
 > The pull-request CI workflows for both applications exist and run
-> ([`../.github/workflows/`](../.github/workflows)); the deploy workflows, the Supabase project
+> ([`../../.github/workflows/`](../../.github/workflows)); the deploy workflows, the Supabase project
 > configuration, and the secret storage are tasks 23.2–23.7 of the `weathra-mvp` change and require
 > the cloud accounts to be provisioned. Anything below marked *(pending)* is not yet in place.
 

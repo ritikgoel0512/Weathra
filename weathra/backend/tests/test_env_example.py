@@ -55,8 +55,8 @@ def backend_env(backend_root: Path) -> Path:
 
 
 @pytest.fixture(scope="module")
-def frontend_env(repo_root: Path) -> Path:
-    return repo_root / "frontend" / ".env.example"
+def frontend_env(project_root: Path) -> Path:
+    return project_root / "frontend" / ".env.example"
 
 
 def test_both_files_exist(backend_env: Path, frontend_env: Path) -> None:

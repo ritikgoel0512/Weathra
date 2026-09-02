@@ -65,17 +65,17 @@ issues warnings: for severe weather it refers you to your official national mete
 One repository, two applications, built and deployed separately. The backend never serves the
 frontend's pages; the frontend talks to the backend only through its documented versioned API.
 
-- [`docs/architecture.md`](docs/architecture.md) — component boundaries and the dependency rule
-- [`docs/agents.md`](docs/agents.md) — the graph, the four agents, and why the graph executes tools
-- [`docs/authentication.md`](docs/authentication.md) — identity, ownership, RLS, and the secret split
-- [`docs/api.md`](docs/api.md) — every endpoint, its classification, and the SSE event catalogue
-- [`docs/configuration.md`](docs/configuration.md) — every environment variable for both applications
-- [`docs/mcp.md`](docs/mcp.md) — the tool catalogue and its error semantics
-- [`docs/rag.md`](docs/rag.md) — the knowledge corpus, embeddings, and retrieval
-- [`docs/evaluation.md`](docs/evaluation.md) — the dataset, the ten metrics, and the acceptance gates
-- [`docs/privacy-ethics.md`](docs/privacy-ethics.md) — data classes, grounding limits, retention, deletion
-- [`docs/deployment.md`](docs/deployment.md) — topology, environments, and rollback
-- [`docs/roadmap.md`](docs/roadmap.md) — what is in this MVP and what is deliberately not
+- [`weathra/docs/architecture.md`](weathra/docs/architecture.md) — component boundaries and the dependency rule
+- [`weathra/docs/agents.md`](weathra/docs/agents.md) — the graph, the four agents, and why the graph executes tools
+- [`weathra/docs/authentication.md`](weathra/docs/authentication.md) — identity, ownership, RLS, and the secret split
+- [`weathra/docs/api.md`](weathra/docs/api.md) — every endpoint, its classification, and the SSE event catalogue
+- [`weathra/docs/configuration.md`](weathra/docs/configuration.md) — every environment variable for both applications
+- [`weathra/docs/mcp.md`](weathra/docs/mcp.md) — the tool catalogue and its error semantics
+- [`weathra/docs/rag.md`](weathra/docs/rag.md) — the knowledge corpus, embeddings, and retrieval
+- [`weathra/docs/evaluation.md`](weathra/docs/evaluation.md) — the dataset, the ten metrics, and the acceptance gates
+- [`weathra/docs/privacy-ethics.md`](weathra/docs/privacy-ethics.md) — data classes, grounding limits, retention, deletion
+- [`weathra/docs/deployment.md`](weathra/docs/deployment.md) — topology, environments, and rollback
+- [`weathra/docs/roadmap.md`](weathra/docs/roadmap.md) — what is in this MVP and what is deliberately not
 
 ## MVP versus post-MVP
 
@@ -90,7 +90,7 @@ organizations and roles, API keys and rate limiting; forecast-accuracy scoring; 
 watch, and report screens; multi-provider consensus; scheduled snapshot capture; a shared cache;
 push notifications. The seams for each exist — a provider contract, a client contract, a cache
 wrapper, a vector-store interface — so these are additions rather than rewrites.
-[`docs/roadmap.md`](docs/roadmap.md) has the full list, and the post-MVP routes exist in the
+[`weathra/docs/roadmap.md`](weathra/docs/roadmap.md) has the full list, and the post-MVP routes exist in the
 frontend as pages that say plainly that they are not yet available.
 
 ## From clone to a running pair
@@ -121,13 +121,13 @@ In the project's dashboard:
    as. Note the connection strings for both the pooled request connection and the direct privileged
    one.
 
-[`docs/authentication.md`](docs/authentication.md) explains what each of these settings is load-bearing
-for, and [`docs/deployment.md`](docs/deployment.md) records the values per environment.
+[`weathra/docs/authentication.md`](weathra/docs/authentication.md) explains what each of these settings is load-bearing
+for, and [`weathra/docs/deployment.md`](weathra/docs/deployment.md) records the values per environment.
 
 ### 3. The backend
 
 ```bash
-cd backend
+cd weathra/backend
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
@@ -155,7 +155,7 @@ uvicorn weathra.api.app:create_app --factory --reload
 ### 4. The frontend
 
 ```bash
-cd frontend
+cd weathra/frontend
 npm ci
 cp .env.example .env.local     # the Supabase URL, its public key, and the backend base URL
 npm run dev
@@ -164,7 +164,7 @@ npm run dev
 Open `http://localhost:3000`, create an account, and enter the code from the verification email.
 You are in the product.
 
-Everything in `frontend/.env.local` is public by design and ships in the browser bundle. The
+Everything in `weathra/frontend/.env.local` is public by design and ships in the browser bundle. The
 service-role key, the database URLs, and the inference key are backend secrets and must never
 appear there under any name — `npm run check:secrets` asserts exactly that, against the environment
 files, the source, and the built bundle, and CI runs it on every pull request.
@@ -173,7 +173,7 @@ files, the source, and the built bundle, and CI runs it on every pull request.
 
 ```bash
 # backend — no network, no database, no credentials needed
-cd backend && pytest
+cd weathra/backend && pytest
 
 # backend — against a real Postgres with pgvector
 WEATHRA_TEST_DATABASE_URL=postgresql://... pytest -m db
@@ -182,24 +182,35 @@ WEATHRA_TEST_DATABASE_URL=postgresql://... pytest -m db
 weathra-evaluate
 
 # frontend
-cd frontend && npm run lint && npm run typecheck && npm test && npm run build
+cd ../frontend && npm run lint && npm run typecheck && npm test && npm run build
 ```
 
 The default test suite reaches nothing external: weather payloads are replayed from recorded
 Open-Meteo responses, tokens are minted locally against a test key pair, embeddings come from a
 deterministic hashing model, and the MCP server runs in-process. That is why it can gate every pull
-request. [`docs/evaluation.md`](docs/evaluation.md) explains what offline mode does and does not
+request. [`weathra/docs/evaluation.md`](weathra/docs/evaluation.md) explains what offline mode does and does not
 measure.
 
 ## Repository layout
 
+The application lives in one top-level project directory. Only what belongs to the repository
+itself sits above it — the CI workflows GitHub Actions can discover nowhere else, the licence, the
+README you are reading, and .gitignore.
+
 ```
-backend/     FastAPI application, LangGraph orchestration, MCP server, analytics, RAG, evaluation
-frontend/    Next.js application
-docs/        Architecture, API, configuration, evaluation, privacy, deployment, design artifacts
-openspec/    The specification-driven change this system was built from
-.github/     CI workflows for each application
+.github/workflows/   CI for each application, at the root because Actions looks only here
+weathra/             The application
+  backend/           FastAPI application, LangGraph orchestration, MCP server, analytics, RAG, evaluation
+  frontend/          Next.js application
+  docs/              Architecture, API, configuration, evaluation, privacy, deployment, design artifacts
+  openspec/          The specification-driven change this system was built from
+.gitignore
+LICENSE
+README.md
 ```
+
+Paths inside `weathra/docs/` and `weathra/openspec/` are relative to `weathra/`, since those
+documents sit beside the applications they describe.
 
 ## Licence
 

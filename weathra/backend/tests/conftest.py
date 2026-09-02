@@ -13,7 +13,12 @@ from tests.auth_support import TokenFactory, build_factory
 pytest_plugins = ["tests.db_support"]
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
-REPO_ROOT = BACKEND_ROOT.parent
+# The application lives in its own top-level project directory, so the two roots are distinct:
+# `weathra/` holds the applications, their docs, and the OpenSpec change, while the repository
+# root above it holds only what belongs to the repository itself — the CI workflows, the README,
+# the licence, and .gitignore.
+PROJECT_ROOT = BACKEND_ROOT.parent
+REPO_ROOT = PROJECT_ROOT.parent
 PACKAGE_ROOT = BACKEND_ROOT / "weathra"
 
 
@@ -24,7 +29,14 @@ def token_factory() -> TokenFactory:
 
 
 @pytest.fixture(scope="session")
+def project_root() -> Path:
+    """The `weathra/` project directory — the parent of `backend/`, `frontend/`, and `docs/`."""
+    return PROJECT_ROOT
+
+
+@pytest.fixture(scope="session")
 def repo_root() -> Path:
+    """The repository root — the parent of `weathra/`, and where `.github/workflows/` lives."""
     return REPO_ROOT
 
 

@@ -71,19 +71,38 @@ def test_every_module_imports_cleanly() -> None:
         importlib.import_module(module.name)
 
 
-def test_monorepo_directories_present(repo_root: Path) -> None:
-    for relative in ("backend", "frontend", "docs", ".github/workflows"):
-        assert (repo_root / relative).is_dir(), f"missing {relative}/"
+def test_monorepo_directories_present(project_root: Path) -> None:
+    for relative in ("backend", "frontend", "docs", "openspec"):
+        assert (project_root / relative).is_dir(), f"missing {relative}/"
 
 
-def test_documentation_placeholders_present(repo_root: Path) -> None:
-    docs = repo_root / "docs"
+def test_the_project_lives_in_its_own_top_level_directory(
+    project_root: Path, repo_root: Path
+) -> None:
+    """The applications sit under `weathra/`; only repository-level files sit above it."""
+    assert project_root.name == "weathra"
+    assert project_root.parent == repo_root
+
+
+def test_the_ci_workflows_stay_at_the_repository_root(repo_root: Path) -> None:
+    """GitHub Actions only discovers workflows in the repository's own `.github/workflows/`."""
+    workflows = repo_root / ".github" / "workflows"
+    assert workflows.is_dir(), "missing .github/workflows/"
+    assert {path.name for path in workflows.glob("*.yml")} >= {"backend.yml", "frontend.yml"}
+
+
+def test_the_repository_level_files_stay_at_the_repository_root(repo_root: Path) -> None:
+    for name in ("README.md", "LICENSE", ".gitignore"):
+        assert (repo_root / name).is_file(), f"missing {name}"
+
+
+def test_documentation_placeholders_present(project_root: Path) -> None:
+    docs = project_root / "docs"
     present = {path.name for path in docs.glob("*.md")}
     assert present.issuperset(EXPECTED_DOCS), f"missing docs: {sorted(EXPECTED_DOCS - present)}"
     assert (docs / "design").is_dir()
-    assert (repo_root / "README.md").is_file()
 
 
 @pytest.mark.parametrize("name", sorted(EXPECTED_DOCS))
-def test_documentation_placeholder_is_not_empty(repo_root: Path, name: str) -> None:
-    assert (repo_root / "docs" / name).read_text().strip()
+def test_documentation_placeholder_is_not_empty(project_root: Path, name: str) -> None:
+    assert (project_root / "docs" / name).read_text().strip()

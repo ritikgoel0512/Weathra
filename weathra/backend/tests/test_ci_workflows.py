@@ -200,14 +200,19 @@ def test_the_frontend_workflow_holds_only_public_configuration(
 def test_each_workflow_only_runs_for_its_own_application(
     backend_workflow: dict[str, Any], frontend_workflow: dict[str, Any]
 ) -> None:
-    """Separately built and deployed: a frontend change must not wait on a Postgres service."""
+    """Separately built and deployed: a frontend change must not wait on a Postgres service.
+
+    The paths are repository-relative, and the applications live under the `weathra/` project
+    directory — a trigger left at the old top-level `backend/` would match nothing at all, so the
+    prefix is asserted in full rather than by suffix.
+    """
     backend_triggers = _triggers(backend_workflow)["pull_request"]["paths"]
     frontend_triggers = _triggers(frontend_workflow)["pull_request"]["paths"]
 
-    assert any(path.startswith("backend/") for path in backend_triggers)
-    assert not any(path.startswith("frontend/") for path in backend_triggers)
-    assert any(path.startswith("frontend/") for path in frontend_triggers)
-    assert not any(path.startswith("backend/") for path in frontend_triggers)
+    assert any(path.startswith("weathra/backend/") for path in backend_triggers)
+    assert not any(path.startswith("weathra/frontend/") for path in backend_triggers)
+    assert any(path.startswith("weathra/frontend/") for path in frontend_triggers)
+    assert not any(path.startswith("weathra/backend/") for path in frontend_triggers)
 
 
 def test_both_workflows_run_on_pull_requests_and_on_main(

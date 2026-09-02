@@ -11,7 +11,6 @@ So this test fails the moment the two disagree, and names the one command that f
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from scripts.dump_openapi import SNAPSHOT, document, render
 
@@ -25,9 +24,7 @@ def test_the_committed_document_is_current() -> None:
     )
 
 
-def test_the_document_carries_the_protected_operations_the_frontend_needs(
-    repo_root: Path,
-) -> None:
+def test_the_document_carries_the_protected_operations_the_frontend_needs() -> None:
     """The generator reads `security` to decide which calls carry a bearer token.
 
     If FastAPI ever stopped emitting it — a changed dependency, a route registered without the

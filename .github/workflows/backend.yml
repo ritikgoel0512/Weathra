@@ -3,12 +3,12 @@ name: backend
 on:
   pull_request:
     paths:
-      - "backend/**"
+      - "weathra/backend/**"
       - ".github/workflows/backend.yml"
   push:
     branches: [main]
     paths:
-      - "backend/**"
+      - "weathra/backend/**"
       - ".github/workflows/backend.yml"
   workflow_dispatch:
 
@@ -18,7 +18,7 @@ concurrency:
 
 defaults:
   run:
-    working-directory: backend
+    working-directory: weathra/backend
 
 env:
   # Enough to construct Settings. No real project, no real credential: the offline suite reaches
@@ -112,5 +112,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: evaluation-run
-          path: backend/evaluation-run.json
+          path: weathra/backend/evaluation-run.json
           if-no-files-found: warn

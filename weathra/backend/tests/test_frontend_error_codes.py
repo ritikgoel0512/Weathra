@@ -32,8 +32,8 @@ _LIST = re.compile(
 
 
 @pytest.fixture(scope="module")
-def declared_codes(repo_root: Path) -> set[str]:
-    source = (repo_root / FRONTEND_ERRORS).read_text()
+def declared_codes(project_root: Path) -> set[str]:
+    source = (project_root / FRONTEND_ERRORS).read_text()
     match = _LIST.search(source)
     assert match is not None, f"AUTHENTICATION_ERROR_CODES is not declared in {FRONTEND_ERRORS}"
     return set(re.findall(r'"([a-z_]+)"', match.group("body")))
@@ -75,9 +75,9 @@ def test_the_frontend_treats_no_non_authentication_failure_as_a_session_failure(
     )
 
 
-def test_the_agent_unavailable_code_matches(repo_root: Path) -> None:
+def test_the_agent_unavailable_code_matches(project_root: Path) -> None:
     """The Analyst names the missing configuration; every other screen stays usable."""
     from weathra.domain.errors import AgentNotConfigured
 
-    source = (repo_root / FRONTEND_ERRORS).read_text()
+    source = (project_root / FRONTEND_ERRORS).read_text()
     assert f'AGENT_NOT_CONFIGURED_CODE = "{AgentNotConfigured.code}"' in source
