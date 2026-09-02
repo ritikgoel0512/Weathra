@@ -1,0 +1,54 @@
+{
+ "generationtime_ms": 0.31721592,
+ "results": [
+  {
+   "admin1": "Capital Region",
+   "admin1_id": 3426182,
+   "admin2": "Reykjav\u00edkurborg",
+   "admin2_id": 3413831,
+   "country": "Iceland",
+   "country_code": "IS",
+   "country_id": 2629691,
+   "elevation": 37.0,
+   "feature_code": "PPLC",
+   "id": 3413829,
+   "latitude": 64.13548,
+   "longitude": -21.89541,
+   "name": "Reykjavik",
+   "population": 118918,
+   "postcodes": [
+    "101",
+    "103",
+    "104",
+    "105",
+    "107",
+    "108",
+    "109",
+    "110",
+    "111",
+    "112",
+    "113",
+    "116",
+    "150",
+    "155"
+   ],
+   "timezone": "Atlantic/Reykjavik"
+  },
+  {
+   "admin1": "Capital Region",
+   "admin1_id": 3426182,
+   "admin2": "Reykjav\u00edkurborg",
+   "admin2_id": 3413831,
+   "country": "Iceland",
+   "country_code": "IS",
+   "country_id": 2629691,
+   "elevation": 14.0,
+   "feature_code": "AIRP",
+   "id": 6295712,
+   "latitude": 64.13,
+   "longitude": -21.94056,
+   "name": "Reykjavik Airport",
+   "timezone": "Atlantic/Reykjavik"
+  }
+ ]
+}

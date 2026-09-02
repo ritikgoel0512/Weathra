@@ -1,0 +1,69 @@
+{
+  "category": "historical",
+  "notes": "Archive questions. Every case forbids the forecast tool: answering 'how warm was it' from a forecast would report what is expected rather than what happened, which specs/historical-weather forbids in both directions.",
+  "cases": [
+    {
+      "case_id": "hi-berlin-week",
+      "category": "historical",
+      "description": "Observations over an explicit past range, labelled as observations.",
+      "question": "How warm was it in Berlin between 1 June 2025 and 7 June 2025?",
+      "expected_tools": ["weather_history"],
+      "expected_agents": ["historical"],
+      "forbidden_tools": ["weather_forecast"],
+      "expected_answer_characteristics": ["berlin"],
+      "expected_resolution": {
+        "locations": ["Berlin"],
+        "location_source": "request"
+      }
+    },
+    {
+      "case_id": "hi-lisbon-rainfall",
+      "category": "historical",
+      "description": "A precipitation total over a past range, which is a sum rather than a mean.",
+      "question": "How much rain fell in Lisbon between 1 June 2025 and 7 June 2025?",
+      "expected_tools": ["weather_history"],
+      "expected_agents": ["historical"],
+      "forbidden_tools": ["weather_forecast"],
+      "expected_answer_characteristics": ["lisbon"]
+    },
+    {
+      "case_id": "hi-munich-last-week",
+      "category": "historical",
+      "description": "A relative past window, which must resolve against the location's own calendar.",
+      "question": "What were the temperatures in Munich between 1 June 2025 and 7 June 2025?",
+      "expected_tools": ["weather_history"],
+      "expected_agents": ["historical"],
+      "forbidden_tools": ["weather_forecast"],
+      "expected_resolution": {
+        "locations": ["Munich"],
+        "location_source": "request"
+      }
+    },
+    {
+      "case_id": "hi-before-archive",
+      "category": "historical",
+      "description": "A range before the archive begins is refused with the coverage stated, not answered.",
+      "question": "How warm was it in Berlin between 1 January 1850 and 7 January 1850?",
+      "expects_refusal": true,
+      "forbidden_answer_characteristics": ["°c on average", "the mean was"]
+    },
+    {
+      "case_id": "hi-future-range",
+      "category": "historical",
+      "description": "A historical question about a future range is refused rather than answered from a forecast.",
+      "question": "How warm was it in Berlin between 1 January 2099 and 7 January 2099?",
+      "forbidden_tools": ["weather_forecast"],
+      "expects_refusal": true
+    },
+    {
+      "case_id": "hi-observation-not-forecast-accuracy",
+      "category": "historical",
+      "description": "Comparing two past periods is a comparison of observations, never a forecast-accuracy score.",
+      "question": "Was Berlin warmer in the first week of June 2025 than in the first week of May 2025?",
+      "expected_tools": ["weather_history"],
+      "expected_agents": ["historical"],
+      "forbidden_tools": ["weather_forecast"],
+      "forbidden_answer_characteristics": ["forecast accuracy", "the forecast was right", "the forecast was wrong"]
+    }
+  ]
+}

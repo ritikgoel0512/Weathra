@@ -1,0 +1,107 @@
+{
+  "category": "current_and_forecast",
+  "notes": "Current conditions and forecast questions. Every case expects the forecast agent and forbids the archive: answering 'what is it now' from historical observations would be a different answer to a different question.",
+  "cases": [
+    {
+      "case_id": "cf-berlin-current",
+      "category": "current_and_forecast",
+      "description": "Current conditions for one named place, labelled current rather than forecast.",
+      "question": "What is the weather in Berlin right now?",
+      "expected_tools": ["weather_forecast"],
+      "expected_agents": ["forecast"],
+      "forbidden_tools": ["weather_history"],
+      "expected_answer_characteristics": ["berlin"],
+      "expected_resolution": {
+        "locations": ["Berlin"],
+        "location_source": "request"
+      }
+    },
+    {
+      "case_id": "cf-berlin-tomorrow",
+      "category": "current_and_forecast",
+      "description": "A one-day forecast, the most common question Weathra will be asked.",
+      "question": "Will it rain in Berlin tomorrow?",
+      "expected_tools": ["weather_forecast"],
+      "expected_agents": ["forecast"],
+      "forbidden_tools": ["weather_history"],
+      "expected_answer_characteristics": ["berlin"],
+      "expected_resolution": {
+        "locations": ["Berlin"],
+        "location_source": "request"
+      }
+    },
+    {
+      "case_id": "cf-lisbon-week",
+      "category": "current_and_forecast",
+      "description": "A week-long horizon, which must be reported with its uncertainty.",
+      "question": "What is the forecast for Lisbon over the next 7 days?",
+      "expected_tools": ["weather_forecast"],
+      "expected_agents": ["forecast"],
+      "forbidden_tools": ["weather_history"],
+      "expected_answer_characteristics": ["lisbon"],
+      "expected_resolution": {
+        "locations": ["Lisbon"],
+        "location_source": "request"
+      }
+    },
+    {
+      "case_id": "cf-munich-wind",
+      "category": "current_and_forecast",
+      "description": "A specific measure rather than a general question, so the answer must name it.",
+      "question": "How windy will it be in Munich over the next 3 days?",
+      "expected_tools": ["weather_forecast"],
+      "expected_agents": ["forecast"],
+      "forbidden_tools": ["weather_history"],
+      "expected_answer_characteristics": ["munich"],
+      "expected_resolution": {
+        "locations": ["Munich"],
+        "location_source": "request"
+      }
+    },
+    {
+      "case_id": "cf-imperial-units",
+      "category": "current_and_forecast",
+      "description": "An explicitly requested unit system, which must win over any default.",
+      "question": "What is the temperature in Berlin over the next 3 days?",
+      "units": "imperial",
+      "expected_tools": ["weather_forecast"],
+      "expected_agents": ["forecast"],
+      "forbidden_tools": ["weather_history"],
+      "expected_resolution": {
+        "locations": ["Berlin"],
+        "unit_system": "imperial",
+        "units_source": "request"
+      }
+    },
+    {
+      "case_id": "cf-unresolvable-place",
+      "category": "current_and_forecast",
+      "description": "An unresolvable place name is refused by name, with no nearest match substituted.",
+      "question": "What is the weather in Atlantisborough tomorrow?",
+      "forbidden_tools": ["weather_forecast", "weather_history", "weather_statistics"],
+      "expects_clarification": true,
+      "forbidden_answer_characteristics": ["°c", "°f", "millimetres"]
+    },
+    {
+      "case_id": "cf-no-place-named",
+      "category": "current_and_forecast",
+      "description": "A question naming no place, with no saved default: asked rather than guessed.",
+      "question": "Will it rain tomorrow?",
+      "forbidden_tools": ["weather_forecast", "weather_history"],
+      "expects_clarification": true
+    },
+    {
+      "case_id": "cf-saved-default-location",
+      "category": "current_and_forecast",
+      "description": "A saved default location is used and disclosed as the default rather than a guess.",
+      "question": "Will it rain tomorrow?",
+      "preferences": {"default_location": "Berlin"},
+      "expected_tools": ["weather_forecast"],
+      "expected_agents": ["forecast"],
+      "expected_resolution": {
+        "locations": ["Berlin"],
+        "location_source": "preferences"
+      }
+    }
+  ]
+}

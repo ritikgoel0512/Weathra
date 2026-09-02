@@ -1,0 +1,19 @@
+{
+ "current": {
+  "interval": 900,
+  "temperature_2m": 10.7,
+  "time": "2026-09-02T16:00"
+ },
+ "current_units": {
+  "interval": "seconds",
+  "temperature_2m": "\u00b0C",
+  "time": "iso8601"
+ },
+ "elevation": 0.0,
+ "generationtime_ms": 0.030159950256347656,
+ "latitude": 64.139565,
+ "longitude": -21.971603,
+ "timezone": "Atlantic/Reykjavik",
+ "timezone_abbreviation": "GMT",
+ "utc_offset_seconds": 0
+}

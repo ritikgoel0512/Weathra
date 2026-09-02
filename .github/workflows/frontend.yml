@@ -1,0 +1,77 @@
+name: frontend
+
+on:
+  pull_request:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend.yml"
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: frontend
+
+# The frontend's whole configuration, and all of it public by design (design.md decision 19). These
+# are placeholders: nothing in lint, type-check, the unit tests, or the build reaches Supabase or
+# the backend, and `lib/env.ts` requires the variables to be *set* so a missing one fails loudly
+# rather than rendering an app pointed at nothing.
+#
+# No secret belongs here, and the containment step below is what proves none arrived: a
+# service-role key or database URL added to this file, to frontend/.env*, to frontend source, or
+# inlined into the built bundle fails the job.
+env:
+  NEXT_PUBLIC_SUPABASE_URL: https://ci.supabase.co
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+  NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  lint-and-test:
+    name: lint, type-check, test, and build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # `npm ci` rather than `npm install`: it installs the lockfile exactly and fails if
+      # package.json and the lockfile disagree, so CI cannot silently resolve a different tree
+      # than a developer has.
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Task 18.11, and it runs *after* the build deliberately. Next.js inlines every
+      # NEXT_PUBLIC_-prefixed value at build time, so the bundle is the only place that shows what
+      # a browser actually receives; `check:secrets` sets WEATHRA_REQUIRE_BUNDLE=1, which turns a
+      # missing build into a failure so the gate can never pass by having nothing to look at.
+      #
+      # The check's own tests run it against deliberately poisoned trees, so a passing job is
+      # evidence the check works and found nothing — not merely that it found nothing.
+      - name: Verify secret containment
+        run: npm run check:secrets

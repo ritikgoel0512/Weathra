@@ -1,0 +1,21 @@
+/*
+ * Placeholder. The design-system tokens — typography, spacing, and colour with a
+ * prefers-color-scheme override — are established in task 20.3 from the approved artifacts of
+ * task group 19.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}

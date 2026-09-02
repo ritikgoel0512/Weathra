@@ -1,0 +1,202 @@
+{
+  "category": "memory",
+  "notes": "Multi-turn cases. Each turn declares what its references are expected to resolve to, because 'the follow-up worked' is not checkable and 'the follow-up resolved to Berlin and Munich, in metric, over 3 days' is.",
+  "cases": [
+    {
+      "case_id": "me-berlin-munich-follow-up",
+      "category": "memory",
+      "description": "The specification's own scenario: compare two places, then ask which is warmer.",
+      "turns": [
+        {
+          "question": "Compare Berlin and Munich over the next 3 days",
+          "expected_tools": [
+            "weather_forecast"
+          ],
+          "expected_resolution": {
+            "locations": [
+              "Berlin",
+              "Munich"
+            ],
+            "location_source": "request"
+          }
+        },
+        {
+          "question": "Which one is warmer tomorrow?",
+          "expected_resolution": {
+            "locations": [
+              "Berlin",
+              "Munich"
+            ],
+            "location_source": "thread"
+          },
+          "expected_answer_characteristics": [
+            "berlin",
+            "munich"
+          ]
+        }
+      ],
+      "expected_agents": [
+        "forecast"
+      ]
+    },
+    {
+      "case_id": "me-window-carried-forward",
+      "category": "memory",
+      "description": "A window established in one turn and inherited by the next: 'what about precipitation?'",
+      "turns": [
+        {
+          "question": "What is the temperature in Berlin over the next 3 days?",
+          "expected_tools": [
+            "weather_forecast"
+          ],
+          "expected_resolution": {
+            "locations": [
+              "Berlin"
+            ],
+            "location_source": "request",
+            "window_days": 3
+          }
+        },
+        {
+          "question": "What about precipitation?",
+          "expected_resolution": {
+            "locations": [
+              "Berlin"
+            ],
+            "location_source": "thread"
+          }
+        }
+      ],
+      "expected_agents": [
+        "forecast"
+      ]
+    },
+    {
+      "case_id": "me-units-carried-forward",
+      "category": "memory",
+      "description": "A unit choice made once and inherited, rather than reverting to the default.",
+      "turns": [
+        {
+          "question": "What is the temperature in Berlin over the next 3 days in Fahrenheit?",
+          "expected_tools": [
+            "weather_forecast"
+          ],
+          "expected_resolution": {
+            "locations": [
+              "Berlin"
+            ],
+            "unit_system": "imperial",
+            "units_source": "request"
+          },
+          "units": "imperial"
+        },
+        {
+          "question": "And the day after?",
+          "expected_resolution": {
+            "locations": [
+              "Berlin"
+            ],
+            "unit_system": "imperial",
+            "location_source": "thread",
+            "units_source": "thread"
+          }
+        }
+      ],
+      "expected_agents": [
+        "forecast"
+      ]
+    },
+    {
+      "case_id": "me-unresolvable-reference",
+      "category": "memory",
+      "description": "A follow-up with nothing behind it: asked rather than answered from a guess.",
+      "turns": [
+        {
+          "question": "Which one is warmer tomorrow?",
+          "expects_clarification": true
+        },
+        {
+          "question": "The first one",
+          "expects_clarification": true
+        }
+      ],
+      "forbidden_tools": [
+        "weather_forecast"
+      ],
+      "forbidden_answer_characteristics": [
+        "berlin is warmer",
+        "munich is warmer"
+      ]
+    },
+    {
+      "case_id": "me-new-place-overrides-context",
+      "category": "memory",
+      "description": "A named place in a follow-up wins over the thread's context, which is what a person means.",
+      "turns": [
+        {
+          "question": "What is the temperature in Berlin over the next 3 days?",
+          "expected_tools": [
+            "weather_forecast"
+          ],
+          "expected_resolution": {
+            "locations": [
+              "Berlin"
+            ],
+            "location_source": "request"
+          }
+        },
+        {
+          "question": "And in Lisbon?",
+          "expected_resolution": {
+            "locations": [
+              "Lisbon"
+            ],
+            "location_source": "request"
+          },
+          "expected_answer_characteristics": [
+            "lisbon"
+          ]
+        }
+      ],
+      "expected_agents": [
+        "forecast"
+      ]
+    },
+    {
+      "case_id": "me-analytics-over-context",
+      "category": "memory",
+      "description": "A statistic asked about a window the previous turn established.",
+      "turns": [
+        {
+          "question": "What is the forecast for Berlin over the next 7 days?",
+          "expected_tools": [
+            "weather_forecast"
+          ],
+          "expected_resolution": {
+            "locations": [
+              "Berlin"
+            ],
+            "location_source": "request",
+            "window_days": 7
+          }
+        },
+        {
+          "question": "What is the average daily high over that window?",
+          "expected_resolution": {
+            "locations": [
+              "Berlin"
+            ],
+            "location_source": "thread"
+          },
+          "expected_tools": [
+            "weather_statistics"
+          ]
+        }
+      ],
+      "expected_agents": [
+        "forecast",
+        "analytics"
+      ]
+    }
+  ]
+}
