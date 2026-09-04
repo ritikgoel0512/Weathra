@@ -41,7 +41,7 @@ An unauthenticated request to a protected endpoint SHALL return 401 with the sta
 
 ### Requirement: Public and protected endpoint classification
 
-Every endpoint SHALL be classified public or protected, and the classification SHALL appear in the API documentation and the OpenAPI schema's security metadata. Public endpoints SHALL be limited to health, readiness, locations, current weather, forecast, history, analysis, and comparison. Protected endpoints SHALL include the agent ask endpoint, the agent stream, preferences, saved locations, evidence, the current-user endpoint, and user data deletion.
+Every endpoint SHALL be classified public or protected, and the classification SHALL appear in the API documentation and the OpenAPI schema's security metadata. Public endpoints SHALL be limited to health, readiness, locations, current weather, forecast, history, analysis, and comparison. Protected endpoints SHALL include the agent ask endpoint, the agent stream, the forecast changes endpoint, preferences, saved locations, evidence, the current-user endpoint, and user data deletion.
 
 #### Scenario: Classification published
 
@@ -156,9 +156,65 @@ The API SHALL provide a current-conditions endpoint and a forecast endpoint, eac
 - **WHEN** a client names a provider that is not registered
 - **THEN** the response is a validation error listing the registered provider names
 
+### Requirement: Forecast changes endpoint
+
+The API SHALL provide a protected forecast-changes endpoint accepting a location as a name or
+coordinate pair with optional units, provider, and horizon, returning the forecast-comparison result
+the forecast-analysis capability produces for that location and window. The endpoint SHALL NOT
+compute the comparison itself: it SHALL retrieve the forecast through the forecast service and
+delegate to that capability, and the response SHALL carry the capability's own result unchanged —
+the location, the window, the provider, the units, the data class, the retrieval times being
+compared, the per-day signed deltas with their materiality, and the plain-language statement.
+
+The response SHALL distinguish a populated comparison from a window with no earlier snapshot: a
+populated comparison SHALL report the comparison as available with both retrieval times and its
+per-day deltas, and a window with nothing earlier on record SHALL report the comparison as
+unavailable with no previous retrieval time and no deltas rather than as an absence of movement. A
+comparison that cannot be obtained at all SHALL be reported as an error in the standard error
+envelope, distinguishable from both, and an unauthenticated request SHALL be refused with 401 before
+any provider is called.
+
+Retrieving a forecast through this endpoint SHALL record it as a snapshot for later comparisons, and
+a failure to record SHALL NOT fail the response.
+
+#### Scenario: Movement returned for a window with an earlier snapshot
+
+- **WHEN** an authenticated client requests changes for a location and window an earlier snapshot
+  covers
+- **THEN** the response reports the comparison as available with both retrieval times, the per-day
+  signed deltas, and the statement produced by the forecast-analysis capability
+
+#### Scenario: No earlier snapshot reported as such
+
+- **WHEN** an authenticated client requests changes for a location and window with nothing earlier
+  on record
+- **THEN** the response reports the comparison as unavailable with no previous retrieval time and no
+  deltas
+- **AND** does not present the current forecast as a change
+
+#### Scenario: Comparison unavailable reported as an error
+
+- **WHEN** the forecast the comparison needs cannot be retrieved
+- **THEN** the response is an error in the standard error envelope
+- **AND** is distinguishable from a successful response reporting no earlier snapshot
+
+#### Scenario: Unauthenticated request refused
+
+- **WHEN** an unauthenticated client requests changes
+- **THEN** the response is 401 in the standard error envelope
+- **AND** no provider is called
+
+#### Scenario: Retrieval recorded for later comparison
+
+- **WHEN** an authenticated client requests changes for a location and window
+- **THEN** the retrieved forecast is recorded as a snapshot
+- **AND** a failure to record it does not fail the response
+
 ### Requirement: History endpoint
 
-The API SHALL provide a history endpoint accepting a location, a past date range, optional units, and optional provider, returning observed data labelled as historical. It SHALL additionally support period-versus-period comparison and baseline computation over a requested number of years.
+The API SHALL provide a history endpoint accepting a location, a past date range, optional units, and optional provider, returning observed data labelled as historical. It SHALL additionally support period-versus-period comparison, baseline computation over a requested number of years, and placing an observed past period against the baseline of the years before it.
+
+The baseline-comparison response SHALL carry the baseline it was placed against — including the years actually used — the signed difference, the z-score, and a plain-language characterization, and SHALL NOT require a caller to derive any of them. Where the baseline has no spread, the z-score SHALL be reported as undefined with its reason and the signed difference SHALL still be reported.
 
 #### Scenario: Observations retrieved
 
@@ -174,6 +230,18 @@ The API SHALL provide a history endpoint accepting a location, a past date range
 
 - **WHEN** a client requests a baseline over 10 years
 - **THEN** the response carries the baseline statistics and the years actually used
+
+#### Scenario: Period placed against its baseline
+
+- **WHEN** a client places an observed past period against a baseline over 10 years
+- **THEN** the response carries the baseline with the years actually used, the signed difference, the z-score, and a plain-language characterization
+- **AND** both sides are labelled as observations rather than as a forecast-accuracy score
+
+#### Scenario: Baseline comparison with no spread
+
+- **WHEN** the baseline for a placed period has a standard deviation of zero
+- **THEN** the z-score is reported as undefined with its reason
+- **AND** the signed difference is still reported
 
 #### Scenario: Range outside coverage
 

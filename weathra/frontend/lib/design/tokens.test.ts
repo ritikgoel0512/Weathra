@@ -302,6 +302,16 @@ describe("contrast meets its minimum in both appearances", () => {
       "surface-raised",
       "surface-overlay",
       "surface-inset",
+      // Task 20.15: the AI-interpretation panel is a tinted ground that carries prose, so it is a
+      // surface body text sits on and belongs in this inventory.
+      "class-interpretation-surface",
+      // Task 21.8's audit: the four status grounds carry prose too. The candidate chooser asks its
+      // question on the caution ground and the two destructive confirmations state what they will
+      // remove on the error ground, so body text sits on all four and each is measured.
+      "status-error-surface",
+      "status-warning-surface",
+      "status-ok-surface",
+      "status-quota-surface",
     ]);
     for (const pair of textPairs) {
       expect(pair.minimum).toBe(4.5);

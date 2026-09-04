@@ -47,12 +47,13 @@ export default tseslint.config(
     rules: { "@typescript-eslint/no-explicit-any": "off" },
   },
   {
-    // frontend/scripts holds Node tooling — the secret-containment check and its tests. Nothing
-    // here is imported by the application, so nothing here reaches a browser bundle, and the
-    // NEXT_PUBLIC_-only rule is about what ships: these files read their own flags the way any
+    // Node tooling, not application code: `scripts/` holds the secret-containment check, and the
+    // Playwright config and its end-to-end harness drive a built application from outside it.
+    // Nothing here is imported by the application, so nothing here reaches a browser bundle, and
+    // the NEXT_PUBLIC_-only rule is about what ships: these files read their own flags the way any
     // Node script does. They may still hold no credential of their own — the containment check
-    // scans this directory along with the rest of the frontend.
-    files: ["scripts/**"],
+    // scans these directories along with the rest of the frontend.
+    files: ["scripts/**", "playwright.config.ts", "tests/e2e/**"],
     rules: { "no-restricted-syntax": "off" },
   },
 );

@@ -65,6 +65,7 @@ BERLIN_PLAN = _plan(PlanStep(capability=Capability.FORECAST, reason="r", locatio
 # the classification table below, so a protected route added without an entry here fails the
 # coverage test rather than quietly going untested.
 PROTECTED_REQUESTS: tuple[tuple[str, str, dict[str, Any]], ...] = (
+    ("GET", "/weather/changes", {"params": {"location": "Berlin"}}),
     ("GET", "/me", {}),
     ("GET", "/me/preferences", {}),
     ("PUT", "/me/preferences", {"json": {"unit_system": "imperial"}}),

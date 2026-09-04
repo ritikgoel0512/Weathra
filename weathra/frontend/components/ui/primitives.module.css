@@ -544,3 +544,232 @@ select.control {
 .stateError .stateTitle {
   color: var(--color-status-error);
 }
+
+/* ------------------------------------------------- provenance (task 20.15) */
+
+/*
+ * A region of one data class.
+ *
+ * The tier — retrieved, computed, interpretation — carries the separation: each gets its own edge
+ * and ground so a screen showing all three reads as three regions rather than one column of text.
+ * The badge inside states the class in words regardless, so the separation never rests on colour.
+ */
+.provenanceSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
+.provenanceSection[data-tier="retrieved"] {
+  border-left: 3px solid var(--color-border-strong);
+}
+
+/* Deterministic calculation is Weathra's own work, and is marked as a different kind of thing. */
+.provenanceSection[data-tier="computed"] {
+  border-left: 3px solid var(--color-class-analytics);
+  background: var(--color-surface-inset);
+}
+
+.provenanceHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.provenanceTitle {
+  font-family: var(--family-display);
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
+  color: var(--color-text-primary);
+}
+
+.provenanceBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.provenanceFooter {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+/*
+ * The attribution footer.
+ *
+ * Wraps rather than truncating: `docs/design/design-system.md` §13 is explicit that provenance is
+ * not the thing that gets dropped when space runs out.
+ */
+.attribution {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.attributionList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+
+.attributionItem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.attributionTerm {
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-secondary);
+}
+
+.attributionTerm::after {
+  content: ":";
+}
+
+.attributionValue {
+  margin: 0;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.attributionNote {
+  color: var(--color-text-muted);
+}
+
+.attributionExtra {
+  margin-top: var(--space-2);
+}
+
+/*
+ * The uncertainty indicator.
+ *
+ * A band and its basis, never a number. The band's word is inside the badge, so the three levels
+ * are distinguishable without the hue — and `low` is deliberately neutral rather than an error
+ * colour: a low-confidence forecast is a normal forecast far into the horizon, not a fault.
+ */
+.uncertainty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+}
+
+.uncertaintyHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.uncertaintyHorizon {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.uncertaintyBasis {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+}
+
+.badge[data-confidence="high"] {
+  color: var(--color-status-ok);
+  background: var(--color-status-ok-surface);
+}
+
+.badge[data-confidence="moderate"] {
+  color: var(--color-status-warning);
+  background: var(--color-status-warning-surface);
+}
+
+.badge[data-confidence="low"] {
+  color: var(--color-text-secondary);
+  background: var(--color-surface-overlay);
+  border-color: var(--color-border-strong);
+}
+
+/* The analytics provenance line: what computed the figure, and how. */
+.methodNote {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.methodStatement {
+  color: var(--color-class-analytics);
+  font-weight: var(--type-ui-weight);
+}
+
+/*
+ * The AI-interpretation panel.
+ *
+ * The most distinct treatment in the set, on purpose: `specs/web-ui` requires interpretation to be
+ * visually distinguishable from retrieved data, and §9 requires that nothing suggest the model
+ * produced a measurement. Its own ground, its own leading rule in the interpretation hue, its own
+ * badge, and the boundary sentence above the prose.
+ */
+.interpretation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--color-class-interpretation);
+  border-left-width: 4px;
+  border-radius: var(--radius-lg);
+  background: var(--color-class-interpretation-surface);
+}
+
+.interpretationHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.interpretationTitle {
+  font-family: var(--family-display);
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
+  color: var(--color-text-primary);
+}
+
+.interpretationBoundary {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+}
+
+.interpretationBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-primary);
+}
+
+.interpretationModel,
+.interpretationFooter {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}

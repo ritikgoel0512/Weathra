@@ -347,14 +347,26 @@ class HistoryService:
         years: int,
         measure: Measure = Measure.TEMPERATURE_MEAN,
         unit_system: UnitSystem = UnitSystem.METRIC,
+        reference_year: int | None = None,
     ) -> Baseline:
         """A baseline for a calendar period, over as many of ``years`` as the archive covers.
 
         A year the archive cannot serve is *dropped and reported*, never silently narrowed: the
         result states which years went into it and how many were asked for.
+
+        ``reference_year`` is the year the candidate years count back from, exclusive. It defaults
+        to ``start.year + 1``, which makes the period's *own* year the first candidate — right for
+        the usual call, where the period is the week ahead and that year holds no archive data to
+        find, so it drops out on its own. A caller placing a *past* period against a baseline passes
+        ``start.year`` instead, because a period compared against a baseline containing it would be
+        partly compared against itself.
         """
         candidates = baseline_periods(
-            location, start=start, end=end, years=years, reference_year=start.year + 1
+            location,
+            start=start,
+            end=end,
+            years=years,
+            reference_year=reference_year if reference_year is not None else start.year + 1,
         )
 
         collected: list[tuple[int, HistoricalObservations]] = []
@@ -409,6 +421,56 @@ class HistoryService:
                 "climate normal published by a meteorological authority."
             ),
             coverage_note=note,
+        )
+
+    async def compare_period_against_baseline(
+        self,
+        location: Location,
+        *,
+        start: date,
+        end: date,
+        years: int,
+        measure: Measure = Measure.TEMPERATURE_MEAN,
+        unit_system: UnitSystem = UnitSystem.METRIC,
+    ) -> BaselineComparison:
+        """Place an observed past period against the baseline of the years before it.
+
+        A composition of three things that already exist — retrieval, the baseline, and
+        ``compare_against_baseline`` — and no arithmetic of its own. Both sides are the *same*
+        statistic computed by the *same* function over daily values, which is what makes the
+        difference meaningful: comparing a period's precipitation total against a baseline of daily
+        means would be a number with no interpretation.
+
+        The baseline is anchored at ``start.year``, so it is built from the years strictly before
+        the period being placed.
+        """
+        observed = await self.observations(location, start=start, end=end, unit_system=unit_system)
+        period_mean = descriptive.mean(observed.daily, measure, provenance_for(observed))
+        if period_mean.value is None:
+            raise NoDataForRange(
+                f"The archive holds no usable {measure.value} observations for this period, so "
+                "there is nothing to place against the baseline.",
+                details={
+                    "measure": measure.value,
+                    "reason": period_mean.reason,
+                    "start": start.isoformat(),
+                    "end": end.isoformat(),
+                },
+            )
+
+        reference = await self.baseline(
+            location,
+            start=start,
+            end=end,
+            years=years,
+            measure=measure,
+            unit_system=unit_system,
+            reference_year=start.year,
+        )
+        return self.compare_against_baseline(
+            baseline=reference,
+            value=period_mean.value,
+            value_data_class=DataClass.HISTORICAL_OBSERVATION,
         )
 
     def compare_against_baseline(

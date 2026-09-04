@@ -343,6 +343,7 @@ async function invoke(client: ApiClient, operation: ApiOperation): Promise<unkno
   const identifier = "00000000-0000-4000-8000-000000000000";
   const byOperation: Record<string, () => Promise<unknown>> = {
     ask_api_v1_agent_ask_post: () => client.ask({ question: "Will it rain?" }),
+    changes_api_v1_weather_changes_get: () => client.changes({ location: "Berlin" }),
     evidence_api_v1_evidence__evidence_id__get: () => client.evidence(identifier),
     me_api_v1_me_get: () => client.me(),
     read_preferences_api_v1_me_preferences_get: () => client.preferences(),
@@ -357,6 +358,8 @@ async function invoke(client: ApiClient, operation: ApiOperation): Promise<unkno
     threads_api_v1_threads_get: () => client.threads(),
     thread_api_v1_threads__thread_id__get: () => client.thread(identifier),
     remove_thread_api_v1_threads__thread_id__delete: () => client.deleteThread(identifier),
+    baseline_comparison_api_v1_weather_history_baseline_comparison_get: () =>
+      client.baselineComparison({ location: "Berlin", start: "2025-06-01", end: "2025-06-07" }),
     search_api_v1_locations_search_get: () => client.searchLocations("Berlin"),
     resolve_api_v1_locations_resolve_get: () => client.resolveLocation({ query: "Berlin" }),
     stream_api_v1_agent_stream_post: () => client.openAgentStream({ question: "Rain?" }),

@@ -16,3 +16,6 @@ next-env.d.ts
 # added and git quietly refused to see it. Re-included here: a deeper ignore file overrides a
 # shallower one, so this negation is what keeps `frontend/lib/` committable.
 !lib/
+
+# Task 21.8 manual-pass harness working directory (scripts/manual-pass-serve.sh).
+.manual-pass/

@@ -24,7 +24,27 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  color: var(--color-accent);
+}
+
+/*
+ * The mark sits in a filled accent tile — task 21.9.
+ *
+ * All eight approved artifacts show the mark as a glyph inside a rounded accent square beside the
+ * wordmark; the implementation drew the glyph alone, tinted with the accent. The glyph itself was
+ * already right, so this is the container it was missing rather than a change of mark. Tokens only:
+ * the accent ground, `accent-contrast` for the glyph on it (the same pairing the primary button
+ * uses, and the reason it reads at either appearance), and `radius-md`.
+ */
+.brandMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  border-radius: var(--radius-md);
 }
 
 .brandName {

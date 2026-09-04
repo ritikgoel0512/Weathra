@@ -685,6 +685,63 @@
         "title": "Baseline",
         "type": "object"
       },
+      "BaselineComparison": {
+        "additionalProperties": false,
+        "description": "A current or forecast value placed against a baseline.",
+        "properties": {
+          "baseline": {
+            "$ref": "#/components/schemas/Baseline"
+          },
+          "characterization": {
+            "minLength": 1,
+            "title": "Characterization",
+            "type": "string"
+          },
+          "difference": {
+            "$ref": "#/components/schemas/StatisticResult"
+          },
+          "forecast_side_caveat": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Present when one side is a forecast: that side is uncertain, and it says so.",
+            "title": "Forecast Side Caveat"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "measure": {
+            "$ref": "#/components/schemas/Measure"
+          },
+          "observed_data_class": {
+            "$ref": "#/components/schemas/DataClass"
+          },
+          "observed_or_forecast_value": {
+            "title": "Observed Or Forecast Value",
+            "type": "number"
+          },
+          "z_score": {
+            "$ref": "#/components/schemas/StatisticResult"
+          }
+        },
+        "required": [
+          "location",
+          "measure",
+          "baseline",
+          "observed_or_forecast_value",
+          "observed_data_class",
+          "difference",
+          "z_score",
+          "characterization"
+        ],
+        "title": "BaselineComparison",
+        "type": "object"
+      },
       "ComparisonCandidate": {
         "additionalProperties": false,
         "description": "One ranked candidate \u2014 a location, or a day at one location \u2014 with its evidence.",
@@ -1108,6 +1165,80 @@
         ],
         "title": "DataClass",
         "type": "string"
+      },
+      "DayChange": {
+        "additionalProperties": false,
+        "description": "How one day's figures moved between two retrievals of the same window.",
+        "properties": {
+          "change": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Current minus previous. Null when either side is absent.",
+            "title": "Change"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "local_date": {
+            "description": "The local calendar date, ISO-8601.",
+            "minLength": 1,
+            "title": "Local Date",
+            "type": "string"
+          },
+          "material": {
+            "description": "False when the movement is inside the measure's materiality margin.",
+            "title": "Material",
+            "type": "boolean"
+          },
+          "measure": {
+            "$ref": "#/components/schemas/Measure"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous"
+          },
+          "statement": {
+            "minLength": 1,
+            "title": "Statement",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "local_date",
+          "measure",
+          "unit",
+          "previous",
+          "current",
+          "material",
+          "statement"
+        ],
+        "title": "DayChange",
+        "type": "object"
       },
       "DeletionResponse": {
         "additionalProperties": false,
@@ -3560,6 +3691,75 @@
         "title": "ValidationError",
         "type": "object"
       },
+      "WhatChanged": {
+        "additionalProperties": false,
+        "description": "How the forecast for a location and window has moved since the last earlier snapshot.",
+        "properties": {
+          "changes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DayChange"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "comparison_available": {
+            "title": "Comparison Available",
+            "type": "boolean"
+          },
+          "current_retrieved_at": {
+            "format": "date-time",
+            "title": "Current Retrieved At",
+            "type": "string"
+          },
+          "data_class": {
+            "$ref": "#/components/schemas/DataClass",
+            "default": "forecast"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "period": {
+            "$ref": "#/components/schemas/Period"
+          },
+          "previous_retrieved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Retrieved At"
+          },
+          "provider": {
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "statement": {
+            "minLength": 1,
+            "title": "Statement",
+            "type": "string"
+          },
+          "unit_system": {
+            "$ref": "#/components/schemas/UnitSystem"
+          }
+        },
+        "required": [
+          "location",
+          "period",
+          "provider",
+          "unit_system",
+          "comparison_available",
+          "current_retrieved_at",
+          "statement"
+        ],
+        "title": "WhatChanged",
+        "type": "object"
+      },
       "weathra__api__routers__weather__Attribution": {
         "additionalProperties": false,
         "description": "Where a figure came from, in the structured fields a reader needs.\n\nNot a credit line: a client renders these next to the numbers, and the evaluation suite reads\nthem to check that an answer's provenance is complete.",
@@ -4636,6 +4836,160 @@
         ]
       }
     },
+    "/api/v1/weather/changes": {
+      "get": {
+        "description": "**Protected.** Forecast movement since the last snapshot. Records the retrieval it compares, and is not one of the endpoints specs/http-api admits to the public surface.\n\nHow this forecast differs from the last earlier snapshot of the same window.",
+        "operationId": "changes_api_v1_weather_changes_get",
+        "parameters": [
+          {
+            "description": "A place name.",
+            "in": "query",
+            "name": "location",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A place name.",
+              "title": "Location"
+            }
+          },
+          {
+            "in": "query",
+            "name": "latitude",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 90.0,
+                  "minimum": -90.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Latitude"
+            }
+          },
+          {
+            "in": "query",
+            "name": "longitude",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 180.0,
+                  "minimum": -180.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Longitude"
+            }
+          },
+          {
+            "description": "Overrides your saved preference for this request only.",
+            "in": "query",
+            "name": "units",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/UnitSystem"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Overrides your saved preference for this request only.",
+              "title": "Units"
+            }
+          },
+          {
+            "description": "A registered provider. The configured default if omitted.",
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A registered provider. The configured default if omitted.",
+              "title": "Provider"
+            }
+          },
+          {
+            "description": "Horizon in days. The window compared is the one this horizon resolves to; your saved preference applies when omitted.",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 365,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Horizon in days. The window compared is the one this horizon resolves to; your saved preference applies when omitted.",
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhatChanged"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "What Changed?",
+        "tags": [
+          "changes"
+        ]
+      }
+    },
     "/api/v1/weather/comparison": {
       "post": {
         "description": "**Public.** Ranking supplied candidates. Reads no user-owned row.\n\nRank places against each other, or the days within one place's window.\n\nEvery candidate that could not be scored appears in ``excluded`` with the reason, so a ranking\nis never quietly shorter than the question.",
@@ -5275,6 +5629,182 @@
         },
         "security": [],
         "summary": "Baseline for a period",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/v1/weather/history/baseline/comparison": {
+      "get": {
+        "description": "**Public.** Places a supplied past period against its baseline. Reads no user-owned row.\n\nHow an observed past period compares with the same calendar period in the years before it.\n\nBoth sides are the same statistic over daily values, computed by the same function, so the\nsigned difference means what a reader will take it to mean. The z-score comes back undefined\n*with its reason* when the baseline has no spread, and the difference is reported either way.\n\nBoth sides are observations: this is not a measure of forecast accuracy, and the comparison's\nown data classes say so.",
+        "operationId": "baseline_comparison_api_v1_weather_history_baseline_comparison_get",
+        "parameters": [
+          {
+            "description": "First day of the range, inclusive (YYYY-MM-DD).",
+            "in": "query",
+            "name": "start",
+            "required": true,
+            "schema": {
+              "description": "First day of the range, inclusive (YYYY-MM-DD).",
+              "format": "date",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Last day of the range, inclusive (YYYY-MM-DD).",
+            "in": "query",
+            "name": "end",
+            "required": true,
+            "schema": {
+              "description": "Last day of the range, inclusive (YYYY-MM-DD).",
+              "format": "date",
+              "title": "End",
+              "type": "string"
+            }
+          },
+          {
+            "description": "How many years before this period to build the baseline from. A year the archive cannot serve is dropped and reported.",
+            "in": "query",
+            "name": "years",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "description": "How many years before this period to build the baseline from. A year the archive cannot serve is dropped and reported.",
+              "maximum": 50,
+              "minimum": 2,
+              "title": "Years",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Which measure to place.",
+            "in": "query",
+            "name": "measure",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Measure",
+              "default": "temperature_mean",
+              "description": "Which measure to place."
+            }
+          },
+          {
+            "description": "A place name.",
+            "in": "query",
+            "name": "location",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A place name.",
+              "title": "Location"
+            }
+          },
+          {
+            "in": "query",
+            "name": "latitude",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 90.0,
+                  "minimum": -90.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Latitude"
+            }
+          },
+          {
+            "in": "query",
+            "name": "longitude",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 180.0,
+                  "minimum": -180.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Longitude"
+            }
+          },
+          {
+            "description": "Overrides your saved preference for this request only.",
+            "in": "query",
+            "name": "units",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/UnitSystem"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Overrides your saved preference for this request only.",
+              "title": "Units"
+            }
+          },
+          {
+            "description": "A registered provider. The configured default if omitted.",
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A registered provider. The configured default if omitted.",
+              "title": "Provider"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaselineComparison"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [],
+        "summary": "Place a past period against its baseline",
         "tags": [
           "history"
         ]

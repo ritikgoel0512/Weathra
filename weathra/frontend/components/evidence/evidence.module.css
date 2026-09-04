@@ -1,0 +1,547 @@
+/*
+ * Agent Evidence / Activity — task 21.5, built from the task 20.3 tokens against
+ * `docs/design/screens/05-agent-evidence.png`.
+ *
+ * What the artifact establishes and this reproduces: the record header with its status strip, the
+ * two-column body with the execution flow as a connected timeline down the narrow left column, and
+ * the grounded sources, deterministic analytics, retrieved knowledge and final synthesis stacked
+ * down the wide right column.
+ *
+ * What it does not reproduce is recorded in `docs/design/screens.md` §5 and §8 — the audit
+ * identifier and signature hash, the "cryptographically signed and immutable" claim and its
+ * stability index, the agent version string, the invented providers and station identifiers, the
+ * fabricated latencies and confidence percentages, and the "Validate Conclusion", "Export Trace",
+ * "Inspect Payloads" and "View Chain of Custody" controls are mockup filler.
+ *
+ * No colour, size or spacing is written here that is not a token.
+ */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------------- header */
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  min-width: 0;
+}
+
+.headerTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.title {
+  font-family: var(--family-display);
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line);
+  font-weight: var(--type-display-weight);
+  color: var(--color-text-primary);
+}
+
+.question {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-secondary);
+  max-width: 72ch;
+}
+
+.subtitle {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+  max-width: 72ch;
+}
+
+/* The status strip: the artifact's four-cell block, carrying only what the backend recorded. */
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-3) var(--space-4);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.summaryItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.summaryTerm {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.summaryValue {
+  margin: 0;
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.identifiers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------ the columns */
+
+.body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .body {
+    grid-template-columns: minmax(260px, 5fr) minmax(0, 8fr);
+    align-items: start;
+  }
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------- a section */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  min-width: 0;
+}
+
+.panelHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.panelTitle {
+  font-family: var(--family-display);
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
+  color: var(--color-text-primary);
+}
+
+.note {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.noteStrong {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-secondary);
+}
+
+.plainList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-secondary);
+}
+
+/* -------------------------------------------------------------- execution flow */
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  padding-left: var(--space-5);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+/* The artifact's connected rail, drawn from the border token rather than as an image. */
+.step::before {
+  content: "";
+  position: absolute;
+  left: var(--space-3);
+  top: var(--space-4);
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--color-text-muted);
+}
+
+.step[data-status="succeeded"]::before {
+  background: var(--color-status-ok);
+}
+
+.step[data-status="failed"]::before {
+  background: var(--color-status-error);
+}
+
+.step[data-status="skipped"]::before {
+  background: var(--color-status-warning);
+}
+
+.step + .step::after {
+  content: "";
+  position: absolute;
+  left: calc(var(--space-3) + 2px);
+  top: calc(-1 * var(--space-3) - 1px);
+  width: 2px;
+  height: calc(var(--space-3) + var(--space-4));
+  background: var(--color-border-subtle);
+}
+
+.stepHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.stepName {
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+}
+
+.stepMeta {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.stepReason {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+}
+
+/* ---------------------------------------------------------------- tool activity */
+
+.tools {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.tool {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.toolHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.toolName {
+  font-family: var(--family-body);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.fieldList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  min-width: 0;
+}
+
+.fieldRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.fieldName {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.fieldValue {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.disclosure {
+  min-width: 0;
+}
+
+.disclosureSummary {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.disclosureSummary:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+  border-radius: var(--radius-sm);
+}
+
+.disclosureBody {
+  padding-top: var(--space-2);
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------ the sources */
+
+.tableScroll {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.table th,
+.table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-border-subtle);
+  white-space: nowrap;
+}
+
+.table th {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.table td {
+  color: var(--color-text-secondary);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* -------------------------------------------------------------------- analytics */
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.figureLabel {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.figureValue {
+  font-family: var(--family-display);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-class-analytics);
+  overflow-wrap: anywhere;
+}
+
+/* --------------------------------------------------------------- the knowledge */
+
+.citations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.citation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-left: 3px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.citationHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.citationTitle {
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+}
+
+.citationText {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------- the states */
+
+.state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  min-width: 0;
+}
+
+.stateTitle {
+  font-family: var(--family-display);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-primary);
+}
+
+.stateBody {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-secondary);
+  max-width: 72ch;
+}
+
+.link {
+  align-self: flex-start;
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+.link:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}

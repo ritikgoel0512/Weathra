@@ -71,11 +71,13 @@ reflection vector.
 | `GET` | `/api/v1/locations/search` | public | 200 | `SearchResponse` |
 | `GET` | `/api/v1/ready` | public | 200 | `ReadinessResponse` |
 | `GET` | `/api/v1/weather/analysis` | public | 200 | `AnalysisResponse` |
+| `GET` | `/api/v1/weather/changes` | **protected** | 200 | `WhatChanged` |
 | `POST` | `/api/v1/weather/comparison` | public | 200 | `ComparisonResult` |
 | `GET` | `/api/v1/weather/current` | public | 200 | `CurrentResponse` |
 | `GET` | `/api/v1/weather/forecast` | public | 200 | `ForecastResponse` |
 | `GET` | `/api/v1/weather/history` | public | 200 | `HistoryResponse` |
 | `GET` | `/api/v1/weather/history/baseline` | public | 200 | `Baseline` |
+| `GET` | `/api/v1/weather/history/baseline/comparison` | public | 200 | `BaselineComparison` |
 | `GET` | `/api/v1/weather/history/comparison` | public | 200 | `PeriodComparison` |
 | `POST` | `/api/v1/agent/ask` | **protected** | 200 | `AskResponse` |
 | `POST` | `/api/v1/agent/stream` | **protected** | 200 | `stream` |
@@ -101,11 +103,13 @@ reflection vector.
 | `/locations/search` | public | Geocoding a free-text query. Reads no user-owned row. |
 | `/ready` | public | Readiness. Reports what is configured and reachable, and no credential material. |
 | `/weather/analysis` | public | Deterministic analytics over a supplied window. Reads no user-owned row. |
+| `/weather/changes` | **protected** | Forecast movement since the last snapshot. Records the retrieval it compares, and is not one of the endpoints specs/http-api admits to the public surface. |
 | `/weather/comparison` | public | Ranking supplied candidates. Reads no user-owned row. |
 | `/weather/current` | public | Current conditions for supplied parameters. Applies the caller's units when signed in. |
 | `/weather/forecast` | public | A forecast for supplied parameters. Applies the caller's units when signed in. |
 | `/weather/history` | public | Archive observations for a supplied range. Reads no user-owned row. |
 | `/weather/history/baseline` | public | A baseline over supplied years. Reads no user-owned row. |
+| `/weather/history/baseline/comparison` | public | Places a supplied past period against its baseline. Reads no user-owned row. |
 | `/weather/history/comparison` | public | Compares two supplied past periods. Reads no user-owned row. |
 | `/agent/ask` | **protected** | Uses and writes the acting user's thread memory and stores an owned evidence record. |
 | `/agent/stream` | **protected** | The same run, streamed. Same memory and same owned record. |

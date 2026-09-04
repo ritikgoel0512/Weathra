@@ -30,6 +30,7 @@ import type {
   AskRequest,
   AskResponse,
   Baseline,
+  BaselineComparison,
   ComparisonRequest,
   ComparisonResult,
   CurrentResponse,
@@ -52,6 +53,7 @@ import type {
   ThreadSummary,
   ThreadsResponse,
   UnitSystem,
+  WhatChanged,
 } from "./schema";
 
 /** The error body every failure carries. */
@@ -158,6 +160,9 @@ export interface BaselineQuery extends HistoryQuery {
   readonly measure?: Measure;
 }
 
+/** A past period, and how many years before it to build the baseline from. */
+export type BaselineComparisonQuery = BaselineQuery;
+
 export interface PeriodComparisonQuery extends PlaceQuery {
   readonly earlier_start: string;
   readonly earlier_end: string;
@@ -184,9 +189,25 @@ export interface ApiClient {
 
   current(query: PlaceQuery): Promise<CurrentResponse>;
   forecast(query: ForecastQuery): Promise<ForecastResponse>;
+  /**
+   * *What Changed?* — how the forecast for this window has moved since the last snapshot of it.
+   *
+   * Protected, unlike the other weather calls: the comparison reads and appends to the shared
+   * snapshot history, and `specs/http-api` does not admit it to the public surface. So a 401 here
+   * is an expired session and reaches the session layer as one, not a weather failure.
+   */
+  changes(query: ForecastQuery): Promise<WhatChanged>;
   analysis(query: AnalysisQuery): Promise<AnalysisResponse>;
   history(query: HistoryQuery): Promise<HistoryResponse>;
   baseline(query: BaselineQuery): Promise<Baseline>;
+  /**
+   * A past period placed against the baseline of the years before it.
+   *
+   * The signed difference and the z-score come back computed: `specs/deterministic-analytics`
+   * puts that arithmetic in the analytics layer, so a screen renders the result rather than
+   * subtracting a baseline from a period itself.
+   */
+  baselineComparison(query: BaselineComparisonQuery): Promise<BaselineComparison>;
   periodComparison(query: PeriodComparisonQuery): Promise<PeriodComparison>;
   compareLocations(request: ComparisonRequest): Promise<ComparisonResult>;
 
@@ -381,9 +402,12 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
 
     current: (query) => get<CurrentResponse>("/api/v1/weather/current", { ...query }),
     forecast: (query) => get<ForecastResponse>("/api/v1/weather/forecast", { ...query }),
+    changes: (query) => get<WhatChanged>("/api/v1/weather/changes", { ...query }),
     analysis: (query) => get<AnalysisResponse>("/api/v1/weather/analysis", { ...query }),
     history: (query) => get<HistoryResponse>("/api/v1/weather/history", { ...query }),
     baseline: (query) => get<Baseline>("/api/v1/weather/history/baseline", { ...query }),
+    baselineComparison: (query) =>
+      get<BaselineComparison>("/api/v1/weather/history/baseline/comparison", { ...query }),
     periodComparison: (query) =>
       get<PeriodComparison>("/api/v1/weather/history/comparison", { ...query }),
     compareLocations: (request) =>

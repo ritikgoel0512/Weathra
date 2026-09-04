@@ -40,6 +40,17 @@ export const AUTHENTICATION_ERROR_CODES: readonly string[] = [
  */
 export const AGENT_NOT_CONFIGURED_CODE = "agent_not_configured";
 
+/**
+ * No evidence record with that identifier — for this caller.
+ *
+ * The backend answers an unknown identifier and one belonging to another user with this same code,
+ * message and status, deliberately and byte for byte, so the endpoint cannot be used to discover
+ * which record identifiers exist. Agent Evidence branches on it only to choose *which state* to
+ * render — a decision that cannot be retried, rather than a failure that can — and never to tell
+ * the two cases apart, because nothing in the response tells them apart.
+ */
+export const EVIDENCE_NOT_FOUND_CODE = "evidence_not_found";
+
 /** Whether a code means the session is gone. */
 export function isAuthenticationCode(code: string | null | undefined): boolean {
   return code !== null && code !== undefined && AUTHENTICATION_ERROR_CODES.includes(code);

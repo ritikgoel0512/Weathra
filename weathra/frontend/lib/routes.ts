@@ -83,13 +83,28 @@ export function completesAuthFlow(pathname: string, parameters: URLSearchParams)
   return false;
 }
 
+/**
+ * Agent Evidence, which is the one MVP screen addressed by a record rather than by a name.
+ *
+ * `/evidence` is the navigation destination and explains where a record comes from;
+ * `/evidence/{id}` is one stored run. The identifier is always the backend's — it comes from an
+ * answer's `evidence_id` and is never constructed here — and it is encoded on the way into the path
+ * so an identifier that ever stops being a UUID cannot smuggle a segment into the URL.
+ */
+export const EVIDENCE_PATH = "/evidence";
+
+/** The route for one stored run. */
+export function evidencePath(evidenceId: string): string {
+  return `${EVIDENCE_PATH}/${encodeURIComponent(evidenceId)}`;
+}
+
 /** The protected MVP product screens, in navigation order. */
 export const MVP_SCREENS: readonly Screen[] = [
   { path: "/", title: "Dashboard" },
   { path: "/analyst", title: "AI Weather Analyst" },
   { path: "/historical", title: "Historical Analytics" },
   { path: "/compare", title: "Compare Cities" },
-  { path: "/evidence", title: "Agent Evidence" },
+  { path: EVIDENCE_PATH, title: "Agent Evidence" },
   { path: "/locations", title: "Saved Locations" },
   { path: "/settings", title: "Settings" },
 ];

@@ -101,6 +101,11 @@ _CLASSIFICATIONS: tuple[EndpointClassification, ...] = (
         "A baseline over supplied years. Reads no user-owned row.",
     ),
     EndpointClassification(
+        "/weather/history/baseline/comparison",
+        Access.PUBLIC,
+        "Places a supplied past period against its baseline. Reads no user-owned row.",
+    ),
+    EndpointClassification(
         "/weather/analysis",
         Access.PUBLIC,
         "Deterministic analytics over a supplied window. Reads no user-owned row.",
@@ -109,6 +114,13 @@ _CLASSIFICATIONS: tuple[EndpointClassification, ...] = (
         "/weather/comparison",
         Access.PUBLIC,
         "Ranking supplied candidates. Reads no user-owned row.",
+    ),
+    # ------------------------------------------ protected: writes the shared snapshot history
+    EndpointClassification(
+        "/weather/changes",
+        Access.PROTECTED,
+        "Forecast movement since the last snapshot. Records the retrieval it compares, and is not "
+        "one of the endpoints specs/http-api admits to the public surface.",
     ),
     # ---------------------------------------------------------------- protected: user-owned data
     EndpointClassification(

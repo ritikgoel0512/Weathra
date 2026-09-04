@@ -41,7 +41,10 @@ export function AuthShell({
   return (
     <>
       <div className={styles.brand}>
-        <BrandMark size={32} />
+        {/* The mark sits in its accent tile, as every approved artifact shows it — task 21.9. */}
+        <span className={styles.brandMark}>
+          <BrandMark size={26} />
+        </span>
         <span className={styles.brandName}>Weathra</span>
       </div>
 

@@ -1,21 +1,17 @@
 /**
- * `/compare` — Compare Cities.
+ * `/compare` — Compare Cities, task 21.4.
  *
- * A route, not a screen. Task 20.12 needs every destination in the navigation to resolve to
- * something honest; the screen itself is task group 21.
+ * A client screen: the places, the criterion and the window are all chosen on the page, and each
+ * comparison is a fresh POST through the shared query layer with its own loading, error and retry.
  */
 
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
-import { RouteStatus } from "@/components/shell/route-status";
+import { CompareCities } from "@/components/compare/compare";
 
 export const metadata: Metadata = { title: "Compare Cities" };
 
 export default function Page(): ReactNode {
-  return (
-    <RouteStatus title="Compare Cities" status="in-progress">
-      Multi-location comparison with criterion selection and per-candidate evidence.
-    </RouteStatus>
-  );
+  return <CompareCities />;
 }

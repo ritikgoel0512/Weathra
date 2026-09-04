@@ -1,0 +1,164 @@
+/**
+ * The Dashboard's adapter — task 21.1.
+ *
+ * The rules that would fabricate a measurement if they broke, asserted directly: an absent measure
+ * is dropped rather than zeroed, the unit comes from the response, and no figure gains precision on
+ * its way to the screen.
+ */
+
+import { describe, expect, it } from "vitest";
+
+import type { PreferenceView, Series } from "@/lib/api/schema";
+
+import {
+  briefingLocationFrom,
+  calendarWindowFrom,
+  forecastDaysFrom,
+  formatReading,
+  localDateOf,
+  measureLabel,
+  preferenceSource,
+  readingFor,
+  readingsFrom,
+} from "./briefing";
+
+describe("reading what the provider reported", () => {
+  it("keeps every reported measure, with the unit the response declared", () => {
+    const readings = readingsFrom(
+      { temperature: 18.2, relative_humidity: 72 },
+      { temperature: "°C", relative_humidity: "%" },
+    );
+
+    expect(readings).toEqual([
+      { key: "temperature", label: "Temperature", value: 18.2, unit: "°C" },
+      { key: "relative_humidity", label: "Relative humidity", value: 72, unit: "%" },
+    ]);
+  });
+
+  it("drops an unreported measure rather than showing it as zero", () => {
+    // The API is explicit that null means 'not reported' and is never a zero. Rendering it as 0
+    // would be a fabricated measurement in the most literal sense.
+    const readings = readingsFrom(
+      { temperature: 18.2, precipitation: null, uv_index: null },
+      { temperature: "°C", precipitation: "mm", uv_index: "" },
+    );
+
+    expect(readings.map((reading) => reading.key)).toEqual(["temperature"]);
+    expect(readingFor("precipitation", { precipitation: null }, {})).toBeNull();
+  });
+
+  it("drops a value that is not a finite number", () => {
+    expect(readingsFrom({ a: Number.NaN, b: Number.POSITIVE_INFINITY }, {})).toEqual([]);
+  });
+
+  it("says the unit is absent rather than inventing one", () => {
+    const [reading] = readingsFrom({ temperature: 18 }, {});
+    expect(reading?.unit).toBeNull();
+    expect(formatReading({ value: 18, unit: null })).toBe("18");
+  });
+
+  it("names a measure it has never seen rather than dropping or guessing at it", () => {
+    expect(measureLabel("temperature")).toBe("Temperature");
+    expect(measureLabel("soil_moisture_0_to_7cm")).toBe("Soil moisture 0 to 7cm");
+  });
+
+  it("adds no precision on the way to the screen", () => {
+    expect(formatReading({ value: 18, unit: "°C" })).toBe("18 °C");
+    expect(formatReading({ value: 18.25, unit: "°C" })).toBe("18.3 °C");
+    expect(formatReading({ value: -3.04, unit: "°C" })).toBe("-3 °C");
+    // Never padded out to look more precise than it is.
+    expect(formatReading({ value: 72, unit: "%" })).toBe("72 %");
+  });
+});
+
+describe("the forecast strip", () => {
+  const series: Series = {
+    granularity: "daily",
+    units: { temperature_max: "°C", temperature_min: "°C", precipitation_sum: "mm" },
+    entries: [
+      {
+        time_local: "2026-09-04T00:00:00+02:00",
+        time_utc: "2026-09-03T22:00:00Z",
+        values: { temperature_max: 21.4, temperature_min: 12.1, precipitation_sum: null },
+      },
+      {
+        time_local: "2026-09-05T00:00:00+02:00",
+        time_utc: "2026-09-04T22:00:00Z",
+        values: { temperature_max: 24, temperature_min: 14, precipitation_sum: 2.4 },
+      },
+    ],
+  };
+
+  it("reads a row per entry, with its high and its low", () => {
+    const days = forecastDaysFrom(series);
+
+    expect(days).toHaveLength(2);
+    expect(days[0]?.date).toBe("2026-09-04");
+    expect(days[0]?.high?.value).toBe(21.4);
+    expect(days[0]?.low?.value).toBe(12.1);
+  });
+
+  it("leaves out a measure the provider did not report for that day", () => {
+    const days = forecastDaysFrom(series);
+    expect(days[0]?.other).toEqual([]);
+    expect(days[1]?.other.map((reading) => reading.key)).toEqual(["precipitation_sum"]);
+  });
+
+  it("reads the local date as text, so no timezone is re-applied to it", () => {
+    // Parsing through Date would show a reader in another zone the wrong calendar day.
+    expect(localDateOf("2026-09-04T00:00:00+02:00")).toBe("2026-09-04");
+  });
+
+  it("produces no rows at all when the backend sent no entries", () => {
+    expect(forecastDaysFrom({ granularity: "daily", units: {} })).toEqual([]);
+    expect(forecastDaysFrom(undefined)).toEqual([]);
+  });
+});
+
+describe("whose briefing this is", () => {
+  const preferences: PreferenceView = {
+    unit_system: "metric",
+    forecast_horizon_days: 7,
+    sources: { unit_system: "chosen", default_location: "chosen" },
+    default_location: {
+      display_name: "Berlin, Germany",
+      latitude: 52.52,
+      longitude: 13.405,
+      timezone: "Europe/Berlin",
+    },
+  };
+
+  it("uses the saved default location", () => {
+    expect(briefingLocationFrom(preferences)?.display_name).toBe("Berlin, Germany");
+  });
+
+  it("reports no location rather than choosing one when none is saved", () => {
+    // Weathra does not infer a default from use; an unset default is a real state with its own
+    // screen.
+    expect(briefingLocationFrom({ ...preferences, default_location: null })).toBeNull();
+    expect(briefingLocationFrom(undefined)).toBeNull();
+  });
+
+  it("carries whether the person chose a preference or Weathra assumed it", () => {
+    expect(preferenceSource(preferences, "unit_system")).toBe("chosen");
+    expect(preferenceSource(preferences, "nothing_like_this")).toBeNull();
+  });
+});
+
+describe("the historical window", () => {
+  it("is the forecast's own period, in the location's calendar", () => {
+    expect(
+      calendarWindowFrom({
+        start_local: "2026-09-04T00:00:00+02:00",
+        end_local: "2026-09-11T00:00:00+02:00",
+        start_utc: "2026-09-03T22:00:00Z",
+        end_utc: "2026-09-10T22:00:00Z",
+        timezone: "Europe/Berlin",
+      }),
+    ).toEqual({ start: "2026-09-04", end: "2026-09-11" });
+  });
+
+  it("asks for nothing when there is no period to ask about", () => {
+    expect(calendarWindowFrom(undefined)).toBeNull();
+  });
+});

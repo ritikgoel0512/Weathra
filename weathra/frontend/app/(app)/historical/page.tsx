@@ -1,21 +1,19 @@
 /**
- * `/historical` — Historical Analytics.
+ * `/historical` — Historical Analytics, task 21.3.
  *
- * A route, not a screen. Task 20.12 needs every destination in the navigation to resolve to
- * something honest; the screen itself is task group 21.
+ * A client screen: the window, the period it is compared with and the number of baseline years are
+ * all chosen on the page, and each choice is a fresh request through the shared query layer with
+ * its own loading, error and retry. A server render would fix one window and could only be changed
+ * by reloading.
  */
 
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
-import { RouteStatus } from "@/components/shell/route-status";
+import { HistoricalAnalytics } from "@/components/historical/historical";
 
 export const metadata: Metadata = { title: "Historical Analytics" };
 
 export default function Page(): ReactNode {
-  return (
-    <RouteStatus title="Historical Analytics" status="in-progress">
-      Historical retrieval, period comparison and baseline comparison.
-    </RouteStatus>
-  );
+  return <HistoricalAnalytics />;
 }

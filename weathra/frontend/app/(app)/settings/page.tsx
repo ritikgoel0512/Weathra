@@ -1,21 +1,20 @@
 /**
- * `/settings` — Settings.
+ * `/settings` — Settings, task 21.6.
  *
- * A route, not a screen. Task 20.12 needs every destination in the navigation to resolve to
- * something honest; the screen itself is task group 21.
+ * A server page around a client screen, for one reason: the sign-out control is a server action
+ * (task 20.9) and an action must not be reached through a client boundary. It is rendered here and
+ * passed in as output, exactly as the protected layout passes it to the shell — so Settings offers
+ * Weathra's one sign-out rather than implementing a second.
  */
 
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
-import { RouteStatus } from "@/components/shell/route-status";
+import { Settings } from "@/components/settings/settings";
+import { SignOutForm } from "@/components/shell/sign-out-form";
 
 export const metadata: Metadata = { title: "Settings" };
 
 export default function Page(): ReactNode {
-  return (
-    <RouteStatus title="Settings" status="in-progress">
-      Units, default location, default forecast range, and your Weathra data.
-    </RouteStatus>
-  );
+  return <Settings signOutControl={<SignOutForm />} />;
 }

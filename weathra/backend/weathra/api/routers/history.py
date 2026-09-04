@@ -14,6 +14,12 @@ series a caller has to interpret.
 **A baseline reports the years it actually used.** ``specs/historical-weather`` requires it, and
 the reason is that a "ten-year average" computed from six years is a different number from the one
 a reader assumed. The years that went in, and the count asked for, are both in the response.
+
+**Placing a period against its baseline is one call, not three.** The signed difference and the
+z-score belong to ``deterministic-analytics`` and are computed there; a caller that fetched the
+baseline and the period separately and subtracted would be a second implementation of a rule stated
+once, in a layer that has no business doing arithmetic. So the composition lives in the service and
+this exposes its result.
 """
 
 from __future__ import annotations
@@ -33,7 +39,12 @@ from weathra.auth.deps import OptionalPrincipal
 from weathra.domain.location import Location
 from weathra.domain.weather import DataClass, Measure, Period, Series, UnitSystem
 from weathra.memory.preferences import PreferenceStore
-from weathra.weather.history_service import Baseline, HistoryService, PeriodComparison
+from weathra.weather.history_service import (
+    Baseline,
+    BaselineComparison,
+    HistoryService,
+    PeriodComparison,
+)
 
 __all__ = ["router"]
 
@@ -234,5 +245,72 @@ async def baseline(
         request,
         acting_user_id=principal.user_id if principal else None,
         weather_provider=result.provider,
+    )
+    return result
+
+
+@router.get(
+    "/history/baseline/comparison",
+    response_model=BaselineComparison,
+    summary="Place a past period against its baseline",
+)
+async def baseline_comparison(
+    request: Request,
+    geocoder: Places,
+    weather: WeatherFor,
+    session: CurrentSession,
+    settings: Configuration,
+    principal: OptionalPrincipal,
+    start: DateFrom,
+    end: DateTo,
+    years: Annotated[
+        int,
+        Query(
+            ge=2,
+            le=50,
+            description=(
+                "How many years before this period to build the baseline from. A year the archive "
+                "cannot serve is dropped and reported."
+            ),
+        ),
+    ] = 10,
+    measure: Annotated[Measure, Query(description="Which measure to place.")] = (
+        Measure.TEMPERATURE_MEAN
+    ),
+    location: LocationName = None,
+    latitude: Latitude = None,
+    longitude: Longitude = None,
+    units: Units = None,
+    provider: ProviderName = None,
+) -> BaselineComparison:
+    """How an observed past period compares with the same calendar period in the years before it.
+
+    Both sides are the same statistic over daily values, computed by the same function, so the
+    signed difference means what a reader will take it to mean. The z-score comes back undefined
+    *with its reason* when the baseline has no spread, and the difference is reported either way.
+
+    Both sides are observations: this is not a measure of forecast accuracy, and the comparison's
+    own data classes say so.
+    """
+    place = await resolve_one(geocoder, location=location, latitude=latitude, longitude=longitude)
+    unit_system, _ = await units_for(
+        request,
+        requested=units,
+        principal=principal,
+        preferences=(
+            PreferenceStore(session, principal, settings) if principal is not None else None
+        ),
+    )
+
+    service = HistoryService(
+        provider=provider_for(request, weather, provider, settings), settings=settings
+    )
+    result = await service.compare_period_against_baseline(
+        place, start=start, end=end, years=years, measure=measure, unit_system=unit_system
+    )
+    annotate(
+        request,
+        acting_user_id=principal.user_id if principal else None,
+        weather_provider=result.baseline.provider,
     )
     return result

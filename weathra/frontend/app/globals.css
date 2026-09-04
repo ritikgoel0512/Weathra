@@ -188,8 +188,16 @@
 }
 
 html {
-  /* The 360-pixel floor: the page itself never scrolls sideways. */
-  overflow-x: hidden;
+  /*
+   * The 360-pixel floor is met by the layout, not by clamping the page — task 21.8.
+   *
+   * This rule used to be `overflow-x: hidden`, which is the wrong instrument twice over: it makes
+   * content that *does* overflow unreachable rather than scrollable, and it makes the requirement
+   * unverifiable, because a browser then reports no overflow whether or not the layout fits.
+   * `specs/web-ui` asks for a layout that fits and for wide content to scroll inside its own
+   * container, and both are now asserted in a real browser at 360 pixels
+   * (`tests/e2e/accessibility.spec.ts`) rather than hidden here.
+   */
 }
 
 body {

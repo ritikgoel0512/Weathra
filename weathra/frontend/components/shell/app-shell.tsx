@@ -82,7 +82,9 @@ export function AppShell({ identity, signOutControl, children }: AppShellProps):
           <span>Menu</span>
         </button>
         <Link className={styles.brand} href={DEFAULT_PROTECTED_PATH}>
-          <BrandMark size={24} />
+          <span className={styles.brandMark}>
+            <BrandMark size={20} />
+          </span>
           <span className={styles.brandName}>Weathra</span>
         </Link>
       </header>
@@ -103,7 +105,9 @@ export function AppShell({ identity, signOutControl, children }: AppShellProps):
         data-open={drawerOpen ? "true" : undefined}
       >
         <Link className={styles.brand} href={DEFAULT_PROTECTED_PATH}>
-          <BrandMark />
+          <span className={styles.brandMark}>
+            <BrandMark size={20} />
+          </span>
           <span className={styles.brandName}>Weathra</span>
         </Link>
 

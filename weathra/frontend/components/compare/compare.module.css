@@ -1,0 +1,438 @@
+/*
+ * Compare Cities — task 21.4, built from the task 20.3 tokens against
+ * `docs/design/screens/04-compare-cities.png`.
+ *
+ * What the artifact establishes and this reproduces: the compared places as cards across the top of
+ * the result, the comparison chart beneath them, the per-candidate figures inside each card, and
+ * the provenance line under the whole ranking.
+ *
+ * What it does not reproduce is recorded in `docs/design/screens.md` §5 and §8 — the city
+ * photography, the station identifiers, the "Comparison Intelligence" panel with its synthesis and
+ * correlation bars, the candlestick baseline chart, the workspace and node identifiers, "Export
+ * PDF", "Recalibrate Models" and the city-planner recommendations are mockup filler.
+ */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.title {
+  font-family: var(--family-display);
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line);
+  font-weight: var(--type-display-weight);
+  color: var(--color-text-primary);
+}
+
+.subtitle {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-muted);
+  max-width: 72ch;
+}
+
+/* -------------------------------------------------------------------- controls */
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.locations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.legend {
+  padding: 0;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.locationRow {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.locationRow > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.locationsAction {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.criteria {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+  align-items: end;
+}
+
+.submit {
+  display: flex;
+  align-items: flex-end;
+}
+
+/* Said before the request, not after a refusal. */
+.blocked {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-status-warning-surface);
+  border: 1px solid var(--color-status-warning);
+  border-radius: var(--radius-md);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-primary);
+}
+
+/* --------------------------------------------------------------------- results */
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.candidates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-3);
+}
+
+.candidate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+/* The winner carries the accent edge the artifact gives the leading card. */
+.candidate[data-rank="1"] {
+  border-color: var(--color-accent);
+}
+
+.candidateHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.rank {
+  font-family: var(--family-display);
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
+  color: var(--color-accent);
+}
+
+.candidateName {
+  font-family: var(--family-display);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.candidateFigure {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* --------------------------------------------------------------------- figures */
+
+.figures,
+.contributions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.figure,
+.contribution {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.contributionHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.figureLabel {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.figureValue {
+  font-family: var(--family-body);
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
+  color: var(--color-text-primary);
+}
+
+.figureUnit {
+  font-size: var(--type-meta-size);
+  color: var(--color-text-muted);
+}
+
+.note,
+.noteStrong {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.noteStrong {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+/* ----------------------------------------------------------------- the basis */
+
+.basis {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.basisHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.basisList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+}
+
+.basisItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.basisItem dt {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.basisItem dd {
+  margin: 0;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* Weathra's own heuristic, said as such. */
+.disclosure {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-primary);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-class-analytics-surface);
+  border-left: 2px solid var(--color-class-analytics);
+  border-radius: var(--radius-sm);
+}
+
+/* ------------------------------------------------------------------ exclusions */
+
+.excluded {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-status-warning-surface);
+  border: 1px solid var(--color-status-warning);
+  border-radius: var(--radius-md);
+}
+
+.excludedList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.excludedItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.excludedName {
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+
+.excludedCode {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------------- chart */
+
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  min-width: 0;
+}
+
+.chartCaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.chartTitle {
+  font-family: var(--family-display);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+}
+
+/* Wide content scrolls in its own container, never the page. */
+.chartScroll,
+.tableScroll {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+/* Sized to include the axis band, so the card never grows a nested scrollbar. */
+.chartPlot {
+  min-width: 320px;
+  height: 240px;
+}
+
+.chartNote {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.tooltip {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-overlay);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.tooltipName {
+  color: var(--color-text-muted);
+}
+
+.tooltipValue {
+  color: var(--color-text-primary);
+}
+
+.table {
+  border-collapse: collapse;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.tableCaption {
+  text-align: left;
+  padding-bottom: var(--space-1);
+  color: var(--color-text-muted);
+}
+
+.table th,
+.table td {
+  padding: var(--space-1) var(--space-3) var(--space-1) 0;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border-subtle);
+  white-space: nowrap;
+}
+
+.table thead th {
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+/*
+ * One row's own candidate chooser — task 21.7. Not depicted in the artifact; recorded in
+ * `docs/design/screens.md` §5 and §8.
+ */
+.locationEntry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}

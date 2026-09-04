@@ -1,0 +1,291 @@
+/*
+ * The Dashboard — task 21.1, built from the task 20.3 tokens against
+ * `docs/design/screens/01-dashboard.png`.
+ *
+ * What the artifact establishes and this reproduces: the compact, data-dense card language on the
+ * dark ground; the wide current-conditions band across the top with its primary readout and a
+ * metric strip beside it; the two-column body with the wide briefing surface beside a narrower
+ * analytics column; the seven-across forecast strip; and the attribution line beneath every
+ * data-bearing surface. What it does not reproduce is recorded in `docs/design/screens.md` §5 —
+ * the photography, the station identifier, the invented confidence bars, the version strings and
+ * the candlestick chart are mockup filler and are not implemented.
+ */
+
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* The band across the top: the location, the primary readout, and the reported measures. */
+.conditions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.conditionsPrimary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.place {
+  font-family: var(--family-display);
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line);
+  font-weight: var(--type-display-weight);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.placeMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.readout {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-family: var(--family-display);
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line);
+  font-weight: var(--type-display-weight);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-accent);
+}
+
+/* The measure strip. Wraps rather than truncating: a dropped measure is a dropped fact. */
+.measures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  margin: 0;
+}
+
+.measure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.measureTerm {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.measureValue {
+  margin: 0;
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+/*
+ * The body: the briefing surface beside the analytics column, as the artifact lays them out, and a
+ * single column below the tablet breakpoint (design-system.md §13).
+ */
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (max-width: 1023px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* The seven-across forecast strip, reflowing rather than shrinking its type. */
+.days {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.day {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+  min-width: 0;
+}
+
+.dayDate {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.dayRange {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+.dayRangeLabel {
+  color: var(--color-text-muted);
+  font-weight: var(--type-meta-weight);
+}
+
+.dayOther {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A list of computed figures, each with its own provenance line. */
+.findings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.finding {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.findingLabel {
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-secondary);
+}
+
+.findingValue {
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+.statement {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-secondary);
+}
+
+/* The prose the deterministic layer writes about its own figures. Not model output. */
+.summary {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-primary);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.note {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+/* ------------------------------------------------------------ the place entry */
+
+/*
+ * Naming a place to brief on — task 21.7. Not depicted in the artifact:
+ * `docs/design/screens.md` §5 records the ambiguous-location interaction among the per-screen gaps
+ * the specs fill, and §8 records this control.
+ */
+.entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  min-width: 0;
+}
+
+.entryField {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.entryActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+/* ------------------------------------------------------------- the screen title */
+
+/* The screen's own heading, added in task 21.8. */
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.title {
+  font-family: var(--family-display);
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line);
+  font-weight: var(--type-display-weight);
+  color: var(--color-text-primary);
+}
+
+.subtitle {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-muted);
+  max-width: 72ch;
+}

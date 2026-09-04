@@ -1,0 +1,185 @@
+/*
+ * Saved Locations — task 21.6, built from the task 20.3 tokens against
+ * `docs/design/screens/06-saved-locations.png`.
+ *
+ * What the artifact establishes and this reproduces: the heading with its filter and add control on
+ * the same row, and the saved places as a responsive card grid beneath it.
+ *
+ * What it does not reproduce is recorded in `docs/design/screens.md` §5 and §8 — the "node"
+ * vocabulary and workspace identifier, the atmospheric-attention banner, the Workspace Intelligence
+ * Synthesis panel with its node-health and grounding-precision bars, the Node Comparison and Live
+ * Metadata panels, and the per-card conditions readout are mockup filler or belong to other
+ * surfaces.
+ */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------------- header */
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.title {
+  font-family: var(--family-display);
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line);
+  font-weight: var(--type-display-weight);
+  color: var(--color-text-primary);
+}
+
+.subtitle {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-muted);
+  max-width: 72ch;
+}
+
+.note {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.noteStrong {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-secondary);
+}
+
+/* ----------------------------------------------------------------------- panel */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  min-width: 0;
+}
+
+.panelTitle {
+  font-family: var(--family-display);
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
+  color: var(--color-text-primary);
+}
+
+/* The artifact's header row: the filter and the add control beside the count. */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.toolbarField {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+/* ----------------------------------------------------------------------- cards */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  min-width: 0;
+}
+
+.cardName {
+  font-family: var(--family-display);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.cardCanonical {
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.cardFacts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  min-width: 0;
+}
+
+.cardRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.cardTerm {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.cardValue {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.cardActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-2);
+}
+
+.badgeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}

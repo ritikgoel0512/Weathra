@@ -9,13 +9,13 @@
  * comparison they built, and the place they had chosen.
  */
 
-import { useQuery, type QueryKey } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { useCallback } from "react";
 
 import type { ApiClient } from "@/lib/api/client";
 import { useApiClient } from "@/lib/api/context";
 
-import { isSubmitting, viewStateFrom, type ViewState } from "./state";
+import { describeFailure, isSubmitting, viewStateFrom, type ViewFailure, type ViewState } from "./state";
 
 export interface UseApiQueryOptions<Data> {
   /** Identifies the request in the cache. Include every input the request depends on. */
@@ -69,4 +69,82 @@ export function useApiQuery<Data>({
       isFetching: query.isFetching,
     }),
   };
+}
+
+/* ------------------------------------------------------------------ writing */
+
+/**
+ * The four states a write is in, and the one place a mutation result becomes one of them.
+ *
+ * The state machine is the honesty requirement rather than a convenience. `saved` is reachable
+ * only from the resolved promise, so a control cannot report success before the backend has
+ * confirmed the write — which is exactly what "avoid fake success states" means for a preference
+ * form, and what makes the difference between "your units are imperial" and "we sent that".
+ */
+export type WriteState<Data> =
+  | { readonly kind: "idle" }
+  | { readonly kind: "saving" }
+  | { readonly kind: "saved"; readonly data: Data }
+  | { readonly kind: "error"; readonly failure: ViewFailure };
+
+export interface UseApiMutationOptions<Input, Data> {
+  readonly run: (client: ApiClient, input: Input) => Promise<Data>;
+  /**
+   * Cached reads this write makes wrong.
+   *
+   * Named keys rather than a blanket clear: a preference change must reach the Dashboard's read of
+   * the same preferences, and must *not* discard the forecast a person is looking at.
+   */
+  readonly invalidates?: readonly QueryKey[];
+  /** Runs after the backend confirmed the write, with what it returned. */
+  readonly onDone?: (data: Data) => void;
+}
+
+export interface UseApiMutationResult<Input, Data> {
+  readonly state: WriteState<Data>;
+  readonly submit: (input: Input) => void;
+  /** True while the write is in flight, so its control disables itself. */
+  readonly busy: boolean;
+  /** Back to `idle` — for dismissing a confirmation or clearing a failed attempt. */
+  readonly reset: () => void;
+}
+
+export function useApiMutation<Input, Data>({
+  run,
+  invalidates = [],
+  onDone,
+}: UseApiMutationOptions<Input, Data>): UseApiMutationResult<Input, Data> {
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: (input: Input) => run(client, input),
+    onSuccess: async (data) => {
+      // Invalidated *after* the backend confirmed, never before: an optimistic invalidation would
+      // refetch the old value and present it as the new one.
+      await Promise.all(invalidates.map((key) => queryClient.invalidateQueries({ queryKey: key })));
+      onDone?.(data);
+    },
+  });
+
+  const { mutate, reset } = mutation;
+
+  const submit = useCallback(
+    (input: Input) => {
+      // A second press while the first is in flight is not a second request.
+      if (mutation.isPending) return;
+      mutate(input);
+    },
+    [mutate, mutation.isPending],
+  );
+
+  const state: WriteState<Data> = mutation.isPending
+    ? { kind: "saving" }
+    : mutation.error !== null && mutation.error !== undefined
+      ? { kind: "error", failure: describeFailure(mutation.error) }
+      : mutation.isSuccess
+        ? { kind: "saved", data: mutation.data }
+        : { kind: "idle" };
+
+  return { state, submit, busy: mutation.isPending, reset };
 }

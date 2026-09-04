@@ -1,0 +1,339 @@
+/*
+ * Historical Analytics — task 21.3, built from the task 20.3 tokens against
+ * `docs/design/screens/03-historical-analytics.png`.
+ *
+ * What the artifact establishes and this reproduces: the stat-tile row across the top; the wide
+ * chart card beneath it carrying the HISTORICAL and ANALYTICS badges together; the two-column body
+ * with the period comparison beside the baseline panel; and the provenance line under every
+ * data-bearing surface.
+ *
+ * What it does not reproduce is recorded in `docs/design/screens.md` §5 and §8 — the station
+ * identifier, the confidence score, the source-node count, the invented reanalysis sources, the
+ * "Recalibrate Baseline Models" control, Export Data, the version strings, and the dual-axis chart.
+ */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.title {
+  font-family: var(--family-display);
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line);
+  font-weight: var(--type-display-weight);
+  color: var(--color-text-primary);
+}
+
+.subtitle {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-muted);
+  max-width: 72ch;
+}
+
+/* --------------------------------------------------------------------- controls */
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--space-3);
+  align-items: end;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.controlsAction {
+  display: flex;
+  align-items: flex-end;
+}
+
+/* ----------------------------------------------------------------------- layout */
+
+.analysis {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+}
+
+.tileNote {
+  overflow-wrap: anywhere;
+}
+
+/* The two badges above the chart card, saying which half of the screen is which. */
+.classKey {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+/* ---------------------------------------------------------------------- figures */
+
+.figures,
+.deltas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.figureLabel {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.figureValue {
+  font-family: var(--family-body);
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
+  color: var(--color-text-primary);
+}
+
+.figureUnit {
+  font-size: var(--type-meta-size);
+  color: var(--color-text-muted);
+}
+
+.periods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+}
+
+.period {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.period dt {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.period dd {
+  margin: 0;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-primary);
+}
+
+.statement {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-primary);
+}
+
+.note,
+.noteStrong {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.noteStrong {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+/* The archive's reporting lag, said rather than left to be noticed. */
+.coverage {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-status-warning-surface);
+  border: 1px solid var(--color-status-warning);
+  border-radius: var(--radius-md);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-primary);
+}
+
+/* ----------------------------------------------------------------------- charts */
+
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  min-width: 0;
+}
+
+.chartCaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.chartTitle {
+  font-family: var(--family-display);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* The legend swatch repeats the series' own stroke treatment, dash included. */
+.legendLine {
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  border-top-width: 2px;
+  border-top-style: solid;
+}
+
+.legendLine[data-series="recorded"] {
+  border-top-color: var(--color-class-historical);
+}
+
+.legendLine[data-series="baseline"] {
+  border-top-color: var(--color-class-analytics);
+  border-top-style: dashed;
+}
+
+/* Wide content scrolls in its own container, never the page. */
+.chartScroll,
+.tableScroll {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+/* Sized to include the axis band, so the card never grows a nested scrollbar. */
+.chartPlot {
+  min-width: 320px;
+  height: 260px;
+}
+
+/*
+ * The chart's `<svg>` is inline-level by default, so it sits on a text baseline and its line box
+ * keeps descender space below it — six pixels that overflowed `.chartPlot`'s fixed height and made
+ * the scroll container above vertically scrollable. `overflow-x: auto` computes the *other* axis
+ * from `visible` to `auto`, so those six pixels became a scrollable region with nothing focusable
+ * in it: six pixels of chart a keyboard could not reach, and axe-core's
+ * `scrollable-region-focusable` was right to fail it. A block-level `<svg>` has no line box.
+ */
+.chartPlot :global(svg) {
+  display: block;
+}
+
+.chartNote {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.tooltip {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-overlay);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.tooltipDate {
+  color: var(--color-text-muted);
+}
+
+.tooltipValue {
+  color: var(--color-text-primary);
+}
+
+/* ------------------------------------------------------------------ the figures */
+
+.table {
+  border-collapse: collapse;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-primary);
+  /* Aligned columns, so equal-width digits are right here and nowhere else. */
+  font-variant-numeric: tabular-nums;
+}
+
+.tableCaption {
+  text-align: left;
+  padding-bottom: var(--space-1);
+  color: var(--color-text-muted);
+}
+
+.table th,
+.table td {
+  padding: var(--space-1) var(--space-3) var(--space-1) 0;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border-subtle);
+  white-space: nowrap;
+}
+
+.table thead th {
+  color: var(--color-text-muted);
+  font-weight: 600;
+}

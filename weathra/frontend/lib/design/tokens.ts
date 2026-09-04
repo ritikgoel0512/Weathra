@@ -277,6 +277,51 @@ export const CONTRAST_REQUIREMENTS: readonly ContrastRequirement[] = [
     minimum: 4.5,
     because: `the ${name} state is also stated in text on a card`,
   })),
+  // The provenance layer, task 20.15. The AI-interpretation panel is the one tinted surface that
+  // carries real prose rather than a badge, so all three text roles sit on it.
+  ...(["text-primary", "text-secondary", "text-muted"] as const).map((foreground) => ({
+    foreground,
+    background: "class-interpretation-surface" as const,
+    minimum: 4.5,
+    because: "the interpretation panel carries prose and its attribution on its own tinted ground",
+  })),
+  {
+    foreground: "class-analytics",
+    background: "surface-inset",
+    minimum: 4.5,
+    because: "the analytics colour opens the method note as text, not as a chart accent",
+  },
+  // Task 21.8's audit. Every pairing below is one the MVP screens actually render and the table
+  // above did not name — so each was measured by hand once and is now measured on every run,
+  // which is the difference between a ratio that held in September and one that keeps holding.
+  ...(["text-primary", "text-secondary", "text-muted"] as const).flatMap((foreground) =>
+    STATUSES.map((status) => ({
+      foreground,
+      background: `status-${status}-surface` as ColorTokenName,
+      minimum: 4.5,
+      // The candidate chooser sits on the caution ground and the destructive confirmations on the
+      // error ground, and both carry prose, a heading and their provenance rather than a badge.
+      because: `the ${status} panel carries body text on its own tinted ground`,
+    })),
+  ),
+  ...STATUSES.map((status) => ({
+    foreground: "accent" as const,
+    background: `status-${status}-surface` as ColorTokenName,
+    minimum: 4.5,
+    because: `a ghost control's label is accent text inside the ${status} panel`,
+  })),
+  {
+    foreground: "accent",
+    background: "surface-inset",
+    minimum: 4.5,
+    because: "the accent badge and a ghost control's label sit on an inset panel",
+  },
+  {
+    foreground: "accent",
+    background: "surface-overlay",
+    minimum: 4.5,
+    because: "a ghost control takes the overlay ground on hover and keeps its accent label",
+  },
 ];
 
 /**

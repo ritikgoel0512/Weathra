@@ -15,7 +15,8 @@ import { ApiError, SessionExpired, type ApiClient } from "@/lib/api/client";
 import { ApiProvider } from "@/lib/api/context";
 import { ViewStateSwitch } from "@/components/view-state";
 
-import { useApiQuery } from "./hooks";
+import { useApiMutation, useApiQuery } from "./hooks";
+import { PREFERENCES_KEY } from "./keys";
 import { createQueryClient, shouldRetry } from "./provider";
 import { describeFailure, isSubmitting, viewStateFrom } from "./state";
 
@@ -207,5 +208,77 @@ describe("the state mapper", () => {
     // The case where a submit control looks safe to press again and is not.
     expect(isSubmitting({ data: { count: 1 }, error: null, isPending: false, isFetching: true }))
       .toBe(true);
+  });
+});
+
+/* --------------------------------------------------------------------- writing */
+
+/**
+ * Task 21.6 added the write half of the query layer. Two properties are worth asserting directly,
+ * because both are honesty rules rather than conveniences: a control must not read as saved before
+ * the backend has confirmed the write, and a write must invalidate the *shared* read of what it
+ * changed — which is what makes a preference set on one screen reach another.
+ */
+function UnitPreference() {
+  const read = useApiQuery({
+    key: PREFERENCES_KEY,
+    request: (client) => client.preferences(),
+  });
+  const write = useApiMutation({
+    run: (client, units: string) => client.updatePreferences({ unit_system: units as never }),
+    invalidates: [PREFERENCES_KEY],
+  });
+
+  return (
+    <div>
+      <p>Read: {read.state.kind === "ready" ? (read.state.data as { unit_system: string }).unit_system : read.state.kind}</p>
+      <p>Write: {write.state.kind}</p>
+      {write.state.kind === "error" ? <p role="alert">{write.state.failure.message}</p> : null}
+      <button onClick={() => write.submit("imperial")}>Save</button>
+    </div>
+  );
+}
+
+describe("a write through the query layer", () => {
+  it("reports saved only once the backend resolved, and re-reads what it changed", async () => {
+    let units = "metric";
+    const preferences = vi.fn(async () => ({ unit_system: units }));
+    const updatePreferences = vi.fn(async () => {
+      units = "imperial";
+      return { unit_system: units };
+    });
+
+    mount(
+      { preferences, updatePreferences } as unknown as ApiClient,
+      <UnitPreference />,
+    );
+
+    await screen.findByText("Read: metric");
+    expect(screen.getByText("Write: idle")).toBeInTheDocument();
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(screen.getByText("Write: saved")).toBeInTheDocument());
+    // The shared read was invalidated, so the other screens reading it get the new value.
+    await waitFor(() => expect(screen.getByText("Read: imperial")).toBeInTheDocument());
+    expect(preferences).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports a refused write as a failure and never as saved", async () => {
+    const preferences = vi.fn(async () => ({ unit_system: "metric" }));
+    const updatePreferences = vi.fn(async () => {
+      throw new ApiError(400, { code: "validation_failed", message: "That preference was refused." });
+    });
+
+    mount({ preferences, updatePreferences } as unknown as ApiClient, <UnitPreference />);
+    await screen.findByText("Read: metric");
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("That preference was refused.");
+    expect(screen.getByText("Write: error")).toBeInTheDocument();
+    expect(screen.queryByText("Write: saved")).toBeNull();
+    // A refused write invalidates nothing: the read still holds what the backend actually has.
+    expect(preferences).toHaveBeenCalledTimes(1);
   });
 });

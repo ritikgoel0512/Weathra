@@ -1,0 +1,419 @@
+/*
+ * The AI Weather Analyst — task 21.2, built from the task 20.3 tokens against
+ * `docs/design/screens/02-ai-weather-analyst.png`.
+ *
+ * What the artifact establishes and this reproduces: the conversation reading down the page with
+ * the person's question set apart above the agent's response; the response as a stack of labelled
+ * panels rather than a paragraph; the run's own reporting line above the answer; the chip row of
+ * starter prompts; and the composer pinned beneath with its send action to the right.
+ *
+ * What it does not reproduce is recorded in `docs/design/screens.md` §5 and §8 — the right-hand
+ * telemetry rail, the generated "Active Data Sources" imagery, the agent version strings, the
+ * station identifier and the synthesis-confidence figure are mockup filler. The progress list and
+ * the resolved-context block take the rail's job, and they carry only what the run reported.
+ */
+
+.analyst {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* -------------------------------------------------------------------- heading */
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.title {
+  font-family: var(--family-display);
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line);
+  font-weight: var(--type-display-weight);
+  color: var(--color-text-primary);
+}
+
+.subtitle,
+.thread {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-muted);
+  max-width: 68ch;
+}
+
+.thread {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+/* ----------------------------------------------------------------- transcript */
+
+.transcript {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.turn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* The person's own question, set apart above the response as the artifact sets it apart. */
+.question {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-self: flex-end;
+  max-width: 60ch;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.questionRole {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.questionText {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.response {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------ progress */
+
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.progressHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.progressTitle {
+  font-family: var(--family-display);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.step {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.step:last-child {
+  border-bottom: none;
+}
+
+/* A tool call is indented under the agent that made it, as its own kind of row. */
+.step[data-step="tool"] {
+  padding-left: var(--space-4);
+}
+
+.stepLabel {
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.stepKind {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+/* The outcome is a word, not only a colour. */
+.stepStatus {
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.step[data-status="running"] .stepStatus {
+  color: var(--color-accent);
+}
+
+.step[data-status="failed"] .stepStatus {
+  color: var(--color-status-error);
+}
+
+.stepDetail,
+.stepAside {
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.stepDetail {
+  flex-basis: 100%;
+}
+
+/* -------------------------------------------------------------------- answer */
+
+.answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.findings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.finding {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.findingLabel {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.findingValue {
+  font-family: var(--family-display);
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
+  color: var(--color-text-primary);
+}
+
+.note,
+.noteStrong {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.noteStrong {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.plainList {
+  list-style: disc;
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-primary);
+}
+
+/* A reference the run could not resolve: asked, rather than assumed. */
+.clarification {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-primary);
+}
+
+.clarificationTitle,
+.resolvedTitle,
+.unavailableTitle {
+  font-family: var(--family-display);
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
+  color: var(--color-text-primary);
+}
+
+.unanswered {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* What the run decided the question was about, and where each default came from. */
+.resolved {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-primary);
+}
+
+.resolvedList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+}
+
+.resolvedItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.resolvedItem dt {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.resolvedItem dd {
+  margin: 0;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.evidence {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* The artifact's "View Full Agent Evidence" affordance, completed in task 21.5. */
+.evidenceLink {
+  align-self: flex-start;
+  margin-top: var(--space-1);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+.evidenceLink:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+/* --------------------------------------------------------------- unavailable */
+
+.unavailable {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-primary);
+}
+
+/* ------------------------------------------------------------------ composer */
+
+.starters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  min-width: 0;
+}
+
+.composerInput {
+  font-family: var(--family-body);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  color: var(--color-text-primary);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  width: 100%;
+  resize: vertical;
+  min-height: 88px;
+}
+
+.composerInput::placeholder {
+  color: var(--color-text-muted);
+}
+
+.composerActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 640px) {
+  .question {
+    align-self: stretch;
+    max-width: none;
+  }
+}

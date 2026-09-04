@@ -311,13 +311,30 @@ comparison tables, historical charts, evidence rows — scrolls **inside its own
 reflow rather than shrinking their type below the body size, and an attribution footer wraps rather
 than truncating: provenance is not the thing that gets dropped when space runs out.
 
+A container that scrolls is **reachable from the keyboard while it has something to scroll**, and
+not otherwise. `ScrollRegion` is the primitive: it measures its own overflow and becomes a named,
+focusable group only when there is content past an edge. Both halves of that are the requirement.
+An `overflow-x: auto` div that is never focusable satisfies "scrolls in its own container" and
+leaves everything past the right edge unavailable to anybody without a pointer; one that is
+*always* focusable puts an empty stop in the tab order of every screen that happens to fit. Note
+that `overflow-x: auto` computes the **other** axis from `visible` to `auto`, so such a container
+scrolls vertically too the moment its content is a few pixels too tall — which is a scrollable
+region on a screen nobody thought had one. Task 21.8 found exactly that, twice.
+
 ## 14. Accessibility
 
 Keyboard operation of every action on every screen, authentication and product alike. Every input
 labelled; every interactive control carrying an accessible name. A visible focus indicator using
 `border-strong`, never `outline: none`. Body text at 4.5:1 in both appearances, verified against
 these tokens rather than per component. Data class is never carried by colour alone — the badge
-label carries it. Charts do not rely on hover to disclose a value.
+label carries it. Charts do not rely on hover to disclose a value. A scrollable container is a tab
+stop while it scrolls, per §13.
+
+Verified on **two engines** — Blink and Gecko — by rule (axe-core, WCAG 2.0/2.1 A and AA plus 2.2
+AA) and by hand-written assertion, because neither instrument subsumes the other: a rule engine
+cannot know that Weathra must not preselect a location candidate, and a hand-written assertion only
+checks what somebody thought to check. The record is
+[`accessibility.md`](accessibility.md).
 
 ## 15. Corrections carried out of the Visily mockups
 

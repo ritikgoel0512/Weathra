@@ -11,6 +11,8 @@ import {
   AUTH_CONFIRM_PATH,
   AUTH_SCREENS,
   completesAuthFlow,
+  EVIDENCE_PATH,
+  evidencePath,
   isAuthPath,
   isProtectedPath,
   isPublicPath,
@@ -121,5 +123,24 @@ describe("the returning-link callback", () => {
     expect(completesAuthFlow("/reset-password", new URLSearchParams("completed=verification"))).toBe(false);
     expect(completesAuthFlow("/sign-in", new URLSearchParams("completed=verification"))).toBe(false);
     expect(completesAuthFlow("/verify-email", new URLSearchParams())).toBe(false);
+  });
+});
+
+describe("the evidence route", () => {
+  it("addresses one stored run under the navigation destination", () => {
+    expect(EVIDENCE_PATH).toBe("/evidence");
+    expect(evidencePath("2f0a9c1e-6c1f-4f0e-9b6b-9d0f6b7f1a23")).toBe(
+      "/evidence/2f0a9c1e-6c1f-4f0e-9b6b-9d0f6b7f1a23",
+    );
+  });
+
+  it("encodes the identifier so it can never add a segment of its own", () => {
+    expect(evidencePath("a/b")).toBe("/evidence/a%2Fb");
+    expect(evidencePath("../settings")).toBe("/evidence/..%2Fsettings");
+  });
+
+  it("stays a protected path, with and without a record", () => {
+    expect(isProtectedPath(EVIDENCE_PATH)).toBe(true);
+    expect(isProtectedPath(evidencePath("run-1"))).toBe(true);
   });
 });

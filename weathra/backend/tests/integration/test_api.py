@@ -173,6 +173,7 @@ async def test_the_declared_table_has_no_paths_the_app_does_not_serve(
 @pytest.mark.parametrize(
     ("method", "path"),
     [
+        ("GET", "/weather/changes"),
         ("POST", "/agent/ask"),
         ("POST", "/agent/stream"),
         ("GET", "/me"),
@@ -214,6 +215,11 @@ async def test_every_protected_route_refuses_an_unauthenticated_request(
             {"location": "Berlin", "start": "2025-06-01", "end": "2025-06-07"},
         ),
         ("GET", "/weather/analysis", {"location": "Berlin", "days": 3}),
+        (
+            "GET",
+            "/weather/history/baseline/comparison",
+            {"location": "Berlin", "start": "2025-06-01", "end": "2025-06-07", "years": 2},
+        ),
     ],
 )
 async def test_every_public_route_succeeds_without_a_token(
@@ -705,6 +711,49 @@ async def test_a_baseline_reports_the_years_it_used(api_factory: ApiFactory) -> 
         body = response.json()
         assert body["years_requested"] == 5
         assert body["years_used"], "which years went in, not just the count"
+
+
+async def test_a_period_is_placed_against_the_baseline_of_the_years_before_it(
+    api_factory: ApiFactory,
+) -> None:
+    """Task 21.3's HTTP surface for `specs/historical-weather`'s comparison-against-baseline."""
+    async with api_factory() as api:
+        response = await api.client.get(
+            f"{PREFIX}/weather/history/baseline/comparison",
+            params={"location": "Berlin", "start": "2025-06-01", "end": "2025-06-07", "years": 3},
+        )
+        assert response.status_code == 200, response.text[:300]
+        body = response.json()
+
+        # The baseline travels with the comparison, years included, so the reader can check it.
+        assert body["baseline"]["years_used"], "which years went in"
+        assert body["baseline"]["years_requested"] == 3
+        assert "not an official climate normal" in body["baseline"]["labelling"]
+
+        # Every figure is computed by the analytics layer and states its method.
+        assert body["difference"]["method"]
+        assert body["z_score"]["method"]
+        assert body["characterization"]
+
+        # Both sides are observations, so nothing here is a forecast-accuracy score.
+        assert body["observed_data_class"] == "historical_observation"
+        assert body["forecast_side_caveat"] is None
+
+        # The baseline is built from the years *before* the period, never including it.
+        assert 2025 not in body["baseline"]["years_used"]
+
+
+async def test_a_baseline_comparison_outside_coverage_is_refused_rather_than_estimated(
+    api_factory: ApiFactory,
+) -> None:
+    async with api_factory() as api:
+        response = await api.client.get(
+            f"{PREFIX}/weather/history/baseline/comparison",
+            params={"location": "Berlin", "start": "1600-01-01", "end": "1600-01-07"},
+        )
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "range_outside_coverage"
+        assert "baseline" not in response.text, "no half-built comparison escapes"
 
 
 async def test_a_range_before_the_archive_is_rejected(api_factory: ApiFactory) -> None:

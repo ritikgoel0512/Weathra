@@ -159,6 +159,20 @@ export interface Baseline {
   readonly years_used: number[];
 }
 
+/** A current or forecast value placed against a baseline. */
+export interface BaselineComparison {
+  readonly baseline: Baseline;
+  readonly characterization: string;
+  readonly difference: StatisticResult;
+  /** Present when one side is a forecast: that side is uncertain, and it says so. */
+  readonly forecast_side_caveat?: string | null;
+  readonly location: Location;
+  readonly measure: Measure;
+  readonly observed_data_class: DataClass;
+  readonly observed_or_forecast_value: number;
+  readonly z_score: StatisticResult;
+}
+
 /** One ranked candidate — a location, or a day at one location — with its evidence. */
 export interface ComparisonCandidate {
   /** Populated for the composite criterion; empty for a single-measure one. */
@@ -263,6 +277,21 @@ export interface CurrentResponse {
 
 /** What kind of thing a reported value is. */
 export type DataClass = "current" | "forecast" | "historical_observation" | "computed_statistic" | "ai_interpretation";
+
+/** How one day's figures moved between two retrievals of the same window. */
+export interface DayChange {
+  /** Current minus previous. Null when either side is absent. */
+  readonly change?: number | null;
+  readonly current: number | null;
+  /** The local calendar date, ISO-8601. */
+  readonly local_date: string;
+  /** False when the movement is inside the measure's materiality margin. */
+  readonly material: boolean;
+  readonly measure: Measure;
+  readonly previous: number | null;
+  readonly statement: string;
+  readonly unit: string;
+}
 
 /** What the deletion removed, per table, and what it deliberately did not. */
 export interface DeletionResponse {
@@ -818,6 +847,20 @@ export interface WeatherAttribution {
   readonly units_source: string;
 }
 
+/** How the forecast for a location and window has moved since the last earlier snapshot. */
+export interface WhatChanged {
+  readonly changes?: DayChange[];
+  readonly comparison_available: boolean;
+  readonly current_retrieved_at: string;
+  readonly data_class?: DataClass;
+  readonly location: Location;
+  readonly period: Period;
+  readonly previous_retrieved_at?: string | null;
+  readonly provider: string;
+  readonly statement: string;
+  readonly unit_system: UnitSystem;
+}
+
 /** A parameter an operation accepts, as the contract declares it. */
 export interface ApiParameter {
   readonly name: string;
@@ -1063,6 +1106,23 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     ],
   },
   {
+    operationId: "changes_api_v1_weather_changes_get",
+    method: "GET",
+    path: "/api/v1/weather/changes",
+    requiresToken: true,
+    request: null,
+    successStatus: 200,
+    response: "WhatChanged",
+    parameters: [
+      { name: "location", in: "query", required: false },
+      { name: "latitude", in: "query", required: false },
+      { name: "longitude", in: "query", required: false },
+      { name: "units", in: "query", required: false },
+      { name: "provider", in: "query", required: false },
+      { name: "days", in: "query", required: false },
+    ],
+  },
+  {
     operationId: "comparison_api_v1_weather_comparison_post",
     method: "POST",
     path: "/api/v1/weather/comparison",
@@ -1131,6 +1191,26 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     request: null,
     successStatus: 200,
     response: "Baseline",
+    parameters: [
+      { name: "start", in: "query", required: true },
+      { name: "end", in: "query", required: true },
+      { name: "years", in: "query", required: false },
+      { name: "measure", in: "query", required: false },
+      { name: "location", in: "query", required: false },
+      { name: "latitude", in: "query", required: false },
+      { name: "longitude", in: "query", required: false },
+      { name: "units", in: "query", required: false },
+      { name: "provider", in: "query", required: false },
+    ],
+  },
+  {
+    operationId: "baseline_comparison_api_v1_weather_history_baseline_comparison_get",
+    method: "GET",
+    path: "/api/v1/weather/history/baseline/comparison",
+    requiresToken: false,
+    request: null,
+    successStatus: 200,
+    response: "BaselineComparison",
     parameters: [
       { name: "start", in: "query", required: true },
       { name: "end", in: "query", required: true },
