@@ -31,6 +31,25 @@ revealed by a rejection. An address that is already registered gets the same res
 confirming that an address has an account tells a stranger something about a person who did not
 choose to tell them.
 
+**The rules.** `specs/authentication` requires that they be stated up front and that a rejection
+name the rule it failed, but it does not say what they are — so these are recorded decisions, held
+in one place (`frontend/lib/auth/password.ts`) and stated on the screen as a checklist that marks
+each rule met as a person types:
+
+| Rule | Why |
+|---|---|
+| At least 12 characters | Length is what actually helps. The Supabase project's minimum-password-length setting is configured to match — see [`deployment.md`](deployment.md) — because a rule the provider enforces and the screen does not state is a rule "revealed by a rejection" |
+| No more than 72 characters | The provider hashes with bcrypt, which ignores anything past 72 bytes. Accepting a longer passphrase would silently use part of it |
+| Not your email address | A password containing the local part of the address it protects is one guess away from useless |
+
+There is deliberately **no composition rule** — no required symbol, digit, or capital. Current
+guidance (NIST SP 800-63B) is that composition rules push people towards predictable substitutions
+and reuse while adding little entropy, and Weathra holds no password material to have an opinion
+about in the first place.
+
+A rejected password names the first rule it failed, one rule at a time: a list of everything wrong
+at once reads as a scolding, and fixing the first usually fixes the rest.
+
 With email confirmation required on the project, `signUp` returns **no session** until the address is
 confirmed. So an unverified account has no access token, and the backend never has to decide
 whether to trust one — the protection is structural rather than a check that could be forgotten.
@@ -110,6 +129,46 @@ use. It holds no credential and no contact detail beyond the address the token a
 exists so Weathra's own tables have a foreign key to hang ownership from. Credentials and contact
 data stay in Supabase Auth.
 
+## The administrative role, and derived entitlement
+
+Two things about a principal are decided by the backend and by nothing else: whether they are
+**administrative**, and what their **plan** entitles them to. Both are the same shape of answer as
+ownership — read from backend-held state keyed by the validated token subject — and both are
+refused the moment a client tries to supply them.
+
+**The administrative role is server-held.** It is backend state keyed by the token subject, read
+only by the backend, and **no client-supplied field grants it**: not a body field, a query
+parameter, a header, a cookie, or an unverified token claim. A request from an ordinary user
+carrying `{"admin": true}`, an `X-Admin` header, or a self-asserted claim is simply a
+non-administrative request.
+
+Administrative capabilities — model policy administration, model catalog administration, plan and
+allowance administration, reading aggregate usage, and the internal model lab — are refused for
+every principal without the role, and the refusal discloses nothing about the capability's
+existence or its contents. It is the not-found treatment again, for the same reason.
+
+Two limits on the role, both deliberate:
+
+- **It grants no access to anyone's own data.** An administrative principal asking for another
+  person's threads, memory, preferences, saved locations, or evidence records is refused exactly as
+  any other caller is. The role reaches the model layer, not people's rows — which is why it is a
+  separate question from ownership rather than a stronger answer to it.
+- **A privileged write is attributed.** The acting principal and the time are recorded with the
+  change, so an administrative action has an author.
+
+**Plan and model entitlement are derived, never asserted.** The effective plan comes from
+backend-held state keyed by the token subject. A plan, policy identifier, model identifier,
+allowance, or entitlement presented by a caller does not grant access, raise an allowance, or
+change which model serves a request — it is ignored for both model resolution and allowance
+accounting. A caller bypassing the frontend entirely gets the same outcome as one using it, because
+hiding or disabling a control was never the mechanism: it is a presentation convenience, and the
+backend refuses the underlying request regardless. This is the same rule as
+[the two gates below](#two-gates-deliberately-independent), applied to the model layer instead of
+to rows.
+
+*This section is the authorization model for the tables classified below; the resolution order and
+the policies themselves belong to `docs/model-policy.md`.*
+
 ## Ownership and the table classification
 
 Ten tables, three classes. The classification lives in the models (`ownership_of`), the migration
@@ -135,6 +194,31 @@ it. The knowledge corpus is the same shape: shared, and written only by the inge
 **Cross-user access is denied identically to a missing record.** Asking for another person's
 evidence record, thread, or saved location returns the same not-found response as an identifier that
 never existed, because "this exists but is not yours" is itself a disclosure.
+
+### The SaaS-ready tables
+
+The **SaaS-ready tables** — those carrying subscription plans, model policies, the model catalog,
+language model usage events, usage limits and consumption, and model evaluations — are classified
+in advance, by the same three classes and with the same two gates. They are created by the SaaS
+schema migrations, so they are absent from the table above until they exist; the classification is
+decided here so the migration has something to conform to rather than the other way round.
+
+| Table class | What it holds | Enforcement |
+|---|---|---|
+| user-owned | usage events carrying a user identifier, per-principal plan assignment, per-principal consumption counters | Row Level Security enabled with an owner-restricting policy; the request-serving restricted role reads and writes only the owner's rows |
+| operational, read-only to users | subscription plans, model policies, model catalog | readable as needed to serve a request; writable only through the administrative path, never by the request-serving restricted role acting for an ordinary user |
+| operational, not user-owned | model evaluations, comparison runs and their results, internal consumption counters, administrative audit records | not exposed to an ordinary authenticated caller at all |
+
+Three rules hold across all of them:
+
+1. **No existing policy is weakened, removed, or bypassed** to accommodate a new table. The
+   policies on `profiles`, `preferences`, `saved_locations`, `threads`, checkpoints, and
+   `agent_runs` are the same before and after, and a test compares them.
+2. **No request path reaches a user-owned row through the privileged connection.** A new
+   user-owned table is read and written under `weathra_request`, like every other one — otherwise
+   the second gate would exist and not apply.
+3. **Policies are established by migration**, so they are versioned with the schema rather than
+   applied by hand to a running database.
 
 ## Two gates, deliberately independent
 

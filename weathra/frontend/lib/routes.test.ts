@@ -8,7 +8,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  AUTH_CONFIRM_PATH,
   AUTH_SCREENS,
+  completesAuthFlow,
   isAuthPath,
   isProtectedPath,
   isPublicPath,
@@ -98,5 +100,26 @@ describe("the sign-in path for a gated request", () => {
 
   it("omits a destination that is where sign-in lands anyway", () => {
     expect(signInPathFor("/")).toBe("/sign-in");
+  });
+});
+
+describe("the returning-link callback", () => {
+  it("is public, and is not one of the authentication screens", () => {
+    // Someone following a verification link has no session yet — completing the link is how they
+    // get one — but the route is a handler, not a screen the gate should redirect people off.
+    expect(isPublicPath(AUTH_CONFIRM_PATH)).toBe(true);
+    expect(isProtectedPath(AUTH_CONFIRM_PATH)).toBe(false);
+    expect(isAuthPath(AUTH_CONFIRM_PATH)).toBe(false);
+  });
+
+  it("names the two screens a completed flow may leave somebody on, and only those", () => {
+    expect(completesAuthFlow("/verify-email", new URLSearchParams("completed=verification"))).toBe(true);
+    expect(completesAuthFlow("/reset-password", new URLSearchParams("completed=recovery"))).toBe(true);
+
+    // A marker for the wrong screen, the wrong flow, or no marker at all changes nothing.
+    expect(completesAuthFlow("/verify-email", new URLSearchParams("completed=recovery"))).toBe(false);
+    expect(completesAuthFlow("/reset-password", new URLSearchParams("completed=verification"))).toBe(false);
+    expect(completesAuthFlow("/sign-in", new URLSearchParams("completed=verification"))).toBe(false);
+    expect(completesAuthFlow("/verify-email", new URLSearchParams())).toBe(false);
   });
 });

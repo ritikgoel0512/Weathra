@@ -51,6 +51,7 @@ Weathra.
 |---|---|---|
 | Authentication → Email provider | enabled | The only sign-in method in the MVP |
 | Confirm email | **required** | `signUp` then returns no session until confirmation, which is what makes an unverified account structurally unable to reach protected features |
+| Minimum password length | **12** | Mirrors the rule the Create Account screen states before submission (`frontend/lib/auth/password.ts`). A project configured stricter than the stated rules produces a password rejected *after* submission, which is what `specs/authentication` forbids |
 | *Confirm signup* email template | includes `{{ .Token }}` | Without the token in the email there is no code to enter, and in-app code entry is a requirement |
 | *Reset password* email template | includes `{{ .Token }}` | Same, for recovery |
 | Redirect URLs | each environment's frontend origin | The returning-link path lands on `/auth/*`, which must be an allowed redirect |
@@ -69,6 +70,23 @@ by hand, so it cannot be forgotten in a new environment.
 | `DATABASE_URL` | Cloud Run secrets | The API and stream processes, under the restricted role |
 | `DATABASE_URL_PRIVILEGED` | GitHub Actions secrets, Cloud Run secrets | Migrations and administrative routines |
 | `OPENROUTER_API_KEY` | Cloud Run secrets | `/ask` and `/stream` only |
+
+### Where a production secret actually lives *(pending)*
+
+Not in a file, and never in Git. Each of the four is stored as a secret version in **Google Cloud
+Secret Manager**, granted to the Cloud Run service account, and referenced by the Cloud Run
+revision so the platform injects it as an environment variable at container start — the backend
+reads it through `Settings` exactly as it reads a local `.env` value, and nothing in the image or
+the repository holds it. Rotation is a new secret version plus a new revision; no code or
+configuration file changes. The privileged jobs that run in CI rather than on Cloud Run
+(migrations, retention, evaluation provisioning) take theirs from GitHub Actions secrets, which is
+why the service-role key and the privileged database URL appear in both columns of the table above.
+
+The local counterparts are `backend/.env` and `frontend/.env.local`, both git-ignored; the
+committed `backend/.env.example` and `frontend/.env.example` carry placeholders only. That split is
+the whole rule: **a real value exists in exactly two kinds of place — a developer's ignored local
+file, and server-side secret storage.** The repository is public, so anything committed is
+published, and a leaked value cannot be unpublished by deleting it later.
 
 None of these reaches the frontend, and none appears in a pull-request workflow: CI holds **no
 credential at all**, which is why the default suite and the offline evaluation run reach nothing

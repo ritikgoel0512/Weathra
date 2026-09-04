@@ -1,0 +1,363 @@
+/*
+ * The application shell — task 20.12.
+ *
+ * Every value is a token from `app/globals.css`; the shell adds no colour, no font and no scale of
+ * its own. The three tiers are the ones `docs/design/design-system.md` §13 records: a full
+ * navigation at 1280 and above, icons with labels on hover or focus between 768 and 1279, and a
+ * drawer below 768.
+ */
+
+.shell {
+  display: grid;
+  grid-template-columns: var(--layout-navigation-collapsed-width) 1fr;
+  grid-template-rows: 1fr;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* ---------------------------------------------------------------- skip link */
+
+.skipLink {
+  position: absolute;
+  left: var(--space-2);
+  top: var(--space-2);
+  z-index: 3;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-size: var(--type-ui-size);
+  font-weight: var(--type-ui-weight);
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+
+.skipLink:focus-visible {
+  transform: translateY(0);
+}
+
+/* ---------------------------------------------------------------- navigation */
+
+.navigation {
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-2);
+  background: var(--color-surface-raised);
+  border-right: 1px solid var(--color-border-subtle);
+  overflow-y: auto;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.brandName {
+  font-family: var(--family-display);
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
+  color: var(--color-text-primary);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color var(--duration-fast) var(--easing);
+}
+
+.item:hover {
+  background: var(--color-surface-overlay);
+  color: var(--color-text-primary);
+}
+
+.item[data-active="true"] {
+  background: var(--color-surface-inset);
+  color: var(--color-accent);
+  box-shadow: inset 2px 0 0 var(--color-accent);
+}
+
+.item[data-status="planned"] {
+  color: var(--color-text-muted);
+}
+
+/* The drawer control. Shares the item's shape, but it is a button and needs a button's reset. */
+.menuButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+  color: var(--color-text-primary);
+  font-family: var(--family-body);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  cursor: pointer;
+}
+
+.itemLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plannedMark {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+}
+
+/* ---------------------------------------------------------------- identity */
+
+.identity {
+  border-top: 1px solid var(--color-border-subtle);
+  padding-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.identityPerson {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.monogram {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-accent);
+  font-family: var(--family-display);
+  font-size: var(--type-ui-size);
+  font-weight: var(--type-card-weight);
+  text-transform: uppercase;
+}
+
+.identityText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.identityName {
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.identityMeta {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------------------------------------------------------------- header and main */
+
+.header {
+  display: none;
+}
+
+.main {
+  grid-column: 2;
+  min-width: 0;
+  padding: var(--space-5) var(--space-4);
+}
+
+.mainInner {
+  max-width: var(--layout-content-maximum);
+  margin: 0 auto;
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------- the wide tier */
+
+@media (min-width: 1280px) {
+  .shell {
+    grid-template-columns: var(--layout-navigation-width) 1fr;
+  }
+}
+
+/* ---------------------------------------------------------------- the collapsed tier
+ *
+ * Between 768 and 1279 the navigation is icons. The labels stay in the accessibility tree — they
+ * are the items' accessible names — and become visible beside the icon on hover or focus, which is
+ * what §13 records. A `title` attribute would not do: it is not shown on keyboard focus.
+ */
+
+@media (min-width: 768px) and (max-width: 1279px) {
+  .brandName,
+  .identityText,
+  .plannedMark {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .item {
+    justify-content: center;
+  }
+
+  .itemLabel {
+    position: absolute;
+    left: calc(100% + var(--space-2));
+    flex: none;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-overlay);
+    border: 1px solid var(--color-border-subtle);
+    box-shadow: var(--shadow-overlay);
+    color: var(--color-text-primary);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  .item:hover .itemLabel,
+  .item:focus-visible .itemLabel {
+    opacity: 1;
+  }
+
+  .identity {
+    align-items: center;
+  }
+}
+
+/* ---------------------------------------------------------------- the drawer tier
+ *
+ * Below 768 the navigation is a drawer behind a labelled control. It is hidden with `visibility`
+ * rather than moved off-screen alone: a translated-away drawer is still in the tab order, so a
+ * person using a keyboard would tab into twelve invisible links.
+ */
+
+@media (max-width: 767px) {
+  .shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .header {
+    grid-column: 1;
+    grid-row: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-surface-raised);
+    border-bottom: 1px solid var(--color-border-subtle);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  .navigation {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(var(--layout-navigation-width), 86vw);
+    z-index: 4;
+    visibility: hidden;
+    transform: translateX(-100%);
+    transition:
+      transform var(--duration-base) var(--easing),
+      visibility var(--duration-base) var(--easing);
+  }
+
+  .navigation[data-open="true"] {
+    visibility: visible;
+    transform: translateX(0);
+    box-shadow: var(--shadow-overlay);
+  }
+
+  .scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 3;
+    background: rgb(0 0 0 / 0.5);
+    border: 0;
+  }
+
+  .main {
+    grid-column: 1;
+    grid-row: 2;
+    padding: var(--space-4) var(--space-3);
+  }
+}
+
+@media (min-width: 768px) {
+  .scrim {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------- route status panel */
+
+.routeStatus {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+  max-width: 70ch;
+}
+
+.routeStatusHeading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.routeStatusBody {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-secondary);
+}

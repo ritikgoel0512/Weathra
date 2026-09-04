@@ -22,13 +22,24 @@ export interface Screen {
   readonly title: string;
 }
 
+/**
+ * The authentication paths, named.
+ *
+ * A screen that links to another writes the constant, not the string: a path typed twice is a path
+ * that can be renamed once. `SIGN_IN_PATH` is further down, beside the redirect it belongs to.
+ */
+export const CREATE_ACCOUNT_PATH = "/create-account";
+export const VERIFY_EMAIL_PATH = "/verify-email";
+export const FORGOT_PASSWORD_PATH = "/forgot-password";
+export const RESET_PASSWORD_PATH = "/reset-password";
+
 /** The unauthenticated screens: the `(auth)` route group. */
 export const AUTH_SCREENS: readonly Screen[] = [
   { path: "/sign-in", title: "Sign In" },
-  { path: "/create-account", title: "Create Account" },
-  { path: "/verify-email", title: "Verify Email" },
-  { path: "/forgot-password", title: "Forgot Password" },
-  { path: "/reset-password", title: "Reset Password" },
+  { path: CREATE_ACCOUNT_PATH, title: "Create Account" },
+  { path: VERIFY_EMAIL_PATH, title: "Verify Email" },
+  { path: FORGOT_PASSWORD_PATH, title: "Forgot Password" },
+  { path: RESET_PASSWORD_PATH, title: "Reset Password" },
 ];
 
 /**
@@ -39,6 +50,38 @@ export const AUTH_SCREENS: readonly Screen[] = [
  * route being public is not the same as the action being unauthenticated.
  */
 export const AUTH_CALLBACK_PREFIX = "/auth/";
+
+/** The one returning-link handler: verification and recovery both come back through it (task 20.6). */
+export const AUTH_CONFIRM_PATH = `${AUTH_CALLBACK_PREFIX}confirm`;
+
+/**
+ * How a callback tells the screen it lands on which flow it just completed.
+ *
+ * A Weathra-controlled marker and nothing more. It carries no token, and it is **not** a claim that
+ * anybody is verified: the screen it lands on resolves the session server-side and shows its
+ * success state only if Supabase agrees. What the marker actually decides is narrower — whether an
+ * already-authenticated person is allowed to *stay* on an authentication screen, which is the one
+ * thing `middleware.ts` cannot work out from the path alone.
+ */
+export const COMPLETED_PARAMETER = "completed";
+export const COMPLETED_VERIFICATION = "verification";
+export const COMPLETED_RECOVERY = "recovery";
+
+/**
+ * Whether this authentication screen is completing a flow that *needed* the session to exist.
+ *
+ * Task 20.10 redirects an already-authenticated person off the authentication screens, and it is
+ * right about every one of them except these two moments: the verification success state exists
+ * precisely because a session was just established, and setting a new password after a recovery
+ * link requires the recovery session. Bouncing either would make the flow that created the session
+ * impossible to finish.
+ */
+export function completesAuthFlow(pathname: string, parameters: URLSearchParams): boolean {
+  const completed = parameters.get(COMPLETED_PARAMETER);
+  if (pathname === VERIFY_EMAIL_PATH) return completed === COMPLETED_VERIFICATION;
+  if (pathname === RESET_PASSWORD_PATH) return completed === COMPLETED_RECOVERY;
+  return false;
+}
 
 /** The protected MVP product screens, in navigation order. */
 export const MVP_SCREENS: readonly Screen[] = [
@@ -72,6 +115,15 @@ export const SIGN_IN_PATH = "/sign-in";
 
 /** The query parameter carrying the screen a person was trying to reach. */
 export const DESTINATION_PARAMETER = "next";
+
+/**
+ * Says that the person is back at sign-in because their session ran out, rather than because they
+ * asked to be. `specs/web-ui` requires an expired session to be *said*, not silently presented as
+ * a fresh sign-in — and a marker in the URL is the only thing that survives the navigation.
+ *
+ * It carries no identity and grants nothing: the sign-in screen reads it to choose a sentence.
+ */
+export const EXPIRED_PARAMETER = "expired";
 
 function matches(pathname: string, path: string): boolean {
   if (path === "/") return pathname === "/";
@@ -114,4 +166,21 @@ export function signInPathFor(pathname: string, search = ""): string {
   const destination = `${pathname}${search}`;
   if (destination === DEFAULT_PROTECTED_PATH) return SIGN_IN_PATH;
   return `${SIGN_IN_PATH}?${DESTINATION_PARAMETER}=${encodeURIComponent(destination)}`;
+}
+
+/**
+ * Where the expired-session state sends somebody, keeping their place.
+ *
+ * The destination goes through `safeDestination` first even though it comes from the browser's own
+ * address bar — this is the one function that turns a *current location* into a redirect target,
+ * and a value that has been through a rewrite, a proxy, or a crafted link is not automatically a
+ * path on this origin just because a browser is currently showing it.
+ */
+export function expiredSignInPath(pathname: string, search = ""): string {
+  const destination = safeDestination(`${pathname}${search}`);
+  const base =
+    destination === null || destination === DEFAULT_PROTECTED_PATH
+      ? SIGN_IN_PATH
+      : `${SIGN_IN_PATH}?${DESTINATION_PARAMETER}=${encodeURIComponent(destination)}`;
+  return `${base}${base.includes("?") ? "&" : "?"}${EXPIRED_PARAMETER}=1`;
 }

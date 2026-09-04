@@ -441,3 +441,95 @@ An authenticated user SHALL be able to delete their Weathra application data —
 
 - **WHEN** a user deletes their data
 - **THEN** the knowledge corpus, provider cache, and location-keyed snapshots are unaffected
+
+### Requirement: Administrative and internal roles are server-held
+
+The system SHALL support an administrative/internal role distinct from an ordinary authenticated user, held as backend state keyed by the validated token subject. The role SHALL be readable only by the backend and SHALL NOT be granted by any client-supplied field: a body field, query parameter, header, cookie, or unverified token claim asserting the role SHALL be ignored.
+
+Administrative capabilities — model policy administration, model catalog administration, plan and allowance administration, aggregate usage reading, and the internal model lab — SHALL be refused for every principal without the role, and the refusal SHALL disclose nothing about the capability's existence or contents. Holding the role SHALL NOT grant access to another user's own data.
+
+#### Scenario: Role established server-side
+
+- **WHEN** the backend determines whether a request is administrative
+- **THEN** it consults backend-held role state keyed by the token subject
+- **AND** no client-supplied field contributes to the determination
+
+#### Scenario: Asserted role ignored
+
+- **WHEN** a request from an ordinary user carries a field, header, or unverified claim asserting the administrative role
+- **THEN** the request is treated as non-administrative
+- **AND** every administrative capability remains refused
+
+#### Scenario: Administrative capability refused without the role
+
+- **WHEN** an ordinary authenticated caller invokes a model policy, catalog, plan, aggregate usage, or model lab operation
+- **THEN** the request is refused
+- **AND** no policy, catalog, plan, usage, or lab content is disclosed
+
+#### Scenario: Administrative role grants no access to user data
+
+- **WHEN** an administrative principal requests another user's threads, memory, preferences, saved locations, or evidence records
+- **THEN** the request is refused exactly as it would be for any other caller
+
+#### Scenario: Administrative action attributed
+
+- **WHEN** an administrative principal performs a privileged write
+- **THEN** the acting principal and the time are recorded with the change
+
+### Requirement: Plan and model entitlement are derived, never asserted
+
+The system SHALL derive a principal's subscription plan and their entitlement to a model policy from backend-held state keyed by the validated token subject. A plan, policy identifier, model identifier, allowance, or entitlement presented by a client SHALL NOT grant access, raise an allowance, or change which model serves a request.
+
+The frontend hiding or disabling a control SHALL NOT be the mechanism that prevents access to a premium model or a raised allowance, and a caller bypassing the frontend SHALL receive the same outcome as one using it.
+
+#### Scenario: Plan derived from backend state
+
+- **WHEN** an authenticated request is served
+- **THEN** the effective plan comes from backend-held state keyed by the token subject
+
+#### Scenario: Asserted plan or model ignored
+
+- **WHEN** a request claims a higher plan, a policy identifier, or a model identifier above the principal's entitlement
+- **THEN** the claim is ignored for both model resolution and allowance accounting
+
+#### Scenario: Bypassing the UI changes nothing
+
+- **WHEN** a caller calls the API directly requesting a premium model or a raised allowance
+- **THEN** the outcome is identical to the same attempt through the frontend
+
+### Requirement: Row Level Security on the SaaS-ready tables
+
+The system SHALL classify every table introduced for subscription plans, model policies, the model catalog, language model usage events, usage limits and consumption, and model evaluations, and SHALL enforce that classification in the database as well as in the data path:
+
+| Table class | Tables | Enforcement |
+|---|---|---|
+| user-owned | usage events carrying a user identifier, per-principal plan assignment, per-principal consumption counters | Row Level Security enabled with an owner-restricting policy; the request-serving restricted role may read and write only the owner's rows |
+| operational, read-only to users | subscription plans, model policies, model catalog | readable as needed to serve a request; writable only through the administrative path, never by the request-serving restricted role acting for an ordinary user |
+| operational, not user-owned | model evaluations, comparison runs and their results, internal consumption counters, administrative audit records | not exposed to an ordinary authenticated caller at all |
+
+Existing Row Level Security policies SHALL NOT be weakened, removed, or bypassed to accommodate these tables, and no new table SHALL be served to a request path through the privileged connection to reach user-owned rows. Policies SHALL be established by migration so they are versioned with the schema.
+
+#### Scenario: Policies present on the new user-owned tables
+
+- **WHEN** the database is inspected after migration
+- **THEN** Row Level Security is enabled with an owner-restricting policy on every new user-owned table
+
+#### Scenario: Foreign usage row blocked by policy
+
+- **WHEN** a query under the request-serving restricted role omits an owner predicate while reading usage events
+- **THEN** it returns only the acting principal's rows
+
+#### Scenario: Ordinary caller cannot write operational tables
+
+- **WHEN** an ordinary authenticated caller attempts to write a plan, policy, or catalog row
+- **THEN** the write is refused in the data path and by policy
+
+#### Scenario: Existing policies unchanged
+
+- **WHEN** the policies on profiles, preferences, saved locations, threads, checkpoints, and agent runs are compared before and after this change
+- **THEN** none has been weakened, removed, or bypassed
+
+#### Scenario: Request path does not use the privileged connection
+
+- **WHEN** a request path reads or writes any new user-owned table
+- **THEN** it does so under the request-serving restricted role

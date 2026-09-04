@@ -1,0 +1,61 @@
+/*
+ * The expired-session state — task 20.9.
+ *
+ * Built from the design-system tokens of task 20.3, and deliberately *not* styled like the data
+ * error state: `docs/design-system.md` §11 lists an expired session as its own shared state, and a
+ * person needs to be able to tell "your session ran out" from "that request did not complete" at a
+ * glance rather than by reading.
+ */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  max-width: 480px;
+  margin: var(--space-5) auto;
+  padding: var(--space-5);
+  border: 1px solid var(--color-border-subtle);
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-raised);
+}
+
+.title {
+  font-family: var(--family-display);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-primary);
+}
+
+.body {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-secondary);
+}
+
+/*
+ * The way back. A link rather than a button, because it is a navigation — and a real one, so it
+ * works from the keyboard, opens in a new tab if somebody means to, and survives a broken bundle.
+ */
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-family: var(--family-body);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  text-decoration: none;
+}
+
+.action:hover {
+  background: var(--color-accent-strong);
+}

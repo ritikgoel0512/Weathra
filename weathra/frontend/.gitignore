@@ -9,3 +9,10 @@ test-results/
 .env*.local
 next-env.d.ts
 *.tsbuildinfo
+
+# The repository-root ignore file carries a Python template whose `lib/` rule was meant for a build
+# directory — and which also matches this application's own `lib/` source directory at any depth.
+# The modules already committed there are tracked, so the rule was invisible until a *new* file was
+# added and git quietly refused to see it. Re-included here: a deeper ignore file overrides a
+# shallower one, so this negation is what keeps `frontend/lib/` committable.
+!lib/

@@ -1,0 +1,286 @@
+/*
+ * The shared authentication shell — the visual direction of
+ * `docs/design/screens/08-authentication.png`, built from the design-system tokens of task 20.3.
+ *
+ * The artifact shows the shell in the light appearance; `docs/design/screens.md` §5 records that
+ * the shell is implemented in both, from the same tokens, which is why there is not a single
+ * literal colour here. A centred column on the page ground, the mark above a single raised card,
+ * one primary action in the accent, and the way out underneath.
+ */
+
+.page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-4);
+  background: var(--color-surface-base);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-accent);
+}
+
+.brandName {
+  font-family: var(--family-display);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-primary);
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-raised);
+}
+
+.headings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.title {
+  font-family: var(--family-display);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-primary);
+}
+
+.subtitle {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.footer {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* The row holding the secondary route out of the screen, beside the last field. */
+.aside {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.link {
+  color: var(--color-accent);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  font-weight: var(--type-ui-weight);
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+}
+
+.link:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/*
+ * The password visibility control, inside the field's frame.
+ *
+ * A real button with a real accessible name — not an icon with a tooltip. Its name says which way
+ * it will move the field ("Show password" while the password is hidden), because a control named
+ * for its current state leaves a person guessing what pressing it does.
+ */
+.reveal {
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-accent);
+  font-family: var(--family-body);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  font-weight: var(--type-ui-weight);
+  cursor: pointer;
+}
+
+.reveal:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* The password field and the rules stated beneath it read as one block. */
+.passwordGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.rules {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.rule {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+/*
+ * A met rule changes colour *and* mark, and carries its state in words for a screen reader. Colour
+ * alone would make the checklist useless to anyone who cannot separate the two.
+ */
+.rule[data-met="true"] {
+  color: var(--color-status-ok);
+}
+
+.ruleMark {
+  width: 1em;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+/*
+ * The failure region. Bordered and tinted from the status tokens so it is not a red sentence
+ * floating above a form, and it is a live region so a person who cannot see it is told.
+ */
+.failure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-status-error);
+  border-left-width: 3px;
+  border-radius: var(--radius-md);
+  background: var(--color-status-error-surface);
+  color: var(--color-status-error);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+
+/*
+ * The polite live region shared by the verification screen's in-progress and confirmed states.
+ *
+ * Always in the DOM so a change to it is *announced* rather than being an element that appears —
+ * a live region inserted at the same moment as its content is often missed entirely. `:empty`
+ * keeps it out of the layout while there is nothing to say.
+ */
+.status {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-base);
+  color: var(--color-text-secondary);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+
+.status:empty {
+  display: none;
+}
+
+/* One line of context inside the card — what was sent, and where. */
+.notice {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-secondary);
+}
+
+/* The address, emphasised so a person can see at a glance which inbox to open. */
+.noticeStrong {
+  color: var(--color-text-primary);
+  font-weight: var(--type-ui-weight);
+  overflow-wrap: anywhere;
+}
+
+/* The secondary action, sitting with the sentence that asks for it. */
+.resend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+/*
+ * The success state. Bordered and tinted from the status tokens for the same reason the failure
+ * region is: a green sentence floating above a card is not a state.
+ */
+.success {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-status-ok);
+  border-left-width: 3px;
+  border-radius: var(--radius-md);
+  background: var(--color-status-ok-surface);
+  color: var(--color-text-secondary);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+
+.successTitle {
+  color: var(--color-status-ok);
+  font-family: var(--family-display);
+  font-weight: var(--type-ui-weight);
+}
+
+/*
+ * A navigation that carries the weight of the screen's primary action — "Request a new reset link".
+ * It borrows the primary button's appearance from the same tokens rather than being a `<button>`
+ * wrapped in an `<a>`, which would be two controls where a person expects one.
+ */
+.actionLink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-family: var(--family-body);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  text-align: center;
+  text-decoration: none;
+}
+
+.actionLink:hover {
+  background: var(--color-accent-strong);
+}

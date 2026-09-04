@@ -450,3 +450,120 @@ The API SHALL permit browser clients from the configured allowed origins, with t
 
 - **WHEN** the deployed configuration is inspected
 - **THEN** the allowed origins are explicit and contain no wildcard
+
+### Requirement: Model selection is not caller-selectable on product endpoints
+
+The agent ask and streaming endpoints SHALL NOT accept a model or policy identifier as an authoritative input. Where such a field is accepted at all it SHALL be advisory: the backend SHALL honour it only within the caller's established entitlement, SHALL otherwise ignore it and serve the request under the entitled policy, and SHALL NOT fail the request on account of the field.
+
+Every agent response and stream SHALL report the provider, the model that actually ran, and the resolving policy, so a caller can see what served them without being able to choose it.
+
+#### Scenario: Advisory field above entitlement ignored
+
+- **WHEN** a Free-plan caller posts a question with a field naming a premium model
+- **THEN** the request succeeds under the Free plan's policy
+- **AND** the response reports the model that actually ran, not the requested one
+
+#### Scenario: Advisory field within entitlement honoured
+
+- **WHEN** a Premium-plan caller names a model their entitled policy already permits and the catalog has enabled
+- **THEN** the response may report that model as used
+
+#### Scenario: Response reports what served it
+
+- **WHEN** an agent request or stream completes
+- **THEN** the provider, the model used, and the resolving policy are reported
+
+#### Scenario: Unknown model field does not fail the request
+
+- **WHEN** a caller posts a question naming a model identifier that does not exist
+- **THEN** the request still succeeds under the entitled policy
+- **AND** the field is reported as ignored rather than raising a validation error
+
+### Requirement: Quota enforcement on the HTTP surface
+
+The API SHALL refuse an agent request or stream whose caller has exhausted their allowance, using HTTP 429 with the standard error model, and SHALL include the bound dimension, the allowance, the consumption, the window reset time, and a retry-after indication. The refusal SHALL be distinguishable from an authentication failure, an upstream weather failure, an agent-unconfigured failure, and a gateway rate limit.
+
+A stream whose caller is already over allowance SHALL be refused before the stream opens rather than terminated mid-answer. Endpoints that consume no language model allowance SHALL continue to serve a caller whose allowance is exhausted.
+
+#### Scenario: Quota refusal returns 429 with its basis
+
+- **WHEN** a caller with an exhausted allowance posts a question
+- **THEN** the response is 429 in the standard error shape naming the bound dimension, the allowance, the consumption, the reset time, and a retry-after
+
+#### Scenario: Quota refusal distinguishable from other failures
+
+- **WHEN** a caller inspects the error code
+- **THEN** it distinguishes an exhausted allowance from a 401, an upstream failure, an unconfigured agent, and a gateway rate limit
+
+#### Scenario: Stream refused before opening
+
+- **WHEN** a caller with an exhausted allowance opens the stream endpoint
+- **THEN** the request is refused with 429 before any stream event is sent
+
+#### Scenario: Non-agent endpoints unaffected
+
+- **WHEN** a caller with an exhausted allowance requests locations, current weather, forecast, history, analysis, or comparison
+- **THEN** the requests succeed
+
+### Requirement: Plan and usage endpoint for the signed-in person
+
+The API SHALL expose a protected endpoint returning the acting principal's own plan and usage: the plan code and display name, consumption and remaining allowance per applicable dimension, each window's reset time, and a bounded recent usage summary. It SHALL NOT expose another user's usage, internal usage, aggregate cost across users, or catalog pricing beyond what the caller's own plan states.
+
+An unauthenticated call SHALL be refused. A caller-supplied user identifier SHALL be ignored in favour of the token subject.
+
+#### Scenario: Own plan and usage returned
+
+- **WHEN** an authenticated caller reads their plan and usage
+- **THEN** the plan code and display name, per-dimension consumption and remaining allowance, and each window's reset time are returned
+
+#### Scenario: Another user's usage not disclosed
+
+- **WHEN** a caller supplies a user identifier for someone else
+- **THEN** the response covers the token subject only
+
+#### Scenario: Unauthenticated call refused
+
+- **WHEN** the endpoint is called with no validated token
+- **THEN** the request is refused as unauthenticated
+
+#### Scenario: Internal usage not exposed
+
+- **WHEN** an ordinary caller reads their plan and usage
+- **THEN** no internal, administrative, evaluation, or lab usage appears
+
+### Requirement: Administrative model, usage, and lab endpoints
+
+The API SHALL expose administrative endpoints, all protected and all refused for any principal without the administrative role, covering at minimum: listing and administering the model catalog including enable and disable; listing and administering model policies and plan-to-policy mappings; listing and administering subscription plans, allowances, and a principal's plan assignment; reading aggregate usage by model, policy, plan, call role, status, and period with internal usage reported separately; and initiating and reading model lab comparison runs and their recorded results.
+
+These endpoints SHALL sit under the versioned prefix, SHALL appear in the published OpenAPI schema, SHALL be classified as protected and administrative in the published endpoint classification, and SHALL use the standard error model. A refusal for a non-administrative caller SHALL disclose nothing about the endpoint's contents.
+
+#### Scenario: Administrative endpoints classified and documented
+
+- **WHEN** the endpoint classification and the OpenAPI schema are read
+- **THEN** every administrative model, usage, and lab endpoint is present and classified as protected and administrative
+
+#### Scenario: Non-administrative caller refused
+
+- **WHEN** an ordinary authenticated caller calls any administrative model, usage, or lab endpoint
+- **THEN** the request is refused
+- **AND** no catalog, policy, plan, usage, or lab content is returned
+
+#### Scenario: Catalog administered
+
+- **WHEN** an administrative caller disables a catalog entry
+- **THEN** the change is applied and reported, and subsequent resolutions skip that model
+
+#### Scenario: Aggregate usage read
+
+- **WHEN** an administrative caller reads aggregate usage for a period
+- **THEN** call counts, token totals, estimated cost totals, failure rates, and median and 95th-percentile latency are returned by model, policy, plan, call role, and status, with internal usage separated
+
+#### Scenario: Lab comparison initiated and read
+
+- **WHEN** an administrative caller initiates a comparison across selected enabled models and then reads the run
+- **THEN** the run's per-model results with latency, tokens, estimated cost, status, and evaluation result are returned
+
+#### Scenario: Unauthenticated administrative call refused
+
+- **WHEN** an administrative endpoint is called with no validated token
+- **THEN** the request is refused as unauthenticated

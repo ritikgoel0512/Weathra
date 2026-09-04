@@ -27,6 +27,12 @@ Compare Cities, Agent Evidence, Saved Locations, and Settings — plus the authe
 **Evaluation.** Forty cases, ten metrics, seven acceptance thresholds, and an offline mode that runs
 in CI with no credentials.
 
+**The model layer.** A model catalog, declared model policies resolved per plan and call role, a
+usage event with tokens, latency, status and an estimated cost for every language model call, and
+per-plan allowances enforced on the agent paths — with an administrative role, held server-side,
+that can read the aggregates and run a recorded model comparison. Plans are assigned
+administratively; nothing here bills.
+
 **One of each provider.** One weather provider, one geocoder, one inference gateway, one vector
 store — each behind a contract, which is what makes the list below additions rather than rewrites.
 
@@ -42,6 +48,10 @@ Beyond the MVP's email-and-password Supabase Auth:
 - Organizations, teams, and role-based access control.
 - Multi-tenancy, rate limiting, and API keys for third-party consumers.
 - Rate limiting on the public weather endpoints, needed before wide public exposure.
+- **Graded roles, scopes, and organization-level administration**, beyond the single
+  administrative/internal flag this change introduces. One server-held flag answers "may this
+  principal administer the model layer"; it does not answer "which organization's plans may they
+  administer", and pretending otherwise would put an authorization model in a boolean.
 
 *Arrives through:* the token-validation layer and the `Principal`, which already separate "who is
 this" from "what may they do".
@@ -68,6 +78,39 @@ Weather Intelligence Report, Forecast Explorer, Weather Scenario Lab, Weather Wa
 Intelligence are represented in the design roadmap and **not implemented** in this change. Their
 routes exist in the frontend and state plainly that they are not yet available — routing structure
 that is real, with nothing rendering broken or empty.
+
+**Admin Model & AI Usage** and **Plan & Usage** are designed and approved under the same design
+gate as every other screen and are **not implemented** in this change. They are recorded as
+post-MVP entries in [`design/roadmap.md`](design/roadmap.md); their routes state that they are not
+yet available, and the administrative route fetches no catalog, usage, cost, or lab content for
+anyone while it is unbuilt.
+
+### Commercial and model governance
+
+The model layer of this change measures, resolves, and bounds; it does not bill, and it does not
+route itself.
+
+- **Payment processing** — checkout, card handling, invoicing, dunning, proration, and a
+  billing-provider integration. Plans are administratively assigned rows in this change, and
+  `subscription_plans` carries a stable plan code and an unused external subscription reference so
+  the integration has somewhere to land.
+- **Enforced estimated-cost budgets** per plan and window against paid models. The allowance model
+  can express one; none is enabled, because an estimate is the wrong thing to refuse a request on.
+- **Reconciliation of estimated cost** against a gateway invoice. Cost stays an operational
+  estimate here, labelled as one wherever it is shown.
+- **Self-service plan upgrade and downgrade**, which needs payment processing first.
+- **Automatic or adaptive model routing** — bandits, per-question difficulty routing, or cost-aware
+  fallback chosen at runtime. Policies stay declared candidate lists in a fixed order, promoted by
+  a recorded human decision against recorded evidence.
+- **Scheduled model health probing** and automatic disabling of a failing catalog entry. Disabling
+  is an administrative action in this change, and the catalog's staleness window means it is not
+  instant.
+- **Per-model prompt variants**, so a policy could carry a prompt tuned to its model rather than
+  sharing one — which is also what makes a model comparison in this change a comparison of models
+  rather than of prompts.
+
+*Arrives through:* the plan, policy, catalog, usage-event, and allowance tables, which are database
+rows rather than environment variables, and the recorded resolution on every run.
 
 ### Platform and architecture
 
@@ -98,6 +141,15 @@ discloses its single-provider basis today.
 
 **Forecast-accuracy scoring** needs a history of snapshots to score against. The snapshot table and
 the capture path exist; the history does not yet.
+
+**Billing** needs a payment provider, a webhook path, and reconciliation against someone else's
+invoice — and it needs cost to be an amount owed rather than an estimate. Estimating cost from
+token counts and catalog pricing is honest and cheap; presenting that estimate as a bill would not
+be either, which is why plans are assigned administratively and the estimate is labelled.
+
+**Adaptive model routing** needs evidence that a runtime choice beats a declared order, and the
+recorded comparison runs are how that evidence would be gathered. Routing before measuring would
+make the model that served an answer something nobody could predict or explain.
 
 **Organizations and roles** change the authorization model from "your own rows" to "rows your role
 may reach", which is a different shape of policy — and Row Level Security is where it belongs, not a

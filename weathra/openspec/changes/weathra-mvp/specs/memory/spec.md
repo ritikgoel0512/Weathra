@@ -174,3 +174,65 @@ When the memory store is unavailable, the system SHALL continue to serve statele
 - **WHEN** a follow-up question arrives while the memory store is unavailable
 - **THEN** the system states that conversation context is unavailable
 - **AND** does not answer the follow-up as though context had been applied
+
+### Requirement: Both memory tiers are retained unchanged by the model policy layer
+
+The system SHALL retain both memory tiers exactly as specified above, and no part of the model policy, model catalog, telemetry, quota, or model lab work SHALL remove, replace, or weaken either:
+
+- **Short-term conversational memory** — thread-scoped state held by the orchestrator's own checkpointing mechanism, scoped to the pair of the authenticated user and the conversation thread, surviving restarts and shared across backend instances, holding the turn history and the resolved entities a follow-up needs.
+- **Long-term durable preference memory** — user-owned application tables holding the preferences a person explicitly chose: unit system, preferred and default location, saved places, and forecast preferences such as the default horizon and the measures they care about.
+
+Which model or policy served a turn SHALL NOT affect what memory holds, how a follow-up resolves, or how long anything is retained. Preferences SHALL apply identically whichever model answers.
+
+#### Scenario: Both tiers present
+
+- **WHEN** the memory layer is inspected
+- **THEN** thread-scoped short-term conversational memory and durable long-term preference memory both exist and are separately identifiable
+
+#### Scenario: Durable preferences enumerated
+
+- **WHEN** the durable preference store is inspected
+- **THEN** it holds the unit system, the preferred and default location, saved places, and forecast preferences including the default horizon
+
+#### Scenario: Follow-up resolution unaffected by the model
+
+- **WHEN** a follow-up is asked in a thread whose earlier turn was served by a different resolved model
+- **THEN** it resolves against the same thread context in the same way
+
+#### Scenario: Preferences applied under every policy
+
+- **WHEN** a person with imperial units and a default location asks a question under any policy
+- **THEN** those preferences are applied and disclosed exactly as under the default policy
+
+#### Scenario: Retention unchanged
+
+- **WHEN** the retention rules are compared before and after this change
+- **THEN** the bounded conversation retention window and the deletion operations are unchanged
+
+### Requirement: Plan, policy, and usage state are not conversational memory
+
+The system SHALL hold plan assignment, policy resolution, catalog state, usage events, consumption counters, and model evaluation records in their own tables under their own ownership and retention rules, and SHALL NOT store them as conversation turns, thread state, or preferences. Conversation memory SHALL NOT be widened to hold arbitrary or sensitive content in order to support model policy, telemetry, quota, or comparison work.
+
+Deleting a person's session memory SHALL NOT delete their plan assignment, and deleting their account data SHALL remove their user-attributed usage events and consumption alongside their threads, preferences, and saved locations.
+
+#### Scenario: Policy state kept out of thread memory
+
+- **WHEN** a thread's stored representation is inspected after several turns
+- **THEN** it holds turn text, resolved entities, and evidence references only
+- **AND** no plan, policy, catalog, usage, or consumption record is stored there
+
+#### Scenario: Conversation storage not widened
+
+- **WHEN** the stored conversation representation is compared before and after this change
+- **THEN** nothing beyond what follow-up resolution and evidence display require has been added
+
+#### Scenario: Session deletion leaves the plan intact
+
+- **WHEN** a person deletes their session memory
+- **THEN** their turns and resolved entities are removed
+- **AND** their plan assignment and remaining allowance are unchanged
+
+#### Scenario: Account deletion removes attributed usage
+
+- **WHEN** a person's account data is deleted
+- **THEN** their threads, preferences, saved locations, and user-attributed usage events and consumption counters are all removed

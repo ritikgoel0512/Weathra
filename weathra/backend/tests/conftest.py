@@ -7,6 +7,22 @@ from pathlib import Path
 import pytest
 
 from tests.auth_support import TokenFactory, build_factory
+from weathra.config import Settings
+
+# The suite does not read the developer's `backend/.env`.
+#
+# `Settings` reads `.env` from the working directory by design, and the offline suite runs from
+# `backend/`, so without this a local environment file leaks into every test that constructs
+# `Settings` — and the tests it breaks are exactly the ones asserting that a credential is *not*
+# required. A blank `OPENROUTER_API_KEY=` line is enough: pydantic-settings reads it as the empty
+# string rather than as absent, `inference_configured` flips to true, and eight tests fail on a
+# machine that is configured correctly. A real key does the same.
+#
+# `test_missing_project_url_is_refused` already passed `_env_file=None` for this reason; applying it
+# once here makes the whole suite hermetic instead of one test. CI has no `.env` at all, so this
+# changes nothing there — it makes a local run agree with CI. The application is untouched:
+# `config.py` still declares `env_file=".env"`, and this mutation lives only in the test process.
+Settings.model_config["env_file"] = None
 
 # `db`-marked tests draw their database fixtures from here. Imported as plugins so any test module
 # can request them without repeating the wiring.

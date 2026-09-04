@@ -1,0 +1,546 @@
+/*
+ * The primitive layer's styles — task 20.3.
+ *
+ * One stylesheet for the whole primitive layer rather than one per component, because these are
+ * not independent widgets: a badge, a card and a metric are three views of the same system, and
+ * splitting them into eight files makes a change to the shared step of lightness an eight-file
+ * change. Screen-specific styling does not belong here.
+ *
+ * Every value is a token from `app/globals.css`. There is no literal colour, no literal spacing,
+ * and no font stack in this file — that is the property `lib/design/tokens.test.ts` enforces.
+ */
+
+/* ---------------------------------------------------------------- surfaces and cards */
+
+.surface {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
+.surface[data-level="base"] {
+  background: var(--color-surface-base);
+}
+
+.surface[data-level="overlay"] {
+  background: var(--color-surface-overlay);
+  box-shadow: var(--shadow-overlay);
+}
+
+.surface[data-level="inset"] {
+  background: var(--color-surface-inset);
+  border-radius: var(--radius-md);
+}
+
+.card {
+  box-shadow: var(--shadow-raised);
+  display: flex;
+  flex-direction: column;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-4) 0;
+}
+
+.cardHeadings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.cardTitle {
+  font-family: var(--family-display);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+}
+
+.cardSubtitle {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.cardHeaderAside {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.cardBody {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.cardFooter {
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-border-subtle);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+}
+
+/* ---------------------------------------------------------------- button */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-family: var(--family-body);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--easing),
+    border-color var(--duration-fast) var(--easing),
+    color var(--duration-fast) var(--easing);
+}
+
+.button[data-size="sm"] {
+  padding: var(--space-1) var(--space-3);
+  min-height: 32px;
+}
+
+.button[data-size="md"] {
+  padding: var(--space-2) var(--space-4);
+  min-height: 40px;
+}
+
+.button[data-full-width="true"] {
+  width: 100%;
+}
+
+.button[data-variant="primary"] {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+.button[data-variant="primary"]:hover:not(:disabled) {
+  background: var(--color-accent-strong);
+}
+
+.button[data-variant="secondary"] {
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-strong);
+}
+
+.button[data-variant="secondary"]:hover:not(:disabled) {
+  background: var(--color-surface-overlay);
+}
+
+.button[data-variant="ghost"] {
+  background: transparent;
+  color: var(--color-accent);
+}
+
+.button[data-variant="ghost"]:hover:not(:disabled) {
+  background: var(--color-surface-overlay);
+}
+
+.button[data-variant="danger"] {
+  background: var(--color-status-error-surface);
+  color: var(--color-status-error);
+  border-color: var(--color-status-error);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* ---------------------------------------------------------------- badges */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-family: var(--family-body);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid currentcolor;
+  white-space: nowrap;
+}
+
+.badge[data-tone="neutral"] {
+  color: var(--color-text-secondary);
+  background: var(--color-surface-inset);
+  border-color: var(--color-border-subtle);
+}
+
+.badge[data-tone="accent"] {
+  color: var(--color-accent);
+  background: var(--color-surface-inset);
+}
+
+.badge[data-tone="error"] {
+  color: var(--color-status-error);
+  background: var(--color-status-error-surface);
+}
+
+.badge[data-tone="warning"] {
+  color: var(--color-status-warning);
+  background: var(--color-status-warning-surface);
+}
+
+.badge[data-tone="ok"] {
+  color: var(--color-status-ok);
+  background: var(--color-status-ok-surface);
+}
+
+.badge[data-tone="quota"] {
+  color: var(--color-status-quota);
+  background: var(--color-status-quota-surface);
+}
+
+/*
+ * The five data classes.
+ *
+ * Hue is never the only carrier: each badge states its class in words, and the AI INTERPRETATION
+ * class additionally takes a solid treatment with a leading rule, so the two adjacent hues in the
+ * set stay apart for a reader who cannot separate violet from fuchsia.
+ */
+.badge[data-class="observed"] {
+  color: var(--color-class-observed);
+  background: var(--color-class-observed-surface);
+}
+
+.badge[data-class="forecast"] {
+  color: var(--color-class-forecast);
+  background: var(--color-class-forecast-surface);
+}
+
+.badge[data-class="historical"] {
+  color: var(--color-class-historical);
+  background: var(--color-class-historical-surface);
+}
+
+.badge[data-class="analytics"] {
+  color: var(--color-class-analytics);
+  background: var(--color-class-analytics-surface);
+}
+
+.badge[data-class="interpretation"] {
+  color: var(--color-class-interpretation);
+  background: var(--color-class-interpretation-surface);
+  border-left-width: 3px;
+}
+
+/* ---------------------------------------------------------------- fields */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.fieldLabel {
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-secondary);
+}
+
+.fieldDescription {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.fieldError {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-status-error);
+}
+
+.control {
+  font-family: var(--family-body);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  color: var(--color-text-primary);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  min-height: 40px;
+  width: 100%;
+}
+
+.control:hover:not(:disabled) {
+  border-color: var(--color-border-strong);
+}
+
+.control[aria-invalid="true"] {
+  border-color: var(--color-status-error);
+}
+
+.control:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.control::placeholder {
+  color: var(--color-text-muted);
+}
+
+select.control {
+  cursor: pointer;
+}
+
+/*
+ * A field with a trailing control. The frame carries the border so the pair reads as one control.
+ *
+ * The frame deliberately does *not* take the focus ring on `:focus-within`: doing so would mean
+ * suppressing the input's own indicator, and the design system's one rule about focus is that
+ * nothing removes an outline. The input and the trailing button each show the shared
+ * `:focus-visible` treatment, so tabbing through the pair says exactly where focus is.
+ */
+.controlFrame {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-1);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding-right: var(--space-1);
+  min-height: 40px;
+  width: 100%;
+}
+
+.controlFrame:hover {
+  border-color: var(--color-border-strong);
+}
+
+.controlFrame[data-invalid="true"] {
+  border-color: var(--color-status-error);
+}
+
+.controlBare {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--family-body);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  color: var(--color-text-primary);
+  background: transparent;
+  border: 0;
+  padding: var(--space-2) var(--space-3);
+}
+
+.controlBare::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* The control inside the frame: a real button, sized to stay a comfortable target. */
+.fieldAction {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--family-body);
+  font-size: var(--type-meta-size);
+  font-weight: var(--type-ui-weight);
+  cursor: pointer;
+}
+
+.fieldAction:hover {
+  color: var(--color-text-primary);
+}
+
+/* ---------------------------------------------------------------- tabs */
+
+.tablist {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+  overflow-x: auto;
+}
+
+.tab {
+  font-family: var(--family-body);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tab:hover:not(:disabled) {
+  color: var(--color-text-primary);
+}
+
+.tab[aria-selected="true"] {
+  color: var(--color-accent-contrast);
+  background: var(--color-accent);
+}
+
+.tabPanel {
+  padding-top: var(--space-4);
+}
+
+/* ---------------------------------------------------------------- metric */
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.metricHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.metricLabel {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.metricValue {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  font-family: var(--family-display);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.metricUnit {
+  font-family: var(--family-body);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  font-weight: var(--type-meta-weight);
+  color: var(--color-text-secondary);
+}
+
+.metricNote {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- skeleton */
+
+.skeleton {
+  display: block;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-inset) 0%,
+    var(--color-surface-overlay) 50%,
+    var(--color-surface-inset) 100%
+  );
+  background-size: 200% 100%;
+  animation: weathra-shimmer 1400ms linear infinite;
+}
+
+@keyframes weathra-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: var(--color-surface-inset);
+  }
+}
+
+/* ---------------------------------------------------------------- states */
+
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-4);
+}
+
+.stateTitle {
+  font-family: var(--family-display);
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
+  color: var(--color-text-primary);
+}
+
+.stateBody {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-secondary);
+  max-width: 60ch;
+}
+
+.stateMeta {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.stateLoading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.stateError {
+  border-left: 3px solid var(--color-status-error);
+  background: var(--color-status-error-surface);
+  border-radius: var(--radius-md);
+}
+
+.stateError .stateTitle {
+  color: var(--color-status-error);
+}

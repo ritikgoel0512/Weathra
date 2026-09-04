@@ -1,14 +1,15 @@
 ## Context
 
-The repository contains a README, a LICENSE, and a Python `.gitignore` — no source, no dependency manifest, no tests. Every structural decision is open. See `proposal.md` for motivation and the MVP/post-MVP split, and the fifteen spec files under `specs/` for the behavior this design must satisfy.
+The repository contains a README, a LICENSE, and a Python `.gitignore` — no source, no dependency manifest, no tests. Every structural decision is open. See `proposal.md` for motivation and the MVP/post-MVP split, and the twenty spec files under `specs/` for the behavior this design must satisfy.
 
-Five constraints shape everything below:
+Six constraints shape everything below:
 
 1. **The architecture is locked.** Two applications, LangGraph supervision over four specialized agents, an MCP tool boundary, a pluggable provider layer, a provider-agnostic LLM layer, Postgres with pgvector, and a shared memory layer. The MVP chooses which screens and refinements land first — not which components exist.
 2. **The language model must be replaceable and initially weak.** OpenRouter is the first gateway and the first model may be a free-tier model. The design cannot assume reliable native tool-calling, long context, or high instruction-following fidelity.
 3. **Numbers may never come from the model.** `specs/deterministic-analytics` and `specs/safety-grounding` make this a hard requirement, which pushes real architectural weight out of the prompt and into code.
 4. **Identity is real, and the client is not trusted.** Supabase Auth issues identity; the backend derives the acting user from a validated token and nothing else. Every user-owned row has an owner, and the frontend hiding a control is never the mechanism that protects data.
 5. **No local-machine dependency.** Development happens in browser/cloud tooling; every setup, test, and deploy path must run in a cloud environment and in CI.
+6. **Which model serves a request is a product decision the backend owns.** Subscription tiers mean model choice is neither a constant nor a client's to make. It has to be resolved per call, server-side, from data an administrator can change — and measured, so the choice rests on evidence. This constraint is satisfied *inside* the existing provider-agnostic LLM seam of constraint 1, not by changing it.
 
 ## Goals / Non-Goals
 
@@ -20,10 +21,15 @@ Five constraints shape everything below:
 - An authorization boundary that holds against a direct API call, not only against the UI: ownership is applied in the data path and again by Row Level Security.
 - A test suite that runs fully offline: no weather network, no inference network, no live database.
 - Robustness against a weak or changing LLM: any model that can emit valid JSON and write prose should work.
+- Model governance that adds no new authority to the model and no new decision to any node: the graph asks for a client and gets one, and every entitlement, quota, and telemetry concern is resolved around it rather than inside it.
+- Every language model call measured — tokens, estimated cost, latency, status — so that model choice, quota design, and cost are questions with recorded answers.
 
 **Non-Goals (design-level, beyond the proposal's exclusions):**
 
 - No microservice decomposition. The backend is one deployable containing separately-bounded modules; the MCP server has its own boundary and its own transport but ships in the same container for the MVP.
+- No billing system. No payment provider, checkout, invoicing, or reconciliation against a gateway invoice. Plans are administratively assigned rows; cost is an estimate computed from token counts and catalog pricing.
+- No graded permission model. One server-held administrative/internal flag, not roles, scopes, or organizations.
+- No model auto-selection or bandit routing. Policies are declared candidate lists in a fixed order; promotion between them is a human decision recorded against evaluation evidence.
 - No identity system of our own. Supabase Auth owns credentials, sessions, verification, and reset; Weathra stores no password material. Enterprise SSO, additional OAuth providers, multi-factor authentication, and organization role hierarchies are out of scope.
 - No custom vector database, ranking model, or reranker. pgvector with cosine distance and a threshold.
 - No agent framework beyond LangGraph, and no vendor agent SDK.
@@ -47,10 +53,14 @@ backend/
     mcp/                    server.py, tools/, schemas.py        — its own boundary
     rag/                    corpus/, ingest.py, embed.py, store.py, retrieve.py
     auth/                   tokens.py (validation), jwks.py (key cache), deps.py (principal),
-                            profiles.py (application profile), rls.py (session claims)
+                            profiles.py (application profile), rls.py (session claims),
+                            roles.py (administrative/internal role)
     memory/                 checkpointer.py, preferences.py, threads.py, retention.py
+    entitlements/           plans.py, catalog.py, policies.py, resolver.py, quotas.py
+    telemetry/              usage.py (usage-event recorder), cost.py (estimator), aggregate.py
     agents/
-      llm/                  base.py (Protocol), openrouter.py, fake.py
+      llm/                  base.py (Protocol), openrouter.py, fake.py, factory.py,
+                            instrumented.py (telemetry + quota wrapper)
       graph.py              LangGraph assembly
       supervisor.py         routing node
       nodes/                forecast.py, historical.py, analytics.py, rag.py, synthesize.py
@@ -60,8 +70,10 @@ backend/
       app.py, deps.py, errors.py, middleware.py
       routers/              locations, weather, history, analysis, comparison, ask,
                             stream, me, preferences, saved_locations, evidence,
-                            account (data deletion), health
-    evaluation/             dataset/, runner.py, metrics.py, report.py
+                            account (data deletion), health, usage (own plan + usage),
+                            admin_models, admin_plans, admin_usage, admin_lab
+    evaluation/             dataset/, runner.py, metrics.py, report.py, model_compare.py
+    lab/                    compare.py (model lab runner), records.py
     db/                     models.py, migrations/ (Alembic)
   tests/
 frontend/
@@ -77,11 +89,11 @@ frontend/
 docs/
   architecture.md, authentication.md, agents.md, mcp.md, rag.md, evaluation.md,
   privacy-ethics.md, deployment.md, configuration.md, api.md, roadmap.md,
-  design/ (approved UXPilot artifacts + design system)
+  design/ (approved Visily artifacts + design system + carried-forward direction)
 .github/workflows/
 ```
 
-The import rule: `domain` ← `providers`/`geocoding`/`analytics` ← `weather`/`rag`/`memory` ← `mcp` ← `agents` ← `api`, with `auth/` sitting beside `memory/` and depended on only by `api/` and `memory/`. Never the reverse. Two consequences are load-bearing and are enforced by a test: no module below `agents/` imports `agents` or any LLM client, and no module in `agents/nodes/` imports a provider client directly.
+The import rule: `domain` ← `providers`/`geocoding`/`analytics` ← `weather`/`rag`/`memory` ← `mcp` ← `agents` ← `api`, with `auth/` sitting beside `memory/` and depended on only by `api/` and `memory/`. `entitlements/` and `telemetry/` sit at the same level as `auth/` and `memory/`: they import `domain` and `db` and nothing above, and are depended on by `agents/` and `api/`. `lab/` sits beside `evaluation/` and is the only module above `agents/` other than `api/`. Never the reverse. Three consequences are load-bearing and are enforced by a test: no module below `agents/` imports `agents` or any LLM client; no module in `agents/nodes/` imports a provider client directly; and no module in `agents/nodes/` imports `entitlements/` — a node receives a client, it does not resolve one.
 
 **Alternative considered:** separate repositories for frontend and backend. Rejected for a capstone — one repo keeps the API contract, the docs, and CI in one place, and the applications remain separately built and deployed, which is what the requirement actually asks for.
 
@@ -125,9 +137,11 @@ class LLMClient(Protocol):
 | Variable | Purpose |
 |---|---|
 | `LLM_PROVIDER` | `openrouter` (the registry key) |
-| `LLM_MODEL` | any OpenRouter model id; initially a free-tier model such as an NVIDIA Nemotron variant |
+| `LLM_MODEL` | development and administrative fallback model id only — **not** the production selection mechanism; see decision 22 |
 | `OPENROUTER_API_KEY` | credential |
 | `LLM_TIMEOUT_SECONDS`, `LLM_MAX_RETRIES` | transport policy |
+
+`model_id` on the Protocol is therefore per-instance, not per-process: a client is built for a resolved model each time one is needed (decision 22), so the same `provider_id` may serve two different `model_id` values in one run — the routing call and the synthesis call. `Completion` carries `model_id`, `prompt_tokens`, and `completion_tokens` as reported by the gateway so telemetry (decision 24) has real counts rather than an estimate of an estimate; where the gateway reports none they stay `None`, never `0`.
 
 `FakeLLMClient` implements the Protocol from a scripted sequence of completions and JSON payloads, and is what the entire test suite and offline evaluation mode use. `anthropic` is not a dependency of the runtime; Claude Code is a development tool only.
 
@@ -232,8 +246,18 @@ Tables:
 | `knowledge_documents` | corpus documents with identifier, title, topic, provenance | shared |
 | `knowledge_chunks` | chunk text, position, `vector(384)`, document reference | shared |
 | `evaluation_runs`, `evaluation_case_results` | run configuration, per-case results, metrics | operational |
+| `subscription_plans` | plan code, display name, per-role policy mapping, allowances, unused external subscription reference | operational, read-only to users |
+| `user_plans` | `user_id` → plan code, assigned-by, assigned-at | **user-owned** |
+| `model_policies` | policy id, ordered candidate catalog keys, applicable call roles, eligibility, declared fallback policy | operational, read-only to users |
+| `model_catalog` | catalog key, gateway provider and model id, display name, capability roles, tier, structured-output support, context window, input/output price, pricing date, currency, status, free-or-paid | operational, read-only to users |
+| `llm_usage_events` | the per-call record of decision 24 | **user-owned where `user_id` is set; internal rows carry none** |
+| `usage_limits` | plan/dimension/window allowances, plus the internal allowance | operational, read-only to users |
+| `usage_counters` | `user_id` (or the internal subject), dimension, window key, consumed | **user-owned** |
+| `model_evaluations` | per-model per-run metric and criterion values, dataset version, commit | operational |
+| `model_comparison_runs`, `model_comparison_results` | lab run provenance and per-model-per-case results | operational |
+| `admin_audit` | acting principal, action, subject, before/after, timestamp | operational |
 
-`profiles.user_id` references the Supabase Auth user and is the ownership key every other user-owned table carries. There is no separate internal profile id: a second identifier would only create a mapping to get wrong, and the auth subject is already stable and opaque.
+`profiles.user_id` references the Supabase Auth user and is the ownership key every other user-owned table carries — including the four SaaS-ready tables above that are user-owned, which get the same owner-restricting Row Level Security policy from the same migration pattern as the rest. The operational tables get no owner column and no owner policy: they are read to serve a request and written only through the administrative path, so an owner predicate on them would be meaningless. `llm_usage_events` is the one table with both shapes, which decision 27 addresses explicitly rather than by a nullable-owner shrug. There is no separate internal profile id: a second identifier would only create a mapping to get wrong, and the auth subject is already stable and opaque.
 
 Async SQLAlchemy with asyncpg through Supabase's connection pooler, with a deliberately small per-instance pool — Cloud Run scales instances horizontally and Postgres connection limits, not application throughput, are the binding constraint. Alembic owns schema and runs under the privileged connection; `pgvector` and the Row Level Security policies of decision 5 are established by migration, so the policies are versioned with the schema rather than clicked into a console.
 
@@ -322,7 +346,11 @@ Next.js App Router with TypeScript. Static shell in server components; every int
 
 **Route groups carry the auth boundary.** `(auth)/` holds the unauthenticated screens and `(app)/` the protected ones, so protection is a property of the group rather than something each page remembers to check. `middleware.ts` refreshes the session and redirects unauthenticated requests for `(app)/` to sign-in with the destination preserved; the protected layout resolves the session server-side before rendering, which is what prevents a flash of protected shell. A 401 from the API is treated as an authentication event by a shared response interceptor — it clears the session and routes to sign-in with an expired-session state — never surfaced as a data error.
 
-**Design comes first.** The UXPilot design phase produces the approved artifacts and the shared design system — typography, spacing, component hierarchy, navigation, cards, charts, weather visualization patterns, responsive behavior, and loading, empty, error, and authentication states — before substantial implementation. Components are built from that system rather than styled ad hoc per screen, and the artifacts are recorded in `docs/design/`. Charts use Recharts, which is React-idiomatic and avoids imperative canvas lifecycle management inside components. Theming via CSS custom properties with a `prefers-color-scheme` override, contrast verified for both palettes against the design system's tokens.
+**Design comes first, and it is done in Visily.** The Visily design phase produces the approved artifacts and the shared design system — typography, spacing, component hierarchy, navigation, cards, charts, weather visualization patterns, responsive behavior, and loading, empty, error, and authentication states — before substantial implementation. Components are built from that system rather than styled ad hoc per screen, and the artifacts are recorded in `docs/design/`. Charts use Recharts, which is React-idiomatic and avoids imperative canvas lifecycle management inside components. Theming via CSS custom properties with a `prefers-color-scheme` override, contrast verified for both palettes against the design system's tokens.
+
+The design direction is not reopened. An earlier UXPilot exploration settled it, and those decisions enter Visily as approved inputs: the **Midnight Intelligence** palette (dark-first, light derived from it), **Plus Jakarta Sans** for display and heading type with **Inter** for body and UI, the **Intelligent Command Center** shell with persistent left navigation, a location-focused Dashboard, a premium modern SaaS level of finish, the named **Weathra Intelligence**, **What Changed?**, **Why?** and **Agent Evidence** surfaces, the visible distinction between observed, forecast, historical, deterministic-analytics and AI-interpretation content, source attribution, timestamps, uncertainty and confidence presentation, and the rule that nothing may imply the model predicts a numerical weather value. Those last few are not styling preferences — they are how `specs/safety-grounding` reaches the screen, so the design system carries them as presentational primitives (the data-class badge, the attribution footer, the uncertainty indicator, the interpretation treatment) rather than leaving each screen to remember them. The Midnight Intelligence palette is what the CSS custom properties above hold, which is why contrast is verified against the design system's tokens and not chosen per component.
+
+**Alternative considered:** a design-to-code export, from Visily's paid tiers or via Figma. Rejected as a dependency — an exported component tree carries its own structure, and reconciling it with the App Router layout, the route groups that carry the auth boundary, and the TanStack Query state convention above costs more than reading the design and building the component. So the pipeline is `OpenSpec → Visily → approved artifacts → hand-written Next.js`, the approved Visily screen is a visual reference, and no paid export capability and no second design tool is on the critical path. Figma is deliberately not mandatory.
 
 Post-MVP routes exist as explicit "not yet available" pages so navigation structure is real and nothing renders broken.
 
@@ -344,10 +372,19 @@ The split is the security boundary, and it is enforced by convention *and* by a 
 | Backend (secret) | `SUPABASE_SERVICE_ROLE_KEY` | privileged operations only — migrations, retention, evaluation test-user provisioning |
 | Backend (secret) | `DATABASE_URL`, `DATABASE_URL_PRIVILEGED` | request-serving and privileged connections |
 | Backend (secret) | `OPENROUTER_API_KEY` | inference gateway |
-| Backend | `LLM_PROVIDER`, `LLM_MODEL`, `LLM_TIMEOUT_SECONDS`, `LLM_MAX_RETRIES` | model selection and transport |
+| Backend | `LLM_PROVIDER`, `LLM_TIMEOUT_SECONDS`, `LLM_MAX_RETRIES` | gateway and transport |
+| Backend | `LLM_MODEL` | development and administrative fallback model only (decision 22) |
+| Backend | `LLM_SINGLE_MODEL_MODE` | when set, bypass policy resolution and use `LLM_MODEL` for every call — development and CI only |
+| Backend | `MODEL_CATALOG_CACHE_TTL_SECONDS` | the documented staleness window for catalog and policy reads (decision 23) |
+| Backend | `QUOTA_WINDOW_TIMEZONE` | the time zone in which day and month boundaries are computed (decision 25) |
+| Backend | `QUOTA_ENABLED` | quota enforcement on/off, for local and CI runs; on by default in deployed environments |
+| Backend | `LLM_USAGE_RETENTION_DAYS` | raw usage-event retention before aggregation (decision 24) |
+| Backend | `MODEL_LAB_MAX_MODELS`, `MODEL_LAB_MAX_CASES`, `MODEL_LAB_TIME_BUDGET_SECONDS` | lab bounds (decision 26) |
 | Backend | provider default, unit and horizon defaults, cache TTLs, HTTP timeout and retry policy, agent step and wall-clock budgets, MCP transport address, embedding model id, RAG top-k and threshold, thread and snapshot retention windows, allowed CORS origins, log level | behavior |
 
 No secret may carry a `NEXT_PUBLIC_` prefix, and CI asserts that the service-role key and the database URLs appear in neither the frontend environment nor the built bundle. A settings validator refuses to start the backend if `SUPABASE_SERVICE_ROLE_KEY` is set on the request-serving path where the restricted connection is expected.
+
+Note what is deliberately *not* here: policies, plan mappings, allowances, and the catalog. Putting them in the environment would make every model or tier change a redeployment, which is exactly what `specs/model-catalog` forbids. They are database rows, seeded by migration and administrable at runtime; `LLM_MODEL` survives only as the fallback, and `LLM_SINGLE_MODEL_MODE` is refused in a deployed environment by the same settings validator.
 
 ### 20. Testing strategy
 
@@ -388,9 +425,128 @@ GitHub Actions runs, on every pull request: backend lint, type-check, and tests 
 
 Development is browser-based (cloud IDE or Codespaces) against the hosted Supabase instance; nothing in the setup, test, or deploy path requires a specific local machine.
 
+### 22. Model policy: a resolver between the graph and the client, not a branch inside either
+
+This is the load-bearing decision of the SaaS-ready layer, and its shape is chosen to keep decision 2 intact.
+
+The graph does not know what a plan is. A node asks for a client for its call role and gets one:
+
+```python
+# entitlements/resolver.py
+@dataclass(frozen=True)
+class Resolution:
+    policy_id: str            # "free_default" | ... | "__fallback_config__"
+    catalog_key: str
+    gateway_provider: str
+    gateway_model: str
+    reason: str               # ordered, human-readable: what was considered and why
+    override_by: str | None   # administrative subject, when an override applied
+
+class ModelPolicyResolver(Protocol):
+    async def resolve(self, *, principal: Principal | None,
+                      role: CallRole, override: str | None = None) -> Resolution: ...
+```
+
+`CallRole` is an enum with `ROUTING` and `SYNTHESIS` — the two call roles the graph actually has — plus `LAB`. It is the role, not the node, that a policy maps against, so a third node needing a structured decision reuses `ROUTING` without a policy change.
+
+Resolution is a pure walk over data, and its order is the whole security argument:
+
+1. Principal → plan. `user_plans` keyed by the validated auth subject, defaulting to `free` on no row. Nothing in the request contributes. A `None` principal is `free` and can never be anything else.
+2. Plan + role → policy id, from `subscription_plans`. `admin_experimental` is reachable only when the principal holds the administrative role, and that check is on the *policy*, not on the plan, so no plan row can accidentally grant it.
+3. Policy → ordered candidate catalog keys. First candidate that is present in `model_catalog` **and** enabled wins. Each skip is appended to `reason`.
+4. Nothing available → the policy's declared fallback policy → the plan's default policy → `LLM_MODEL`, itself validated against the catalog. Never a stronger policy's model: falling *up* would turn an outage into a free upgrade, and the spec forbids it.
+5. Still nothing → raise `NoEligibleModel`, a configuration error. No answer is produced from an unentitled model.
+
+An administrative `override` is checked against the catalog before anything else and refused outright if absent or disabled — it is a shortcut through steps 2–4, never a shortcut past step 1's identity or past the catalog allowlist.
+
+`reason` is not decoration. It is what makes "why did this caller get that model" answerable from the evidence record without re-running the resolution, and it is what the resolution tests assert against.
+
+**Where the caller's advisory preference fits.** `AskRequest.model` (if accepted at all) is passed as a *hint*, honoured only when the resolved policy's candidate list already contains it and the catalog has it enabled. A hint outside entitlement is dropped and reported as ignored — never a 403, because failing the request would leak which models exist above the caller's tier.
+
+**Alternative considered:** resolve once per request in the API layer and put the client in graph state. Rejected — the two call roles want different policies, and a single per-request client would make per-role mapping impossible without the graph re-resolving anyway.
+
+**Alternative considered:** a `plan` field on `Principal`, resolved during token validation. Rejected — it would put a database read on every protected request including the ones that never touch a model, and it would tempt a node to branch on the plan directly. The resolver reads it only when a model is actually needed.
+
+### 23. The catalog is data, and the cache is a TTL, not an invalidation protocol
+
+`model_catalog`, `model_policies`, and `subscription_plans` are read on nearly every agent request and change perhaps weekly. Reading them per call is three queries on the hot path; caching them without expiry means an administrator's disable takes effect on redeploy, which `specs/model-catalog` forbids.
+
+So: a process-local snapshot with a TTL of `MODEL_CATALOG_CACHE_TTL_SECONDS` (60 by default), refreshed on read when stale. Multiple Cloud Run instances converge within one TTL, and that window is the documented staleness window the spec asks to be stated. No pub/sub, no cache-invalidation message, no second datastore — the same trade decision 8 makes for the provider cache, for the same reason.
+
+The consequence is honest and worth stating: **a disable is not instant.** An administrator disabling a model may see it serve requests for up to one TTL on instances that have not refreshed. That is acceptable for a cost or quality decision and would not be for a safety one — which is why the safety controls (grounding, attribution, the tool catalog) are code, not catalog rows. An administrative override and a lab selection read through the cache but validate against the database directly, so an administrator never acts on a stale allowlist.
+
+`catalog_key` is the stable internal handle and the only thing policies, evaluations, and comparison results reference. `gateway_model` is the vendor string and is mutable — a gateway rename is a one-row update that breaks nothing. This split is what makes the "no vendor model id in business logic" requirement mechanically checkable: a test greps the source for the pattern of a gateway model id and allows it only in `db/migrations/`, `.env.example`, and the OpenRouter adapter's request body.
+
+### 24. Telemetry: a wrapper implementing the same Protocol, written outside the answer path
+
+Instrumentation is a decorator over `LLMClient`, not a call inside every node — the same pattern as `CachedProvider` in decision 8:
+
+```python
+class InstrumentedLLMClient:              # satisfies LLMClient
+    def __init__(self, inner: LLMClient, ctx: CallContext, sink: UsageSink): ...
+```
+
+`CallContext` carries the principal, the agent run id, the request id, the resolution from decision 22, the plan, and the call role. Every `complete` and `complete_json` is timed around the gateway call only, and emits exactly one `llm_usage_events` row per attempt — including failures, with a classified reason (`timeout`, `gateway_rate_limit`, `transport`, `auth_config`, `schema_validation`, `unclassified`). A schema retry inside `complete_json` emits its own row carrying `attempt` and `retried_event_id`, so "how often does this model need two tries" is a query rather than a guess. That single number is the structured-JSON-reliability criterion in `specs/evaluation`, which is why the retry is instrumented at all.
+
+Two rules make it safe to have on every call:
+
+- **Fire-and-forget with a bounded budget.** The row is written on a background task with its own short timeout and its own session. A write failure logs and increments a counter; it never propagates. `specs/llm-telemetry` requires the answer to be unaffected, and the only way to guarantee that is for the write not to be in the request's critical path at all.
+- **Metadata only.** No prompt, no completion, no retrieved passage. Diagnosis goes through `agent_run_id` to the evidence record, which already has its own ownership and retention. The row is small and boring on purpose — a table with no content in it cannot leak content, and it can be aggregated for an admin screen without an isolation argument.
+
+Cost is `cost.py`: a pure function of token counts and the catalog price row, returning `None` when either is unknown — never `0`, since zero is a claim and null is the truth. The price and its `pricing_date` are copied onto the event at write time, so re-pricing the catalog never rewrites history. Cost is labelled an estimate everywhere it surfaces; nothing reconciles it against a gateway invoice, and `specs/usage-limits` forbids presenting it as a charge.
+
+**Alternative considered:** logging usage as structured log lines and aggregating in the log platform. Rejected — quotas need to *read* consumption transactionally (decision 25), and a log pipeline cannot be the source of truth for a gate.
+
+### 25. Quotas: a reservation in the same transaction as the counter
+
+Counting after the fact cannot gate; counting optimistically races. So consumption is a row per `(subject, dimension, window_key)` in `usage_counters`, and admission is one statement:
+
+```sql
+INSERT INTO usage_counters (subject, dimension, window_key, consumed)
+VALUES (:subject, :dim, :window, 1)
+ON CONFLICT (subject, dimension, window_key)
+DO UPDATE SET consumed = usage_counters.consumed + 1
+WHERE usage_counters.consumed < :allowance
+RETURNING consumed;
+```
+
+No row returned means the allowance is exhausted — the check and the increment are the same atomic operation, so concurrent requests from one principal cannot race past a limit. `window_key` is a string derived from `QUOTA_WINDOW_TIMEZONE` (`2026-09-03` for a day, `2026-09` for a month), which makes the reset a new key rather than a scheduled job, and makes a window's history queryable after it closes.
+
+Request dimensions reserve up front and release on a failure before any gateway call. Token dimensions cannot be reserved — the count is not known until the call returns — so they are enforced as a *pre-check* against the window's consumed total and settled from the telemetry events afterward. This admits a bounded overshoot of one request's tokens past a monthly ceiling, which is the honest trade for not pre-declaring token counts, and is stated as such rather than papered over. Concurrency is its own counter, incremented on run start and decremented in a `finally`.
+
+Where several dimensions apply the most restrictive binding one is reported, because "you are over your limit" without naming which limit is not actionable. The refusal is a distinct error code mapping to 429 with the allowance, the consumption, the reset time, and a retry-after — distinguishable from a gateway 429, which is a transport failure and not the caller's fault.
+
+`subject` is the auth subject for a user and a reserved internal subject for administrative, lab, and evaluation traffic, so internal work is accounted against its own allowance by construction rather than by a flag that could be forgotten. An accounting store failure **fails closed** for a bounded dimension: refusing a request is recoverable, silently granting unlimited paid inference is not.
+
+**Alternative considered:** a token-bucket rate limiter in front of the API. Rejected — it answers a different question (requests per second) than a subscription allowance (requests per month), and it has no per-plan notion of entitlement.
+
+### 26. The model lab: the evaluation runner with the model as its axis
+
+The lab is deliberately not a new evaluation implementation. `lab/compare.py` drives the existing runner from `specs/evaluation` with the candidate set as the varying axis and everything else pinned — dataset version, recorded weather fixtures, corpus, embedding model, analytics, commit. A comparison is therefore *n* runner invocations sharing one fixed configuration, and its results are `model_evaluations` rows plus `model_comparison_results` rows, not a parallel scoring system with its own definitions of groundedness.
+
+Holding the retrieval fixed is what makes the comparison mean anything: two models given different upstream data are not being compared on interpretation. Fixtures do that for dataset runs; an ad-hoc question retrieves once and replays the same structured results to every candidate.
+
+The lab holds no privilege. It runs under the request-serving restricted role with the administrator's own principal, so RLS applies to it exactly as to any request — and `specs/model-lab`'s "no data isolation bypass" is then a property of the connection rather than a rule the code has to remember. Its input comes from the dataset, a fixture, or the administrator's own data; there is no code path that reads another user's thread, because there is no such repository function that ignores an owner predicate.
+
+Bounds (`MODEL_LAB_MAX_MODELS`, `MODEL_LAB_MAX_CASES`, `MODEL_LAB_TIME_BUDGET_SECONDS`) exist because a comparison is the one place a single administrative click can spend real money across a matrix. Exceeding the time budget returns a partial result naming what completed, following the same bounded-execution stance as decision 2's step and wall-clock budgets.
+
+Promotion is a separate administrative write to `model_policies`, recorded in `admin_audit` with the cited comparison run ids. Nothing about running a comparison changes what any other caller receives — the lab writes result rows, never policy rows.
+
+### 27. `llm_usage_events` and the two-shape ownership problem
+
+One table holds both a user's calls and internal calls. The tempting answers are both wrong: a nullable `user_id` with an RLS policy of `user_id = auth.uid()` silently hides internal rows from the admin aggregate as well, and two separate tables duplicate every aggregation query and every retention routine.
+
+The resolution: one table, `user_id` nullable, and *two* policies — an owner policy on the restricted role (`user_id = current_setting('request.jwt.claims')::json->>'sub'`) that a caller reading their own usage runs under, and no read path at all for the restricted role to rows where `user_id IS NULL`. The administrative aggregate is a separate, explicitly administrative repository function that reads aggregates — counts, sums, percentiles grouped by model, policy, plan, role, status — and never returns rows. Since the table holds no content (decision 24), an aggregate across users discloses nothing about anyone's questions, which is what makes this safe rather than merely convenient.
+
+`is_internal` is a generated classification (`user_id IS NULL OR subject_kind = 'internal'`) so every aggregate splits product from internal usage without each query remembering to, and an internal event can never be counted against a plan.
+
+Account deletion removes a user's rows here alongside their threads, preferences, and saved locations. Aggregates that no longer attribute to anyone may be retained, and raw rows age out at `LLM_USAGE_RETENTION_DAYS` through the same retention routine decision 11 already schedules from CI — one routine, not a second scheduler.
+
+**Alternative considered:** writing user usage and internal usage to separate tables. Rejected — every aggregate, every retention rule, and every reconciliation against `usage_counters` would exist twice, and the first divergence between the two copies would be a bug nobody notices.
+
 ## Risks / Trade-offs
 
-- **A free-tier model may route badly or write sloppily.** Routing quality directly determines tool-selection accuracy, one of the gated metrics. → The deterministic fallback router keeps requests answerable when JSON parsing fails repeatedly; the model has no authority over numbers, so bad routing degrades relevance rather than correctness; and `LLM_MODEL` is configuration, so a better model is an environment change measured by the same eval suite.
+- **A free-tier model may route badly or write sloppily.** Routing quality directly determines tool-selection accuracy, one of the gated metrics. → The deterministic fallback router keeps requests answerable when JSON parsing fails repeatedly; the model has no authority over numbers, so bad routing degrades relevance rather than correctness; and the model is a catalog row inside a policy's candidate list, so a better model is a data change measured by the same eval suite through the model comparison of decision 26.
 - **Grounding cannot be fully enforced.** The numeric audit will not catch a wrong figure that happens to appear somewhere in the evidence, and prose can mislead without stating a number. → The envelope carries structured findings alongside prose so the UI can show the real values, the zero-retrieval case is hard-blocked, `grounding.verified` is surfaced rather than hidden, and the evaluation suite measures hallucination and unsupported-claim rates explicitly.
 - **Cold starts plus a heavy import graph make first-request latency poor.** LangGraph, SQLAlchemy, and the ONNX embedding runtime are all slow to import on Cloud Run. → Minimum instances configured for the deployed service, the embedding model loaded lazily on first RAG use, and the agent path already streams progress so the wait is visible rather than blank.
 - **Postgres connection limits, not CPU, will bind first.** Horizontally-scaled Cloud Run instances each holding a pool can exhaust Supabase connections. → Connect through the Supabase pooler with a small per-instance pool, and treat pool size as a deployment setting rather than a code constant.
@@ -406,23 +562,33 @@ Development is browser-based (cloud IDE or Codespaces) against the hosted Supaba
 - **The provider abstraction is shaped by its only implementation.** The normalized model will lean toward Open-Meteo's field set. → Fields are derived from what the capabilities need rather than what the payload offers, `capabilities()` is mandatory so absent measures are declared, and the Open-Meteo mapping is written as explicit field-by-field translation rather than passthrough.
 - **The RAG corpus is authored, not licensed.** Weather explanations written for the corpus carry Weathra's own provenance and could contain errors. → Every document carries a provenance note, the corpus is small enough to review, and the evaluation suite includes conceptual cases that would surface a wrong explanation.
 - **Evaluation against a live model costs money and varies run to run.** → Deterministic metrics run offline in CI on every pull request; live runs are deliberate, recorded with their provider and model, and compared against earlier runs rather than treated as absolute.
-- **Fourteen capabilities is a large MVP.** The risk is a thin slice of everything rather than a working product. → Task ordering builds the data and analytics spine first, so that every layer above it has something real to stand on, and each task carries its own verification.
+- **The model policy layer is a new gate on every agent request.** A bug in resolution, a policy with no available candidate, or an unreachable catalog would refuse answers for everyone at once. → Resolution is a pure function over data with no network call, its fallback chain ends at `LLM_MODEL`, the catalog snapshot is cached so a database blip does not fail the path, and `NoEligibleModel` is a distinct configuration error rather than a generic 500 so a systemic refusal is diagnosable in one look. A resolution test asserts every step of the chain including the case where nothing is available.
+- **A catalog disable is not instant.** Up to one cache TTL of requests may still reach a model an administrator has just disabled. → Stated as the documented staleness window rather than hidden; overrides and lab selections validate against the database directly; and no safety control lives in the catalog, so the worst case is a cost or quality decision arriving a minute late.
+- **Token quotas can overshoot by one request.** Token counts are unknown until a call returns, so a monthly token ceiling is pre-checked and settled afterward. → The overshoot is bounded by one request's tokens, request-count dimensions are reserved atomically and cannot overshoot at all, and the trade is stated in decision 25 rather than presented as an exact limit.
+- **Quota accounting fails closed, which means an outage refuses paying customers.** → The alternative is granting unmetered paid inference during exactly the incident when nobody is watching. The refusal is a distinct 429 naming the reason, non-agent capabilities keep serving, and `QUOTA_ENABLED` exists so a local or CI run is never gated by a store it does not have.
+- **Telemetry on every call is a write amplification.** Two or more rows per agent request, forever, is the largest-growing table in the system. → Rows are small and content-free, they age out at `LLM_USAGE_RETENTION_DAYS` into retained aggregates through the retention routine that already exists, and the write is a background task so its cost never lands on a caller's latency.
+- **An administrative role is a new privilege class in a system that had none.** A wrongly-granted flag exposes the catalog, plans, aggregate usage, and the lab. → The role is backend-held state keyed by the auth subject and never a token claim or client field; it grants no access to any other user's own data; every privileged write is recorded in `admin_audit`; and the lab runs under the restricted connection so the role cannot be used to read around RLS.
+- **Cost figures invite being read as bills.** An estimate on an admin screen will eventually be quoted at somebody. → It is `None` rather than `0` when unknown, carries the pricing basis and date it was computed from, is labelled an estimate at every surface by spec, and nothing in the system reconciles or charges against it.
+- **Twenty capabilities is a large MVP.** The risk is a thin slice of everything rather than a working product, and the SaaS layer adds five specs to a change that was already large. → Task ordering builds the data and analytics spine first, so that every layer above it has something real to stand on, and each task carries its own verification. Every one of the five later capabilities sits inside a seam that spine already establishes — the LLM client Protocol, the settings layer, the migration and Row Level Security pattern, the retention routine, and the evaluation runner — so groups 26–34 add tables, a resolver, a wrapper, and a runner axis rather than new architecture. None of the fifteen original capabilities changes shape.
 
 ## Migration Plan
 
 Nothing to migrate — this is the first code in the repository.
 
-**Bring-up order:** provision the Supabase project, enable pgvector, and configure Auth (email confirmation required, confirmation and recovery templates carrying the one-time token, redirect URLs per environment) → apply migrations, including the Row Level Security policies → verify the backend serves the public weather, history, analysis, and comparison endpoints with no inference credential and no session → create a test account through the real sign-up and verification flow and verify a protected endpoint accepts its token and rejects a missing or expired one → ingest the RAG corpus → configure `OPENROUTER_API_KEY` and verify `/ask` and the authenticated SSE stream → deploy the backend to Cloud Run → deploy the frontend to Cloudflare pointed at it → run the evaluation suite as an authenticated test user and record its results.
+**Bring-up order:** provision the Supabase project, enable pgvector, and configure Auth (email confirmation required, confirmation and recovery templates carrying the one-time token, redirect URLs per environment) → apply migrations, including the Row Level Security policies and the seeded catalog, policies, plans, and allowances → verify the backend serves the public weather, history, analysis, and comparison endpoints with no inference credential and no session → create a test account through the real sign-up and verification flow and verify a protected endpoint accepts its token and rejects a missing or expired one → ingest the RAG corpus → configure `OPENROUTER_API_KEY` and verify `/ask` and the authenticated SSE stream, with a resolution recorded in the evidence record and a usage event recorded for each call → grant the administrative role to the operating account and verify the administrative catalog, plan, usage, and lab endpoints → deploy the backend to Cloud Run → deploy the frontend to Cloudflare pointed at it → run the evaluation suite as an authenticated test user and record its results → run the first model comparison and seed the policy candidate lists from its recorded evidence.
 
 **Rollback:** the backend is a container revision, so rollback is redeploying the previous revision; the frontend likewise. Migrations are additive in this change (no destructive operations), so a rolled-back revision runs against the newer schema without loss. Data rollback is not required — there is no pre-existing data.
 
-**Verification that the slice is real:** readiness reports every dependency reachable; a public forecast request for a named city returns attributed data without a session; a new account can be created, verified by code, and signed into; a historical baseline comparison returns both sides labelled; a question through `/ask` returns an answer whose every figure appears in its evidence record; a second account cannot see the first account's saved locations, preferences, or threads by any route; and the evaluation suite passes its gated thresholds.
+**Verification that the slice is real:** readiness reports every dependency reachable; a public forecast request for a named city returns attributed data without a session; a new account can be created, verified by code, and signed into; a historical baseline comparison returns both sides labelled; a question through `/ask` returns an answer whose every figure appears in its evidence record; a second account cannot see the first account's saved locations, preferences, or threads by any route; a Free-plan caller is served their entitled model with the resolution recorded and a body field claiming Premium ignored; every language model call has a usage event with tokens, latency, and a labelled estimated cost; an exhausted allowance returns 429 naming its basis while forecast, history, analysis, and comparison keep serving; an administrative override is accepted for an enabled catalog model and refused for a disabled one; internal lab and evaluation usage is reported separately from every product plan; and the evaluation suite passes its gated thresholds.
 
 ## Open Questions
 
 - **Which SMTP sender for verification mail.** Supabase's shared default sender is rate-limited and prone to filtering, which is a poor fit for a flow where a missing email blocks all access. Configuring a project SMTP provider is a deployment decision, not a design change, but it should be made before the product is shown to more than a handful of people.
 - **Session and token lifetimes.** The access-token lifetime interacts with the agent wall-clock budget (a stream must not outlive its token) and with how often a returning person is asked to sign in again. Starting from Supabase's defaults with the agent budget set below the token lifetime; both are configuration.
-- **Which OpenRouter model to start on.** The architecture is model-agnostic and the eval suite is how the choice gets made; a free Nemotron variant is the starting point, and the first eval run may show routing accuracy below the 95% threshold on it, in which case the answer is a different `LLM_MODEL` value rather than a design change.
+- **Which OpenRouter models to seed the catalog with.** The architecture is model-agnostic and the eval suite is how the choice gets made. A free-tier model is the starting point for `free_default`, and the first eval run may show routing accuracy below the 95% threshold on it — in which case the answer is a different catalog row and a reordered candidate list, not a design change. Which specific models fill `balanced` and `high_reasoning` is a seeding decision made from the first model-comparison run.
+- **What the initial allowances should be.** Free, Plus, and Premium need numbers for daily and monthly requests and monthly tokens, and there is no traffic history to derive them from. Starting deliberately conservative on Free and generous on Premium, with the intent of tuning from recorded usage rather than guessing well — the allowance rows are data, so tuning is not a deployment.
+- **Whether a cost budget dimension gets enabled.** The allowance model can express an estimated-cost budget per plan and window, and nothing enables one in this change. It becomes worth turning on when a policy first resolves a paid model, and that is a pricing decision rather than a design one.
+- **Whether the caller-facing advisory model hint is accepted at all.** The design supports it and drops it outside entitlement; the simpler option is not accepting the field on the product endpoints in the first place. Leaning toward not accepting it until a real reason appears, since a field that is usually ignored is a field that gets misread.
 - **Snapshot retention and granularity.** Forecast snapshots accumulate per location, window, and retrieval. How long to keep them, and whether to store hourly as well as daily series, depends on how What Changed? is actually used. Settings, not structure.
 - **Cache TTL values.** 15 minutes for current conditions and 1 hour for forecasts are starting points that depend on Open-Meteo's model-run cadence. Settings.
 - **RAG chunk size, top-k, and relevance threshold.** Starting at heading-aware chunks with a modest overlap, top-k of 4, and a cosine threshold to be tuned against the conceptual evaluation cases. Tuning changes no interface.

@@ -62,15 +62,21 @@ The supervisor SHALL support a single request whose answer requires several agen
 
 ### Requirement: Provider-agnostic language model abstraction
 
-The system SHALL define an internal language model client contract covering a tool-capable conversation turn, and SHALL treat the inference provider and model as environment configuration — at minimum a provider identifier, a model identifier, and the provider's credential. No agent, supervisor, or graph node SHALL import or reference a specific model vendor's SDK or a specific model name.
+The system SHALL define an internal language model client contract covering a tool-capable conversation turn, and SHALL treat the inference gateway as environment configuration — at minimum a provider identifier, the provider's credential, and a configured fallback model identifier. The model used for a given call SHALL be resolved per call by the model policy layer of `specs/model-policy`, with the configured `LLM_MODEL` retained as the development and administrative fallback. No agent, supervisor, or graph node SHALL import or reference a specific model vendor's SDK or a specific model name.
 
-The system SHALL ship OpenRouter as the first concrete implementation. Substituting another implementation of the contract SHALL NOT change any behavior required elsewhere in this capability. Every answer SHALL report which provider and model produced it.
+The system SHALL ship OpenRouter as the first concrete implementation. Substituting another implementation of the contract SHALL NOT change any behavior required elsewhere in this capability. Every answer SHALL report which provider and model produced it, and which policy resolved that model.
 
-#### Scenario: Provider and model come from configuration
+#### Scenario: Gateway comes from configuration
 
-- **WHEN** the configured provider is OpenRouter and the configured model is changed to a different OpenRouter model
-- **THEN** requests are answered using the newly configured model with no code change
-- **AND** the response reports the provider and model used
+- **WHEN** the configured gateway is OpenRouter and a policy's resolved model is changed to a different gateway model
+- **THEN** requests are answered using the newly resolved model with no code change
+- **AND** the response reports the provider, the model, and the resolving policy
+
+#### Scenario: Configured fallback model used in development mode
+
+- **WHEN** the system runs in single-model development mode with `LLM_MODEL` set
+- **THEN** requests are answered using that model
+- **AND** the response reports it as the configured fallback rather than as a resolved policy
 
 #### Scenario: No vendor coupling in agent code
 
@@ -279,3 +285,59 @@ When no inference credential is configured, the system SHALL report the agent su
 
 - **WHEN** a caller asks whether the agent surface is available
 - **THEN** the system reports whether an inference provider is configured, without disclosing the credential
+
+### Requirement: Model selection comes from the policy layer, never from a node or a caller
+
+The supervisor, every capability node, the synthesis node, and every route serving them SHALL obtain the model for a language model call from the model policy layer, and SHALL NOT select, name, or default a model themselves. The policy layer SHALL be consulted with the acting principal, that principal's backend-derived plan, and the call role, and its resolution SHALL be recorded in the run's evidence record alongside the provider and model actually used.
+
+A model or policy named by a caller SHALL NOT determine what runs unless the caller's established entitlement already permits it. Routing decisions, tool selection, deterministic computation, evidence capture, grounding enforcement, and stream event ordering SHALL be identical whichever model a policy resolves.
+
+#### Scenario: Node asks the policy layer
+
+- **WHEN** the supervisor makes its structured routing call and the synthesis node makes its prose call
+- **THEN** each obtains its model from the policy layer for its own call role
+- **AND** neither names a model itself
+
+#### Scenario: Resolution recorded in the evidence record
+
+- **WHEN** a run completes
+- **THEN** its evidence record states the resolved policy identifier, the model identifier used per call, and whether an administrative override or a configured fallback applied
+
+#### Scenario: Caller-named model does not determine what runs
+
+- **WHEN** a caller asks a question with a request field naming a model above their entitlement
+- **THEN** the run uses the entitled policy's model
+- **AND** the answer reports the model that actually ran
+
+#### Scenario: Behavior invariant across resolved models
+
+- **WHEN** the same question over the same fixture data runs under two policies resolving different models
+- **THEN** the same tools are selected, every figure is identical, the evidence record is equally complete, and the stream emits the same event sequence
+
+### Requirement: Orchestration is gated by quota and instrumented per call
+
+Before a run makes its first language model call, the system SHALL check the acting principal's remaining allowance as required by `specs/usage-limits` and SHALL refuse the run with the quota error when it is exhausted, without making a language model call. Every language model call a run makes SHALL emit a usage event as required by `specs/llm-telemetry`, carrying the run identifier so a run's calls are recoverable from it.
+
+Instrumentation SHALL NOT alter the answer, the evidence record, or the stream contract, and a telemetry write failure SHALL NOT fail a run.
+
+#### Scenario: Run refused when the allowance is exhausted
+
+- **WHEN** a caller with an exhausted allowance asks a question
+- **THEN** the run is refused with the quota error before any language model call is made
+
+#### Scenario: Calls emit usage events carrying the run identifier
+
+- **WHEN** a run makes a routing call and a synthesis call
+- **THEN** two usage events are recorded, each carrying that run's identifier
+
+#### Scenario: Instrumentation does not change the run
+
+- **WHEN** the same question runs with telemetry recording available and unavailable
+- **THEN** the answer, the evidence record, and the stream event sequence are identical
+- **AND** the run does not fail on account of the telemetry write
+
+#### Scenario: Partial run still accounted
+
+- **WHEN** a run exhausts its step or time budget after one language model call
+- **THEN** that call's usage event is recorded with its tokens, latency, and status
+

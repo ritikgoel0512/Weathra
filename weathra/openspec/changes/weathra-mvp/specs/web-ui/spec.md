@@ -30,16 +30,28 @@ The backend's base URL SHALL be frontend configuration, so the two may be deploy
 - **WHEN** the frontend's network calls are inspected
 - **THEN** every call targets a documented versioned API endpoint, an SSE stream, or Supabase Auth
 
-### Requirement: UXPilot design artifacts precede implementation
+### Requirement: Visily design artifacts precede implementation
 
-Frontend implementation SHALL follow approved UXPilot-produced design artifacts. A UXPilot design phase SHALL complete before substantial frontend implementation begins and SHALL cover both the authentication experience and the core product experience.
+Frontend implementation SHALL follow approved design artifacts produced in **Visily.ai**. A Visily design phase SHALL complete before substantial frontend implementation begins and SHALL cover both the authentication experience and the core product experience. Visily is the design tool for the remaining UI/UX work; the earlier UXPilot exploration is prior art whose approved decisions are carried forward under the requirement below rather than rediscovered.
 
 The design phase SHALL establish a shared Weathra design system covering typography, spacing, component hierarchy, navigation, cards, charts, weather visualization patterns, responsive behavior, loading states, empty states, error states, and authentication states. Every MVP screen — authentication and product alike — SHALL have an approved design artifact recorded in the repository documentation before its implementation is considered complete. Implemented screens SHALL follow the approved artifacts rather than generic generated styling, and any deliberate divergence SHALL be recorded with its reason.
+
+The design gate SHALL be satisfiable with Visily's freely available capabilities. No paid Visily export capability, no design-to-code handoff, and no other design tool — Figma included — SHALL be required to satisfy it: an approved Visily screen is a visual reference, and implementing it manually in Next.js against the recorded design system SHALL be a conforming implementation path.
 
 #### Scenario: Design phase precedes implementation
 
 - **WHEN** substantial frontend implementation begins
-- **THEN** the UXPilot artifacts covering the authentication screens, the product screens, and the shared design system are already approved and recorded
+- **THEN** the Visily artifacts covering the authentication screens, the product screens, and the shared design system are already approved and recorded
+
+#### Scenario: No paid export or second tool required
+
+- **WHEN** the design gate is satisfied for a screen
+- **THEN** it was satisfied without a paid Visily export capability and without Figma or any other design tool
+
+#### Scenario: Manual implementation conforms
+
+- **WHEN** an approved Visily screen is implemented by hand in Next.js against the recorded design system
+- **THEN** the implementation conforms to the gate, no generated-code export being required
 
 #### Scenario: Design system established
 
@@ -55,12 +67,63 @@ The design phase SHALL establish a shared Weathra design system covering typogra
 #### Scenario: Post-MVP screens represented in the design roadmap
 
 - **WHEN** the design roadmap is inspected
-- **THEN** Weather Intelligence Report, Forecast Explorer, Weather Scenario Lab, Weather Watch, and Travel Intelligence are represented as post-MVP
+- **THEN** Weather Intelligence Report, Forecast Explorer, Weather Scenario Lab, Weather Watch, Travel Intelligence, Admin Model & AI Usage, and Plan & Usage are represented as post-MVP
 
 #### Scenario: Divergence recorded
 
 - **WHEN** an implemented screen deliberately diverges from its design artifact
 - **THEN** the divergence and its reason are recorded
+
+### Requirement: Approved design direction carried into Visily
+
+The design decisions already approved during the earlier UXPilot exploration SHALL be carried into Visily as design-direction inputs rather than rediscovered, and the Visily design system and screens SHALL conform to them. The carried-forward direction is:
+
+| Decision | What it fixes |
+|---|---|
+| **Midnight Intelligence** palette | The dark-first color direction and its token set, with the light appearance derived from it |
+| **Plus Jakarta Sans** for display and heading type, **Inter** for body and UI type | The typographic pairing and its role assignment |
+| **Intelligent Command Center** shell with persistent left navigation | The application frame: a persistent left navigation identifying the signed-in person and reaching every screen |
+| Location-focused **Dashboard** | The Dashboard is organized around a chosen or default location rather than a generic feed |
+| Premium modern SaaS visual direction | The overall level of visual finish: density, elevation, restraint, and chart treatment |
+| **Weathra Intelligence** | The named synthesized briefing surface on the Dashboard |
+| **What Changed?** | The named surface for forecast movement since the last captured snapshot |
+| **Why?** | The named surface explaining what drove a stated conclusion |
+| **Agent Evidence** | The named surface showing the run record behind an answer |
+| Visible distinction between **Observed**, **Forecast**, **Historical**, **Deterministic Analytics**, and **AI Interpretation** | Data class is a presentational primitive, not prose |
+| Source attribution | Provider, location, and period shown on every weather-bearing surface |
+| Timestamps | Retrieval and validity times shown rather than implied |
+| Uncertainty and confidence presentation | Confidence and its stated basis are presented, not omitted or overstated |
+| No implication that the language model predicts numerical weather values | Nothing in the visual or copy direction may suggest the model produces measurements |
+
+These decisions SHALL be recorded as approved design-direction inputs with their UXPilot origin noted, and any later departure from one SHALL be recorded with its reason in the same way a screen-level divergence is.
+
+#### Scenario: Direction carried forward rather than rediscovered
+
+- **WHEN** the Visily design system is inspected
+- **THEN** every carried-forward decision above is present in it
+- **AND** each is recorded as an approved design-direction input rather than reopened
+
+#### Scenario: Palette and typography conform
+
+- **WHEN** the recorded design tokens are inspected
+- **THEN** the color tokens are the Midnight Intelligence palette and the type roles are Plus Jakarta Sans for display and heading and Inter for body and UI
+
+#### Scenario: Shell and Dashboard conform
+
+- **WHEN** the Visily screens are inspected
+- **THEN** they share the Intelligent Command Center shell with persistent left navigation
+- **AND** the Dashboard is organized around a chosen or default location
+
+#### Scenario: Data-class distinction preserved in the design
+
+- **WHEN** any screen presenting weather data is inspected
+- **THEN** observed, forecast, historical, deterministic-analytics, and AI-interpretation content are visibly distinguished, attributed, timestamped, and carry their uncertainty
+- **AND** nothing in the design implies the language model produced a numerical weather value
+
+#### Scenario: Departure from the direction recorded
+
+- **WHEN** a Visily design deliberately departs from a carried-forward decision
+- **THEN** the departure and its reason are recorded
 
 ### Requirement: MVP authentication screens
 
@@ -235,7 +298,7 @@ Every MVP product screen SHALL be reachable from a persistent navigation surface
 
 ### Requirement: Post-MVP screens are designed, not built
 
-The frontend SHALL reserve navigation and routing structure for the post-MVP screens — Weather Intelligence Report, Forecast Explorer, Weather Scenario Lab, Weather Watch, and Travel Intelligence — without implementing their functionality in this change. Any such route present SHALL state plainly that the screen is not yet available rather than rendering a broken or empty screen.
+The frontend SHALL reserve navigation and routing structure for the post-MVP screens — Weather Intelligence Report, Forecast Explorer, Weather Scenario Lab, Weather Watch, Travel Intelligence, Admin Model & AI Usage, and Plan & Usage — without implementing their functionality in this change. Any such route present SHALL state plainly that the screen is not yet available rather than rendering a broken or empty screen.
 
 #### Scenario: Post-MVP route states its status
 
@@ -247,6 +310,12 @@ The frontend SHALL reserve navigation and routing structure for the post-MVP scr
 
 - **WHEN** the navigation surface is inspected
 - **THEN** post-MVP screens are either absent or marked as not yet available
+
+#### Scenario: Administrative route states its status without fetching
+
+- **WHEN** any person navigates to the Admin Model & AI Usage route or the Plan & Usage route in this change
+- **THEN** the route states that the screen is not yet available
+- **AND** no catalog, usage, cost, or lab request is issued
 
 ### Requirement: Data classes and attribution are visible
 
@@ -341,3 +410,117 @@ The frontend SHALL be operable by keyboard alone for every action across authent
 
 - **WHEN** a table or chart is wider than the viewport
 - **THEN** it scrolls within its own container rather than scrolling the page
+
+### Requirement: Admin Model & AI Usage screen
+
+The frontend SHALL provide an administrative Model & AI Usage screen, reachable only by a principal the backend confirms holds the administrative role, presenting at minimum:
+
+- **Model status** — every catalog entry with its display name, capability roles, tier, structured-output support, free-or-paid classification, pricing, and enabled or disabled status, with the enable and disable controls.
+- **Token usage** — prompt, completion, and total tokens over a selected period, broken down by model, policy, plan, and call role.
+- **Cost** — estimated cost over the period by model, policy, and plan, labelled an estimate and never presented as a billed amount.
+- **Latency** — median and 95th-percentile latency by model and call role.
+- **Errors** — failure counts and rates by model and failure classification, including timeouts, gateway rate limits, and schema-validation failures.
+- **Plan usage** — consumption against allowance per plan, with internal and evaluation usage shown separately from product usage.
+- **Internal model selector** — selection of one or more enabled catalog models for a controlled comparison run, with the recorded results of past runs.
+
+The screen SHALL present no conversation content, since usage records hold none, and SHALL show no other user's questions, threads, or saved data. This screen is post-MVP; it is designed in the design phase and implemented after the MVP screens.
+
+#### Scenario: Administrative screen reachable by an administrator
+
+- **WHEN** a principal the backend confirms is administrative opens the Model & AI Usage screen
+- **THEN** model status, token usage, cost, latency, errors, plan usage, and the internal model selector are all present
+
+#### Scenario: Non-administrative visitor cannot reach it
+
+- **WHEN** an ordinary authenticated person navigates to the administrative route
+- **THEN** they are shown a not-available state
+- **AND** no catalog, usage, cost, or lab content is fetched or rendered
+
+#### Scenario: Cost labelled as an estimate
+
+- **WHEN** cost is displayed
+- **THEN** it is labelled an estimate and is not presented as an amount owed
+
+#### Scenario: Model enabled and disabled from the screen
+
+- **WHEN** an administrator disables a model from the screen and the backend confirms the change
+- **THEN** the screen reflects the disabled status
+
+#### Scenario: Comparison initiated from the internal selector
+
+- **WHEN** an administrator selects several enabled models and a question and starts a comparison
+- **THEN** the run's per-model latency, tokens, estimated cost, status, and evaluation result are shown side by side when it completes
+
+#### Scenario: No conversation content shown
+
+- **WHEN** the usage, cost, latency, and error views are inspected
+- **THEN** they contain no prompt text, completion text, or other person's question
+
+### Requirement: The UI never authorizes model access or an allowance
+
+The frontend SHALL treat the backend as the sole authority on plan, entitlement, model resolution, and allowance. It SHALL NOT decide which model serves a request, SHALL NOT gate a premium capability by a client-held value alone, and SHALL NOT present a raised allowance the backend has not granted. Hiding or disabling a control SHALL be a presentation convenience only; the backend SHALL refuse the underlying request regardless.
+
+Where the backend refuses a request for an exhausted allowance, the frontend SHALL present that as a distinct, honest state naming the limit and when it resets — not as a weather error, an authentication error, or a generic failure — and SHALL leave the person's thread, saved locations, and preferences intact.
+
+#### Scenario: Hidden control is not the gate
+
+- **WHEN** a premium control is hidden for a Free-plan person and the underlying request is issued anyway
+- **THEN** the backend refuses or downgrades it
+- **AND** the UI reflects what the backend actually did
+
+#### Scenario: Quota state presented honestly
+
+- **WHEN** the backend refuses an agent request for an exhausted allowance
+- **THEN** the screen states the limit reached and when it resets
+- **AND** it is visually and textually distinct from a weather error and from an expired session
+
+#### Scenario: Person's data intact after a quota refusal
+
+- **WHEN** a person hits their allowance
+- **THEN** their thread, saved locations, and preferences remain available
+
+#### Scenario: Displayed model is the one that ran
+
+- **WHEN** an answer reports the provider, model, and policy that served it
+- **THEN** the UI shows those values rather than a client-side assumption
+
+### Requirement: Plan and usage visible to the signed-in person
+
+The frontend SHALL show the signed-in person their own plan and usage — the plan name, consumption against allowance per applicable dimension, and each window's reset time — and SHALL show no other person's usage, no internal usage, and no aggregate cost across users. This view is post-MVP and is designed in the design phase alongside the administrative screen.
+
+#### Scenario: Own plan and usage shown
+
+- **WHEN** a signed-in person opens their plan and usage view
+- **THEN** their plan name, per-dimension consumption and remaining allowance, and reset times are shown
+
+#### Scenario: Only their own usage shown
+
+- **WHEN** the view is inspected
+- **THEN** it contains no other person's usage, no internal usage, and no cross-user cost total
+
+### Requirement: Administrative and plan screens remain subject to the Visily design gate
+
+The Admin Model & AI Usage screen and the plan-and-usage view SHALL be designed in Visily before substantial implementation, following the same gate as every other screen: an artifact per screen covering its populated, loading, empty, error, and not-permitted states; conformance to the established Weathra design system and its carried-forward design direction rather than generic generated styling; a recorded approval before implementation begins; and a recorded reason for any deliberate divergence.
+
+Until they are implemented, they SHALL be represented in the design roadmap as post-MVP entries rather than advertised as working.
+
+#### Scenario: Design precedes implementation
+
+- **WHEN** implementation of the administrative screen or the plan-and-usage view is started
+- **THEN** an approved Visily artifact for it already exists and is recorded
+
+#### Scenario: States covered by the artifact
+
+- **WHEN** the artifact for the administrative screen is inspected
+- **THEN** it covers the populated, loading, empty, error, and not-permitted states
+
+#### Scenario: Design system followed
+
+- **WHEN** the artifact is inspected
+- **THEN** its typography, spacing, components, charts, and states come from the established Weathra design system
+
+#### Scenario: Represented in the roadmap while unbuilt
+
+- **WHEN** the design roadmap is read before these screens are implemented
+- **THEN** they appear as post-MVP entries
+- **AND** no route advertises them as working

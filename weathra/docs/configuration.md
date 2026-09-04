@@ -135,6 +135,29 @@ hidden — it is not registered, so a plan that named it gets an error rather th
 **`DATABASE_POOL_SIZE`** is small on purpose. Supabase's connection limits bind long before
 application throughput does, and a pool sized for the application starves the database.
 
+**`LLM_MODEL`** is the only place the runtime model is chosen. No model id appears in the backend
+outside this setting's default in `config.py`, and a test asserts it across the whole package — so
+switching models is an environment change, never a code change. Which id to put there is a
+question about the account rather than about Weathra, and there is a command for it:
+
+```
+cd backend  && python scripts/list_openrouter_models.py --free --tools
+```
+
+It queries the gateway's models endpoint over the same HTTP client and retry policy the weather
+providers use, and prints each model's id, context length, tool-calling support where the catalogue
+exposes it, and per-million-token cost, free models first. `--search`, `--limit`, and `--json`
+narrow or reshape the output; `--help` lists them. It reads `OPENROUTER_API_KEY` from the
+environment to fetch the account's own catalogue and **never prints it** — the header line says
+only whether a credential was sent, and every message it emits passes through `redaction.redact`
+first.
+
+Tool-calling support is worth seeing but is not a requirement: the graph executes tools and the
+model proposes (see [`agents.md`](agents.md)), so what the routing path actually needs is reliable
+JSON-object output against a supplied schema within `LLM_JSON_MAX_ATTEMPTS` attempts. The eval
+suite settles the choice — `weathra-evaluate` against a candidate id — and this command only
+narrows the field.
+
 ## Where the values live
 
 | Environment | Frontend | Backend |
@@ -146,3 +169,63 @@ application throughput does, and a pool sized for the application starves the da
 CI holds no credential. That is why the default suite and the offline evaluation run reach nothing
 external: recorded provider payloads, locally minted tokens, a deterministic embedder, and an
 in-process MCP transport. [`deployment.md`](deployment.md) covers the deployed values.
+
+`backend/.env` and `frontend/.env.local` are the local files, and both are git-ignored — the
+repository is public, so that is a property to check rather than assume. The committed
+`.env.example` templates carry placeholders only and are deliberately *not* ignored; the
+repository `.gitignore` re-includes them explicitly so a broader pattern cannot quietly make the
+templates uncommittable. A real production secret never enters Git at all: it lives in
+server-side deployment secret storage — **Google Cloud Secret Manager**, surfaced to the service as
+Cloud Run environment secrets, with GitHub Actions secrets for the privileged jobs — and is
+injected as an environment variable at start.
+
+### Putting the inference key into `backend/.env`
+
+A credential typed at a prompt ends up in the shell's history file, and one pasted into an editor
+session or a chat transcript ends up somewhere it cannot be deleted from. `read -s` avoids both: it
+does not echo, and the history records the command rather than the value.
+
+```bash
+cd backend
+read -rsp 'OpenRouter API key: ' OPENROUTER_KEY; echo
+OPENROUTER_KEY="$OPENROUTER_KEY" python3 - <<'PY'
+import os, pathlib, re
+path = pathlib.Path(".env")
+text, count = re.subn(
+    r"(?m)^OPENROUTER_API_KEY=.*$",
+    "OPENROUTER_API_KEY=" + os.environ["OPENROUTER_KEY"],
+    path.read_text(),
+)
+path.write_text(text)
+print(f"OPENROUTER_API_KEY set in backend/.env ({count} line replaced)")
+PY
+unset OPENROUTER_KEY
+```
+
+It rewrites the one line in place, leaves the rest of the file alone, and prints only a count. The
+same shape works for any other secret — change the variable name in both places. Verify without
+revealing anything, once `SUPABASE_URL` is filled in too:
+
+```
+python -c "from weathra.config import get_settings; print(get_settings().inference_configured)"
+```
+
+`Settings` holds every secret as a `SecretStr`, so it renders as `**********` in a log line, a
+traceback, a `repr`, and `model_dump_json`; the root logger additionally carries a redaction filter
+that rewrites anything token- or key-shaped that reaches a log record by another route.
+
+## What is deliberately not configuration
+
+**The design tool** has no environment variable in either application, and needs no key at runtime.
+Visily.ai is the design tool for Weathra's UI/UX work — and UXPilot was, in an earlier exploration
+whose approved design direction Visily carries forward — but both are design-time tools: they
+produce the UI/UX artifacts and the shared design system recorded under [`design/`](design/), and no
+Weathra process ever calls either. Weathra's runtime LLM/provider layer is OpenRouter for inference
+and Open-Meteo for weather data — those are the only two upstreams the running system has, and the
+settings table above is complete. If a design-tool credential is ever needed it belongs to whoever
+runs the design tool, not to a deployed Weathra process, and adding one here would fail the test
+that asserts this document names nothing the code reads.
+
+The same holds for anything else that is part of how Weathra is *built* rather than how it *runs*:
+a tool that never executes inside a Weathra process has no place in `Settings`, in either `.env`
+file, or in this table.

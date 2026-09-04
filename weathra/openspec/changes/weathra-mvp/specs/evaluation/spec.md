@@ -199,3 +199,139 @@ The system SHALL document the evaluation methodology — the dataset composition
 
 - **WHEN** an evaluation run is accepted as current
 - **THEN** its metric values and pass or fail outcome are recorded in the repository documentation
+
+### Requirement: Candidate models are evaluated through this framework
+
+The system SHALL evaluate a candidate model by running the existing dataset, runner, and metric definitions against it, rather than by any separate or ad-hoc procedure. A model evaluation run SHALL hold every variable but the model fixed: the same dataset version, the same recorded weather fixtures, the same knowledge corpus and embedding model, the same deterministic analytics, and the same commit.
+
+The runner SHALL accept a set of candidate models, or a policy whose candidates are to be evaluated, and SHALL produce one scored result per model over the selected cases. A model that fails or times out SHALL NOT abort the comparison; its failure SHALL be recorded as that model's outcome for the affected cases.
+
+#### Scenario: Candidate evaluated with the existing dataset and metrics
+
+- **WHEN** a candidate model is evaluated
+- **THEN** the existing dataset, runner, and metric definitions are used unchanged
+- **AND** the result reports every metric the framework defines
+
+#### Scenario: Only the model varies
+
+- **WHEN** several candidate models are evaluated in one comparison
+- **THEN** the dataset version, weather fixtures, knowledge corpus, embedding model, analytics, and commit are identical across them
+- **AND** the run record states them once for the whole comparison
+
+#### Scenario: Runner accepts models or a policy
+
+- **WHEN** the runner is invoked with a set of candidate models, or with a policy whose candidate list is to be evaluated
+- **THEN** it produces one scored result per model over the selected cases
+
+#### Scenario: A failing model does not abort the comparison
+
+- **WHEN** one candidate times out on several cases
+- **THEN** the other candidates complete
+- **AND** the timeouts are recorded as that model's outcome for those cases
+
+### Requirement: Model selection is decided on measured criteria, not on model name
+
+The system SHALL base a decision to promote a model into a policy on measured criteria, and SHALL NOT base it on the model's name, vendor, or reputation. The criteria SHALL cover at minimum:
+
+| Criterion | Measured by |
+|---|---|
+| Structured JSON reliability | the proportion of structured-decision calls returning schema-valid output on the first attempt, and the mean attempts to a valid decision |
+| Groundedness | the framework's groundedness metric, together with the hallucination rate and the unsupported weather claim rate |
+| Latency | median and 95th-percentile latency per call role and overall |
+| Tool and planning quality | the framework's tool-selection accuracy, plus multi-step plan correctness — whether the planned capabilities and their order match the case's expectation |
+| Cost | estimated cost per case and per run, from the recorded token counts and catalog pricing |
+
+Every model evaluation result SHALL report all five criteria. A model failing structured JSON reliability or groundedness SHALL NOT be promoted on the strength of latency or cost alone, and a promotion decision SHALL record which criteria were compared and the run identifiers relied upon.
+
+Numerical calculation accuracy SHALL remain 100% for every candidate, since figures come from deterministic analytics and not from the model; a candidate whose result shows otherwise indicates a grounding defect rather than a model preference.
+
+#### Scenario: All five criteria reported
+
+- **WHEN** a model evaluation result is inspected
+- **THEN** structured JSON reliability, groundedness, latency, tool and planning quality, and cost are all reported
+
+#### Scenario: Structured output reliability measured
+
+- **WHEN** a candidate is evaluated
+- **THEN** the proportion of structured calls valid on the first attempt and the mean attempts to a valid decision are reported
+
+#### Scenario: Plan correctness measured
+
+- **WHEN** a multi-step case is evaluated
+- **THEN** whether the planned capabilities and their order matched the case's expectation is recorded
+
+#### Scenario: Cost measured from recorded usage
+
+- **WHEN** a candidate's cost is reported
+- **THEN** it is computed from that run's recorded token counts and the catalog pricing, and labelled an estimate
+
+#### Scenario: Promotion refused on criteria
+
+- **WHEN** a candidate is cheaper and faster but fails structured JSON reliability or groundedness
+- **THEN** it is not promoted on cost or latency alone
+- **AND** the decision record names the criteria it failed
+
+#### Scenario: Decision records its basis
+
+- **WHEN** a model is promoted into a policy
+- **THEN** the decision records the criteria compared and the evaluation run identifiers relied upon
+
+#### Scenario: Numerical accuracy independent of the model
+
+- **WHEN** any candidate is evaluated over the same fixtures
+- **THEN** numerical calculation accuracy is 100%
+
+### Requirement: Model evaluation results are persisted and comparable
+
+The system SHALL persist a model evaluation record per model per run, carrying the model catalog reference and gateway model identifier, the policy context where one applies, the dataset version, every metric and criterion value, the per-case outcomes, the recorded usage the run produced, and the commit under test. Records SHALL be comparable across runs and across models, and SHALL remain readable after a model is disabled or removed from a policy.
+
+Comparing runs that used different dataset versions SHALL state that the dataset version differs, exactly as it does for any other comparison.
+
+#### Scenario: Evaluation record persisted
+
+- **WHEN** a model evaluation completes
+- **THEN** a record is persisted carrying the model, policy context, dataset version, metric and criterion values, per-case outcomes, recorded usage, and commit
+
+#### Scenario: Models compared
+
+- **WHEN** two models' evaluation records for the same dataset version are compared
+- **THEN** the difference in each metric and criterion is reported
+
+#### Scenario: Records survive a model being retired
+
+- **WHEN** a model is disabled or removed from every policy
+- **THEN** its evaluation records remain readable and attributed to it
+
+#### Scenario: Dataset version difference flagged
+
+- **WHEN** two compared model evaluations used different dataset versions
+- **THEN** the comparison states that the dataset version differs
+
+### Requirement: Evaluation runs are internal usage
+
+An evaluation run against a live inference gateway SHALL emit a usage event per language model call, classified as internal, attributed to the run rather than to any end user's plan, and accounted against the internal allowance. An evaluation run SHALL NOT consume any end user's allowance and SHALL NOT alter any end user's plan, consumption, threads, memory, preferences, or saved locations.
+
+Offline runs using a fake inference provider SHALL make no gateway call and SHALL be recorded as offline, consuming no allowance.
+
+#### Scenario: Live run accounted as internal
+
+- **WHEN** an evaluation run executes against a live gateway
+- **THEN** each language model call emits a usage event classified as internal
+- **AND** no end user's plan consumption changes
+
+#### Scenario: Evaluation refused when the internal allowance is exhausted
+
+- **WHEN** the internal allowance is exhausted
+- **THEN** a live evaluation run is refused with the quota error
+- **AND** product traffic on user plans is unaffected
+
+#### Scenario: Offline run consumes no allowance
+
+- **WHEN** the runner executes in offline mode with a fake inference provider
+- **THEN** no gateway call is made and no allowance is consumed
+- **AND** the run record states that offline mode was used
+
+#### Scenario: Evaluation leaves user state untouched
+
+- **WHEN** an evaluation run completes
+- **THEN** no end user's threads, memory, preferences, saved locations, plan, or consumption have changed

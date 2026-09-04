@@ -1,8 +1,185 @@
 /*
- * Placeholder. The design-system tokens — typography, spacing, and colour with a
- * prefers-color-scheme override — are established in task 20.3 from the approved artifacts of
- * task group 19.
+ * The Weathra design system, as CSS custom properties — task 20.3.
+ *
+ * `lib/design/tokens.ts` is the source of truth for every value here; this file exists because a
+ * stylesheet cannot import TypeScript, and `lib/design/tokens.test.ts` asserts the two agree in
+ * both appearances. A value changed in one place and not the other fails that test rather than
+ * shipping a palette that half the application does not use.
+ *
+ * Dark-first: `:root` carries Midnight Intelligence, and the light appearance is derived from the
+ * same roles under a `prefers-color-scheme` override. Components reference roles — never a literal
+ * colour — so a screen cannot invent one.
  */
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --color-surface-base: #05080c;
+  --color-surface-raised: #0b121b;
+  --color-surface-overlay: #121b26;
+  --color-surface-inset: #070c12;
+
+  /* Edges */
+  --color-border-subtle: #1b2634;
+  --color-border-strong: #4e6a86;
+
+  /* Text hierarchy */
+  --color-text-primary: #e9eff6;
+  --color-text-secondary: #aebccb;
+  --color-text-muted: #93a3b3;
+
+  /* The single accent */
+  --color-accent: #22d3ee;
+  --color-accent-strong: #67e8f9;
+  --color-accent-muted: #0e7490;
+  --color-accent-contrast: #04121a;
+
+  /* The five data classes */
+  --color-class-observed: #34d399;
+  --color-class-observed-surface: #0a2a22;
+  --color-class-forecast: #7cb2ff;
+  --color-class-forecast-surface: #0d1c33;
+  --color-class-historical: #fbbf24;
+  --color-class-historical-surface: #2b2008;
+  --color-class-analytics: #a78bfa;
+  --color-class-analytics-surface: #1c1633;
+  --color-class-interpretation: #e879f9;
+  --color-class-interpretation-surface: #2a1030;
+
+  /* Status */
+  --color-status-error: #f87171;
+  --color-status-error-surface: #2c1214;
+  --color-status-warning: #fb923c;
+  --color-status-warning-surface: #2b1a0b;
+  --color-status-ok: #4ade80;
+  --color-status-ok-surface: #0c2a17;
+  --color-status-quota: #c4b5fd;
+  --color-status-quota-surface: #1d1a33;
+
+  /*
+   * Typography. `--font-display` and `--font-body` are set by `next/font` in the root layout, which
+   * self-hosts Plus Jakarta Sans and Inter; the stacks below keep the roles legible if a face
+   * fails to load.
+   */
+  --family-display: var(--font-display), "Plus Jakarta Sans", system-ui, sans-serif;
+  --family-body: var(--font-body), Inter, system-ui, sans-serif;
+
+  --type-display-size: 2rem;
+  --type-display-line: 1.15;
+  --type-display-weight: 600;
+
+  --type-heading-size: 1.5rem;
+  --type-heading-line: 1.2;
+  --type-heading-weight: 600;
+
+  --type-section-size: 1.125rem;
+  --type-section-line: 1.3;
+  --type-section-weight: 600;
+
+  --type-card-size: 0.9375rem;
+  --type-card-line: 1.35;
+  --type-card-weight: 600;
+
+  --type-body-size: 0.9375rem;
+  --type-body-line: 1.55;
+  --type-body-weight: 400;
+
+  --type-ui-size: 0.875rem;
+  --type-ui-line: 1.4;
+  --type-ui-weight: 500;
+
+  --type-label-size: 0.6875rem;
+  --type-label-line: 1.2;
+  --type-label-weight: 600;
+  --type-label-tracking: 0.08em;
+
+  --type-meta-size: 0.75rem;
+  --type-meta-line: 1.45;
+  --type-meta-weight: 400;
+
+  /* The 4-pixel spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* Radii */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
+
+  /* Elevation */
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.28);
+  --shadow-overlay: 0 16px 40px rgb(0 0 0 / 0.45);
+  --shadow-focus: 0 0 0 2px var(--color-surface-base), 0 0 0 4px var(--color-accent);
+
+  /* Responsive foundations */
+  --layout-navigation-width: 248px;
+  --layout-navigation-collapsed-width: 64px;
+  --layout-content-maximum: 1440px;
+
+  /* Motion */
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --easing: cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+/*
+ * The light appearance, derived from the same roles. Only the colour tokens move: type, spacing,
+ * radii and motion are appearance-independent, and redeclaring them here would be two places to
+ * change a scale.
+ */
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+
+    --color-surface-base: #f4f7fa;
+    --color-surface-raised: #ffffff;
+    --color-surface-overlay: #ffffff;
+    --color-surface-inset: #eef2f7;
+
+    --color-border-subtle: #dbe2ea;
+    --color-border-strong: #7d8ea0;
+
+    --color-text-primary: #0b141d;
+    --color-text-secondary: #3c4c5c;
+    --color-text-muted: #546678;
+
+    --color-accent: #0b6a83;
+    --color-accent-strong: #08505f;
+    --color-accent-muted: #0891b2;
+    --color-accent-contrast: #ffffff;
+
+    --color-class-observed: #046c4e;
+    --color-class-observed-surface: #e6f6ef;
+    --color-class-forecast: #1d4ed8;
+    --color-class-forecast-surface: #e8eefc;
+    --color-class-historical: #8a4b04;
+    --color-class-historical-surface: #fdf2e0;
+    --color-class-analytics: #6d28d9;
+    --color-class-analytics-surface: #f0eafd;
+    --color-class-interpretation: #a21caf;
+    --color-class-interpretation-surface: #fbeaf9;
+
+    --color-status-error: #b42318;
+    --color-status-error-surface: #fdeceb;
+    --color-status-warning: #b54708;
+    --color-status-warning-surface: #fdf0e3;
+    --color-status-ok: #136f35;
+    --color-status-ok-surface: #e7f6ec;
+    --color-status-quota: #5b21b6;
+    --color-status-quota-surface: #efe9fb;
+
+    --shadow-raised: 0 1px 2px rgb(15 23 32 / 0.08);
+    --shadow-overlay: 0 16px 40px rgb(15 23 32 / 0.16);
+  }
+}
 
 *,
 *::before,
@@ -10,12 +187,105 @@
   box-sizing: border-box;
 }
 
+html {
+  /* The 360-pixel floor: the page itself never scrolls sideways. */
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    sans-serif;
+  background: var(--color-surface-base);
+  color: var(--color-text-primary);
+  font-family: var(--family-body);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  font-weight: var(--type-body-weight);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-family: var(--family-display);
+  color: var(--color-text-primary);
+}
+
+h1 {
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+}
+
+h2 {
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
+}
+
+h3,
+h4 {
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+/*
+ * One focus treatment, everywhere.
+ *
+ * `:focus-visible` rather than `:focus` so a pointer click does not leave a ring behind, and the
+ * ring is two layers — a gap in the page colour, then the accent — so it stays visible against a
+ * card, an overlay, and a filled button alike. Nothing in this system sets `outline: none` without
+ * putting this in its place.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Wide content scrolls inside its own container rather than scrolling the page. */
+.weathra-scroll-x {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+/* Available to a screen reader, absent from the visual layout. */
+.weathra-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * Motion is a nicety and is dropped entirely on request. `prefers-reduced-motion` is a statement
+ * about vestibular comfort, not a styling preference, so the answer is no animation at all rather
+ * than a shorter one.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

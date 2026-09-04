@@ -275,6 +275,9 @@ def test_every_authentication_requirement_is_addressed(authentication: str) -> N
         "Secret handling": "NEXT_PUBLIC_",
         "Authentication in streaming requests": "terminal authentication error",
         "Account and data deletion": "count removed per table",
+        "Administrative and internal roles are server-held": "no client-supplied field grants it",
+        "Plan and model entitlement are derived, never asserted": "derived, never asserted",
+        "Row Level Security on the SaaS-ready tables": "SaaS-ready tables",
     }
 
     missing = set(requirements) - set(expected)

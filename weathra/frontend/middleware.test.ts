@@ -145,6 +145,29 @@ describe("an authenticated person", () => {
     }
   });
 
+  it("is left on the screen a returning link just completed a flow on", async () => {
+    // Task 20.6: the callback established the session, and the success state is what it
+    // established it *for*. Redirecting here would make the last step unreachable.
+    session(SIGNED_IN);
+
+    expect(location(await middleware(request("/verify-email?completed=verification")))).toBeNull();
+    expect(location(await middleware(request("/reset-password?completed=recovery")))).toBeNull();
+  });
+
+  it("is still redirected off those screens without the marker, or with the wrong one", async () => {
+    session(SIGNED_IN);
+
+    for (const path of [
+      "/verify-email",
+      "/verify-email?completed=recovery",
+      "/reset-password",
+      "/reset-password?completed=verification",
+      "/sign-in?completed=verification",
+    ]) {
+      expect(location(await middleware(request(path))), path).toBe("/");
+    }
+  });
+
   it("lands on the destination they were originally sent to sign-in from", async () => {
     session(SIGNED_IN);
 
@@ -196,5 +219,62 @@ describe("a refreshed session", () => {
 
     expect(response.status).toBe(307);
     expect(response.cookies.get("sb-auth")?.value).toBe("refreshed");
+  });
+});
+
+describe("session persistence and refresh — task 20.9", () => {
+  it("re-resolves the session on every request, which is what a reload is", async () => {
+    session(SIGNED_IN);
+
+    // Three requests, three resolutions: nothing is remembered between them, because the session
+    // lives in the cookies the request carries rather than in anything the application holds.
+    for (const path of ["/", "/analyst", "/historical"]) {
+      const response = await middleware(request(path, { name: "sb-auth", value: "session" }));
+      expect(response.status, path).toBe(200);
+      expect(location(response), path).toBeNull();
+    }
+  });
+
+  it("refreshes transparently on a protected navigation, keeping the person where they were going", async () => {
+    session(SIGNED_IN, [{ name: "sb-auth", value: "refreshed" }]);
+
+    const response = await middleware(request("/compare", { name: "sb-auth", value: "expiring" }));
+
+    expect(location(response)).toBeNull();
+    expect(response.cookies.get("sb-auth")?.value).toBe("refreshed");
+  });
+
+  it("routes to sign-in with the destination kept when the session cannot be refreshed", async () => {
+    // The refresh token is gone or refused: `getUser()` answers null, and that is an authentication
+    // event rather than a failed request.
+    session(null);
+
+    const response = await middleware(request("/compare?a=Berlin"));
+
+    expect(location(response)).toBe(`/sign-in?next=${encodeURIComponent("/compare?a=Berlin")}`);
+  });
+
+  it("never loops: the screen it sends them to is one it lets them reach", async () => {
+    session(null);
+
+    const redirected = location(await middleware(request("/analyst")));
+    expect(redirected).toBe(`/sign-in?next=${encodeURIComponent("/analyst")}`);
+    // Following it does not bounce again.
+    expect(location(await middleware(request(redirected as string)))).toBeNull();
+  });
+
+  it("forbids the browser caching a protected screen, so back cannot restore one after sign-out", async () => {
+    session(SIGNED_IN);
+
+    const response = await middleware(request("/analyst", { name: "sb-auth", value: "session" }));
+
+    expect(response.headers.get("cache-control")).toBe("no-store, must-revalidate");
+  });
+
+  it("leaves the unauthenticated screens cacheable, since they hold nobody's data", async () => {
+    session(null);
+
+    const response = await middleware(request("/sign-in"));
+    expect(response.headers.get("cache-control")).toBeNull();
   });
 });

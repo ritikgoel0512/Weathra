@@ -15,6 +15,7 @@
 import type { NextRequest, NextResponse } from "next/server";
 
 import {
+  completesAuthFlow,
   DEFAULT_PROTECTED_PATH,
   DESTINATION_PARAMETER,
   isAuthPath,
@@ -32,7 +33,10 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return redirectPreservingSession(request, signInPathFor(pathname, search), response);
   }
 
-  if (user !== null && isAuthPath(pathname)) {
+  // The one exception: a callback has just completed a flow *on* one of these screens, and the
+  // session it established is what the screen is for (task 20.6). Redirecting would make the last
+  // step of verification and of password recovery unreachable.
+  if (user !== null && isAuthPath(pathname) && !completesAuthFlow(pathname, searchParams)) {
     // Where they were going before they were sent here, if they were sent here at all.
     const destination = safeDestination(searchParams.get(DESTINATION_PARAMETER));
     return redirectPreservingSession(
@@ -40,6 +44,13 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
       destination ?? DEFAULT_PROTECTED_PATH,
       response,
     );
+  }
+
+  // A protected screen is server-rendered from somebody's session, so it must not be re-shown from
+  // the browser's cache after they sign out — the back button restoring a rendered dashboard is
+  // protected content served to whoever is at the machine now, without a request the gate can see.
+  if (isProtectedPath(pathname)) {
+    response.headers.set("Cache-Control", "no-store, must-revalidate");
   }
 
   return response;
