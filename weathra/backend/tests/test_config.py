@@ -3,8 +3,11 @@ service-role key on a request-serving path."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
+from pydantic_settings import NoDecode
 
 from weathra.config import SERVICE_ROLE_ON_REQUEST_PATH_MESSAGE, Settings, get_settings
 
@@ -164,3 +167,159 @@ def test_get_settings_is_cached(monkeypatch: pytest.MonkeyPatch) -> None:
         import os
 
         os.environ.pop("SUPABASE_URL", None)
+
+
+# ---------------------------------------------------------------- environment-source contract
+#
+# `CORS_ALLOWED_ORIGINS` and `MCP_ENABLED_TOOLS` are documented in `.env.example` as
+# comma-separated strings, but they are the only two complex-typed fields on `Settings`. A
+# settings *source* runs `json.loads` on a complex field before any validator sees the value, so
+# the documented `CORS_ALLOWED_ORIGINS=http://localhost:3000` failed at source level with
+# `SettingsError` and `_split_comma_separated` never ran. The tests above passed throughout,
+# because they construct `Settings(...)` with keyword arguments — which skips the sources entirely.
+# So these exercise both real sources: the process environment and a `.env` file.
+#
+# `NoDecode` on exactly those two fields is the fix. Decoding stays on for every other field.
+
+DOTENV_REQUIRED = "SUPABASE_URL=https://project.supabase.co\n"
+
+
+def _from_environment(monkeypatch: pytest.MonkeyPatch, **variables: str) -> Settings:
+    """Load through `EnvSettingsSource`, with no `.env` file involved."""
+    monkeypatch.setenv("SUPABASE_URL", "https://project.supabase.co")
+    for name, value in variables.items():
+        monkeypatch.setenv(name, value)
+    return Settings(_env_file=None)
+
+
+def _from_dotenv(tmp_path: Path, body: str) -> Settings:
+    """Load through `DotEnvSettingsSource`, with the named file as the only source."""
+    written = tmp_path / ".env"
+    written.write_text(DOTENV_REQUIRED + body)
+    return Settings(_env_file=written)
+
+
+@pytest.fixture(autouse=True)
+def _no_ambient_list_variables(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A developer shell exporting either variable must not decide what these tests observe."""
+    for name in ("CORS_ALLOWED_ORIGINS", "MCP_ENABLED_TOOLS"):
+        monkeypatch.delenv(name, raising=False)
+        monkeypatch.delenv(name.lower(), raising=False)
+
+
+def test_cors_single_origin_from_the_process_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    built = _from_environment(monkeypatch, CORS_ALLOWED_ORIGINS="https://a.example")
+    assert built.cors_allowed_origins == ("https://a.example",)
+
+
+def test_cors_multiple_origins_from_the_process_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    built = _from_environment(
+        monkeypatch, CORS_ALLOWED_ORIGINS="https://a.example, https://b.example"
+    )
+    assert built.cors_allowed_origins == ("https://a.example", "https://b.example")
+
+
+def test_cors_single_origin_from_a_dotenv_file(tmp_path: Path) -> None:
+    built = _from_dotenv(tmp_path, "CORS_ALLOWED_ORIGINS=https://a.example\n")
+    assert built.cors_allowed_origins == ("https://a.example",)
+
+
+def test_cors_multiple_origins_from_a_dotenv_file(tmp_path: Path) -> None:
+    built = _from_dotenv(tmp_path, "CORS_ALLOWED_ORIGINS=https://a.example,https://b.example\n")
+    assert built.cors_allowed_origins == ("https://a.example", "https://b.example")
+
+
+def test_mcp_single_tool_from_the_process_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A lone value carries no comma, so it is not valid JSON either — the case that broke first."""
+    built = _from_environment(monkeypatch, MCP_ENABLED_TOOLS="weather_current")
+    assert built.mcp_enabled_tools == ("weather_current",)
+
+
+def test_mcp_multiple_tools_from_the_process_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    built = _from_environment(
+        monkeypatch, MCP_ENABLED_TOOLS="geocode_location, weather_current,weather_forecast"
+    )
+    assert built.mcp_enabled_tools == (
+        "geocode_location",
+        "weather_current",
+        "weather_forecast",
+    )
+
+
+def test_mcp_single_tool_from_a_dotenv_file(tmp_path: Path) -> None:
+    built = _from_dotenv(tmp_path, "MCP_ENABLED_TOOLS=weather_current\n")
+    assert built.mcp_enabled_tools == ("weather_current",)
+
+
+def test_mcp_multiple_tools_from_a_dotenv_file(tmp_path: Path) -> None:
+    built = _from_dotenv(tmp_path, "MCP_ENABLED_TOOLS=geocode_location,weather_current\n")
+    assert built.mcp_enabled_tools == ("geocode_location", "weather_current")
+
+
+def test_the_committed_env_example_loads_as_written(backend_root: Path) -> None:
+    """The round trip that matters: the file we tell people to copy must actually load.
+
+    `.env.example` is the documented contract, so it is the fixture — not a rewrite of it.
+
+    `runtime_mode` is forced because the example declares every secret present-but-empty, and an
+    empty `SUPABASE_SERVICE_ROLE_KEY=` reads as the empty string rather than as absent — which the
+    request-serving guard refuses. That is decision 19's own convention, unrelated to how these two
+    lists parse; overriding the mode keeps this test about the parsing.
+    """
+    example = backend_root / ".env.example"
+    built = Settings(_env_file=example, runtime_mode="privileged")
+    assert built.cors_allowed_origins == ("http://localhost:3000",)
+    assert built.mcp_enabled_tools == (
+        "geocode_location",
+        "weather_current",
+        "weather_forecast",
+        "weather_history",
+        "weather_compare",
+        "weather_statistics",
+        "weather_anomaly",
+    )
+
+
+def test_defaults_survive_an_environment_that_names_neither_variable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    built = _from_environment(monkeypatch)
+    assert built.cors_allowed_origins == ("http://localhost:3000",)
+    assert len(built.mcp_enabled_tools) == 7
+
+
+def test_unrelated_scalars_still_load_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`NoDecode` is scoped to two fields; nothing else about source loading moves."""
+    built = _from_environment(
+        monkeypatch,
+        LOG_LEVEL="DEBUG",
+        API_VERSION_PREFIX="/api/v2/",
+        DEFAULT_FORECAST_DAYS="10",
+        HTTP_TIMEOUT_SECONDS="7.5",
+        MCP_TRANSPORT="http",
+    )
+    assert built.log_level == "DEBUG"
+    assert built.api_version_prefix == "/api/v2"
+    assert built.default_forecast_days == 10
+    assert built.http_timeout_seconds == 7.5
+    assert built.mcp_transport == "http"
+
+
+def test_wildcard_origin_is_still_refused_from_the_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`NoDecode` moves where parsing happens, not which values are acceptable."""
+    with pytest.raises(ValidationError, match="wildcard"):
+        _from_environment(monkeypatch, CORS_ALLOWED_ORIGINS="*")
+
+
+def test_no_decode_is_scoped_to_exactly_the_two_documented_list_fields() -> None:
+    """Guards the narrow form of the fix: decoding is not disabled model-wide."""
+    annotated = {
+        name
+        for name, field in Settings.model_fields.items()
+        if any(meta is NoDecode for meta in field.metadata)
+    }
+    assert annotated == {"cors_allowed_origins", "mcp_enabled_tools"}

@@ -16,7 +16,7 @@ from functools import lru_cache
 from typing import Annotated, Literal, Self
 
 from pydantic import AnyHttpUrl, Field, SecretStr, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 RuntimeMode = Literal["request_serving", "privileged"]
 UnitSystemName = Literal["metric", "imperial"]
@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     environment: str = Field(default="development", validation_alias="weathra_environment")
     log_level: LogLevel = Field(default="INFO", validation_alias="log_level")
     api_version_prefix: str = Field(default="/api/v1", validation_alias="api_version_prefix")
-    cors_allowed_origins: tuple[str, ...] = Field(
+    cors_allowed_origins: Annotated[tuple[str, ...], NoDecode] = Field(
         default=("http://localhost:3000",),
         validation_alias="cors_allowed_origins",
         description="Explicit frontend origins. A wildcard is refused.",
@@ -216,7 +216,7 @@ class Settings(BaseSettings):
     mcp_timeout_seconds: Annotated[float, Field(gt=0, le=300)] = Field(
         default=30.0, validation_alias="mcp_timeout_seconds"
     )
-    mcp_enabled_tools: tuple[str, ...] = Field(
+    mcp_enabled_tools: Annotated[tuple[str, ...], NoDecode] = Field(
         default=(
             "geocode_location",
             "weather_current",
@@ -268,6 +268,16 @@ class Settings(BaseSettings):
     @field_validator("cors_allowed_origins", "mcp_enabled_tools", mode="before")
     @classmethod
     def _split_comma_separated(cls, value: object) -> object:
+        """The documented environment contract for both fields is a comma-separated string.
+
+        Both fields carry ``NoDecode``. Without it a settings *source* — the process environment
+        and the `.env` file alike — tries ``json.loads`` on any complex-typed field before a
+        validator ever runs, so the documented ``CORS_ALLOWED_ORIGINS=http://localhost:3000`` in
+        `.env.example` raised ``SettingsError`` at source level and this validator never saw it.
+        ``NoDecode`` hands the raw string through to validation instead, which is where the
+        documented contract is defined. It is applied to exactly these two fields, so every other
+        complex field keeps pydantic-settings' standard JSON decoding.
+        """
         if isinstance(value, str):
             return tuple(part.strip() for part in value.split(",") if part.strip())
         return value
