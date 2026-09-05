@@ -236,7 +236,8 @@ Three pieces make the second gate apply to Weathra's own queries:
    a plain Postgres, and the point of the RLS test is that it runs in CI.
 2. **The `weathra_request` role** — `NOLOGIN NOBYPASSRLS`. A table's owner is exempt from its
    policies, so the backend's own connection would otherwise bypass RLS entirely. Each request
-   assumes this role inside its transaction with `SET LOCAL ROLE`.
+   assumes this role inside its transaction with `SET LOCAL ROLE`. It is `NOLOGIN` because it is
+   *assumed*, never connected as — which is why there is a third role, below.
 3. **The policies themselves**, applied by migration `0002_row_level_security`.
 
 Shared tables are left unrestricted on purpose, and the test asserts policies are *absent* there as
@@ -248,12 +249,42 @@ ownership predicate *deliberately omitted*, under one user's claims, against ano
 and gets nothing back. That is the only way to demonstrate that the database, and not the
 repository code, is what refused.
 
-## Two database connections
+## Two database connections, three roles
 
-| | Role | Used by | Row Level Security |
-|---|---|---|---|
-| `DATABASE_URL` | `weathra_request` (restricted) | the API and stream processes | applies |
-| `DATABASE_URL_PRIVILEGED` | the owner | migrations, retention, evaluation provisioning | bypassed |
+| | Authenticates as | Runs as | Used by | Row Level Security |
+|---|---|---|---|---|
+| `DATABASE_URL` | `weathra_api` (login) | `weathra_request` (restricted) | the API and stream processes | applies |
+| `DATABASE_URL_PRIVILEGED` | the owner | the owner | migrations, retention, evaluation provisioning | bypassed |
+
+The two columns differ for the request-serving connection, and that gap is the design. Postgres
+will not let a `NOLOGIN` role be connected as, so `DATABASE_URL` needs a login identity of its own —
+and the obvious candidate, the owner, would make the request-serving credential and the migration
+credential the same secret. So migration `0003_request_login_role` adds **`weathra_api`**: `LOGIN`,
+`NOINHERIT`, `NOBYPASSRLS`, no table privileges, and a member of `weathra_request`.
+
+`NOINHERIT` is what makes that membership safe. Without it the restricted role's privileges would
+apply to every query automatically and the `SET LOCAL ROLE` would be decorative; with it, the
+membership confers exactly one capability — the right to *become* `weathra_request` — so a request
+that somehow skipped the role switch runs as a role that can read nothing rather than one that can
+read everything. A `db` test asserts precisely that.
+
+**The runtime sequence**, in the order `db/session.py` performs it:
+
+    DATABASE_URL → authenticate as weathra_api → BEGIN
+      → set_config('request.jwt.claims', …, local)   the acting user's validated claims
+      → SET LOCAL ROLE weathra_request               the policies now bind
+      → the handler's queries                        RLS enforced
+      → COMMIT / ROLLBACK, then RESET ROLE
+
+Claims are bound *before* the role switch on purpose: the setting is written while still connected
+as `weathra_api`, and everything after the switch runs with no privilege beyond what the policies
+allow. Both are `SET LOCAL`, so a pooled connection carries neither to the next request.
+
+**`weathra_api`'s password is not in this repository and never will be.** Migration `0003` creates
+the role with no password — under SCRAM it therefore cannot authenticate at all until a deployment
+sets one out of band with `ALTER ROLE weathra_api PASSWORD …`. That password becomes part of
+`DATABASE_URL` and lives only in development and deployment secret storage. The migration owns the
+role's structure and membership; the deployment owns its credential.
 
 The separation is enforced at startup: a settings validator **refuses to start** a
 request-serving process that has `SUPABASE_SERVICE_ROLE_KEY` set, and the privileged command-line

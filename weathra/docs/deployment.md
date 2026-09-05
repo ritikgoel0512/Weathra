@@ -59,10 +59,34 @@ Weathra.
 | Redirect URLs | each environment's frontend origin | The returning-link path lands on `/auth/*`, which must be an allowed redirect |
 | Access-token lifetime | above `AGENT_WALL_CLOCK_BUDGET_SECONDS` | The stream validates its token once at the start; the agent budget bounds how long the run may continue. A token shorter than the budget reintroduces mid-run expiry |
 | Database → `pgvector` | enabled | The migration enables the extension; the image must support it |
-| Connection | pooler for `DATABASE_URL`, direct for `DATABASE_URL_PRIVILEGED` | The request path wants pooled connections; migrations want a direct one |
+| Connection | pooler in **session** mode (5432) for `DATABASE_URL`, direct for `DATABASE_URL_PRIVILEGED` | The request path wants pooled connections; migrations want a direct one. Not transaction mode (6543): it does not support prepared statements, which the asyncpg engine and the checkpointer's own pool both rely on |
 
-The restricted `weathra_request` role is created by migration `0002_row_level_security` rather than
-by hand, so it cannot be forgotten in a new environment.
+Both database roles are created by migration rather than by hand, so neither can be forgotten in a
+new environment: the restricted `weathra_request` by `0002_row_level_security`, and the login role
+`weathra_api` that `DATABASE_URL` authenticates as by `0003_request_login_role`. See
+[`authentication.md`](authentication.md) for why there are three roles across two connections.
+
+### Provisioning the `weathra_api` credential
+
+Migration `0003` creates `weathra_api` with **no password**, so under SCRAM the role cannot
+authenticate until one is set. This is deliberate: a migration is committed source, and a committed
+credential is a leaked credential. Role structure belongs to the migration; the credential belongs
+to the deployment.
+
+Once, per environment, after migrations have been applied:
+
+1. Generate a strong password locally. Do not echo it into a shell history, a log, or a commit.
+2. Under the privileged connection — the Supabase SQL Editor, or `psql` with
+   `DATABASE_URL_PRIVILEGED` — run `ALTER ROLE weathra_api PASSWORD '<generated>';`
+3. Assemble `DATABASE_URL` from it, against the **session-mode pooler** with the username form
+   `weathra_api.<project-ref>` (Supabase requires the project reference on a pooler username, for
+   custom roles as well as for `postgres`).
+4. Store it where that environment keeps secrets — `backend/.env` for local and Codespaces
+   development (gitignored), and secret storage for CI and Cloud Run under task 23.3.
+
+Rotation is the same `ALTER ROLE` plus a secret update. No migration re-runs, and no schema changes.
+Re-running `0003` after provisioning is safe: it asserts the role's attributes with `ALTER ROLE`,
+which does not disturb an existing password.
 
 ### Verified against the project
 
@@ -126,7 +150,7 @@ Each deployed environment must register its own frontend origin before either is
 | Secret | Held in | Used by |
 |---|---|---|
 | `SUPABASE_SERVICE_ROLE_KEY` | GitHub Actions secrets, Cloud Run secrets | Migrations, retention, evaluation provisioning — never a request path |
-| `DATABASE_URL` | Cloud Run secrets | The API and stream processes, under the restricted role |
+| `DATABASE_URL` | Cloud Run secrets | The API and stream processes — authenticates as `weathra_api`, runs under the restricted role |
 | `DATABASE_URL_PRIVILEGED` | GitHub Actions secrets, Cloud Run secrets | Migrations and administrative routines |
 | `OPENROUTER_API_KEY` | Cloud Run secrets | `/ask` and `/stream` only |
 

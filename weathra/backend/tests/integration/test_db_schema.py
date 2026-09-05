@@ -32,6 +32,11 @@ USER_OWNED = ("profiles", "preferences", "saved_locations", "threads", "agent_ru
 SHARED = ("forecast_snapshots", "knowledge_documents", "knowledge_chunks")
 OPERATIONAL = ("evaluation_runs", "evaluation_case_results")
 
+# The three roles: the owner runs migrations, LOGIN_ROLE is what DATABASE_URL authenticates as,
+# and RESTRICTED_ROLE is what every request transaction assumes. See docs/authentication.md.
+LOGIN_ROLE = "weathra_api"
+RESTRICTED_ROLE = "weathra_request"
+
 
 # =========================================================================== 3.2 migrations
 
@@ -176,6 +181,67 @@ async def test_the_restricted_role_exists_and_cannot_bypass_policies(
     assert bypass is False, "the request role must not be able to bypass row level security"
     assert can_login is False, "the request role is assumed, never connected as"
     assert is_super is False
+
+
+async def test_the_login_role_exists_and_may_only_log_in(privileged: AsyncSession) -> None:
+    """``weathra_api`` — the identity ``DATABASE_URL`` authenticates as (migration 0003).
+
+    ``rolinherit`` is the one that matters. If the membership below were inheritable, the restricted
+    role's privileges would apply to every query automatically and the ``SET LOCAL ROLE`` in
+    ``db/session.py`` would be decorative — a request that skipped the switch would still read
+    everything. With ``NOINHERIT`` the membership confers exactly one capability: the right to
+    *become* ``weathra_request``.
+    """
+    row = (
+        await privileged.execute(
+            text(
+                "SELECT rolcanlogin, rolinherit, rolbypassrls, rolsuper, rolcreatedb, "
+                "rolcreaterole, rolreplication FROM pg_roles WHERE rolname = :role"
+            ),
+            {"role": LOGIN_ROLE},
+        )
+    ).one_or_none()
+    assert row is not None, f"migration 0003 did not create the {LOGIN_ROLE} role"
+    can_login, inherits, bypass, is_super, createdb, createrole, replication = row
+    assert can_login is True, (
+        "DATABASE_URL authenticates as this role, so it must be able to log in"
+    )
+    assert inherits is False, "NOINHERIT is what keeps SET LOCAL ROLE load-bearing"
+    assert bypass is False, "a request-serving identity must never bypass row level security"
+    assert (is_super, createdb, createrole, replication) == (False, False, False, False)
+
+
+async def test_the_login_role_is_a_member_of_the_restricted_role(privileged: AsyncSession) -> None:
+    """Without this grant the role switch every request performs would fail outright."""
+    granted = (
+        (
+            await privileged.execute(
+                text(
+                    "SELECT r.rolname FROM pg_auth_members am "
+                    "JOIN pg_roles m ON m.oid = am.member "
+                    "JOIN pg_roles r ON r.oid = am.roleid WHERE m.rolname = :role"
+                ),
+                {"role": LOGIN_ROLE},
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert RESTRICTED_ROLE in granted
+
+
+async def test_the_login_role_holds_no_table_privileges_of_its_own(
+    privileged: AsyncSession,
+) -> None:
+    """Checked without inherited rights, which is exactly the question ``NOINHERIT`` settles: before
+    the role switch, a request-serving connection must be able to reach nothing."""
+    for table in USER_OWNED + SHARED:
+        for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE"):
+            granted = await privileged.scalar(
+                text("SELECT has_table_privilege(:role, :table, :privilege)"),
+                {"role": LOGIN_ROLE, "table": table, "privilege": f"{privilege} WITH GRANT OPTION"},
+            )
+            assert granted is False, f"{LOGIN_ROLE} should hold no direct {privilege} on {table}"
 
 
 # =========================================================================== 3.4 sessions
