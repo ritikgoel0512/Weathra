@@ -255,7 +255,7 @@ Completes before substantial frontend implementation in groups 20 and 21. Visily
 
 ## 23. CI/CD, secrets, and deployment
 
-- [ ] 23.1 Implement the pull-request CI workflow — backend lint, type-check, and tests with a Postgres+pgvector service; frontend lint, type-check, tests, and build; the secret-exposure check; and the offline evaluation run; verify the workflow passes on a pull request with no local-machine step.
+- [x] 23.1 Implement the pull-request CI workflow — backend lint, type-check, and tests with a Postgres+pgvector service; frontend lint, type-check, tests, and build; the secret-exposure check; and the offline evaluation run; verify the workflow passes on a pull request with no local-machine step.
 - [ ] 23.2 Configure the Supabase project and record its required configuration as version-controlled notes — email confirmation required, confirmation and recovery templates carrying the one-time token, per-environment redirect URLs, and token lifetimes below which the agent budget sits; verify a real sign-up delivers a usable code and the documented configuration matches the project.
 - [ ] 23.3 Configure secret storage for CI and Cloud Run holding the service-role key, database URLs, and inference key server-side only; verify no secret is present in the frontend environment or repository and the deployed backend starts with them injected.
 - [ ] 23.4 Containerize the backend and implement the Cloud Run deployment workflow with Alembic migrations, including the RLS policies, applied under the privileged connection as a release step before the revision takes traffic, and minimum instances configured; verify a deployment succeeds and readiness reports every dependency reachable.
