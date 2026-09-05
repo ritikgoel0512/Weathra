@@ -314,3 +314,37 @@ is why it is refused on the request path at all and why CI asserts it appears in
 frontend environment nor the built bundle (`npm run check:secrets`, and
 `backend/tests/test_env_example.py` for the convention half). [`configuration.md`](configuration.md)
 documents every variable.
+
+## Known issue — the code entry silently truncates an over-length code
+
+A hardening follow-up, recorded here rather than fixed inside task 23.2 so that the task records
+what was verified rather than quietly absorbing a defect it uncovered.
+
+`normalizeVerificationCode` (`frontend/lib/auth/verification.ts`) reduces what a person types to
+digits and then **discards everything past `VERIFICATION_CODE_LENGTH`**, and the code field carries
+the same limit as `maxLength`. Both were written for a benign case — a pasted `"Code: 123456"`, a
+fat-fingered seventh digit — and for a code of the expected length they behave correctly.
+
+For a code *longer* than the expected length they do something worse than reject it. The extra
+digits are dropped without a word, the truncated string then satisfies
+`verificationCodeFormatError` because it is exactly the expected length, and it is submitted to the
+provider as if it were what arrived in the email. The provider refuses it, and the screen reports
+`CODE_INCORRECT` — *"That code is not right."* A correct code, refused, with the interface asserting
+the person mistyped it.
+
+This is how the task 23.2 verification failed on its first attempt: the project was configured with
+Email OTP Length 8 and the screen was built for 6. It cost a real delivered email and a manual test
+to find something the interface had the information to state plainly. Pinning the project to 6
+([`deployment.md`](deployment.md)) removes the trigger; it does not remove the failure mode, which
+returns the moment a project is configured otherwise.
+
+The smallest fix is to stop discarding: let `normalizeVerificationCode` keep the digits it is given
+and let `verificationCodeFormatError` report a code that is too long, in the same voice as the one
+that reports a code that is too short. A too-long code is then a stated, visible refusal before the
+provider is troubled with it, and a length mismatch announces itself instead of impersonating a
+typo. Two test files pin the current wording and would move with it:
+`frontend/lib/auth/verification.test.ts` and `frontend/components/auth/verify-email.test.tsx`.
+
+Accepting a provider-configured range (GoTrue permits 6–10) rather than one length is a larger
+change and is not proposed here: `specs/authentication` requires only that Weathra submit the code
+the configured flow delivered, and a single documented length satisfies that with far less surface.

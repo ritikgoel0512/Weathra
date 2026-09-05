@@ -54,6 +54,8 @@ Weathra.
 | Minimum password length | **12** | Mirrors the rule the Create Account screen states before submission (`frontend/lib/auth/password.ts`). A project configured stricter than the stated rules produces a password rejected *after* submission, which is what `specs/authentication` forbids |
 | *Confirm signup* email template | includes `{{ .Token }}` | Without the token in the email there is no code to enter, and in-app code entry is a requirement |
 | *Reset password* email template | includes `{{ .Token }}` | Same, for recovery |
+| Email OTP Length | **6** | Mirrors the length the Verify Email screen states and validates (`VERIFICATION_CODE_LENGTH`, `frontend/lib/auth/verification.ts`). A project configured longer delivers a token the screen truncates before submitting, so a *correct* code is refused as an incorrect one — observed against this project at length 8 and corrected to 6 (§ *Verified against the project*) |
+| Email OTP Expiration | **1 hour** | Mirrors `VERIFICATION_CODE_LIFETIME_MS` (`frontend/lib/auth/verification.ts`), which the Verify Email screen uses to tell an expired code apart from an incorrect one. GoTrue answers both with the same refusal, so a project configured differently makes that split report the wrong state |
 | Redirect URLs | each environment's frontend origin | The returning-link path lands on `/auth/*`, which must be an allowed redirect |
 | Access-token lifetime | above `AGENT_WALL_CLOCK_BUDGET_SECONDS` | The stream validates its token once at the start; the agent budget bounds how long the run may continue. A token shorter than the budget reintroduces mid-run expiry |
 | Database → `pgvector` | enabled | The migration enables the extension; the image must support it |
@@ -61,6 +63,62 @@ Weathra.
 
 The restricted `weathra_request` role is created by migration `0002_row_level_security` rather than
 by hand, so it cannot be forgotten in a new environment.
+
+### Verified against the project
+
+Task 23.2 asks that the documented configuration above match the real project, and that a real
+sign-up deliver a usable code. This records that verification. No address, code, credential or
+personal value from the test is recorded here or anywhere in the repository — the evidence is the
+configuration state and the observed outcome, which is what a later reader needs.
+
+**Date:** 2026-09-05. **Method:** the real hosted Supabase project with custom SMTP (Brevo), the
+real Next.js frontend served from Google Cloud Shell Web Preview on `:3000`, a real address the
+tester controls. No mock, stub, fixture, fake identity provider or automated test stood in for any
+part of it. The FastAPI backend was deliberately not running: the flow under test is Supabase Auth
+only, and the frontend reaches the backend only after the authenticated shell is entered.
+
+| Setting | How it was verified | Result |
+|---|---|---|
+| Email provider enabled | `GET /auth/v1/settings` | `email: true` |
+| Sign-ups permitted | `GET /auth/v1/settings` | `disable_signup: false` |
+| Confirm email required | `GET /auth/v1/settings` | `mailer_autoconfirm: false` — so `signUp` returns no session and confirmation is structurally unavoidable |
+| Custom SMTP (Brevo) | a real email was delivered | delivered |
+| *Confirm signup* template carries `{{ .Token }}` | the delivered email carried a numeric code | confirmed |
+| *Reset password* template carries `{{ .Token }}` | template saved in the dashboard | configured; not exercised end to end |
+| Email OTP Length = 6 | see the defect below | corrected, then confirmed by a delivered 6-digit code |
+| Real sign-up delivers a usable code | the full flow, below | passed |
+| Access-token lifetime | read back from the project | 3600 s — above `AGENT_WALL_CLOCK_BUDGET_SECONDS` (120 s), so a stream cannot outlive the token it validated at the start |
+| Email OTP Expiration | read back from the project | 1 hour — matches `VERIFICATION_CODE_LIFETIME_MS`, so the screen's expired-versus-incorrect split reports the state the provider actually means |
+| `pgvector` availability | dashboard extension list | `vector` 0.8.2 available, left OFF so migration `0001` performs the enable |
+
+**The flow that passed.** Create Account on the running frontend → Supabase accepted the sign-up and
+issued no session → Brevo delivered the *Confirm signup* email → the email carried a six-digit code
+→ the code was entered into Weathra's own Verify Email screen, which called `verifyOtp` → Supabase
+accepted it → the screen showed its verified state ("Email verified — Your address is confirmed and
+you are signed in") → *Continue to Weathra* entered the authenticated application shell. The
+Dashboard's data surfaces showed their backend-unreachable error state, which is the correct
+degradation for a run with no backend and is itself evidence that the session was real: the shell
+renders only for a session the server resolved against Supabase.
+
+**A defect this verification found.** The project was initially configured with **Email OTP Length
+8**, while the Verify Email screen states and validates six digits. The screen truncated the
+delivered eight-digit token to its first six characters, submitted those, and reported the
+provider's refusal as *"That code is not right."* — a correct code refused as an incorrect one, with
+nothing on screen indicating that two digits had been dropped. The project was set to 6 and the flow
+then passed unchanged. `specs/authentication` states no code length; it defers to "the configured
+Supabase email verification flow", so pinning the project to the length the screen already states is
+the same contract the *Minimum password length* row above records, and the row was added for the
+same reason. The truncation itself is a real defect independent of the setting and is tracked
+separately as a hardening follow-up in [`authentication.md`](authentication.md); it is deliberately
+not folded into this task.
+
+**Not covered by this verification.** The *Reset password* template is configured and carries the
+token, but the recovery flow was not exercised end to end. Redirect URLs are registered for no
+environment yet, because none exists beyond the ephemeral Cloud Shell preview origin — the
+code-entry path does not consult them (`signUp` is called with no `emailRedirectTo`), which is why
+this verification could pass without one, but the returning-link path and password recovery both do.
+Each deployed environment must register its own frontend origin before either is used there; task
+23.5 is where that lands for the hosted frontend.
 
 ## Secrets
 
