@@ -127,7 +127,16 @@ def test_comma_separated_lists_are_parsed() -> None:
     assert built.cors_allowed_origins == ("https://a.example", "https://b.example")
 
 
-def test_missing_project_url_is_refused() -> None:
+def test_missing_project_url_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The variable is cleared, because "missing" has to actually be missing.
+
+    ``_env_file=None`` only stops pydantic-settings reading the `.env` file; it still reads the
+    *process* environment. So this test passed on a developer's machine, where nothing exports
+    ``SUPABASE_URL``, and failed in CI, where the workflow sets it at job level so the rest of the
+    suite can construct Settings. The environment it asserts about was ambient rather than stated.
+    """
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("supabase_url", raising=False)
     with pytest.raises(ValidationError, match="supabase_url"):
         Settings(_env_file=None)
 
@@ -137,12 +146,16 @@ def test_chunk_overlap_must_be_smaller_than_the_chunk() -> None:
         settings(rag_chunk_max_tokens=100, rag_chunk_overlap_tokens=100)
 
 
-def test_get_settings_is_cached() -> None:
+def test_get_settings_is_cached(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Via ``monkeypatch`` so the variable is removed again afterwards.
+
+    Setting it through ``os.environ`` left ``SUPABASE_URL`` exported for every test that ran after
+    this one in the same process — including the one above, which asserts the variable is absent.
+    That is the same leak, from the other direction.
+    """
     get_settings.cache_clear()
     try:
-        import os
-
-        os.environ["SUPABASE_URL"] = "https://cached.supabase.co"
+        monkeypatch.setenv("SUPABASE_URL", "https://cached.supabase.co")
         first = get_settings()
         second = get_settings()
         assert first is second
