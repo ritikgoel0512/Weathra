@@ -181,9 +181,10 @@ async def test_retention_clears_the_checkpoints_of_an_expired_thread(
     checkpointer = Checkpointer(db_settings)
     await checkpointer.open()
     try:
-        await graph.compile(checkpointer=checkpointer.saver).ainvoke(
-            {"turns": ["hello"]}, config=checkpointer.config_for(principal, thread.id)
-        )
+        async with checkpointer.acting_as(principal.user_id):
+            await graph.compile(checkpointer=checkpointer.saver).ainvoke(
+                {"turns": ["hello"]}, config=checkpointer.config_for(principal, thread.id)
+            )
         assert await checkpointer.load(principal, thread.id) is not None
 
         await _expire(engines, thread.id)
@@ -396,9 +397,10 @@ async def test_account_deletion_clears_the_checkpoints_too(
     checkpointer = Checkpointer(db_settings)
     await checkpointer.open()
     try:
-        await graph.compile(checkpointer=checkpointer.saver).ainvoke(
-            {"turns": ["hello"]}, config=checkpointer.config_for(principal, thread_id)
-        )
+        async with checkpointer.acting_as(principal.user_id):
+            await graph.compile(checkpointer=checkpointer.saver).ainvoke(
+                {"turns": ["hello"]}, config=checkpointer.config_for(principal, thread_id)
+            )
 
         async with session_as(engines, user) as session:
             report = await delete_account_data(session, principal, checkpointer=checkpointer)
@@ -450,11 +452,12 @@ async def test_the_routine_runs_privileged_only_and_still_clears_checkpoints(
     writer = Checkpointer(db_settings)
     await writer.open()
     try:
-        await (
-            one_turn_graph()
-            .compile(checkpointer=writer.saver)
-            .ainvoke({"turns": ["hello"]}, config=writer.config_for(principal, thread.id))
-        )
+        async with writer.acting_as(principal.user_id):
+            await (
+                one_turn_graph()
+                .compile(checkpointer=writer.saver)
+                .ainvoke({"turns": ["hello"]}, config=writer.config_for(principal, thread.id))
+            )
     finally:
         await writer.close()
 

@@ -13,7 +13,7 @@ from tests.db_support import new_user_id, principal_for
 from tests.graph_support import one_turn_graph
 from weathra.config import Settings
 from weathra.memory.checkpointer import (
-    CHECKPOINT_TABLES,
+    THREAD_SCOPED_CHECKPOINT_TABLES,
     Checkpointer,
     checkpoint_config,
     owner_of_checkpoint_key,
@@ -71,9 +71,10 @@ async def test_graph_state_persists_across_a_reinstantiated_checkpointer(
     first = Checkpointer(db_settings)
     await first.open()
     try:
-        await graph.compile(checkpointer=first.saver).ainvoke(
-            {"turns": ["hello"]}, config=first.config_for(principal, THREAD)
-        )
+        async with first.acting_as(principal.user_id):
+            await graph.compile(checkpointer=first.saver).ainvoke(
+                {"turns": ["hello"]}, config=first.config_for(principal, THREAD)
+            )
     finally:
         await first.close()
 
@@ -84,9 +85,10 @@ async def test_graph_state_persists_across_a_reinstantiated_checkpointer(
         assert values["turns"] == ["hello", "answered hello"]
 
         # And a follow-up run continues from that state rather than starting over.
-        result = await graph.compile(checkpointer=second.saver).ainvoke(
-            {"turns": ["and now?"]}, config=second.config_for(principal, THREAD)
-        )
+        async with second.acting_as(principal.user_id):
+            result = await graph.compile(checkpointer=second.saver).ainvoke(
+                {"turns": ["and now?"]}, config=second.config_for(principal, THREAD)
+            )
         assert result["turns"] == ["hello", "answered hello", "and now?", "answered and now?"]
     finally:
         await second.close()
@@ -113,10 +115,11 @@ async def test_a_key_composed_for_one_user_cannot_address_anothers_checkpoint(
 ) -> None:
     """Both users name the *same* raw thread id; only the owner reaches the state.
 
-    This is the obscurity half of decision 11, and the test says so: what makes it safe is that
-    the key is composed from the acting principal's own subject, so there is no code path by which
-    the second user can build the first user's key. The gate that *refuses* the request is the
-    ``threads`` ownership check in ``test_memory_threads.py``, not this.
+    Two things make that true, and this test only covers the first: the key is composed from the
+    acting principal's own subject, so there is no code path by which the second user can build the
+    first user's key. Since ``ensure_checkpoint_schema`` writes the policies, the database refuses
+    the key even when it *is* known — ``test_checkpoint_policies.py`` covers that — and the
+    ``threads`` ownership check in ``test_memory_threads.py`` is still what refuses the request.
     """
     owner = principal_for(new_user_id())
     other = principal_for(new_user_id())
@@ -124,11 +127,12 @@ async def test_a_key_composed_for_one_user_cannot_address_anothers_checkpoint(
     checkpointer = Checkpointer(db_settings)
     await checkpointer.open()
     try:
-        await (
-            one_turn_graph()
-            .compile(checkpointer=checkpointer.saver)
-            .ainvoke({"turns": ["secret"]}, config=checkpointer.config_for(owner, THREAD))
-        )
+        async with checkpointer.acting_as(owner.user_id):
+            await (
+                one_turn_graph()
+                .compile(checkpointer=checkpointer.saver)
+                .ainvoke({"turns": ["secret"]}, config=checkpointer.config_for(owner, THREAD))
+            )
 
         assert await checkpointer.load(other, THREAD) is None
         assert await checkpointer.channel_values(other, THREAD) == {}
@@ -147,10 +151,11 @@ async def test_forget_removes_only_that_threads_checkpoints(
     await checkpointer.open()
     try:
         compiled = one_turn_graph().compile(checkpointer=checkpointer.saver)
-        for thread in (THREAD, other_thread):
-            await compiled.ainvoke(
-                {"turns": ["hello"]}, config=checkpointer.config_for(principal, thread)
-            )
+        async with checkpointer.acting_as(principal.user_id):
+            for thread in (THREAD, other_thread):
+                await compiled.ainvoke(
+                    {"turns": ["hello"]}, config=checkpointer.config_for(principal, thread)
+                )
 
         await checkpointer.forget(principal.user_id, THREAD)
 
@@ -183,11 +188,15 @@ async def test_the_checkpointer_connection_runs_as_the_restricted_role(
         await checkpointer.close()
 
 
-@pytest.mark.parametrize("table", CHECKPOINT_TABLES)
-async def test_the_restricted_role_can_write_each_checkpoint_table(
+@pytest.mark.parametrize("table", THREAD_SCOPED_CHECKPOINT_TABLES)
+async def test_the_restricted_role_can_write_each_thread_scoped_table(
     db_settings: Settings, checkpointer_schema: str, table: str
 ) -> None:
-    """The deploy-time grant covers every table the library made, not just the ones in use."""
+    """The deploy-time grant covers every table that holds thread state, not just the ones in use.
+
+    ``checkpoint_migrations`` is excluded on purpose and asserted separately: it is the library's
+    schema-version bookkeeping, written only by ``setup()`` under the privileged connection.
+    """
     checkpointer = Checkpointer(db_settings)
     await checkpointer.open()
     try:
@@ -203,23 +212,52 @@ async def test_the_restricted_role_can_write_each_checkpoint_table(
         await checkpointer.close()
 
 
-async def test_the_checkpoint_tables_carry_no_owner_policy(
+async def test_the_restricted_role_cannot_write_the_bookkeeping_table(
+    db_settings: Settings, checkpointer_schema: str
+) -> None:
+    """``checkpoint_migrations`` holds one integer and belongs to ``setup()``. An earlier version
+    of the provisioning granted the request role full DML on it; that grant is revoked."""
+    checkpointer = Checkpointer(db_settings)
+    await checkpointer.open()
+    try:
+        async with checkpointer.connection() as connection:
+            row = await (
+                await connection.execute(
+                    "SELECT has_table_privilege(current_role, 'checkpoint_migrations', 'INSERT') "
+                    "AS granted"
+                )
+            ).fetchone()
+        assert row is not None
+        assert not row["granted"], "the restricted role can write the library's bookkeeping table"
+    finally:
+        await checkpointer.close()
+
+
+async def test_the_thread_scoped_tables_carry_an_owner_policy(
     checkpointer_schema: str, privileged: object
 ) -> None:
-    """Recorded on purpose, so nobody mistakes the composed key for row-level enforcement.
+    """The composed key is row-level enforcement now, not only a name.
 
-    These tables have no ownership column, so there is nothing to write a policy against — which
-    is exactly why the ``threads`` row exists as the actual gate (design.md decision 11).
+    ``ensure_checkpoint_schema`` writes one policy per thread-scoped table, comparing the key's
+    owner against the acting subject. ``test_checkpoint_policies.py`` proves the behaviour; this
+    records that the objects exist at all, and that the bookkeeping table has none.
     """
     from sqlalchemy import text
     from sqlalchemy.ext.asyncio import AsyncSession
 
     session: AsyncSession = privileged  # type: ignore[assignment]
-    count = await session.scalar(
-        text(
-            "SELECT count(*) FROM pg_policies WHERE schemaname = 'public' "
-            "AND tablename = ANY(:tables)"
-        ),
-        {"tables": list(CHECKPOINT_TABLES)},
+    for table in THREAD_SCOPED_CHECKPOINT_TABLES:
+        count = await session.scalar(
+            text(
+                "SELECT count(*) FROM pg_policies WHERE schemaname = 'public' "
+                "AND tablename = :table AND qual LIKE '%weathra_current_user_id%'"
+            ),
+            {"table": table},
+        )
+        assert count == 1, f"{table} carries {count} owner-restricting policies"
+
+    bookkeeping = await session.scalar(
+        text("SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = :t"),
+        {"t": "checkpoint_migrations"},
     )
-    assert count == 0
+    assert bookkeeping == 0

@@ -83,6 +83,13 @@ were discovered the hard way and neither reproduces on a stock PostgreSQL:
   path performs. Weathra keeps RLS on rather than disabling it —
   [`authentication.md`](authentication.md) explains why, and why the policies name no other role.
 
+The second point applies to the LangGraph checkpoint tables too, and they are not covered by any
+migration: the library creates them, so `ensure_checkpoint_schema()` is what enables Row Level
+Security on them, writes the owner-restricting policies, and grants the restricted role. Run it
+after the migrations — it needs `weathra_current_user_id()` from `0002` and refuses to proceed
+without it — and treat a failure as a failed deploy rather than a warning: it raises instead of
+reporting memory ready over tables nothing can reach. Re-running is safe and changes nothing.
+
 ### Provisioning the `weathra_api` credential
 
 Migration `0003` creates `weathra_api` with **no password**, so under SCRAM the role cannot

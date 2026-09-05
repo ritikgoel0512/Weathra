@@ -5,25 +5,36 @@ including an interrupted run mid-flight — persists correctly across instances 
 reimplementing LangGraph's serialization, which is the part that would quietly rot.
 
 **Scoping a table we do not own.** The checkpointer owns its schema, so ownership cannot be a
-column we add. Two mechanisms combine instead, and the docstrings here are careful about which is
+column we add. Three mechanisms combine instead, and the docstrings here are careful about which is
 which:
 
 * the checkpointer's ``thread_id`` is the composed key ``{user_id}:{thread_id}``, built only ever
   from the acting principal's own subject, so a caller cannot *address* another user's checkpoint
-  without already knowing that user's subject — and even then the ownership check below refuses;
+  without already knowing that user's subject;
 * the ``threads`` row in ``memory/threads.py``, which we do own and which Row Level Security does
-  cover, records the owner and is checked *before the graph is invoked at all*.
+  cover, records the owner and is checked *before the graph is invoked at all*;
+* **Row Level Security on the checkpoint tables themselves**, added by ``ensure_checkpoint_schema``.
+  The composed key is not only a name — ``split_part(thread_id, ':', 1)`` recovers the owner, and
+  the policies compare it against the same ``weathra_current_user_id()`` every user-owned table
+  uses. So the composed key stopped being obscurity and became a predicate the database enforces.
 
-The first is obscurity. The second is the gate. Neither alone would be enough, which is why
-``Checkpointer`` will not build a config from a bare string: every entry point here takes a
-``Principal``, so there is no code path that composes a key for a user other than the caller.
+The second is still the gate that produces a clean refusal; the third is what a leaked
+request-serving credential runs into. Neither alone would be enough, which is why ``Checkpointer``
+will not build a config from a bare string: every entry point here takes a ``Principal``, so there
+is no code path that composes a key for a user other than the caller.
+
+**Binding the acting subject.** A policy is only as good as the identity bound on the connection,
+and the checkpointer does not use the request session's — it speaks psycopg over its own pool. So
+every checkpoint statement runs inside :meth:`Checkpointer.acting_as`, which sets the subject the
+policies read; a graph invoked outside it reaches nothing at all rather than everything. The
+binding is cleared as each cursor closes and again as the connection returns to the pool.
 
 **Its own connections, deliberately.** The checkpointer speaks psycopg, not SQLAlchemy, so it
 cannot share the request engine's pool. It gets a small pool of its own on the *request-serving*
 credential, and each connection assumes the restricted role the moment it is opened — this is
-request-path work, and it must not run privileged. The checkpoint tables carry no RLS policy (there
-is no ownership column to write one against), so ``ensure_checkpoint_schema`` grants the restricted
-role plain DML on them at deploy time; least privilege is all that connection gets.
+request-path work, and it must not run privileged. ``ensure_checkpoint_schema`` grants that role
+DML on the three thread-scoped tables at deploy time and writes the policies that bound it to its
+own threads; ``checkpoint_migrations`` is the library's schema bookkeeping and it gets nothing.
 
 The one exception is the retention job, which passes ``role=ConnectionRole.PRIVILEGED``. That job
 runs privileged from end to end and has no ``DATABASE_URL`` at all, so making it resolve the
@@ -37,27 +48,30 @@ unavailable" rather than an answer that silently had no context (``specs/memory`
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import AsyncIterator, Mapping
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
+from contextvars import ContextVar
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import CheckpointTuple
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-from psycopg import AsyncConnection, OperationalError
+from psycopg import AsyncConnection, AsyncCursor, OperationalError
 from psycopg.rows import DictRow, dict_row
 from psycopg_pool import AsyncConnectionPool, PoolTimeout
 
 from weathra.config import Settings
-from weathra.db.session import validated_role_name
+from weathra.db.session import CLAIMS_SETTING, validated_role_name
 from weathra.db.urls import ConnectionRole, libpq_url, resolve_url
 from weathra.domain.errors import MemoryUnavailable
-from weathra.domain.identity import Principal, compose_thread_key
+from weathra.domain.identity import THREAD_KEY_SEPARATOR, Principal, compose_thread_key
 from weathra.memory.availability import reporting_unavailable
 
 __all__ = [
     "CHECKPOINT_TABLES",
+    "THREAD_SCOPED_CHECKPOINT_TABLES",
     "Checkpointer",
     "checkpoint_config",
     "ensure_checkpoint_schema",
@@ -74,6 +88,65 @@ CHECKPOINT_TABLES = (
     "checkpoint_blobs",
     "checkpoint_writes",
 )
+
+# The three that carry ``thread_id`` — the composed ``{user_id}:{thread_id}`` key — and can
+# therefore be scoped to their owner. ``checkpoint_migrations`` is the library's own schema-version
+# bookkeeping: one integer column, written only by ``setup()`` under the privileged connection, and
+# nothing the request role ever needs. It is deliberately absent here and deliberately un-granted.
+THREAD_SCOPED_CHECKPOINT_TABLES = ("checkpoints", "checkpoint_blobs", "checkpoint_writes")
+
+# One policy per table, named like 0002's so the two read as the same idea.
+_POLICY_NAME = "{table}_owner_only"
+
+# The owner recovered from the composed key, compared against the acting subject. `split_part` is
+# unambiguous because `compose_thread_key` refuses the separator on both halves. An unbound session
+# makes `weathra_current_user_id()` NULL, so the comparison is NULL, so the policy denies — the
+# request role reaches nothing at all without a principal, which is the property that matters most.
+_OWNER_PREDICATE = f"split_part(thread_id, '{THREAD_KEY_SEPARATOR}', 1) = weathra_current_user_id()"
+
+# The acting subject for checkpoint work on this task. Set only by `Checkpointer` from an already
+# validated `Principal` — or from a user id whose ownership the caller established — and never from
+# request input, which is what keeps it unspoofable.
+_ACTING_SUBJECT: ContextVar[str | None] = ContextVar("weathra_checkpoint_subject", default=None)
+
+_BIND_CLAIMS_SQL = "SELECT set_config(%s, %s, false)"
+
+
+def _claims_payload(subject: str | None) -> str:
+    """The claims JSON the policies read, or an empty setting binding nobody."""
+    return json.dumps({"sub": subject}) if subject else ""
+
+
+class _ClaimsBindingSaver(AsyncPostgresSaver):
+    """The library's saver, with the acting subject bound on whichever connection it picks up.
+
+    The checkpointer holds a *pool*, and the saver takes a connection out of it per operation — so
+    binding claims once at checkout, the way ``db/session.py`` does for a request transaction, is
+    not available here. Overriding the one seam where the saver acquires its cursor is: every read
+    and write LangGraph performs, including the ones it performs from inside a running graph, goes
+    through it.
+
+    The binding is session-scoped rather than transaction-scoped because the saver runs autocommit,
+    where a transaction-local setting would not outlive the statement that set it. It is cleared
+    again as the cursor closes, and the pool clears it once more when the connection is returned —
+    two chances, because a setting left behind on a pooled connection is a cross-user leak.
+    """
+
+    @asynccontextmanager
+    async def _cursor(self, *, pipeline: bool = False) -> AsyncIterator[AsyncCursor[DictRow]]:
+        async with super()._cursor(pipeline=pipeline) as cursor:
+            await cursor.execute(
+                _BIND_CLAIMS_SQL, (CLAIMS_SETTING, _claims_payload(_ACTING_SUBJECT.get()))
+            )
+            try:
+                yield cursor
+            finally:
+                # Suppressed because the connection may already be unusable — an error here would
+                # replace whatever actually went wrong with a confusing one, and the pool's reset
+                # is the guarantee that matters.
+                with suppress(Exception):
+                    await cursor.execute(_BIND_CLAIMS_SQL, (CLAIMS_SETTING, ""))
+
 
 # psycopg connection settings the saver requires: dict rows because its own SQL reads by name, and
 # no prepared-statement threshold because a pooler in front of Postgres may not support them.
@@ -108,31 +181,91 @@ def owner_of_checkpoint_key(key: str) -> str | None:
 
 
 async def ensure_checkpoint_schema(settings: Settings) -> tuple[str, ...]:
-    """Create the checkpointer's tables and grant the restricted role access to them.
+    """Create the checkpointer's tables and secure them, under the **privileged** connection.
 
-    Runs under the **privileged** connection, at deploy time, alongside the Alembic migrations —
-    the library creates its own tables, so this cannot be an Alembic revision without duplicating
-    LangGraph's schema and having to track its migrations by hand.
+    Runs at deploy time alongside the Alembic migrations. It cannot *be* an Alembic revision: the
+    library creates its own tables, so a migration would have to duplicate LangGraph's schema and
+    track its migrations by hand. What it can do — and now does — is finish the job a migration
+    would have finished, because creating the tables is only half of it.
 
-    The grant is the second half, and it has to happen here rather than in a migration: the tables
-    do not exist until the library makes them, so a grant written earlier would have nothing to
-    grant on. There is no RLS policy — these tables have no ownership column to write one against,
-    which is exactly why the composed key and the ``threads`` row both exist.
+    **The other half is Row Level Security, and it is not optional.** A managed Postgres may switch
+    RLS on for these tables the moment the library creates them: Supabase runs an ``ensure_rls``
+    event trigger over everything created in ``public``. A ``GRANT`` does not survive that — RLS
+    with no applicable policy denies every row to a role that is neither table owner nor
+    ``BYPASSRLS`` — so granting alone would leave conversation memory silently unreadable. And the
+    inverse, leaving RLS off where the platform does not switch it on, would leave every user's
+    conversation state readable by anything holding the request credential. So this enables RLS
+    itself and writes the policies, on every platform, rather than depending on either default.
 
-    Returns the tables it granted on, so a caller can report them.
+    Checkpoint state is *user data*, unlike the corpus and the snapshots, so the policies are
+    owner-restricting rather than merely role-scoped: the composed ``{user_id}:{thread_id}`` key in
+    ``thread_id`` is what they test, against the same ``weathra_current_user_id()`` the user-owned
+    tables use. That turns the composed key from obscurity into a third gate — ``memory/threads.py``
+    is still the one checked before the graph runs.
+
+    Not ``FORCE``d: forcing would apply the policies to the table owner, which is the privileged
+    connection that retention runs on, and retention legitimately deletes every expired user's rows.
+
+    Idempotent, and safe to re-run: the grants are re-asserted, the policies dropped and recreated.
+    Re-running cannot widen anything, because the revoke below is unconditional and the policy set
+    is replaced rather than added to.
+
+    Raises rather than returning if the security half fails, so a deployment never reads
+    "checkpointer schema ready" over tables that are RLS-enabled and reachable by nobody.
     """
     conninfo = libpq_url(resolve_url(settings, ConnectionRole.PRIVILEGED))
-    role = settings.database_restricted_role
+    role = validated_role_name(settings.database_restricted_role)
 
     async with AsyncPostgresSaver.from_conn_string(conninfo) as saver:
         await saver.setup()
-        for table in CHECKPOINT_TABLES:
-            # A plain identifier, validated by the same rule the session role switch uses.
-            await saver.conn.execute(  # type: ignore[union-attr]
-                f"GRANT SELECT, INSERT, UPDATE, DELETE ON {table} TO {validated_role_name(role)}"
+        # `from_conn_string` yields a saver over a single connection, never a pool.
+        connection = saver.conn
+        if not isinstance(connection, AsyncConnection):  # pragma: no cover - shape guard
+            raise RuntimeError("the checkpointer setup connection is not a plain connection")
+
+        # The policies call it, so a database without it would produce policies that raise on every
+        # row rather than a clear failure here. It comes from migration 0002; if it is missing, the
+        # migrations have not been applied and nothing below is safe to do.
+        accessor = await (
+            await connection.execute(
+                "SELECT count(*) AS n FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace "
+                "WHERE n.nspname = 'public' AND p.proname = 'weathra_current_user_id'"
+            )
+        ).fetchone()
+        if not accessor or not accessor["n"]:
+            raise RuntimeError(
+                "weathra_current_user_id() is absent, so the checkpoint policies cannot be "
+                "written. Apply the Alembic migrations before provisioning the checkpointer."
             )
 
-    logger.info("checkpointer schema ready; granted %s on %s", role, ", ".join(CHECKPOINT_TABLES))
+        # One transaction: either the tables end up secured, or the failure is visible and this
+        # raises. A half-installed policy set is the state most likely to be mistaken for working.
+        async with connection.transaction():
+            # Bookkeeping only, and privileged-only. Revoked unconditionally because an earlier
+            # deployment granted the request role full DML on it.
+            await connection.execute(f"REVOKE ALL ON checkpoint_migrations FROM {role}")
+
+            for table in THREAD_SCOPED_CHECKPOINT_TABLES:
+                policy = _POLICY_NAME.format(table=table)
+                await connection.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
+                # Dropped first so a re-run replaces the policy instead of failing on it, and so a
+                # policy from an older shape of this code cannot survive alongside the current one.
+                await connection.execute(f"DROP POLICY IF EXISTS {policy} ON {table}")
+                await connection.execute(
+                    f"CREATE POLICY {policy} ON {table} FOR ALL TO {role} "
+                    f"USING ({_OWNER_PREDICATE}) WITH CHECK ({_OWNER_PREDICATE})"
+                )
+                # After the policy, never before: until one exists the table is deny-all, which is
+                # the safe direction to be caught halfway.
+                await connection.execute(
+                    f"GRANT SELECT, INSERT, UPDATE, DELETE ON {table} TO {role}"
+                )
+
+    logger.info(
+        "checkpointer schema ready; %s restricted to its own threads on %s",
+        role,
+        ", ".join(THREAD_SCOPED_CHECKPOINT_TABLES),
+    )
     return CHECKPOINT_TABLES
 
 
@@ -151,7 +284,7 @@ class Checkpointer:
         self._settings = settings
         self._role = role
         self._pool: AsyncConnectionPool[AsyncConnection[DictRow]] | None = None
-        self._saver: AsyncPostgresSaver | None = None
+        self._saver: _ClaimsBindingSaver | None = None
 
     # ---------------------------------------------------------------- lifecycle
 
@@ -177,6 +310,16 @@ class Checkpointer:
             """
             await connection.execute(f"SET ROLE {role}")
 
+        async def clear_bound_claims(connection: AsyncConnection[DictRow]) -> None:
+            """Unbind the acting subject as a connection goes back to the pool.
+
+            The saver binds it session-wide, because it runs autocommit and a transaction-local
+            setting would not outlive the statement. This is the guarantee that one request's
+            subject cannot be inherited by the next request to draw the same connection — the
+            saver clears it too, but only this runs whatever went wrong in between.
+            """
+            await connection.execute(_BIND_CLAIMS_SQL, (CLAIMS_SETTING, ""))
+
         pool: AsyncConnectionPool[AsyncConnection[DictRow]] = AsyncConnectionPool(
             conninfo,
             # One connection kept warm, rather than zero. With no minimum, ``open(wait=True)``
@@ -189,6 +332,7 @@ class Checkpointer:
             # which is privileged work by definition, and dropping it to the request role would
             # only make it look constrained while the credential behind it was not.
             configure=(assume_restricted_role if self._role is ConnectionRole.REQUEST else None),
+            reset=clear_bound_claims,
             open=False,
         )
         try:
@@ -201,7 +345,7 @@ class Checkpointer:
             ) from exc
 
         self._pool = pool
-        self._saver = AsyncPostgresSaver(conn=pool)
+        self._saver = _ClaimsBindingSaver(conn=pool)
 
     async def close(self) -> None:
         if self._pool is not None:
@@ -219,6 +363,10 @@ class Checkpointer:
 
         Raises rather than returning ``None``: a graph compiled with no checkpointer would run and
         silently forget, which is precisely the dishonest degradation ``specs/memory`` forbids.
+
+        Invoke the graph inside :meth:`acting_as`. The saver binds whatever subject is in scope, and
+        outside that block there is none — so the policies match no row and the run reads and writes
+        nothing. That is the safe direction to fail, but it is still a failure.
         """
         if self._saver is None:
             raise MemoryUnavailable(
@@ -244,6 +392,25 @@ class Checkpointer:
 
     # ---------------------------------------------------------------- scoped access
 
+    @asynccontextmanager
+    async def acting_as(self, user_id: str) -> AsyncIterator[None]:
+        """Bind one subject for every checkpoint statement made inside this block.
+
+        **The sanctioned way to run a graph.** ``config_for`` addresses the right rows; this is
+        what makes the database agree — the checkpoint policies compare the composed key's owner
+        against the bound subject, so a graph invoked outside this block reaches nothing at all
+        rather than reaching everything.
+
+        Takes a bare ``user_id`` because both kinds of caller already hold one they established:
+        a request path that validated a ``Principal``, and the deletion paths that checked the
+        ``threads`` row first. Nothing here reads a subject out of caller input.
+        """
+        token = _ACTING_SUBJECT.set(user_id)
+        try:
+            yield
+        finally:
+            _ACTING_SUBJECT.reset(token)
+
     def config_for(self, principal: Principal, thread_id: str) -> RunnableConfig:
         """The config a graph invocation for this principal's thread runs under."""
         return checkpoint_config(principal, thread_id)
@@ -255,7 +422,7 @@ class Checkpointer:
         thread — the key simply does not match, so there is nothing to return. That is the
         obscurity half; ``memory/threads.py`` is what actually refuses the request.
         """
-        async with reporting_unavailable("checkpointer"):
+        async with reporting_unavailable("checkpointer"), self.acting_as(principal.user_id):
             return await self.saver.aget_tuple(self.config_for(principal, thread_id))
 
     async def channel_values(self, principal: Principal, thread_id: str) -> Mapping[str, Any]:
@@ -273,5 +440,5 @@ class Checkpointer:
         privileged over already-expired threads). Composing the key here rather than accepting one
         keeps "a key is always {owner}:{thread}" true in one place.
         """
-        async with reporting_unavailable("checkpointer"):
+        async with reporting_unavailable("checkpointer"), self.acting_as(user_id):
             await self.saver.adelete_thread(compose_thread_key(user_id, thread_id))

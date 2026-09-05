@@ -23,7 +23,7 @@ from tests.db_support import (
     session_as,
 )
 from weathra.db.engine import Engines
-from weathra.db.models import Ownership, ownership_of, user_owned_tables
+from weathra.db.models import Base, Ownership, ownership_of, user_owned_tables
 from weathra.db.session import privileged_session
 
 pytestmark = pytest.mark.db
@@ -173,6 +173,10 @@ async def test_the_policy_set_matches_the_models_classification(
     Keyed on owner-restricting policies rather than on policies as such, because 0004 gave the
     shared tables role-scoped read policies too. The classification that must hold is which tables
     bind a row to a person — not which tables happen to appear in ``pg_policies``.
+
+    Scoped to the tables the models declare. LangGraph's checkpoint tables also carry
+    owner-restricting policies, written by ``ensure_checkpoint_schema`` rather than by a migration,
+    and they are not in ``Base.metadata`` because Weathra does not define them.
     """
     rows = await privileged.execute(
         text(
@@ -181,7 +185,8 @@ async def test_the_policy_set_matches_the_models_classification(
             "     OR coalesce(with_check, '') LIKE '%weathra_current_user_id%')"
         )
     )
-    owner_restricted = {row[0] for row in rows}
+    declared = set(Base.metadata.tables)
+    owner_restricted = {row[0] for row in rows} & declared
     assert owner_restricted == set(user_owned_tables())
     for table in owner_restricted:
         assert ownership_of(table) is Ownership.USER
@@ -189,7 +194,7 @@ async def test_the_policy_set_matches_the_models_classification(
     everything = await privileged.execute(
         text("SELECT DISTINCT tablename FROM pg_policies WHERE schemaname = 'public'")
     )
-    for table in {row[0] for row in everything} - owner_restricted:
+    for table in ({row[0] for row in everything} & declared) - owner_restricted:
         assert ownership_of(table) is Ownership.SHARED, (
             f"{table} carries a policy that is neither owner-restricting nor shared-read"
         )

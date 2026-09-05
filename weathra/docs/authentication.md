@@ -282,6 +282,39 @@ done it, so a stock PostgreSQL test cluster and a real project agree on the prop
 and a further test fails if *any* table ever again grants that role a privilege that Row Level
 Security then denies.
 
+### The LangGraph checkpoint tables
+
+Conversation state is the opposite case: it is *user* data, and it lives in four tables Weathra does
+not own. LangGraph's saver creates them, so no Alembic revision can — a migration would have to
+duplicate the library's schema and track its migrations by hand. `ensure_checkpoint_schema()` runs
+at deploy time instead, and it installs the security alongside the schema rather than only the
+grants, for the reason above: the same `ensure_rls` trigger fires when the library creates them, so
+grants alone would leave every user's memory unreadable.
+
+Ownership is enforced, not merely obscured. Three of the four tables carry `thread_id`, and Weathra
+only ever writes the composed key `{user_id}:{thread_id}` into it, so `split_part(thread_id, ':', 1)`
+recovers the owner. Each gets one `FOR ALL` policy scoped `TO weathra_request`, comparing that owner
+against the same `weathra_current_user_id()` the user-owned tables use — `WITH CHECK` as well as
+`USING`, so a write cannot attach a row to someone else's thread. `compose_thread_key` refuses the
+separator in either half, which is what makes the split unambiguous by construction.
+
+| Table | Access |
+|---|---|
+| `checkpoints`, `checkpoint_blobs`, `checkpoint_writes` | RLS enabled; `SELECT/INSERT/UPDATE/DELETE` to `weathra_request`, restricted to its own threads |
+| `checkpoint_migrations` | the library's schema-version bookkeeping; privileged only, no grant |
+
+**A policy is only as strong as the identity bound on the connection.** The checkpointer speaks
+psycopg over its own pool, not the request session, so it does not inherit the claims
+`db/session.py` binds. Every checkpoint statement therefore runs inside `Checkpointer.acting_as()`,
+which binds the acting subject for the block; the saver applies it on whichever pooled connection it
+picks up, clears it as the cursor closes, and the pool clears it again on return. A graph invoked
+outside that block matches no row and writes nothing — it fails closed, loudly, rather than reading
+or writing unscoped state.
+
+Retention is deliberately outside all of this. It runs on the privileged connection, deletes every
+expired user's rows, and could not satisfy an owner predicate; the checkpoint tables are not
+`FORCE`d, so the table owner is not subject to the policies.
+
 **The gate is proven independently of the data path.** A `db`-marked test runs a query with its
 ownership predicate *deliberately omitted*, under one user's claims, against another user's row —
 and gets nothing back. That is the only way to demonstrate that the database, and not the

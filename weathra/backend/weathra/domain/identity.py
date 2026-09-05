@@ -61,6 +61,16 @@ def compose_thread_key(user_id: str, thread_id: str) -> str:
             f"A thread identifier may not contain {THREAD_KEY_SEPARATOR!r}; it would make the "
             "composed key ambiguous about which part is the owner."
         )
+    if THREAD_KEY_SEPARATOR in user_id:
+        # The checkpoint tables' Row Level Security policies recover the owner with
+        # `split_part(thread_id, ':', 1)`, so a subject containing the separator would split into a
+        # prefix of itself and never match — the policy would deny the owner their own memory. A
+        # Supabase subject is a UUID and never contains one; refusing here is what makes "the text
+        # before the first colon is the owner" true by construction rather than by convention.
+        raise ValueError(
+            f"An auth subject may not contain {THREAD_KEY_SEPARATOR!r}; the composed key would be "
+            "ambiguous about where the owner ends."
+        )
     return f"{user_id}{THREAD_KEY_SEPARATOR}{thread_id}"
 
 
