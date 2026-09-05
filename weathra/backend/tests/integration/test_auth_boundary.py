@@ -42,10 +42,13 @@ PREFIX = "/api/v1"
 
 @pytest.fixture
 def api_factory(
-    token_factory: TokenFactory, migrated_database: str, clean_database: None
+    token_factory: TokenFactory, checkpointer_schema: str, clean_database: None
 ) -> ApiFactory:
+    """On ``checkpointer_schema`` — the migrated URL plus LangGraph's tables — because the
+    ``DELETE`` routes covered below reach the checkpointer, as a deployed app's would."""
+
     def build(**overrides: Any) -> AbstractAsyncContextManager[ApiHarness]:
-        return harness(factory=token_factory, database_url=migrated_database, **overrides)
+        return harness(factory=token_factory, database_url=checkpointer_schema, **overrides)
 
     return build
 

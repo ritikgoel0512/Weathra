@@ -37,7 +37,7 @@ PREFIX = "/api/v1"
 
 @pytest.fixture
 def api_factory(
-    token_factory: TokenFactory, migrated_database: str, clean_database: None
+    token_factory: TokenFactory, checkpointer_schema: str, clean_database: None
 ) -> ApiFactory:
     """A harness the *test* opens, rather than a fixture that holds one open.
 
@@ -46,10 +46,15 @@ def api_factory(
     "attempted to exit cancel scope in a different task" over the top of whatever the test was
     actually doing. Handing back a factory keeps setup, body, and teardown in one task, and is the
     same shape ``tests/agent_support.connected_tools`` already uses for the same reason.
+
+    It depends on ``checkpointer_schema`` rather than ``migrated_database`` — the same URL, plus
+    LangGraph's tables — because this harness boots the whole app, and the thread and account
+    deletion routes reach the checkpointer. A deployed app always has those tables; a test app
+    built on the migrations alone did not, and failed on the ``DELETE`` routes only.
     """
 
     def build(**overrides: Any) -> AbstractAsyncContextManager[ApiHarness]:
-        return harness(factory=token_factory, database_url=migrated_database, **overrides)
+        return harness(factory=token_factory, database_url=checkpointer_schema, **overrides)
 
     return build
 

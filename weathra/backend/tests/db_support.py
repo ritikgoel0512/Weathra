@@ -76,8 +76,11 @@ def checkpointer_schema(migrated_database: str) -> str:
     """Create LangGraph's checkpointer tables once, the way a deploy does.
 
     Separate from ``migrated_database`` because the library owns that schema: it is created by the
-    saver's own ``setup()``, not by an Alembic revision (design.md decision 11). Only the memory
-    tests need it, so only they pay for it.
+    saver's own ``setup()``, not by an Alembic revision (design.md decision 11).
+
+    Every test that boots the app needs it, not only the memory tests: the thread and account
+    deletion routes delete checkpoints, so an app built on the migrations alone raises
+    ``UndefinedTable`` where a deployed one — which runs this at deploy time — would not.
     """
     import asyncio
 
