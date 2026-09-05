@@ -23,6 +23,9 @@ from pathlib import Path
 
 import psycopg
 import pytest
+from alembic import command
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from psycopg import sql
 from sqlalchemy.engine import make_url
 
@@ -71,26 +74,26 @@ def _probe_url(database_url: str, database: str) -> str:
     return _url_for(database_url, database=database, username=PROBE_ROLE, password=PROBE_PASSWORD)
 
 
-def _alembic_config(url: str) -> object:
+def _alembic_config(url: str) -> Config:
     """Alembic driven the way a deployment drives it, rather than reproducing the SQL here."""
-    from alembic.config import Config
-
     config = Config(str(BACKEND_ROOT / "alembic.ini"))
     config.set_main_option("script_location", str(BACKEND_ROOT / "weathra" / "db" / "migrations"))
     config.cmd_opts = type("Options", (), {"x": [f"url={url}"]})()
     return config
 
 
-def _upgrade(url: str) -> None:
-    from alembic import command
+def _head_revision() -> str:
+    """The current head, read from the migration scripts. Named nowhere in this file, so adding a
+    migration does not require editing a test that is not about that migration."""
+    return ScriptDirectory.from_config(_alembic_config("")).get_current_head() or ""
 
-    command.upgrade(_alembic_config(url), "head")  # type: ignore[arg-type]
+
+def _upgrade(url: str) -> None:
+    command.upgrade(_alembic_config(url), "head")
 
 
 def _downgrade_to_base(url: str) -> None:
-    from alembic import command
-
-    command.downgrade(_alembic_config(url), "base")  # type: ignore[arg-type]
+    command.downgrade(_alembic_config(url), "base")
 
 
 def _drop_probe_role(admin: psycopg.Connection) -> None:
@@ -186,7 +189,7 @@ def test_the_whole_chain_applies_without_a_superuser(unprivileged_admin: str) ->
 
     with psycopg.connect(unprivileged_admin, autocommit=True) as conn:
         revision = conn.execute("SELECT version_num FROM alembic_version").fetchone()
-    assert revision is not None and revision[0] == "0003_request_login_role"
+    assert revision is not None and revision[0] == _head_revision()
 
 
 def test_the_login_role_is_correct_when_a_non_superuser_created_it(
@@ -297,7 +300,7 @@ def test_the_migrations_still_downgrade_and_reapply(database_url: str) -> None:
 
         with psycopg.connect(url, autocommit=True) as conn:
             revision = conn.execute("SELECT version_num FROM alembic_version").fetchone()
-        assert revision is not None and revision[0] == "0003_request_login_role"
+        assert revision is not None and revision[0] == _head_revision()
     finally:
         with _admin_connection(database_url) as admin:
             admin.execute(

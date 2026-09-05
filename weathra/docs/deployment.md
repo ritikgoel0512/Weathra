@@ -66,6 +66,23 @@ new environment: the restricted `weathra_request` by `0002_row_level_security`, 
 `weathra_api` that `DATABASE_URL` authenticates as by `0003_request_login_role`. See
 [`authentication.md`](authentication.md) for why there are three roles across two connections.
 
+Two properties of a managed Postgres are worth knowing before the first migration, because both
+were discovered the hard way and neither reproduces on a stock PostgreSQL:
+
+- **The migration role is not a superuser.** Supabase's `postgres` holds `CREATEROLE`, `CREATEDB`
+  and `BYPASSRLS`, and neither `SUPERUSER` nor `REPLICATION`. PostgreSQL lets a role change those
+  four attributes on another role only if it holds the attribute itself, in either direction — so
+  an `ALTER ROLE … NOSUPERUSER` is refused even though it asks for the value the role already has.
+  Migration `0003` chooses its clauses from what the current role may change and then verifies the
+  result, so it applies as a superuser and as a managed platform's owner alike.
+- **The platform may enable Row Level Security for you.** An `ensure_rls` event trigger enables RLS
+  on every table created in `public`. A `GRANT` does not survive that: RLS with no applicable policy
+  denies every row to a role that is neither table owner nor `BYPASSRLS`, so a grant that reads
+  correctly in the catalog reaches nothing. Migration `0004_shared_read_policies` gives the three
+  shared tables explicit `weathra_request`-scoped policies for exactly the operations the request
+  path performs. Weathra keeps RLS on rather than disabling it —
+  [`authentication.md`](authentication.md) explains why, and why the policies name no other role.
+
 ### Provisioning the `weathra_api` credential
 
 Migration `0003` creates `weathra_api` with **no password**, so under SCRAM the role cannot

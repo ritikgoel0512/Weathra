@@ -240,9 +240,47 @@ Three pieces make the second gate apply to Weathra's own queries:
    *assumed*, never connected as — which is why there is a third role, below.
 3. **The policies themselves**, applied by migration `0002_row_level_security`.
 
-Shared tables are left unrestricted on purpose, and the test asserts policies are *absent* there as
-well as present on the user-owned ones — an asymmetry the spec requires, and one that a test
-checking only for presence would let drift.
+**Shared tables carry no owner predicate, which is not the same as carrying no policy.** The corpus
+and the location-keyed snapshots have no owner to test — that is their whole classification — so
+none of their policies mentions `weathra_current_user_id()`, and a test asserts that asymmetry
+rather than only asserting presence on the user-owned side. They do have policies, since migration
+`0004_shared_read_policies`, for a reason worth stating plainly:
+
+> **A `GRANT` does not survive Row Level Security.** A table with RLS enabled and no applicable
+> policy denies every row to any role that is neither the table owner nor `BYPASSRLS`. The grant
+> stays in the catalog looking entirely correct.
+
+Weathra's migrations originally left RLS switched off on the shared tables, so their grants were the
+only thing in play. **A managed Postgres may switch it on regardless:** Supabase runs an
+`ensure_rls` event trigger that enables Row Level Security on every table created in `public`, which
+is a sensible default for a platform that exposes `public` through PostgREST. The three shared
+tables therefore came out of migration `0001` with RLS on and no policy, and `weathra_request` — a
+role that is neither owner nor `BYPASSRLS` — could reach none of them. Corpus search returned an
+empty result and the snapshot append was rejected, with nothing in the ACL to suggest why.
+
+The resolution keeps Row Level Security rather than disabling it, and states the access explicitly:
+
+| Table | Policy | Operations |
+|---|---|---|
+| `forecast_snapshots` | `_request_read`, `_request_append` | `SELECT`, `INSERT` |
+| `knowledge_documents` | `_request_read` | `SELECT` |
+| `knowledge_chunks` | `_request_read` | `SELECT` |
+
+Each is `TO weathra_request` — never `PUBLIC`, `anon`, or `authenticated` — and each mirrors exactly
+the grant `0002` already made, so the policy and the ACL say the same thing rather than one silently
+overriding the other. `UPDATE` and `DELETE` on the snapshots get neither, because the request path
+performs neither: retention expires snapshots under the privileged connection. Keeping RLS on is
+worth more than the original grant-only arrangement, because these tables are reachable by
+Supabase's own roles through PostgREST, and a policy scoped to `weathra_request` denies those roles
+instead of merely not granting them. The shared tables are *not* `FORCE`d, unlike the user-owned
+ones: forcing would apply these policies to the table owner, which is the privileged connection that
+ingests the corpus and runs retention, and both legitimately touch every row.
+
+Migration `0004` enables RLS on the three tables itself rather than relying on the platform having
+done it, so a stock PostgreSQL test cluster and a real project agree on the property under test. A
+`db`-marked test asserts the effective behaviour by running real statements as `weathra_request`,
+and a further test fails if *any* table ever again grants that role a privilege that Row Level
+Security then denies.
 
 **The gate is proven independently of the data path.** A `db`-marked test runs a query with its
 ownership predicate *deliberately omitted*, under one user's claims, against another user's row —

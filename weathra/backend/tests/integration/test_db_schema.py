@@ -139,31 +139,60 @@ async def test_each_user_owned_table_has_an_owner_restricting_policy(
 async def test_shared_tables_are_not_restricted_by_owner(
     privileged: AsyncSession, table: str
 ) -> None:
-    """specs/authentication requires exactly this asymmetry, so it is asserted, not assumed."""
-    enabled = await privileged.scalar(
-        text("SELECT relrowsecurity FROM pg_class WHERE oid = to_regclass(:table)"),
-        {"table": table},
-    )
-    assert enabled is False, f"{table} is shared but carries row level security"
+    """specs/authentication requires exactly this asymmetry, so it is asserted, not assumed.
 
-    count = await privileged.scalar(
-        text("SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = :table"),
-        {"table": table},
-    )
-    assert count == 0, f"{table} is shared but carries {count} owner-restricting policies"
+    The asymmetry is about *ownership*, not about whether row level security is switched on. These
+    tables carry policies since 0004 — they have to, because Supabase enables RLS on everything in
+    ``public`` and a table with RLS on and no policy is unreachable — but none of those policies
+    tests who the row belongs to. That is what "not restricted by owner" means, and it is what the
+    corpus and the location-keyed snapshots require: shared data has no owner to test.
+    """
+    for name, using, with_check in (
+        await privileged.execute(
+            text(
+                "SELECT policyname, qual, with_check FROM pg_policies "
+                "WHERE schemaname = 'public' AND tablename = :table"
+            ),
+            {"table": table},
+        )
+    ).all():
+        for clause in (using, with_check):
+            assert "weathra_current_user_id()" not in (clause or ""), (
+                f"{table}.{name} restricts shared data by owner; {table} has no owner to test"
+            )
+            assert "user_id" not in (clause or ""), (
+                f"{table}.{name} predicates on a user column that {table} does not carry"
+            )
 
 
 async def test_the_policy_set_matches_the_models_classification(
     privileged: AsyncSession,
 ) -> None:
-    """The migration and ``user_owned_tables()`` must not drift apart."""
+    """The migrations and ``user_owned_tables()`` must not drift apart.
+
+    Keyed on owner-restricting policies rather than on policies as such, because 0004 gave the
+    shared tables role-scoped read policies too. The classification that must hold is which tables
+    bind a row to a person — not which tables happen to appear in ``pg_policies``.
+    """
     rows = await privileged.execute(
+        text(
+            "SELECT DISTINCT tablename FROM pg_policies WHERE schemaname = 'public' "
+            "AND (coalesce(qual, '') LIKE '%weathra_current_user_id%' "
+            "     OR coalesce(with_check, '') LIKE '%weathra_current_user_id%')"
+        )
+    )
+    owner_restricted = {row[0] for row in rows}
+    assert owner_restricted == set(user_owned_tables())
+    for table in owner_restricted:
+        assert ownership_of(table) is Ownership.USER
+
+    everything = await privileged.execute(
         text("SELECT DISTINCT tablename FROM pg_policies WHERE schemaname = 'public'")
     )
-    with_policies = {row[0] for row in rows}
-    assert with_policies == set(user_owned_tables())
-    for table in with_policies:
-        assert ownership_of(table) is Ownership.USER
+    for table in {row[0] for row in everything} - owner_restricted:
+        assert ownership_of(table) is Ownership.SHARED, (
+            f"{table} carries a policy that is neither owner-restricting nor shared-read"
+        )
 
 
 async def test_the_restricted_role_exists_and_cannot_bypass_policies(
