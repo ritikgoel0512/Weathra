@@ -26,7 +26,7 @@ from contextlib import AbstractAsyncContextManager
 import pytest
 from langchain_core.runnables import RunnableConfig
 from psycopg import AsyncConnection
-from psycopg.errors import InsufficientPrivilege
+from psycopg.errors import InsufficientPrivilege, PipelineAborted
 from psycopg.rows import DictRow
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -259,11 +259,24 @@ async def test_an_unbound_session_reaches_nothing(checkpointer: Checkpointer) ->
 async def test_a_graph_invoked_outside_acting_as_writes_nothing(
     checkpointer: Checkpointer,
 ) -> None:
-    """Fail closed, loudly. A run that skipped the binding must not quietly write unscoped rows."""
+    """Fail closed, loudly. A run that skipped the binding must not quietly write unscoped rows.
+
+    The refusal surfaces as one of two exception types, and which one arrives is a race rather than
+    a difference in what the database did. The saver writes in pipeline mode
+    (``AsyncPostgresSaver.aput``), so the statement the policy refuses and the statements queued
+    behind it fail together: read the refused statement's result first and psycopg raises
+    ``InsufficientPrivilege``, read a queued one's first and it raises ``PipelineAborted``.
+
+    Matching the error *text* therefore passed only about half the time — and failed inside
+    ``pytest.raises`` before reaching the row count below, which is the assertion that actually
+    proves nothing was written. Naming both types keeps the property this test exists for: the run
+    was stopped by the database denying access, not by an unrelated application error, and no row
+    survived it.
+    """
     user, thread = new_user_id(), str(uuid.uuid4())
     principal = principal_for(user)
 
-    with pytest.raises(Exception, match=r"row-level security|permission denied"):
+    with pytest.raises((InsufficientPrivilege, PipelineAborted)):
         await (
             one_turn_graph()
             .compile(checkpointer=checkpointer.saver)
