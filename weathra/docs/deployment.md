@@ -55,7 +55,7 @@ Weathra.
 | *Confirm signup* email template | includes `{{ .Token }}` | Without the token in the email there is no code to enter, and in-app code entry is a requirement |
 | *Reset password* email template | includes `{{ .Token }}` | Same, for recovery |
 | Email OTP Length | **6** | Mirrors the length the Verify Email screen states and validates (`VERIFICATION_CODE_LENGTH`, `frontend/lib/auth/verification.ts`). A project configured longer delivers a token the screen truncates before submitting, so a *correct* code is refused as an incorrect one — observed against this project at length 8 and corrected to 6 (§ *Verified against the project*) |
-| Email OTP Expiration | **1 hour** | Mirrors `VERIFICATION_CODE_LIFETIME_MS` (`frontend/lib/auth/verification.ts`), which the Verify Email screen uses to tell an expired code apart from an incorrect one. GoTrue answers both with the same refusal, so a project configured differently makes that split report the wrong state |
+| Email OTP Expiration | **3600 s** (1 hour) | Mirrors `VERIFICATION_CODE_LIFETIME_MS` (`frontend/lib/auth/verification.ts`), which the Verify Email screen uses to tell an expired code apart from an incorrect one. GoTrue answers both with the same refusal, so a project configured differently makes that split report the wrong state |
 | Redirect URLs | each environment's frontend origin | The returning-link path lands on `/auth/*`, which must be an allowed redirect |
 | Access-token lifetime | above `AGENT_WALL_CLOCK_BUDGET_SECONDS` | The stream validates its token once at the start; the agent budget bounds how long the run may continue. A token shorter than the budget reintroduces mid-run expiry |
 | Database → `pgvector` | enabled | The migration enables the extension; the image must support it |
@@ -82,13 +82,14 @@ only, and the frontend reaches the backend only after the authenticated shell is
 | Email provider enabled | `GET /auth/v1/settings` | `email: true` |
 | Sign-ups permitted | `GET /auth/v1/settings` | `disable_signup: false` |
 | Confirm email required | `GET /auth/v1/settings` | `mailer_autoconfirm: false` — so `signUp` returns no session and confirmation is structurally unavoidable |
-| Custom SMTP (Brevo) | a real email was delivered | delivered |
+| Custom SMTP | enabled in the project (Brevo), and a real email was delivered through it | enabled and delivering. The credentials live in the Supabase project only — they are deliberately absent from this repository and from both applications' environments |
 | *Confirm signup* template carries `{{ .Token }}` | the delivered email carried a numeric code | confirmed |
 | *Reset password* template carries `{{ .Token }}` | template saved in the dashboard | configured; not exercised end to end |
+| Minimum password length = 12 | set in the project on 2026-09-05 | matches `PASSWORD_MINIMUM_LENGTH` (`frontend/lib/auth/password.ts`), the rule the Create Account screen states before submission, so the project can no longer refuse a password the screen accepted |
 | Email OTP Length = 6 | see the defect below | corrected, then confirmed by a delivered 6-digit code |
 | Real sign-up delivers a usable code | the full flow, below | passed |
-| Access-token lifetime | read back from the project | 3600 s — above `AGENT_WALL_CLOCK_BUDGET_SECONDS` (120 s), so a stream cannot outlive the token it validated at the start |
-| Email OTP Expiration | read back from the project | 1 hour — matches `VERIFICATION_CODE_LIFETIME_MS`, so the screen's expired-versus-incorrect split reports the state the provider actually means |
+| Access-token lifetime | read back from the project | 3600 s — thirty times above `AGENT_WALL_CLOCK_BUDGET_SECONDS` (120 s), so a stream cannot outlive the token it validated at the start |
+| Email OTP Expiration | read back from the project | 3600 s (1 hour) — matches `VERIFICATION_CODE_LIFETIME_MS`, so the screen's expired-versus-incorrect split reports the state the provider actually means |
 | `pgvector` availability | dashboard extension list | `vector` 0.8.2 available, left OFF so migration `0001` performs the enable |
 
 **The flow that passed.** Create Account on the running frontend → Supabase accepted the sign-up and
