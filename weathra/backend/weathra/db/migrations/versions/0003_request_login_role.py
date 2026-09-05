@@ -34,6 +34,16 @@ That split is the point: this file is committed and must stay readable to anyone
 credential belongs to the deployment. ``ALTER ROLE`` on attributes does not disturb an already-set
 password, so re-running this migration after provisioning is safe.
 
+**The migration administrator is not assumed to be a superuser.** A managed Postgres deliberately
+withholds that: Supabase's ``postgres`` has ``CREATEROLE``, ``CREATEDB`` and ``BYPASSRLS`` but is
+not a superuser and has no ``REPLICATION``. PostgreSQL lets a non-superuser change ``SUPERUSER``,
+``REPLICATION``, ``BYPASSRLS`` or ``CREATEDB`` on another role only if it holds that attribute
+itself, in either direction — so re-asserting ``NOSUPERUSER NOREPLICATION`` on a role that already
+has neither is refused, and the whole statement fails. The corrective ``ALTER ROLE`` therefore names
+only the clauses the current role may actually change, and a check afterwards raises if the role is
+left holding anything the design forbids. CI runs as a superuser, which is why this was invisible
+until the first real Supabase migration.
+
 Revision ID: 0003_request_login_role
 Revises: 0002_row_level_security
 Create date: 2026-09-05
@@ -63,6 +73,21 @@ LOGIN_ROLE_ATTRIBUTES = (
     "LOGIN NOINHERIT NOBYPASSRLS NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION"
 )
 
+# The four attributes PostgreSQL will not let an administrator change unless it holds that same
+# attribute — SUPERUSER requiring an actual superuser — and it applies in *both* directions: naming
+# `NOREPLICATION` on a role that is already NOREPLICATION is still refused. They are fine in
+# `CREATE ROLE`, which is why the creation path below keeps the full list; only re-asserting them
+# on an existing role is gated.
+GATED_ATTRIBUTES = ("SUPERUSER", "REPLICATION", "BYPASSRLS", "CREATEDB")
+
+# The remainder — LOGIN, NOINHERIT, NOCREATEROLE — which any role that may alter this one at all
+# can always assert. Derived rather than written out a second time, so the two cannot drift apart.
+UNGATED_ATTRIBUTES = " ".join(
+    attribute
+    for attribute in LOGIN_ROLE_ATTRIBUTES.split()
+    if attribute.removeprefix("NO") not in GATED_ATTRIBUTES
+)
+
 
 def upgrade() -> None:
     # Created only if absent, like 0002's role: an environment may already have it, and a
@@ -78,10 +103,86 @@ def upgrade() -> None:
         $$
         """
     )
-    # Asserted unconditionally afterwards, because the branch above skips an existing role and a
-    # role that exists with the wrong attributes is exactly the case worth correcting. This does
-    # not touch the password, so it is safe to run against a provisioned role.
-    op.execute(f"ALTER ROLE {LOGIN_ROLE} {LOGIN_ROLE_ATTRIBUTES}")
+    # Re-asserted afterwards, because the branch above skips an existing role and a role that
+    # exists with the wrong attributes is exactly the case worth correcting.
+    #
+    # Which clauses may be named is a property of the administrator running the migration, not of
+    # this file, so they are chosen at runtime. A managed platform's migration role is deliberately
+    # not a superuser — Supabase's `postgres` holds CREATEROLE, CREATEDB and BYPASSRLS but neither
+    # SUPERUSER nor REPLICATION — and the fixed list this once ran was rejected outright there,
+    # before any of it took effect. Naming only what the current role may change keeps every
+    # attribute it *can* correct enforced, and the check below covers the rest.
+    #
+    # No PASSWORD clause appears, so an already-provisioned credential is left undisturbed.
+    op.execute(
+        f"""
+        DO $$
+        DECLARE
+            migration_admin record;
+            clauses text := '{UNGATED_ATTRIBUTES}';
+        BEGIN
+            SELECT rolsuper, rolreplication, rolbypassrls, rolcreatedb
+              INTO migration_admin
+              FROM pg_roles
+             WHERE rolname = current_user;
+
+            IF migration_admin.rolsuper THEN
+                clauses := clauses || ' NOSUPERUSER';
+            END IF;
+            IF migration_admin.rolsuper OR migration_admin.rolreplication THEN
+                clauses := clauses || ' NOREPLICATION';
+            END IF;
+            IF migration_admin.rolsuper OR migration_admin.rolbypassrls THEN
+                clauses := clauses || ' NOBYPASSRLS';
+            END IF;
+            IF migration_admin.rolsuper OR migration_admin.rolcreatedb THEN
+                clauses := clauses || ' NOCREATEDB';
+            END IF;
+
+            EXECUTE format('ALTER ROLE %I %s', '{LOGIN_ROLE}', clauses);
+        END
+        $$
+        """
+    )
+
+    # The guarantee the statement above can no longer make on its own. Every attribute it may have
+    # had to skip is checked here against what the role actually is, so a role left over-privileged
+    # on a platform that would not let the migration correct it stops the migration loudly instead
+    # of quietly becoming the identity that serves requests. This is strictly stronger than the
+    # unconditional ALTER it replaces, which asserted the attributes and then never looked.
+    op.execute(
+        f"""
+        DO $$
+        DECLARE
+            login_role record;
+        BEGIN
+            SELECT rolcanlogin, rolinherit, rolbypassrls, rolsuper,
+                   rolcreatedb, rolcreaterole, rolreplication
+              INTO login_role
+              FROM pg_roles
+             WHERE rolname = '{LOGIN_ROLE}';
+
+            IF NOT login_role.rolcanlogin
+               OR login_role.rolinherit
+               OR login_role.rolbypassrls
+               OR login_role.rolsuper
+               OR login_role.rolcreatedb
+               OR login_role.rolcreaterole
+               OR login_role.rolreplication
+            THEN
+                RAISE EXCEPTION
+                    'role {LOGIN_ROLE} must be LOGIN NOINHERIT and hold no other attribute, but is '
+                    'login=% inherit=% bypassrls=% superuser=% '
+                    'createdb=% createrole=% replication=%. '
+                    'A superuser must correct it before this migration can run.',
+                    login_role.rolcanlogin, login_role.rolinherit, login_role.rolbypassrls,
+                    login_role.rolsuper, login_role.rolcreatedb, login_role.rolcreaterole,
+                    login_role.rolreplication;
+            END IF;
+        END
+        $$
+        """
+    )
 
     # Explicit rather than relying on PUBLIC's default CONNECT: a project that has hardened its
     # database by revoking it would otherwise leave this role able to authenticate and unable to
