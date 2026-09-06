@@ -111,7 +111,14 @@ export function AppShell({ identity, signOutControl, children }: AppShellProps):
           <span className={styles.brandName}>Weathra</span>
         </Link>
 
-        <Navigation onNavigate={close} />
+        {/*
+          The entries scroll; the brand above and the identity below do not. The wrapper is the
+          scroll container so that `.navigation` is not one: a scroll container clips both axes,
+          and the collapsed tier's labels are drawn outside the rail.
+        */}
+        <div className={styles.navScroll}>
+          <Navigation onNavigate={close} />
+        </div>
 
         <IdentityPanel identity={identity} signOutControl={signOutControl} />
       </nav>

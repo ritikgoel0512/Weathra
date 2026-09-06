@@ -123,6 +123,10 @@
   --layout-navigation-width: 248px;
   --layout-navigation-collapsed-width: 64px;
   --layout-content-maximum: 1440px;
+  /* The room the collapsed rail's hover/focus labels need beside it. The widest of the twelve —
+     "Weather Intelligence Report" — measures about 214px, and it is offset from the rail by
+     `--space-2`. See `.navScroll` in `components/shell/shell.module.css`. */
+  --layout-navigation-label-room: 264px;
 
   /* Motion */
   --duration-fast: 120ms;

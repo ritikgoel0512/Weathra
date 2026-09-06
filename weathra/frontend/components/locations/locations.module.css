@@ -92,6 +92,13 @@
   min-width: 0;
 }
 
+/* The filter sits directly in `.panel`, which is a *column* flex container — so `.toolbarField`'s
+ * `flex-basis: 220px` would be read as a height and leave a 130px hole above the location grid.
+ * The filter needs no basis at all: a column child already spans the panel's width. */
+.filterField {
+  min-width: 0;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;

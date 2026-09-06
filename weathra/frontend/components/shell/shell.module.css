@@ -46,6 +46,24 @@
   padding: var(--space-4) var(--space-2);
   background: var(--color-surface-raised);
   border-right: 1px solid var(--color-border-subtle);
+  /* Deliberately not a scroll container. `overflow-y: auto` here made the *horizontal* overflow
+   * compute to `auto` as well — CSS gives no way to scroll one axis and leave the other visible —
+   * and the collapsed tier's labels sit outside the 64px rail, so every one of them was clipped
+   * away. The scrolling moved to `.navScroll`; the brand and the identity stay put. */
+  min-height: 0;
+}
+
+/*
+ * The scrolling half of the navigation: the twelve entries, and nothing else.
+ *
+ * Splitting the scroll off the rail is what lets a label paint beside the collapsed rail while a
+ * short viewport can still reach the last entry. This box still clips — that is what a scroll
+ * container does — so in the collapsed tier below it is widened to hold the labels rather than
+ * asked to stop clipping.
+ */
+.navScroll {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -144,11 +162,19 @@
   cursor: pointer;
 }
 
+/* Wraps rather than truncates. `design-system.md` §5 is the official navigation precisely because
+ * the mockups' sidebars "omit an entry, abbreviate one, or name one differently" — so an
+ * implementation that ellipsis-clips "Weather Intelligence Report" to "Weather Int..." reintroduces
+ * the fault that table exists to correct. The longest entry needs about 196px and the widest a
+ * 248px rail can offer a label is about 165px even with no chip beside it, so the label wraps to a
+ * second line; widening the rail instead would push the shell past the proportion the artifacts
+ * establish. In the collapsed tier below, this same element is the hover/focus tooltip and stays
+ * on one line. */
 .itemLabel {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .plannedMark {
@@ -272,6 +298,7 @@
     position: absolute;
     left: calc(100% + var(--space-2));
     flex: none;
+    white-space: nowrap;
     padding: var(--space-1) var(--space-2);
     border-radius: var(--radius-md);
     background: var(--color-surface-overlay);
@@ -286,6 +313,33 @@
   .item:hover .itemLabel,
   .item:focus-visible .itemLabel {
     opacity: 1;
+  }
+
+  /*
+   * The label is a child of the scroll container, so it can only be seen inside that container's
+   * clip box. The box is therefore extended to the right by exactly the room a label needs, and
+   * pulled back by the same amount so nothing in the layout moves: the rail is still 64px, the
+   * content region still starts where it did.
+   *
+   * The extension lies over the screen, so it must not take the pointer — a transparent 264px
+   * strip that swallowed clicks would be worse than the clipped label. Only the list within it is
+   * interactive. Its scrollbar would render at the far edge of that strip, adrift in the content,
+   * so it is hidden; the wheel over the rail and moving focus through the entries both still
+   * scroll it, which is what reaches the last entry on a short viewport.
+   */
+  .navScroll {
+    padding-right: var(--layout-navigation-label-room);
+    margin-right: calc(-1 * var(--layout-navigation-label-room));
+    pointer-events: none;
+    scrollbar-width: none;
+  }
+
+  .navScroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .list {
+    pointer-events: auto;
   }
 
   .identity {

@@ -345,6 +345,118 @@ test.describe("the shell keeps the three recorded tiers", () => {
     }
   });
 
+  /**
+   * The collapsed rail's labels, which are the only thing naming its twelve icons.
+   *
+   * They were invisible: `.navigation` carried `overflow-y: auto`, and CSS has no way to scroll one
+   * axis while leaving the other visible — the horizontal overflow computed to `auto` too, so every
+   * label, drawn beside the 64px rail, was clipped away. The scroll moved to an inner wrapper whose
+   * clip box is widened by `--layout-navigation-label-room` to hold them.
+   *
+   * Asserted as geometry rather than as a screenshot: what matters is that the painted label lies
+   * inside the box that clips it and outside the rail, which is checkable without pinning a pixel.
+   */
+  test("paints the collapsed rail's labels beside it, on hover and on focus", async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 800 });
+    await signIn(page);
+
+    // The rail is icon-only: the widest entry's name is not laid out in the rail's own width.
+    const rail = await page.getByRole("navigation", { name: "Weathra" }).boundingBox();
+    expect(rail).not.toBeNull();
+    expect(rail!.width).toBeLessThan(100);
+
+    const longest = page.getByRole("link", { name: /Weather Intelligence Report/ });
+    // The name is in the accessibility tree whether or not anything is painted — the icons are not
+    // the accessible name, the label is.
+    await expect(longest).toHaveAccessibleName(/Weather Intelligence Report/);
+
+    const geometry = async () =>
+      page.evaluate(() => {
+        const nav = document.getElementById("weathra-navigation")!;
+        const scroller = nav.querySelector("div")!;
+        const link = Array.from(nav.querySelectorAll("a")).find((element) =>
+          (element.textContent ?? "").includes("Weather Intelligence Report"),
+        )!;
+        const label = link.querySelector("span")!;
+        const labelBox = label.getBoundingClientRect();
+        const clipBox = scroller.getBoundingClientRect();
+        return {
+          opacity: Number(getComputedStyle(label).opacity),
+          labelLeft: labelBox.left,
+          labelRight: labelBox.right,
+          labelWidth: labelBox.width,
+          clipRight: clipBox.right,
+          railRight: nav.getBoundingClientRect().right,
+          // A label that blocks the screen beneath it would be worse than one that is clipped.
+          pointerEvents: getComputedStyle(label).pointerEvents,
+          scrollerHorizontalOverflow: scroller.scrollWidth - scroller.clientWidth,
+        };
+      });
+
+    for (const reveal of [
+      async () => longest.hover(),
+      async () => {
+        await page.mouse.move(0, 0);
+        // Reached with Tab rather than `.focus()`: `:focus-visible` is a heuristic about how focus
+        // arrived, and programmatic focus on a link does not satisfy it in either engine. Tabbing
+        // from the entry before it is what a keyboard user actually does.
+        await page.getByRole("link", { name: /^Compare Cities/ }).focus();
+        await page.keyboard.press("Tab");
+        await expect(longest).toBeFocused();
+      },
+    ]) {
+      await reveal();
+      const seen = await geometry();
+
+      expect(seen.opacity, "the label did not become visible").toBe(1);
+      // Drawn beside the rail, not inside it...
+      expect(seen.labelLeft).toBeGreaterThanOrEqual(seen.railRight - 1);
+      expect(seen.labelWidth).toBeGreaterThan(120);
+      // ...and inside the box that clips it, which is the defect this test exists for.
+      expect(seen.labelRight, "the label is clipped by the navigation scroll container").toBeLessThanOrEqual(
+        seen.clipRight + 1,
+      );
+      // The widened clip box must not itself start scrolling sideways.
+      expect(seen.scrollerHorizontalOverflow).toBeLessThanOrEqual(1);
+      expect(seen.pointerEvents).toBe("none");
+    }
+
+    // And none of that pushed the page open.
+    const overflow = await horizontalOverflow(page);
+    expect(overflow.document).toBeLessThanOrEqual(1);
+    expect(overflow.body).toBeLessThanOrEqual(1);
+  });
+
+  /**
+   * The other half of the same change: moving the scroll off `.navigation` must not cost the last
+   * entry on a viewport too short to show twelve of them.
+   */
+  test("keeps the last navigation entry reachable when the rail cannot show them all", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 480 });
+    await signIn(page);
+    await page.getByRole("button", { name: "Menu", exact: true }).click();
+
+    const settings = page.getByRole("link", { name: /^Settings/ });
+    await expect(settings).toBeVisible();
+
+    // Scrolling it into view is the browser's own affordance; that it *can* be scrolled to is the
+    // assertion. `scrollIntoViewIfNeeded` fails outright if no ancestor can bring it in.
+    await settings.scrollIntoViewIfNeeded();
+    await expect(settings).toBeInViewport();
+
+    const scrolled = await page.evaluate(() => {
+      const scroller = document.getElementById("weathra-navigation")!.querySelector("div")!;
+      return {
+        canScroll: scroller.scrollHeight > scroller.clientHeight,
+        scrollTop: scroller.scrollTop,
+      };
+    });
+    expect(scrolled.canScroll, "the navigation entries cannot scroll on a short viewport").toBe(true);
+    expect(scrolled.scrollTop).toBeGreaterThan(0);
+  });
+
   test("reflows the content rather than shrinking the desktop layout", async ({ page }) => {
     await signIn(page);
     await page.goto("/evidence/run-stub");

@@ -1,6 +1,8 @@
 # Screen index and design-gate status
 
-> The index required by tasks 19.5 and 24.9 of the `weathra-mvp` change. Status as of 2026-09-03.
+> The index required by tasks 19.5 and 24.9 of the `weathra-mvp` change. The design gate and
+> every approval below were settled on 2026-09-03; the Implementation column tracks the build
+> and was last confirmed on 2026-09-05 against the screens as they stand.
 
 Every MVP screen, the approved artifact recorded for it, and the exceptions recorded against that
 artifact. The gate `specs/web-ui` sets is that an approved artifact is **recorded in this
@@ -29,13 +31,13 @@ the design, and is not implemented.
 
 | Screen | Artifact | Design status | Implementation |
 |---|---|---|---|
-| Dashboard — Weathra Intelligence briefing, *What Changed?*, *Why?* | `01-dashboard.png` | Approved 2026-09-03, with the exceptions in §5 | Not started (task 21.1) |
-| AI Weather Analyst | `02-ai-weather-analyst.png` | Approved 2026-09-03, with the exceptions in §5 | Not started (task 21.2) |
-| Historical Analytics | `03-historical-analytics.png` | Approved 2026-09-03, with the exceptions in §5 | Not started (task 21.3) |
-| Compare Cities | `04-compare-cities.png` | Approved 2026-09-03, with the exceptions in §5 | Not started (task 21.4) |
-| Agent Evidence / Activity | `05-agent-evidence.png` | Approved 2026-09-03, with the exceptions in §5 | Not started (task 21.5) |
-| Saved Locations | `06-saved-locations.png` | Approved 2026-09-03, with the exceptions in §5 | Not started (task 21.6) |
-| Settings | `07-settings.png` | Approved 2026-09-03, with the exceptions in §5 | Not started (task 21.6) |
+| Dashboard — Weathra Intelligence briefing, *What Changed?*, *Why?* | `01-dashboard.png` | Approved 2026-09-03, with the exceptions in §5 | Implemented (task 21.1) |
+| AI Weather Analyst | `02-ai-weather-analyst.png` | Approved 2026-09-03, with the exceptions in §5 | Implemented (task 21.2) |
+| Historical Analytics | `03-historical-analytics.png` | Approved 2026-09-03, with the exceptions in §5 | Implemented (task 21.3) |
+| Compare Cities | `04-compare-cities.png` | Approved 2026-09-03, with the exceptions in §5 | Implemented (task 21.4) |
+| Agent Evidence / Activity | `05-agent-evidence.png` | Approved 2026-09-03, with the exceptions in §5 | Implemented (task 21.5) |
+| Saved Locations | `06-saved-locations.png` | Approved 2026-09-03, with the exceptions in §5 | Implemented (task 21.6) |
+| Settings | `07-settings.png` | Approved 2026-09-03, with the exceptions in §5 | Implemented (task 21.6) |
 
 **What the artifacts establish**, and what implementation takes from them: the Intelligent Command
 Center shell with its persistent left navigation and signed-in identity; the compact, data-dense

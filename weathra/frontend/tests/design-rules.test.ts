@@ -185,6 +185,51 @@ describe("the recorded responsive tiers", () => {
   });
 });
 
+describe("the collapsed rail does not clip its own labels", () => {
+  /**
+   * A scroll container clips both axes — CSS computes a `visible` overflow to `auto` as soon as the
+   * other axis scrolls. So the element that scrolls the navigation cannot also be the element the
+   * collapsed tier's labels are drawn outside of. `.navigation` therefore does not scroll;
+   * `.navScroll` does, and the collapsed tier widens its clip box to hold the labels.
+   *
+   * Static because the browser test that proves the label is painted names a viewport and a
+   * measurement, where this names the rule that broke.
+   */
+  const [shellPath, shell] = stylesheets().find(([path]) =>
+    path.endsWith(join("shell", "shell.module.css")),
+  ) ?? ["", ""];
+
+  it("gives the navigation rail no overflow of its own", () => {
+    const rule = rules(shell).find(({ selector }) => selector === ".navigation");
+    expect(rule, `${shellPath} declares no .navigation rule`).toBeDefined();
+    expect(
+      rule?.body ?? "",
+      "`.navigation` scrolls again — the collapsed tier's labels are clipped by it",
+    ).not.toMatch(/overflow(-x|-y)?:\s*(auto|scroll|hidden|clip)/);
+  });
+
+  it("puts the scrolling on the inner wrapper instead", () => {
+    const rule = rules(shell).find(({ selector }) => selector === ".navScroll");
+    expect(rule, `${shellPath} declares no .navScroll rule`).toBeDefined();
+    expect(rule?.body ?? "").toMatch(/overflow-y:\s*auto/);
+    // Without this it cannot shrink inside the rail, so it never scrolls at all.
+    expect(rule?.body ?? "").toMatch(/min-height:\s*0/);
+  });
+
+  it("widens that wrapper by a token rather than by a guessed pixel value", () => {
+    const widened = rules(shell).filter(
+      ({ selector, body }) => selector === ".navScroll" && /padding-right:/.test(body),
+    );
+    expect(widened.length, "the collapsed tier does not widen the label's clip box").toBe(1);
+    const body = widened[0]?.body ?? "";
+    expect(body).toMatch(/padding-right:\s*var\(--layout-navigation-label-room\)/);
+    // Pulled back by the same amount, so the rail and the content region do not move.
+    expect(body).toMatch(/margin-right:\s*calc\(-1 \* var\(--layout-navigation-label-room\)\)/);
+    // The widened strip lies over the screen; it must not take the pointer.
+    expect(body).toMatch(/pointer-events:\s*none/);
+  });
+});
+
 describe("nothing pins the page wider than the viewport", () => {
   it("never sets `overflow-x` on the document or the body", () => {
     const [, globals] = SHEETS.find(([path]) => path.endsWith("globals.css")) ?? ["", ""];

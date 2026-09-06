@@ -272,7 +272,7 @@ function SavedList({ response }: { readonly response: SavedLocationsResponse }):
         </div>
       </div>
 
-      <div className={styles.toolbarField}>
+      <div className={styles.filterField}>
         <Input
           label="Filter these locations"
           description="Narrows the list below. It searches nothing new."
