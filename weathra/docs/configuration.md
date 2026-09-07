@@ -106,7 +106,7 @@ bundle — see [`authentication.md`](authentication.md) for why the split is dra
 | `SNAPSHOT_RETENTION_DAYS` | `90` | behaviour | How long forecast snapshots are kept |
 | `SAVED_LOCATIONS_LIMIT` | `25` | behaviour | Saved locations per person |
 | `EVALUATION_MIN_SERVED_RATE` | `1.0` | behaviour | Proportion of a live evaluation run's cases the configured model must have served for the run to be scored as model quality at all |
-| `EVALUATION_LLM_MIN_INTERVAL_SECONDS` | `2.0` | behaviour | Minimum spacing between live evaluation cases, so the dataset does not reach a free tier's per-minute ceiling as one burst |
+| `EVALUATION_LLM_MIN_INTERVAL_SECONDS` | `5.0` | behaviour | Minimum spacing between live evaluation cases, so the dataset does not reach a free tier's per-minute ceiling as one burst |
 
 ## Notes on the ones that bite
 

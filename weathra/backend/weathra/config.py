@@ -284,12 +284,14 @@ class Settings(BaseSettings):
         ),
     )
     evaluation_llm_min_interval_seconds: Annotated[float, Field(ge=0.0, le=60.0)] = Field(
-        default=2.0,
+        default=5.0,
         validation_alias="evaluation_llm_min_interval_seconds",
         description=(
             "Minimum wall-clock spacing between evaluation cases in live mode. A property of how "
-            "the harness drives the API, never of the product: forty cases at two calls each "
-            "would otherwise reach a free tier's per-minute ceiling as one burst."
+            "the harness drives the API, never of the product: the dataset's 40 cases carry 46 "
+            "turns and about 92 gateway calls, which at 2s spacing exceeds a 20-request-per-"
+            "minute free-tier ceiling whenever the model answers in under ~2.5s. 5s holds the "
+            "run under that ceiling at any plausible latency."
         ),
     )
 

@@ -262,9 +262,18 @@ A live run asks the configured model one structured question before executing th
 non-served answer aborts the run as a provider failure with **no case executed** — one gateway call
 instead of eighty. That is what should have happened to both historical runs.
 
-`EVALUATION_LLM_MIN_INTERVAL_SECONDS` (default **2.0**) spaces live cases so the dataset does not
+`EVALUATION_LLM_MIN_INTERVAL_SECONDS` (default **5.0**) spaces live cases so the dataset does not
 arrive at a free tier's per-minute ceiling as a single burst. It is a property of how the harness
 drives the API, never of the product.
+
+The value is arithmetic, not a guess. The 40 cases carry **46 turns**, and routing and synthesis
+each call once per turn, so a run makes about 92 gateway calls. At a spacing of *g* seconds and a
+per-call latency of *L*, the run sustains `5520 / (39g + 92L)` requests per minute. Against
+OpenRouter's 20-per-minute free-tier ceiling, 2s spacing breaches it whenever the model answers in
+under about 2.5 seconds; 5s spacing stays under it at any plausible latency. A breach is worse than
+it looks: this gateway sends no `Retry-After` on a rate limit, so the bounded-ceiling path cannot
+fire, the client spends all three transport attempts, and the turn falls back — costing triple the
+quota *and* tripping the served-rate gate into a provider failure.
 
 A 429 is retried within `LLM_RATE_LIMIT_MAX_WAIT_SECONDS` (default **30.0**), honouring the
 gateway's own `Retry-After` where it states one — the gateway knows when its window opens and
