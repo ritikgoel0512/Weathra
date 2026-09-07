@@ -533,7 +533,7 @@ Every agent response and stream SHALL report the provider, the model that actual
 
 #### Scenario: Advisory field within entitlement honoured
 
-- **WHEN** a Premium-plan caller names a model their entitled policy already permits and the catalog has enabled
+- **WHEN** a Pro-plan caller names a model their entitled policy already permits and the catalog has enabled
 - **THEN** the response may report that model as used
 
 #### Scenario: Response reports what served it

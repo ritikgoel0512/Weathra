@@ -48,7 +48,7 @@ The system SHALL define model policies as named, persisted records rather than i
 
 Each policy SHALL declare an ordered list of candidate models by catalog reference, the call roles it applies to, and its eligibility condition. A policy SHALL NOT name a vendor model identifier inline in application logic; it SHALL reference catalog entries.
 
-User-facing subscription plans SHALL map onto policies, with at least Free, Plus, and Premium as the initial plan set, and the mapping SHALL be persisted data that can change without a code change. A plan SHALL be able to map to different policies for different call roles.
+User-facing subscription plans SHALL map onto policies, with at least Free, Plus, and Pro as the initial plan set, and the mapping SHALL be persisted data that can change without a code change. A plan SHALL be able to map to different policies for different call roles.
 
 #### Scenario: Shipped policies present
 
@@ -60,7 +60,7 @@ User-facing subscription plans SHALL map onto policies, with at least Free, Plus
 
 - **WHEN** a caller on the Free plan makes a request
 - **THEN** the policy layer resolves the policy that the Free plan maps to
-- **AND** a caller on the Premium plan making the same request resolves the policy that the Premium plan maps to
+- **AND** a caller on the Pro plan making the same request resolves the policy that the Pro plan maps to
 
 #### Scenario: Plan-to-policy mapping changed without code
 
@@ -74,7 +74,7 @@ User-facing subscription plans SHALL map onto policies, with at least Free, Plus
 
 #### Scenario: Administrative policy not reachable by a product plan
 
-- **WHEN** a caller on any of the Free, Plus, or Premium plans makes a product request
+- **WHEN** a caller on any of the Free, Plus, or Pro plans makes a product request
 - **THEN** `admin_experimental` is never resolved for that request
 
 ### Requirement: Entitlement is enforced server-side and never trusted from the client
@@ -87,7 +87,7 @@ A frontend hiding or disabling a control SHALL NOT be the mechanism that prevent
 
 #### Scenario: Client-asserted plan ignored
 
-- **WHEN** a request from a Free-plan caller carries a body field or header claiming the Premium plan
+- **WHEN** a request from a Free-plan caller carries a body field or header claiming the Pro plan
 - **THEN** the policy layer resolves the Free plan's policy
 - **AND** the claimed field is ignored and does not appear in the resolution reason as an authority
 
@@ -99,7 +99,7 @@ A frontend hiding or disabling a control SHALL NOT be the mechanism that prevent
 
 #### Scenario: Advisory preference honoured within entitlement
 
-- **WHEN** a Premium-plan caller names a model that their entitled policy's candidate list already contains and that is enabled in the catalog
+- **WHEN** a Pro-plan caller names a model that their entitled policy's candidate list already contains and that is enabled in the catalog
 - **THEN** the policy layer may resolve that model
 - **AND** the resolution reason records that a caller preference was honoured within entitlement
 
@@ -274,3 +274,59 @@ Creating, editing, enabling, and disabling model policies and plan-to-policy map
 
 - **WHEN** a policy is written referencing a catalog entry that does not exist
 - **THEN** the write is refused with a structured error naming the missing reference
+
+### Requirement: Runtime provider failure fails over within the entitled policy, never on quality
+
+When a language model call fails for an infrastructure reason — the gateway reports the model unavailable, the gateway returns a server error, the call times out, or the network fails — the policy layer SHALL attempt the next enabled candidate of the same resolved policy, in the policy's declared order, bounded by a configured maximum number of models per call role. It SHALL NOT escalate to a policy above the caller's entitlement, and a Free-plan caller SHALL NOT reach a Plus or Pro candidate by this or any other path.
+
+A model SHALL NOT be changed for any reason derived from the content or quality of a model's output. Output that failed schema validation, a groundedness result, a hallucination or unsupported-claim finding, an evaluation metric or threshold, a latency measurement, and any other judgement of answer quality SHALL NOT be an input to model selection.
+
+A gateway rate limit SHALL NOT trigger a change of model where the candidates share a gateway account, because the limit is a property of the account rather than of the model. It SHALL be handled by bounded retry honouring the gateway's stated delay up to a configured maximum wait, and then reported as a rate limit.
+
+When every eligible candidate has failed, a product request SHALL degrade by the deterministic path already required by `specs/agent-orchestration` and an evaluation request SHALL fail honestly, and in neither case SHALL output produced without a model be attributed to one.
+
+Every attempt, including every failed attempt, SHALL be recorded with its selected model, its outcome, and the reason it was attempted.
+
+#### Scenario: Unavailable model fails over to the next candidate
+
+- **WHEN** the gateway reports the resolved model unavailable and the policy declares a further enabled candidate
+- **THEN** the next candidate is attempted
+- **AND** both attempts are recorded with their outcomes
+
+#### Scenario: Provider error and timeout fail over
+
+- **WHEN** a call fails with a gateway server error, or times out
+- **THEN** the next enabled candidate of the same policy is attempted within the configured bound
+
+#### Scenario: A rate limit does not change the model
+
+- **WHEN** a call is rate-limited by the gateway and the policy's candidates share a gateway account
+- **THEN** no other candidate is attempted for that reason
+- **AND** the call is retried within the bounded wait against the same model, then reported as a rate limit
+
+#### Scenario: Invalid output never changes the model
+
+- **WHEN** a model returns output that fails schema validation after the permitted retries
+- **THEN** no other candidate is attempted
+- **AND** the run continues by the deterministic path with the failure recorded as a quality outcome
+
+#### Scenario: Failover never escalates above entitlement
+
+- **WHEN** every candidate of a Free-plan caller's policy fails for an infrastructure reason and a Plus or Pro candidate is available
+- **THEN** the Plus and Pro candidates are not attempted for that caller
+
+#### Scenario: Failover is bounded
+
+- **WHEN** candidates keep failing for infrastructure reasons
+- **THEN** no more than the configured maximum number of models is attempted for that call role
+
+#### Scenario: Exhaustion degrades honestly
+
+- **WHEN** every eligible candidate has failed
+- **THEN** a product request is answered by the deterministic path and reports that no model served it
+- **AND** the answer's figures, attribution, and grounding are unchanged
+
+#### Scenario: Fixed-model evaluation performs no failover
+
+- **WHEN** a run resolves the fixed-model evaluation policy
+- **THEN** no candidate other than the pinned model is attempted for any reason

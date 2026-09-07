@@ -341,3 +341,44 @@ Instrumentation SHALL NOT alter the answer, the evidence record, or the stream c
 - **WHEN** a run exhausts its step or time budget after one language model call
 - **THEN** that call's usage event is recorded with its tokens, latency, and status
 
+
+### Requirement: Every language model call attempt is recorded in the evidence record
+
+The evidence record SHALL carry, for every language model call attempt a run makes, the call stage, the attempt number within that stage, the outcome of the attempt, the provider, the model that was selected, and — where the attempt returned a completion — the model the gateway reported as having actually served it. Where an attempt did not return a completion, the record SHALL carry the failure classification, the provider status where the failure had one, and the reason the run continued as it did.
+
+An attempt outcome SHALL distinguish at minimum: a completion served by the selected model; output that failed schema validation after the permitted retries; a gateway rate limit; a model reported unavailable by the gateway; another provider error; a timeout or network failure; and no inference credential being configured.
+
+A run SHALL be able to state whether the configured model materially served it, meaning every language model call attempt the run made was served. A run answered wholly or partly by the deterministic router or the code-written summary SHALL NOT be reported as having been served by a model, and the provider and model named in the record SHALL NOT by themselves be taken as evidence that either produced the answer.
+
+#### Scenario: Served call recorded with the model that answered
+
+- **WHEN** a language model call returns a completion
+- **THEN** the evidence record carries an attempt for that stage with a served outcome, the selected model, and the model the gateway reported
+
+#### Scenario: Model unavailable recorded and distinguished
+
+- **WHEN** the gateway reports the selected model unavailable
+- **THEN** the evidence record carries an attempt classified as the model being unavailable, with the provider status
+- **AND** the outcome is distinguishable from output that failed schema validation
+
+#### Scenario: Rate limit, provider error, and timeout each distinguishable
+
+- **WHEN** a call is rate-limited by the gateway, fails with a provider error, or times out
+- **THEN** each is recorded as its own outcome classification, distinguishable from one another and from a schema-validation failure
+
+#### Scenario: Invalid output is a quality outcome, not a provider outcome
+
+- **WHEN** the model returns output that fails schema validation after the permitted retries
+- **THEN** the attempt is recorded as a served call whose output was invalid
+- **AND** it is not classified as a provider or infrastructure failure
+
+#### Scenario: A fallback-answered run does not claim a model served it
+
+- **WHEN** every language model call in a run fails and the deterministic router and code-written summary produce the answer
+- **THEN** the run reports that the configured model did not materially serve it
+- **AND** the answer is still returned with its figures, attribution, and grounding intact
+
+#### Scenario: No credential recorded rather than inferred
+
+- **WHEN** a run executes with no inference credential configured
+- **THEN** each stage records an attempt stating that no inference provider was configured

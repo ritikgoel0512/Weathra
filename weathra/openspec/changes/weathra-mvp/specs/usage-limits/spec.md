@@ -1,6 +1,6 @@
 ## Purpose
 
-Server-side allowances on language model usage, enforced by plan: how many agent requests and how many tokens a Free, Plus, or Premium subscriber may consume in a window, checked in the backend before a call is made and accounted from recorded usage. It keeps a free tier affordable and leaves room for daily, monthly, and future cost-budget dimensions without introducing payment processing.
+Server-side allowances on language model usage, enforced by plan: how many agent requests and how many tokens a Free, Plus, or Pro subscriber may consume in a window, checked in the backend before a call is made and accounted from recorded usage. It keeps a free tier affordable and leaves room for daily, monthly, and future cost-budget dimensions without introducing payment processing.
 
 Allowances are counted from the events in `specs/llm-telemetry` and the plan mapping in `specs/model-policy`. Plan membership always comes from backend-held state keyed by the validated token subject; see `specs/authentication`.
 
@@ -8,7 +8,7 @@ Allowances are counted from the events in `specs/llm-telemetry` and the plan map
 
 ### Requirement: Subscription plans are persisted server-side data
 
-The system SHALL persist subscription plans as records, with at least Free, Plus, and Premium in the initial set, each declaring a stable plan code, a display name, its policy mappings, and its usage allowances. Every principal SHALL have exactly one effective plan at any time, defaulting to Free where no assignment exists.
+The system SHALL persist subscription plans as records, with at least Free, Plus, and Pro in the initial set, each declaring a stable plan code, a display name, its policy mappings, and its usage allowances. Every principal SHALL have exactly one effective plan at any time, defaulting to Free where no assignment exists.
 
 A principal's plan SHALL be derived from backend-held state keyed by the validated token subject. A plan named in a request body, query parameter, header, cookie, or token claim not issued by the backend's own plan store SHALL NOT determine the effective plan.
 
@@ -17,7 +17,7 @@ Changing a plan's allowances SHALL take effect for subsequent requests without a
 #### Scenario: Plans present with allowances
 
 - **WHEN** the plan records are inspected
-- **THEN** Free, Plus, and Premium are present, each with a plan code, display name, policy mappings, and allowances
+- **THEN** Free, Plus, and Pro are present, each with a plan code, display name, policy mappings, and allowances
 
 #### Scenario: Default plan applied
 
@@ -71,7 +71,7 @@ The system SHALL support allowances in at least these dimensions, each optional 
 - total tokens per calendar month
 - concurrent in-flight agent runs
 
-Free, Plus, and Premium SHALL be able to carry different values in every dimension, and a plan MAY leave a dimension unlimited. The architecture SHALL admit a future estimated-cost budget dimension for paid models, expressed per plan and per window, without restructuring the allowance model.
+Free, Plus, and Pro SHALL be able to carry different values in every dimension, and a plan MAY leave a dimension unlimited. The architecture SHALL admit a future estimated-cost budget dimension for paid models, expressed per plan and per window, without restructuring the allowance model.
 
 Where several dimensions apply, the most restrictive binding dimension SHALL determine the outcome, and the response SHALL name which dimension bound.
 
@@ -226,7 +226,7 @@ Creating and editing plans, allowances, internal allowances, and a principal's p
 
 #### Scenario: Plan assignment recorded
 
-- **WHEN** an administrative principal assigns a caller to the Premium plan
+- **WHEN** an administrative principal assigns a caller to the Pro plan
 - **THEN** the assignment takes effect for subsequent requests
 - **AND** the acting principal, the subject, the before and after values, and the time are recorded
 

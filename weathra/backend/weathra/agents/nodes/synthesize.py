@@ -34,12 +34,19 @@ import json
 import logging
 from datetime import UTC, datetime
 
-from weathra.agents.llm.base import LLMClient, Message
+from weathra.agents.llm.base import LLMClient, Message, classify_inference_failure
 from weathra.agents.nodes.support import record_step
 from weathra.agents.safety import SafetyAssessment
 from weathra.agents.state import GraphState
 from weathra.domain.errors import ProviderRateLimited, ProviderTimeout, ProviderUnavailable
-from weathra.domain.evidence import AgentName, Finding, StepStatus
+from weathra.domain.evidence import (
+    AgentName,
+    Finding,
+    InferenceAttempt,
+    InferenceStage,
+    InferenceStatus,
+    StepStatus,
+)
 
 __all__ = ["SYNTHESIS_SYSTEM_PROMPT", "code_written_summary", "synthesize"]
 
@@ -157,7 +164,15 @@ async def synthesize(
     if client is None:
         prose = _with_required(code_written_summary(state), required)
         return record_step(
-            state.with_updates(answer_prose=prose),
+            state.with_updates(answer_prose=prose).with_inference_attempt(
+                InferenceAttempt(
+                    stage=InferenceStage.SYNTHESIS,
+                    status=InferenceStatus.NOT_CONFIGURED,
+                    fallback_reason=(
+                        "No inference provider was configured; the summary was written by code."
+                    ),
+                )
+            ),
             agent=AgentName.SYNTHESIS,
             started_at=started,
             reason="No inference provider was configured, so the summary was written by code.",
@@ -171,18 +186,32 @@ async def synthesize(
             + "\n".join(f"- {constraint}" for constraint in safety.prompt_constraints)
         )
 
+    call_started = datetime.now(UTC)
     try:
         completion = await client.complete(system=system, messages=_prompt(state))
     except (ProviderTimeout, ProviderRateLimited, ProviderUnavailable) as exc:
         # The findings are already correct and already in the envelope. Losing the prose is a
         # degradation; losing the answer would be a failure.
         logger.warning("synthesis fell back to a code-written summary: %s", exc.code)
+        status, http_status = classify_inference_failure(exc)
+        note = (
+            "The explanation could not be written because the inference provider was "
+            "unavailable. The figures below were still retrieved and computed."
+        )
         return record_step(
-            state.with_updates(
-                answer_prose=_with_required(code_written_summary(state), required)
-            ).with_failure(
-                "The explanation could not be written because the inference provider was "
-                "unavailable. The figures below were still retrieved and computed."
+            state.with_updates(answer_prose=_with_required(code_written_summary(state), required))
+            .with_failure(note)
+            .with_inference_attempt(
+                InferenceAttempt(
+                    stage=InferenceStage.SYNTHESIS,
+                    status=status,
+                    provider=client.provider_id,
+                    selected_model=client.model_id,
+                    http_status=http_status,
+                    error_code=exc.code,
+                    fallback_reason=note,
+                    latency_ms=_elapsed_ms(call_started),
+                )
             ),
             agent=AgentName.SYNTHESIS,
             started_at=started,
@@ -191,11 +220,29 @@ async def synthesize(
         )
 
     return record_step(
-        state.with_updates(answer_prose=_with_required(completion.text.strip(), required)),
+        state.with_updates(
+            answer_prose=_with_required(completion.text.strip(), required)
+        ).with_inference_attempt(
+            InferenceAttempt(
+                stage=InferenceStage.SYNTHESIS,
+                status=InferenceStatus.SERVED,
+                provider=completion.provider_id,
+                selected_model=client.model_id,
+                # The gateway's own answer to "what served this", which is not always what was
+                # asked for. A silent route substitution shows up here rather than nowhere.
+                served_model=completion.model_id,
+                latency_ms=_elapsed_ms(call_started),
+            )
+        ),
         agent=AgentName.SYNTHESIS,
         started_at=started,
         reason=f"Prose written by {completion.provider_id}/{completion.model_id}.",
     )
+
+
+def _elapsed_ms(since: datetime) -> float:
+    """Wall-clock milliseconds since ``since``. The gateway call only."""
+    return max(0.0, (datetime.now(UTC) - since).total_seconds() * 1000.0)
 
 
 def _with_required(prose: str, required: tuple[str, ...]) -> str:

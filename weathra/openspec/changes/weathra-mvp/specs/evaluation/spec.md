@@ -335,3 +335,114 @@ Offline runs using a fake inference provider SHALL make no gateway call and SHAL
 
 - **WHEN** an evaluation run completes
 - **THEN** no end user's threads, memory, preferences, saved locations, plan, or consumption have changed
+
+### Requirement: A live evaluation run is pinned to one named model
+
+A live evaluation run SHALL execute against exactly one named inference model for every call role, SHALL NOT vary that model across cases within the run, and SHALL NOT substitute a different model for any reason during the run — including a provider or infrastructure failure. The pinned model SHALL be stated in the run record alongside every distinct model the run observed to have actually served a call, so that a run claiming a model can be checked against what answered.
+
+Where a model policy layer exists, a live evaluation run SHALL resolve its pinned model through a fixed-model evaluation policy rather than through the evaluation test user's subscription plan, so that a change to a plan, a policy, or a candidate pool cannot change what an evaluation run measures.
+
+Comparing several models SHALL be done by executing several pinned runs, one per model, rather than by allowing one run to vary its model.
+
+#### Scenario: One model across the whole run
+
+- **WHEN** a live run executes the dataset
+- **THEN** every language model call in every case uses the pinned model
+- **AND** the run record states the pinned model
+
+#### Scenario: No substitution on provider failure
+
+- **WHEN** the pinned model fails during a live run
+- **THEN** no other model is substituted
+- **AND** the run reports the failure rather than continuing against a different model
+
+#### Scenario: Served models recorded against the pinned model
+
+- **WHEN** a live run completes
+- **THEN** the run record states every distinct model observed to have served a call
+- **AND** a model differing from the pinned one is visible rather than hidden
+
+#### Scenario: Plan changes cannot change what is evaluated
+
+- **WHEN** the evaluation test user's plan or its mapped policy is changed
+- **THEN** a live evaluation run still resolves its pinned model
+
+### Requirement: Live runs distinguish provider failure from model quality
+
+A live evaluation run SHALL determine, for every case, whether the pinned model materially served that case, meaning every language model call attempt the case made was served by that model. A case not served by the model SHALL be excluded from every metric numerator and every metric denominator, SHALL NOT be counted as a pass, and SHALL NOT be counted as a failure.
+
+A run SHALL be classified as a provider failure when the proportion of served cases falls below a configured representativeness floor, or when excluding unserved cases leaves any gated threshold with no applicable cases. A run classified as a provider failure SHALL NOT report its metrics as model-quality metrics, SHALL NOT report a threshold verdict, SHALL retain every case's diagnostic evidence, SHALL be persisted with no pass-or-fail verdict rather than as a failure, and SHALL return a result distinguishable from both success and a missed threshold.
+
+Output that failed schema validation SHALL be counted as the model having served the call, and SHALL be scored as a quality outcome rather than classified as a provider failure.
+
+A live run SHALL verify that the pinned model can serve a call before executing the dataset, and SHALL abort as a provider failure without executing any case when it cannot.
+
+An offline run SHALL be classified as not applicable to this judgement rather than as a provider failure, and SHALL continue to compute and gate on every deterministic metric.
+
+#### Scenario: Fully unserved run classified as a provider failure
+
+- **WHEN** every case in a live run falls back because the pinned model is unavailable
+- **THEN** the run is classified as a provider failure
+- **AND** no threshold verdict is reported and the metrics are not presented as model-quality metrics
+
+#### Scenario: Rate limiting is not a quality failure
+
+- **WHEN** a live run's cases are rate-limited by the gateway
+- **THEN** the run is classified as a provider failure rather than as a missed threshold
+
+#### Scenario: Unserved case quarantined from the metrics
+
+- **WHEN** one case in a live run is answered by the deterministic fallback
+- **THEN** that case appears in no metric numerator and no metric denominator
+- **AND** it is counted neither as a pass nor as a failure
+
+#### Scenario: Invalid model output is scored, not quarantined
+
+- **WHEN** the pinned model returns output failing schema validation
+- **THEN** the case is scored as a quality outcome and the run remains eligible to be scored
+
+#### Scenario: Provider failure retains its diagnostics
+
+- **WHEN** a run is classified as a provider failure
+- **THEN** every case's evidence is retained and the failure classification and its counts are recorded
+
+#### Scenario: Provider failure persisted without a verdict
+
+- **WHEN** a provider-failure run is stored
+- **THEN** it is persisted with no pass-or-fail verdict rather than as a failing run
+- **AND** a later comparison reports it as not scored
+
+#### Scenario: Pre-flight aborts before spending the dataset
+
+- **WHEN** the pinned model cannot serve a call at the start of a live run
+- **THEN** the run aborts as a provider failure with no case executed
+
+#### Scenario: Offline run unaffected
+
+- **WHEN** an offline run executes
+- **THEN** it is classified as not applicable to the served-model judgement
+- **AND** every deterministic metric is computed and gated as before
+
+### Requirement: Live runs are paced and bounded against provider limits
+
+A live evaluation run SHALL be able to pace its requests so that executing the dataset does not issue its language model calls as an unbounded burst, and the pacing SHALL be configuration rather than a fixed constant. Retrying a rate-limited call SHALL be bounded, SHALL honour a delay the gateway states where it states one, and SHALL be capped by a configured maximum wait. A run SHALL NOT retry indefinitely, and SHALL NOT resolve a provider limit by lowering a threshold, by excluding a recorded failure from the record, or by substituting another model.
+
+#### Scenario: Pacing configurable
+
+- **WHEN** a minimum interval between cases is configured
+- **THEN** a live run honours it and does not issue the dataset's calls as a single burst
+
+#### Scenario: Bounded retry honouring the stated delay
+
+- **WHEN** the gateway rate-limits a call and states a retry delay within the configured maximum wait
+- **THEN** the call is retried after that delay
+
+#### Scenario: Retry ceiling respected
+
+- **WHEN** the gateway states a retry delay beyond the configured maximum wait
+- **THEN** the call is not retried further and the rate limit is reported
+
+#### Scenario: Provider limits never resolved by adjusting measurement
+
+- **WHEN** a run encounters a provider limit
+- **THEN** no threshold is adjusted, no recorded failure is omitted, and no other model is substituted

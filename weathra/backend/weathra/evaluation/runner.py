@@ -44,6 +44,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from weathra.config import Settings
 from weathra.db.engine import Engines
+from weathra.domain.evidence import InferenceAttempt
 from weathra.evaluation.cases import (
     DATASET_VERSION,
     Category,
@@ -52,9 +53,10 @@ from weathra.evaluation.cases import (
     load_dataset,
 )
 from weathra.evaluation.harness import build_evaluation_app
+from weathra.evaluation.integrity import InferenceIntegrity, RunOutcome, assess_integrity
 from weathra.evaluation.metrics import CaseOutcome, MetricsReport, compute_metrics, figures_in
 from weathra.evaluation.provisioning import EvaluationMode, TestIdentity
-from weathra.evaluation.thresholds import ThresholdReport, evaluate_thresholds
+from weathra.evaluation.thresholds import GATED_METRICS, ThresholdReport, evaluate_thresholds
 
 __all__ = ["RunConfiguration", "RunResult", "execute_run", "main"]
 
@@ -102,6 +104,11 @@ class CaseRecord(BaseModel):
     latency_ms: float | None = None
     http_status: int | None = None
     error: str | None = None
+    inference_attempts: tuple[InferenceAttempt, ...] = ()
+    model_served: bool = Field(
+        default=True,
+        description="Whether the configured model served every call this case made.",
+    )
 
 
 class RunResult(BaseModel):
@@ -117,7 +124,26 @@ class RunResult(BaseModel):
     completed_at: datetime
 
     @property
-    def passed(self) -> bool:
+    def integrity(self) -> InferenceIntegrity | None:
+        return self.thresholds.integrity
+
+    @property
+    def outcome(self) -> RunOutcome | None:
+        return self.thresholds.run_outcome
+
+    @property
+    def provider_failed(self) -> bool:
+        return self.thresholds.provider_failed
+
+    @property
+    def passed(self) -> bool | None:
+        """The quality verdict, or ``None`` when the run has not earned one.
+
+        ``None`` rather than ``False`` on a provider failure. The database column is already
+        nullable and ``storage._verdict`` already renders null as "not scored", so the honest
+        third answer needed no schema change to express — only somebody to stop collapsing it
+        into the second.
+        """
         return self.thresholds.passed
 
     @property
@@ -126,9 +152,21 @@ class RunResult(BaseModel):
 
     def report(self) -> str:
         """The human-readable report, for a terminal and for CI's log."""
+        integrity = self.integrity
+        banner: list[str] = []
+        if self.provider_failed and integrity is not None:
+            banner = [
+                "  !! PROVIDER FAILURE — this run did not evaluate the configured model.",
+                *(f"  {line}" for line in integrity.describe()),
+                "  The metrics below were computed over deterministic-fallback output and are",
+                "  NOT model-quality metrics. No threshold verdict is reported.",
+                "",
+            ]
+
         lines = [
             "Weathra evaluation",
             "=" * 60,
+            *banner,
             f"dataset       {self.configuration.dataset_version}",
             f"mode          {self.configuration.mode.value}",
             f"provider      {self.configuration.weather_provider}",
@@ -137,6 +175,12 @@ class RunResult(BaseModel):
             f"embedder      {self.configuration.embedding_model}",
             f"commit        {self.configuration.commit_sha or '-'}",
             f"cases         {len(self.cases)} of {self.configuration.cases_selected} selected",
+            f"served        {self.metrics.cases_scored} scored"
+            + (
+                f", {len(self.metrics.cases_quarantined)} quarantined"
+                if self.metrics.cases_quarantined
+                else ""
+            ),
             f"duration      {self.duration_seconds:.1f}s",
             "",
             "Metrics",
@@ -352,6 +396,13 @@ async def _execute_case(
     final = answers[-1]
     evidence = final.get("evidence") or {}
 
+    # Every turn's attempts, not only the final one. A multi-turn case whose *second* turn fell
+    # back is contaminated in exactly the dimension the memory metrics measure, and reading only
+    # the last turn would miss a first-turn failure entirely.
+    attempts = tuple(
+        attempt for answer in answers for attempt in _attempts_in(answer.get("evidence") or {})
+    )
+
     reference_value = (
         _compute_reference(case.reference, evidence) if case.reference is not None else None
     )
@@ -381,6 +432,7 @@ async def _execute_case(
         clarification_asked=bool(final.get("clarification_question")),
         refused=bool(final.get("unanswered_parts")),
         carries_weather_data=bool(final.get("findings")),
+        inference_attempts=attempts,
     )
 
     return outcome, CaseRecord(
@@ -392,7 +444,26 @@ async def _execute_case(
         latency_ms=outcome.latency_ms,
         http_status=outcome.http_status,
         error=error,
+        inference_attempts=attempts,
+        model_served=outcome.model_served,
     )
+
+
+def _attempts_in(evidence: dict[str, Any]) -> tuple[InferenceAttempt, ...]:
+    """The inference attempts an answer's evidence record carries.
+
+    Parsed rather than trusted: the evidence arrives as JSON over HTTP like any other response
+    field, and an unparseable entry is dropped with a warning rather than failing the run — a
+    malformed provenance record is a reason to look at the record, not to lose the case.
+    """
+    raw = evidence.get("inference_attempts") or ()
+    parsed: list[InferenceAttempt] = []
+    for entry in raw:
+        try:
+            parsed.append(InferenceAttempt.model_validate(entry))
+        except Exception:  # a bad entry must not take the run down
+            logger.warning("could not read an inference attempt from the evidence record")
+    return tuple(parsed)
 
 
 def _error_code(response: httpx.Response) -> str | None:
@@ -480,6 +551,7 @@ async def execute_run(
     cases = select_cases(category=category, case_id=case_id)
     started = datetime.now(UTC)
     engines = Engines.create(settings)
+    pacing = settings.evaluation_llm_min_interval_seconds if mode is EvaluationMode.LIVE else 0.0
 
     try:
         async with build_evaluation_app(settings, mode=mode) as prepared:
@@ -487,7 +559,29 @@ async def execute_run(
             outcomes: list[CaseOutcome] = []
             records: list[CaseRecord] = []
 
-            for case in cases:
+            # Ask the configured model one question before spending the dataset on it. A withdrawn
+            # model, an exhausted quota or a rejected credential all answer here, in one call
+            # rather than eighty — which is exactly what should have happened to the Task 22.8
+            # live runs instead of forty fallback answers being scored as model quality.
+            probe = await _preflight(prepared, mode)
+            if probe is not None:
+                return _aborted_run(
+                    settings,
+                    cases=cases,
+                    prepared=prepared,
+                    started=started,
+                    probe=probe,
+                    category=category,
+                    case_id=case_id,
+                    mode=mode,
+                )
+
+            for index, case in enumerate(cases):
+                if pacing > 0 and index > 0:
+                    # Spacing, not a retry. Forty cases at up to two calls each would otherwise
+                    # arrive as one burst and trip a free tier's per-minute ceiling on a model
+                    # that is working perfectly well.
+                    await asyncio.sleep(pacing)
                 logger.info("running %s (%s)", case.case_id, case.category.value)
                 prepared.script_for(case)
                 outcome, record = await _execute_case(case, prepared.client, identity, settings)
@@ -495,7 +589,21 @@ async def execute_run(
                 records.append(record)
 
             metrics = compute_metrics(outcomes, cases)
-            thresholds = evaluate_thresholds(metrics)
+            integrity = assess_integrity(
+                outcomes,
+                metrics,
+                mode=mode,
+                minimum_served_rate=settings.evaluation_min_served_rate,
+                gated_metrics=GATED_METRICS,
+                # Only when quarantine actually removed something; otherwise the two reports are
+                # identical by construction and computing the second would be waste.
+                metrics_before_quarantine=(
+                    compute_metrics(outcomes, cases, quarantine=False)
+                    if metrics.cases_quarantined
+                    else metrics
+                ),
+            )
+            thresholds = evaluate_thresholds(metrics, integrity=integrity)
             configuration = RunConfiguration(
                 dataset_version=DATASET_VERSION,
                 mode=mode,
@@ -526,6 +634,118 @@ async def execute_run(
     )
 
 
+async def _preflight(prepared: Any, mode: EvaluationMode) -> InferenceAttempt | None:
+    """Ask the configured model one structured question. ``None`` means it answered.
+
+    Only in live mode: offline substitutes a client that cannot fail this way, and spending a
+    probe on it would test the stand-in.
+
+    The probe goes through Weathra's own client and its own ``complete_json``, so it exercises the
+    same translation and the same bounded JSON retry a case would. A probe that bypassed them
+    could pass while every real call failed.
+    """
+    if mode is not EvaluationMode.LIVE:
+        return None
+
+    from weathra.agents.llm.base import Message, classify_inference_failure
+    from weathra.agents.plan import RoutingPlan
+    from weathra.agents.supervisor import ROUTING_SYSTEM_PROMPT
+    from weathra.domain.errors import WeathraError
+    from weathra.domain.evidence import InferenceStage
+
+    client = prepared.app.state.inference.get()
+    started = time.perf_counter()
+    try:
+        await client.complete_json(
+            system=ROUTING_SYSTEM_PROMPT,
+            messages=[Message.user("Question: will it rain in Berlin tomorrow?")],
+            schema=RoutingPlan,
+        )
+    except WeathraError as exc:
+        status, http_status = classify_inference_failure(exc)
+        latency = (time.perf_counter() - started) * 1000.0
+        if status.served:
+            # The model answered and could not produce a valid plan. That is a quality result, and
+            # a quality result is what the dataset exists to measure — so the run proceeds and the
+            # metrics say so, rather than the probe pre-judging the model.
+            logger.warning("pre-flight produced invalid output; running the dataset anyway")
+            return None
+        logger.error("pre-flight failed (%s); aborting before any case runs", status.value)
+        return InferenceAttempt(
+            stage=InferenceStage.ROUTING,
+            status=status,
+            provider=client.provider_id,
+            selected_model=client.model_id,
+            http_status=http_status,
+            error_code=exc.code,
+            fallback_reason=(
+                "Pre-flight: the configured model could not serve a call, so the dataset was "
+                "not executed."
+            ),
+            latency_ms=latency,
+        )
+
+    logger.info("pre-flight served by %s/%s", client.provider_id, client.model_id)
+    return None
+
+
+def _aborted_run(
+    settings: Settings,
+    *,
+    cases: tuple[EvaluationCase, ...],
+    prepared: Any,
+    started: datetime,
+    probe: InferenceAttempt,
+    category: str | None,
+    case_id: str | None,
+    mode: EvaluationMode,
+) -> RunResult:
+    """A run that never executed a case, recorded honestly rather than not at all.
+
+    It carries the probe's own attempt as its diagnostic. There are no case records because there
+    were no cases — which is the point: a provider failure caught here costs one gateway call.
+    """
+    metrics = compute_metrics([], cases)
+    integrity = assess_integrity(
+        [],
+        metrics,
+        mode=mode,
+        minimum_served_rate=settings.evaluation_min_served_rate,
+        gated_metrics=GATED_METRICS,
+    )
+    integrity = integrity.model_copy(
+        update={
+            "attempts_by_status": {probe.status.value: 1},
+            "reason": (
+                f"Pre-flight: {probe.status.value}"
+                + (f" (HTTP {probe.http_status})" if probe.http_status else "")
+                + ". The dataset was not executed."
+            ),
+            "outcome": RunOutcome.PROVIDER_FAILURE,
+        }
+    )
+    return RunResult(
+        configuration=RunConfiguration(
+            dataset_version=DATASET_VERSION,
+            mode=mode,
+            llm_provider=prepared.llm_provider,
+            llm_model=prepared.llm_model,
+            weather_provider=prepared.weather_provider,
+            embedding_model=settings.embedding_model_id,
+            commit_sha=_commit_sha(),
+            category_filter=category,
+            case_filter=case_id,
+            test_user=prepared.identity.recorded(),
+            cases_selected=len(cases),
+        ),
+        cases=(),
+        metrics=metrics,
+        thresholds=evaluate_thresholds(metrics, integrity=integrity),
+        started_at=started,
+        completed_at=datetime.now(UTC),
+    )
+
+
 def _failing_case_ids(metrics: MetricsReport) -> set[str]:
     """Every case that failed any metric it was applicable to.
 
@@ -548,7 +768,8 @@ def main(argv: list[str] | None = None) -> int:
         description=(
             "Execute Weathra's evaluation dataset, compute the ten metrics, and report each "
             "acceptance threshold. Offline by default: no network, no credential, and every "
-            "deterministic metric still computed."
+            "deterministic metric still computed. Exits 0 on a pass, 1 on a missed threshold, "
+            "2 on a misconfiguration, and 3 when the configured model did not serve the run."
         ),
     )
     parser.add_argument(
@@ -570,10 +791,21 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Store the run in the database for cross-run comparison.",
     )
+    parser.add_argument(
+        "--min-served-rate",
+        type=float,
+        default=None,
+        help=(
+            "Proportion of cases the configured model must serve for the run to be scored as "
+            "model quality. Defaults to EVALUATION_MIN_SERVED_RATE (1.0)."
+        ),
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
     settings = Settings()
+    if args.min_served_rate is not None:
+        settings = settings.model_copy(update={"evaluation_min_served_rate": args.min_served_rate})
     mode = EvaluationMode(args.mode)
 
     if mode is EvaluationMode.LIVE and not settings.inference_configured:
@@ -598,6 +830,15 @@ def main(argv: list[str] | None = None) -> int:
         args.output.write_text(json.dumps(payload, indent=2, sort_keys=True))
     print(json.dumps(payload, indent=2, sort_keys=True) if args.as_json else result.report())
 
+    if result.provider_failed:
+        # Distinct from 1 on purpose. A provider outage and a model that scored badly are
+        # different findings and must not share an exit code: CI gating on 1 would otherwise
+        # report "Weathra got worse" every time the gateway had a bad afternoon.
+        print(
+            "\nThe configured model did not serve this run, so no quality verdict was produced.",
+            file=sys.stderr,
+        )
+        return 3
     return 0 if result.passed else 1
 
 

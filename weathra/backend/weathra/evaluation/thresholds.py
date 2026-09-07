@@ -30,9 +30,11 @@ import logging
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from weathra.evaluation.integrity import InferenceIntegrity, RunOutcome
 from weathra.evaluation.metrics import MetricName, MetricResult, MetricsReport
 
 __all__ = [
+    "GATED_METRICS",
     "THRESHOLDS",
     "ThresholdOutcome",
     "ThresholdReport",
@@ -114,6 +116,10 @@ THRESHOLDS: tuple[Threshold, ...] = (
     ),
 )
 
+# The metrics that gate acceptance, named once so the integrity classifier and the threshold
+# evaluation cannot disagree about which gates a quarantine could empty.
+GATED_METRICS: tuple[str, ...] = tuple(threshold.metric.value for threshold in THRESHOLDS)
+
 # Reported for every run whether or not they gate acceptance, because a gate would be the wrong
 # instrument: groundedness and hallucination rate depend on a heuristic figure match, memory
 # correctness on a small denominator, and latency on the machine the run happened to be on.
@@ -165,20 +171,40 @@ class ThresholdReport(BaseModel):
     non_gating: dict[str, MetricResult] = Field(
         default_factory=dict, description="Reported for every run, gating or not."
     )
-    passed: bool = Field(
+    passed: bool | None = Field(
         description=(
             "True when every *applicable* threshold is met. A threshold whose metric had no "
-            "applicable cases is not counted either way."
+            "applicable cases is not counted either way. **Null** when the run was classified a "
+            "provider failure: a run the configured model did not serve has no quality verdict "
+            "to give, and reporting one would be the defect this field exists to avoid."
         )
     )
     measured_thresholds: int = Field(ge=0)
     inapplicable_thresholds: tuple[str, ...] = ()
+    integrity: InferenceIntegrity | None = Field(
+        default=None,
+        description="Whether the configured model served the run. Absent on a legacy report.",
+    )
+
+    @property
+    def run_outcome(self) -> RunOutcome | None:
+        return self.integrity.outcome if self.integrity else None
+
+    @property
+    def provider_failed(self) -> bool:
+        return self.integrity is not None and not self.integrity.representative
 
     @property
     def missed(self) -> tuple[ThresholdOutcome, ...]:
         return tuple(outcome for outcome in self.outcomes if outcome.missed)
 
     def summary(self) -> str:
+        if self.provider_failed:
+            assert self.integrity is not None
+            return (
+                "PROVIDER FAILURE — the configured model did not serve this run, so no threshold "
+                f"verdict is reported. {self.integrity.reason or ''}".strip()
+            )
         if self.passed and not self.inapplicable_thresholds:
             return f"PASS — every one of {self.measured_thresholds} thresholds met."
         if self.passed:
@@ -191,6 +217,11 @@ class ThresholdReport(BaseModel):
         return f"FAIL — {len(self.missed)} of {self.measured_thresholds} thresholds missed: {names}"
 
     def describe(self) -> tuple[str, ...]:
+        if self.provider_failed:
+            return (
+                "Not evaluated — the configured model did not serve this run.",
+                *(f"  {outcome.statement} — not evaluated" for outcome in self.outcomes),
+            )
         lines = [outcome.describe() for outcome in self.outcomes]
         lines.append("")
         lines.append("Reported but not gating:")
@@ -198,8 +229,15 @@ class ThresholdReport(BaseModel):
         return tuple(lines)
 
 
-def evaluate_thresholds(report: MetricsReport) -> ThresholdReport:
-    """Every threshold, judged against the metrics, with margins and failing cases named."""
+def evaluate_thresholds(
+    report: MetricsReport, *, integrity: InferenceIntegrity | None = None
+) -> ThresholdReport:
+    """Every threshold, judged against the metrics, with margins and failing cases named.
+
+    ``integrity`` decides whether a verdict is given at all. A run the configured model did not
+    serve gets ``passed = None`` — not ``False``. Reporting it as a failure would say the model
+    performed badly, which is precisely the false statement Task 22.8's runs made.
+    """
     outcomes: list[ThresholdOutcome] = []
     inapplicable: list[str] = []
 
@@ -224,9 +262,16 @@ def evaluate_thresholds(report: MetricsReport) -> ThresholdReport:
         )
 
     measured = [outcome for outcome in outcomes if outcome.passed is not None]
-    overall = all(outcome.passed for outcome in measured)
+    overall: bool | None = all(outcome.passed for outcome in measured)
 
-    if not overall:
+    if integrity is not None and not integrity.representative:
+        # No verdict. The metrics above were computed over whatever the fallback produced, and
+        # calling that a pass or a fail would attribute it to a model that did not answer.
+        overall = None
+        logger.warning(
+            "no threshold verdict: %s", integrity.reason or "the model did not serve the run"
+        )
+    elif not overall:
         logger.warning(
             "evaluation failed %d threshold(s): %s",
             len([outcome for outcome in measured if not outcome.passed]),
@@ -243,4 +288,5 @@ def evaluate_thresholds(report: MetricsReport) -> ThresholdReport:
         passed=overall,
         measured_thresholds=len(measured),
         inapplicable_thresholds=tuple(inapplicable),
+        integrity=integrity,
     )

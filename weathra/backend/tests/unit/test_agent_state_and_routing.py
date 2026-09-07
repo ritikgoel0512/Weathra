@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from weathra.agents.evidence import build_record
 from weathra.agents.llm.fake import FakeLLMClient
 from weathra.agents.plan import (
     Capability,
@@ -20,8 +21,18 @@ from weathra.agents.plan import (
 from weathra.agents.state import GraphState
 from weathra.agents.supervisor import catalog_capabilities, route
 from weathra.domain.comparison import Criterion
-from weathra.domain.errors import ProviderUnavailable
-from weathra.domain.evidence import AgentName, StepStatus
+from weathra.domain.errors import (
+    ProviderRateLimited,
+    ProviderTimeout,
+    ProviderUnavailable,
+)
+from weathra.domain.evidence import (
+    AgentName,
+    InferenceAttempt,
+    InferenceStage,
+    InferenceStatus,
+    StepStatus,
+)
 from weathra.domain.identity import Principal
 from weathra.domain.location import Location
 from weathra.domain.weather import UnitSystem
@@ -664,3 +675,142 @@ def test_a_date_word_after_a_preposition_is_not_taken_for_a_place() -> None:
     assert extract_location("How warm was it in June?") is None
     assert extract_location("What is the forecast for Monday?") is None
     assert extract_location("Will it rain in Berlin on Tuesday?") == "Berlin"
+
+
+# =========================================================================== task 22.8
+#
+# Inference provenance. Task 22.8's live runs produced forty answers that looked like a model's
+# work and were not, because nothing recorded whether a model had actually answered. These assert
+# that the record now says — *and* that the product's graceful fallback is untouched, which is the
+# constraint the whole design is built around.
+
+
+async def test_a_served_routing_call_records_the_model_that_answered() -> None:
+    client = FakeLLMClient(
+        json_responses=[_plan(PlanStep(capability=Capability.FORECAST, reason="r"))]
+    )
+
+    state = await route(_state(), client=client, now=NOW)
+
+    assert state.routing_source == "model"
+    assert len(state.inference_attempts) == 1
+    attempt = state.inference_attempts[0]
+    assert attempt.stage is InferenceStage.ROUTING
+    assert attempt.status is InferenceStatus.SERVED
+    assert attempt.served is True
+    assert attempt.provider == client.provider_id
+    assert attempt.selected_model == client.model_id
+    assert attempt.served_model == client.model_id
+    assert attempt.latency_ms is not None
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected"),
+    [
+        (
+            ProviderUnavailable("withdrawn", details={"provider": "p", "status": 404}),
+            InferenceStatus.MODEL_UNAVAILABLE,
+        ),
+        (
+            ProviderUnavailable("broken", details={"provider": "p", "status": 503}),
+            InferenceStatus.PROVIDER_ERROR,
+        ),
+        (
+            ProviderRateLimited("slow down", details={"provider": "p", "status": 429}),
+            InferenceStatus.RATE_LIMITED,
+        ),
+        (ProviderTimeout("no reply", details={"provider": "p"}), InferenceStatus.TIMEOUT),
+    ],
+    ids=["404", "5xx", "429", "timeout"],
+)
+async def test_a_provider_failure_is_recorded_and_the_run_still_routes(
+    failure: Exception, expected: InferenceStatus
+) -> None:
+    """Both halves matter. The failure is recorded *and* the question still gets an answer — the
+    product's graceful degradation is preserved, it is merely no longer silent."""
+    state = await route(_state(), client=FakeLLMClient(failure=failure), now=NOW)
+
+    assert state.plan is not None, "the deterministic router must still produce a plan"
+    assert state.routing_source == "deterministic_fallback"
+
+    attempt = state.inference_attempts[0]
+    assert attempt.status is expected
+    assert attempt.served is False
+    assert attempt.status.infrastructure_failure is True
+    assert attempt.error_code == failure.code  # type: ignore[attr-defined]
+    assert attempt.fallback_reason
+
+
+async def test_an_unparseable_plan_records_invalid_output_not_a_provider_failure() -> None:
+    """The model answered. It answered badly. That is a quality result and must never be
+    classified as an outage, or a weak model could launder its failures as one."""
+    client = FakeLLMClient(json_responses=["this is not a routing plan"])
+
+    state = await route(_state(), client=client, now=NOW)
+
+    attempt = state.inference_attempts[0]
+    assert attempt.status is InferenceStatus.INVALID_OUTPUT
+    assert attempt.served is True
+    assert attempt.status.infrastructure_failure is False
+    assert state.routing_source == "deterministic_fallback"
+
+
+async def test_a_run_with_no_client_records_that_rather_than_leaving_an_absence() -> None:
+    """ "No credential" and "the model failed" produce identical prose. Only the record separates
+    them, so the record has to say."""
+    state = await route(_state(), client=None, now=NOW)
+
+    assert state.inference_attempts[0].status is InferenceStatus.NOT_CONFIGURED
+    assert state.plan is not None
+
+
+async def test_the_evidence_record_reports_whether_a_model_served_the_run() -> None:
+    served = await route(
+        _state(),
+        client=FakeLLMClient(
+            json_responses=[_plan(PlanStep(capability=Capability.RAG, reason="r"))]
+        ),
+        now=NOW,
+    )
+    fell_back = await route(
+        _state(),
+        client=FakeLLMClient(
+            failure=ProviderUnavailable("withdrawn", details={"provider": "p", "status": 404})
+        ),
+        now=NOW,
+    )
+
+    record_served = build_record(served, provider_id="openrouter", model_id="vendor/m")
+    record_fallback = build_record(fell_back, provider_id="openrouter", model_id="vendor/m")
+
+    assert record_served.model_served is True
+    assert record_served.fallback_used is False
+
+    assert record_fallback.model_served is False
+    assert record_fallback.fallback_used is True
+    # The configured identity is still recorded — and is exactly what used to be mistaken for
+    # evidence that the model answered. It names a model; it does not vouch for one.
+    assert record_fallback.llm_model == "vendor/m"
+
+
+async def test_a_partly_fallen_back_run_is_not_reported_as_model_served() -> None:
+    """Not "at least one attempt served". A run whose routing came from the model and whose prose
+    came from code is contaminated in exactly the dimension the wording metrics measure."""
+    state = await route(
+        _state(),
+        client=FakeLLMClient(
+            json_responses=[_plan(PlanStep(capability=Capability.RAG, reason="r"))]
+        ),
+        now=NOW,
+    )
+    state = state.with_inference_attempt(
+        InferenceAttempt(
+            stage=InferenceStage.SYNTHESIS,
+            status=InferenceStatus.MODEL_UNAVAILABLE,
+            http_status=404,
+        )
+    )
+
+    record = build_record(state, provider_id="openrouter", model_id="vendor/m")
+    assert record.model_served is False
+    assert record.fallback_used is True

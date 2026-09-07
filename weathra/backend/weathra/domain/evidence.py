@@ -33,6 +33,9 @@ __all__ = [
     "EvidenceRecord",
     "Finding",
     "GroundingReport",
+    "InferenceAttempt",
+    "InferenceStage",
+    "InferenceStatus",
     "KnowledgeCitation",
     "ResolvedContext",
     "StepStatus",
@@ -62,6 +65,121 @@ class StepStatus(StrEnum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     SKIPPED = "skipped"
+
+
+class InferenceStage(StrEnum):
+    """Which call a language model was asked to make.
+
+    The *role* rather than the node, so a second node needing a structured decision records
+    ``ROUTING`` without a new member. These are the two roles the graph actually has.
+    """
+
+    ROUTING = "routing"
+    SYNTHESIS = "synthesis"
+
+
+class InferenceStatus(StrEnum):
+    """How one language model call attempt ended.
+
+    The distinction this enum exists to hold is between a model that **answered badly** and a
+    model that **did not answer**. ``INVALID_OUTPUT`` is the first: the gateway returned a
+    completion and its content failed schema validation, which is a quality result and is scored
+    as one. Every other non-served member is the second: no completion came back, so anything the
+    run went on to produce was produced without a model.
+
+    Collapsing those two would let a genuinely weak model launder its failures as an outage, and
+    would let an outage be reported as a weak model. Task 22.8's live runs were the latter.
+    """
+
+    SERVED = "served"
+    INVALID_OUTPUT = "invalid_output"
+    RATE_LIMITED = "rate_limited"
+    MODEL_UNAVAILABLE = "model_unavailable"
+    PROVIDER_ERROR = "provider_error"
+    TIMEOUT = "timeout"
+    NOT_CONFIGURED = "not_configured"
+
+    @property
+    def served(self) -> bool:
+        """Whether the configured model actually produced a completion.
+
+        ``INVALID_OUTPUT`` counts: the model answered, and being wrong is a quality outcome.
+        """
+        return self in _SERVED_STATUSES
+
+    @property
+    def infrastructure_failure(self) -> bool:
+        """Whether this outcome is the provider's doing rather than the model's judgement.
+
+        The predicate a failover rule may read (``specs/model-policy``) and the one the
+        evaluation integrity classifier reads. ``NOT_CONFIGURED`` is excluded deliberately: a
+        missing or rejected credential is a configuration fault, and retrying or failing over
+        would send an operator to a status page when the answer is on their settings screen.
+        """
+        return self in _INFRASTRUCTURE_STATUSES
+
+
+_SERVED_STATUSES = frozenset({InferenceStatus.SERVED, InferenceStatus.INVALID_OUTPUT})
+_INFRASTRUCTURE_STATUSES = frozenset(
+    {
+        InferenceStatus.RATE_LIMITED,
+        InferenceStatus.MODEL_UNAVAILABLE,
+        InferenceStatus.PROVIDER_ERROR,
+        InferenceStatus.TIMEOUT,
+    }
+)
+
+
+class InferenceAttempt(BaseModel):
+    """One language model call attempt, and what became of it.
+
+    **Why this is on the evidence record and not only in a log.** ``specs/agent-orchestration``
+    requires the record to be sufficient for a reader to verify every claim in the answer without
+    re-running it. "A language model wrote this sentence" is such a claim, and until this type
+    existed it was the one claim the record could not support: ``llm_provider`` and ``llm_model``
+    are read off the *configured* client, so they name a model whether or not it answered.
+
+    **The policy fields are nullable on purpose.** ``catalog_key``, ``policy_id``, ``plan`` and
+    ``resolution_reason`` are filled by the model policy layer when it lands. They are declared
+    now so that layer *populates an existing record* rather than introducing a second, parallel
+    one that can drift from this one — the same reason the telemetry event of
+    ``specs/llm-telemetry`` is a projection of this type rather than a re-derivation.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    stage: InferenceStage
+    attempt_number: int = Field(default=1, ge=1, description="1-based, within the stage.")
+    status: InferenceStatus
+    provider: str | None = None
+    selected_model: str | None = Field(
+        default=None, description="What was asked for, before the gateway had a say."
+    )
+    served_model: str | None = Field(
+        default=None,
+        description=(
+            "As the gateway reported it. Differs from ``selected_model`` when a route "
+            "substituted one, which is a fact worth seeing rather than smoothing over."
+        ),
+    )
+    catalog_key: str | None = Field(default=None, description="Filled by the model policy layer.")
+    policy_id: str | None = Field(default=None, description="Filled by the model policy layer.")
+    plan: str | None = Field(default=None, description="Filled by the model policy layer.")
+    resolution_reason: str | None = None
+    http_status: int | None = Field(
+        default=None, description="Present where the failure carried one; a 404 is not a 500."
+    )
+    error_code: str | None = Field(
+        default=None, description="The ``WeathraError`` code, so the existing hierarchy is reused."
+    )
+    fallback_reason: str | None = Field(
+        default=None, description="Why the run continued as it did, in a reader's words."
+    )
+    latency_ms: float | None = Field(default=None, ge=0.0)
+
+    @property
+    def served(self) -> bool:
+        return self.status.served
 
 
 class Attribution(BaseModel):
@@ -302,9 +420,22 @@ class EvidenceRecord(BaseModel):
     attributions: tuple[Attribution, ...] = ()
     data_classes: tuple[DataClass, ...] = ()
     llm_provider: str | None = Field(
-        default=None, description="Null when the run answered without a model."
+        default=None,
+        description=(
+            "The *configured* provider. Null when no inference was configured at all. This is "
+            "not evidence that it answered — read ``inference_attempts`` for that."
+        ),
     )
-    llm_model: str | None = None
+    llm_model: str | None = Field(
+        default=None, description="The *configured* model, on the same terms as ``llm_provider``."
+    )
+    inference_attempts: tuple[InferenceAttempt, ...] = Field(
+        default=(),
+        description=(
+            "Every language model call attempt this run made, in order. Empty on a run that "
+            "needed no inference."
+        ),
+    )
     started_at: AwareDatetime
     completed_at: AwareDatetime
     total_duration_ms: float = Field(ge=0.0)
@@ -335,6 +466,24 @@ class EvidenceRecord(BaseModel):
         if self.partial and not self.partial_reason:
             raise ValueError("A partial run must state which bound it hit.")
         return self
+
+    @property
+    def model_served(self) -> bool:
+        """Whether the configured model materially served this run.
+
+        Every attempt the run made, served. Not "at least one": a run whose routing came from a
+        model and whose prose came from ``code_written_summary`` is a run a reader must not be
+        told a model wrote. False on a run that made no attempt at all, because a model that was
+        never asked did not serve anything.
+        """
+        return bool(self.inference_attempts) and all(
+            attempt.served for attempt in self.inference_attempts
+        )
+
+    @property
+    def fallback_used(self) -> bool:
+        """Whether any part of this run proceeded without the model it asked for."""
+        return any(not attempt.served for attempt in self.inference_attempts)
 
     @property
     def retrieval_happened(self) -> bool:

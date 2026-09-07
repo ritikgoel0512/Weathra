@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from weathra.domain.evidence import InferenceAttempt, InferenceStage, InferenceStatus
 from weathra.evaluation.cases import (
     DATASET_DIRECTORY,
     DATASET_VERSION,
@@ -23,6 +24,7 @@ from weathra.evaluation.cases import (
     composition,
     load_dataset,
 )
+from weathra.evaluation.integrity import RunOutcome, assess_integrity
 from weathra.evaluation.metrics import (
     METRIC_NAMES,
     CaseOutcome,
@@ -30,7 +32,8 @@ from weathra.evaluation.metrics import (
     compute_metrics,
     figures_in,
 )
-from weathra.evaluation.thresholds import THRESHOLDS, evaluate_thresholds
+from weathra.evaluation.provisioning import EvaluationMode
+from weathra.evaluation.thresholds import GATED_METRICS, THRESHOLDS, evaluate_thresholds
 
 # =========================================================================== 22.1 the dataset
 
@@ -858,3 +861,218 @@ def test_every_threshold_in_the_specification_is_evaluated() -> None:
         threshold.metric for threshold in THRESHOLDS
     }
     assert len(THRESHOLDS) == 7, "the specification's table has seven gating thresholds"
+
+
+# =========================================================================== task 22.9
+#
+# Evaluation inference integrity. Task 22.8's live runs scored forty deterministic-fallback answers
+# as though a language model had written them, missed the thresholds, and were recorded as a
+# quality failure of a model that never answered. These assert that cannot happen again.
+
+
+def _attempt(status: InferenceStatus, *, stage: InferenceStage = InferenceStage.ROUTING, **kw):
+    return InferenceAttempt(stage=stage, status=status, **kw)
+
+
+def _served(case_id: str, category: Category, **overrides: object) -> CaseOutcome:
+    return _outcome(
+        case_id,
+        category,
+        inference_attempts=(
+            _attempt(InferenceStatus.SERVED, served_model="vendor/pinned"),
+            _attempt(
+                InferenceStatus.SERVED, stage=InferenceStage.SYNTHESIS, served_model="vendor/pinned"
+            ),
+        ),
+        **overrides,
+    )
+
+
+def _fell_back(case_id: str, category: Category, **overrides: object) -> CaseOutcome:
+    return _outcome(
+        case_id,
+        category,
+        inference_attempts=(
+            _attempt(InferenceStatus.MODEL_UNAVAILABLE, http_status=404),
+            _attempt(
+                InferenceStatus.MODEL_UNAVAILABLE, stage=InferenceStage.SYNTHESIS, http_status=404
+            ),
+        ),
+        **overrides,
+    )
+
+
+def _assess(outcomes, metrics, *, mode=EvaluationMode.LIVE, floor: float = 1.0, cases=None):
+    return assess_integrity(
+        outcomes,
+        metrics,
+        mode=mode,
+        minimum_served_rate=floor,
+        gated_metrics=GATED_METRICS,
+        metrics_before_quarantine=(
+            compute_metrics(outcomes, cases, quarantine=False) if cases else metrics
+        ),
+    )
+
+
+def test_a_case_the_model_did_not_serve_is_excluded_from_every_metric() -> None:
+    """Both halves of every fraction. Not a pass, not a failure — the treatment an inapplicable
+    case already gets, for the same reason: counting it either way is a claim nobody earned."""
+    cases = [
+        _case("served", Category.HISTORICAL, expected_tools=["weather_history"]),
+        _case("fallback", Category.HISTORICAL, expected_tools=["weather_history"]),
+    ]
+    report = compute_metrics(
+        [
+            _served("served", Category.HISTORICAL, tools_called=("weather_history",)),
+            _fell_back("fallback", Category.HISTORICAL, tools_called=("weather_history",)),
+        ],
+        cases,
+    )
+
+    result = report.result(MetricName.TOOL_SELECTION_ACCURACY)
+    assert result.denominator == 1, "the quarantined case must leave the denominator"
+    assert result.numerator == 1
+    assert "fallback" not in result.failing_cases, "and must not be counted as a failure either"
+    assert report.cases_quarantined == ("fallback",)
+    assert report.cases_scored == 1
+
+
+def test_a_fully_fallen_back_run_is_a_provider_failure_not_a_threshold_failure() -> None:
+    """The Task 22.8 regression, asserted directly."""
+    cases = [
+        _case(f"c{i}", Category.HISTORICAL, expected_tools=["weather_history"]) for i in range(4)
+    ]
+    outcomes = [_fell_back(f"c{i}", Category.HISTORICAL) for i in range(4)]
+
+    metrics = compute_metrics(outcomes, cases)
+    integrity = _assess(outcomes, metrics)
+    report = evaluate_thresholds(metrics, integrity=integrity)
+
+    assert integrity.outcome is RunOutcome.PROVIDER_FAILURE
+    assert integrity.cases_model_served == 0
+    assert integrity.served_rate == 0.0
+    assert report.passed is None, "no verdict — not a failing verdict"
+    assert report.provider_failed is True
+    assert "PROVIDER FAILURE" in report.summary()
+    assert not report.missed, "a provider outage names no missed threshold"
+
+
+def test_a_rate_limited_run_is_a_provider_failure_too() -> None:
+    cases = [_case("c0", Category.HISTORICAL, expected_tools=["weather_history"])]
+    outcomes = [
+        _outcome(
+            "c0",
+            Category.HISTORICAL,
+            inference_attempts=(_attempt(InferenceStatus.RATE_LIMITED, http_status=429),),
+        )
+    ]
+    integrity = _assess(outcomes, compute_metrics(outcomes, cases))
+
+    assert integrity.outcome is RunOutcome.PROVIDER_FAILURE
+    assert integrity.attempts_by_status == {"rate_limited": 1}
+    assert "rate_limited" in (integrity.reason or "")
+
+
+def test_invalid_output_is_scored_rather_than_quarantined() -> None:
+    """A model that answered badly served the evaluation. Quarantining it would let a weak model
+    escape measurement by producing garbage."""
+    cases = [_case("c0", Category.HISTORICAL, expected_tools=["weather_history"])]
+    outcomes = [
+        _outcome(
+            "c0",
+            Category.HISTORICAL,
+            tools_called=("weather_history",),
+            inference_attempts=(_attempt(InferenceStatus.INVALID_OUTPUT),),
+        )
+    ]
+    metrics = compute_metrics(outcomes, cases)
+    integrity = _assess(outcomes, metrics)
+
+    assert metrics.cases_quarantined == ()
+    assert integrity.outcome is RunOutcome.SCORED
+    assert evaluate_thresholds(metrics, integrity=integrity).passed is not None
+
+
+def test_a_run_below_the_served_floor_is_a_provider_failure() -> None:
+    cases = [
+        _case(f"c{i}", Category.HISTORICAL, expected_tools=["weather_history"]) for i in range(4)
+    ]
+    outcomes = [
+        _served("c0", Category.HISTORICAL, tools_called=("weather_history",)),
+        _served("c1", Category.HISTORICAL, tools_called=("weather_history",)),
+        _served("c2", Category.HISTORICAL, tools_called=("weather_history",)),
+        _fell_back("c3", Category.HISTORICAL),
+    ]
+    metrics = compute_metrics(outcomes, cases)
+
+    assert _assess(outcomes, metrics, floor=1.0).outcome is RunOutcome.PROVIDER_FAILURE
+    # Lowered deliberately: an exploratory run may accept a reduced basis, and says so.
+    relaxed = _assess(outcomes, metrics, floor=0.75)
+    assert relaxed.outcome is RunOutcome.SCORED
+    assert relaxed.served_rate == 0.75
+
+
+def test_a_gate_emptied_by_quarantine_invalidates_the_run() -> None:
+    """The degenerate case: quarantine everything a gate applied to, and the gate would otherwise
+    "pass" over nothing at all."""
+    cases = [
+        _case("numeric", Category.ANALYTICS, reference={"statistic": "mean", "measure": "t"}),
+        _case("other", Category.HISTORICAL),
+    ]
+    outcomes = [
+        _fell_back("numeric", Category.ANALYTICS),
+        _served("other", Category.HISTORICAL),
+    ]
+    metrics = compute_metrics(outcomes, cases)
+    integrity = _assess(outcomes, metrics, floor=0.5, cases=cases)
+
+    assert not metrics.result(MetricName.NUMERICAL_CALCULATION_ACCURACY).applicable
+    assert integrity.outcome is RunOutcome.PROVIDER_FAILURE
+    assert "numerical_calculation_accuracy" in integrity.emptied_thresholds
+
+
+def test_an_offline_run_is_not_applicable_rather_than_a_provider_failure() -> None:
+    """CI's offline run must keep passing. It evaluates no live model, so the question of whether
+    one served it does not arise."""
+    cases = [_case("c0", Category.HISTORICAL, expected_tools=["weather_history"])]
+    outcomes = [_served("c0", Category.HISTORICAL, tools_called=("weather_history",))]
+    metrics = compute_metrics(outcomes, cases)
+    integrity = _assess(outcomes, metrics, mode=EvaluationMode.OFFLINE)
+
+    assert integrity.outcome is RunOutcome.NOT_APPLICABLE
+    assert integrity.representative is True
+    assert evaluate_thresholds(metrics, integrity=integrity).passed is True
+
+
+def test_outcomes_with_no_recorded_attempts_are_still_scored() -> None:
+    """Absence of evidence is not evidence of fallback. A record predating the provenance field,
+    or a synthetic outcome, must not be retroactively voided."""
+    cases = [_case("c0", Category.HISTORICAL, expected_tools=["weather_history"])]
+    outcomes = [_outcome("c0", Category.HISTORICAL, tools_called=("weather_history",))]
+    metrics = compute_metrics(outcomes, cases)
+
+    assert metrics.cases_quarantined == ()
+    assert metrics.result(MetricName.TOOL_SELECTION_ACCURACY).denominator == 1
+
+
+def test_the_integrity_report_names_the_models_that_actually_answered() -> None:
+    """A pinned run that observed two distinct served models had a route substitute one, and that
+    is a fact a reproducible evaluation has to surface rather than average over."""
+    cases = [_case("c0", Category.HISTORICAL), _case("c1", Category.HISTORICAL)]
+    outcomes = [
+        _outcome(
+            "c0",
+            Category.HISTORICAL,
+            inference_attempts=(_attempt(InferenceStatus.SERVED, served_model="vendor/a"),),
+        ),
+        _outcome(
+            "c1",
+            Category.HISTORICAL,
+            inference_attempts=(_attempt(InferenceStatus.SERVED, served_model="vendor/b"),),
+        ),
+    ]
+    integrity = _assess(outcomes, compute_metrics(outcomes, cases))
+
+    assert integrity.served_models == ("vendor/a", "vendor/b")
+    assert integrity.attempts_by_status == {"served": 2}

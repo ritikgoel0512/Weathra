@@ -337,8 +337,11 @@ export interface EvidenceRecord {
   readonly citations?: KnowledgeCitation[];
   readonly completed_at: string;
   readonly data_classes?: DataClass[];
+  /** Every language model call attempt this run made, in order. Empty on a run that needed no inference. */
+  readonly inference_attempts?: InferenceAttempt[];
+  /** The *configured* model, on the same terms as ``llm_provider``. */
   readonly llm_model?: string | null;
-  /** Null when the run answered without a model. */
+  /** The *configured* provider. Null when no inference was configured at all. This is not evidence that it answered — read ``inference_attempts`` for that. */
   readonly llm_provider?: string | null;
   /** True when a budget was exhausted before a complete answer. */
   readonly partial?: boolean;
@@ -474,6 +477,39 @@ export interface HorizonPoint {
 export interface HTTPValidationError {
   readonly detail?: ValidationError[];
 }
+
+/** One language model call attempt, and what became of it. */
+export interface InferenceAttempt {
+  /** 1-based, within the stage. */
+  readonly attempt_number?: number;
+  /** Filled by the model policy layer. */
+  readonly catalog_key?: string | null;
+  /** The ``WeathraError`` code, so the existing hierarchy is reused. */
+  readonly error_code?: string | null;
+  /** Why the run continued as it did, in a reader's words. */
+  readonly fallback_reason?: string | null;
+  /** Present where the failure carried one; a 404 is not a 500. */
+  readonly http_status?: number | null;
+  readonly latency_ms?: number | null;
+  /** Filled by the model policy layer. */
+  readonly plan?: string | null;
+  /** Filled by the model policy layer. */
+  readonly policy_id?: string | null;
+  readonly provider?: string | null;
+  readonly resolution_reason?: string | null;
+  /** What was asked for, before the gateway had a say. */
+  readonly selected_model?: string | null;
+  /** As the gateway reported it. Differs from ``selected_model`` when a route substituted one, which is a fact worth seeing rather than smoothing over. */
+  readonly served_model?: string | null;
+  readonly stage: InferenceStage;
+  readonly status: InferenceStatus;
+}
+
+/** Which call a language model was asked to make. */
+export type InferenceStage = "routing" | "synthesis";
+
+/** How one language model call attempt ended. */
+export type InferenceStatus = "served" | "invalid_output" | "rate_limited" | "model_unavailable" | "provider_error" | "timeout" | "not_configured";
 
 /** A retrieved knowledge chunk the answer drew on. */
 export interface KnowledgeCitation {

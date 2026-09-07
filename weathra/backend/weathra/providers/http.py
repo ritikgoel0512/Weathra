@@ -36,6 +36,8 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
@@ -68,6 +70,8 @@ class RetryPolicy:
     timeout_seconds: float
     max_retries: int
     backoff_seconds: float
+    rate_limit_max_wait_seconds: float = 0.0
+    """Ceiling on honouring a 429's ``Retry-After``. Zero means "do not honour it at all"."""
 
     @classmethod
     def for_providers(cls, settings: Settings) -> RetryPolicy:
@@ -83,6 +87,10 @@ class RetryPolicy:
             timeout_seconds=settings.llm_timeout_seconds,
             max_retries=settings.llm_max_retries,
             backoff_seconds=settings.http_backoff_seconds,
+            # Only the inference gateway honours Retry-After. A forecast is on a person's
+            # critical path and has ten seconds; waiting out a rate limit there would spend the
+            # whole budget on a request the caller is still waiting for.
+            rate_limit_max_wait_seconds=settings.llm_rate_limit_max_wait_seconds,
         )
 
     @property
@@ -187,6 +195,27 @@ async def _send_json(
                 raise specific
 
         if response.status_code in RETRYABLE_STATUSES and attempt < policy.attempts:
+            stated = _retry_after_seconds(response) if response.status_code == 429 else None
+            if stated is not None and stated > policy.rate_limit_max_wait_seconds:
+                # The gateway has told us how long it wants, and it is longer than we are willing
+                # to make a caller wait. Retrying sooner would be a request we already know will
+                # be refused, so the limit is reported instead of disguised as more attempts.
+                logger.info(
+                    "%s asked for %.1fs, beyond the %.1fs ceiling; not retrying",
+                    provider,
+                    stated,
+                    policy.rate_limit_max_wait_seconds,
+                )
+                raise ProviderRateLimited(
+                    f"{provider} rate-limited the request and asked for {stated:g}s, beyond the "
+                    f"{policy.rate_limit_max_wait_seconds:g}s ceiling.",
+                    details={
+                        "provider": provider,
+                        "status": 429,
+                        "attempts": attempt,
+                        "retry_after_seconds": stated,
+                    },
+                )
             logger.info(
                 "retrying %s after status %s (attempt %s of %s)",
                 provider,
@@ -194,13 +223,19 @@ async def _send_json(
                 attempt,
                 policy.attempts,
             )
-            await _backoff(policy, attempt)
+            await _backoff(policy, attempt, stated_delay=stated)
             continue
 
         if response.status_code == 429:
+            stated = _retry_after_seconds(response)
             raise ProviderRateLimited(
                 f"{provider} rate-limited the request.",
-                details={"provider": provider, "status": 429, "attempts": attempt},
+                details={
+                    "provider": provider,
+                    "status": 429,
+                    "attempts": attempt,
+                    **({"retry_after_seconds": stated} if stated is not None else {}),
+                },
             )
 
         if response.status_code >= 400:
@@ -244,9 +279,45 @@ async def _send_json(
     )
 
 
-async def _backoff(policy: RetryPolicy, attempt: int) -> None:
-    """Linear backoff. Deliberately not exponential: the ceiling is two or three attempts inside a
-    ten-second budget, so a doubling delay would spend the budget waiting rather than trying."""
+def _retry_after_seconds(response: httpx.Response) -> float | None:
+    """The gateway's own ``Retry-After``, in seconds, when it states one it means.
+
+    Both forms are accepted because both are used: delta-seconds, and an HTTP-date. A date already
+    in the past yields zero rather than a negative sleep. A header we cannot parse is treated as
+    absent — guessing at a malformed delay would be worse than falling back to our own backoff.
+    """
+    raw = response.headers.get("Retry-After")
+    if raw is None:
+        return None
+
+    try:
+        return max(0.0, float(raw.strip()))
+    except ValueError:
+        pass
+
+    try:
+        moment = parsedate_to_datetime(raw.strip())
+    except (TypeError, ValueError):
+        return None
+    if moment is None:
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    return max(0.0, (moment - datetime.now(UTC)).total_seconds())
+
+
+async def _backoff(policy: RetryPolicy, attempt: int, *, stated_delay: float | None = None) -> None:
+    """Wait before the next attempt.
+
+    Linear rather than exponential by default: the ceiling is two or three attempts inside a
+    ten-second budget, so a doubling delay would spend the budget waiting rather than trying.
+
+    A ``Retry-After`` the gateway stated wins over our guess, capped by the policy's ceiling. The
+    gateway knows when its window opens and we do not, and sub-second linear backoff cannot clear
+    a per-minute rate limit however many times it is repeated.
+    """
     delay = policy.backoff_seconds * attempt
+    if stated_delay is not None:
+        delay = min(max(stated_delay, delay), policy.rate_limit_max_wait_seconds)
     if delay > 0:
         await asyncio.sleep(delay)

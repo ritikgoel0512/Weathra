@@ -7,23 +7,35 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from pydantic import SecretStr
 from sqlalchemy import text
 
+from weathra.agents.llm.openrouter import OpenRouterClient
 from weathra.config import Settings
 from weathra.db.engine import Engines
 from weathra.db.session import privileged_session
+from weathra.domain.errors import ProviderUnavailable
 from weathra.evaluation.cases import DATASET_VERSION, Category, load_dataset
 from weathra.evaluation.fixtures import MissingFixture, build_offline_transport, recorded_places
+from weathra.evaluation.integrity import RunOutcome
 from weathra.evaluation.metrics import MetricName
+from weathra.evaluation.offline_llm import OFFLINE_PROVIDER_ID
 from weathra.evaluation.provisioning import (
     TEST_USER_EMAIL,
     EvaluationMode,
     provision_test_user,
 )
-from weathra.evaluation.runner import execute_run, select_cases
+from weathra.evaluation.runner import (
+    RunResult,
+    _aborted_run,
+    _preflight,
+    execute_run,
+    select_cases,
+)
 from weathra.evaluation.storage import compare_runs, latest_runs, persist
 
 pytestmark = pytest.mark.db
@@ -491,3 +503,158 @@ def test_the_evaluation_fixtures_ship_with_the_package() -> None:
 
     pyproject = (Path(__file__).resolve().parents[2] / "pyproject.toml").read_text()
     assert "evaluation/fixtures/*.json" in pyproject or "evaluation/fixtures" in pyproject
+
+
+# =========================================================================== task 22.9
+#
+# Provider-failure classification, end to end through the real app. Task 22.8's live runs produced
+# forty deterministic-fallback answers, scored them as model quality, missed the thresholds, and
+# exited 1 — the same exit code a genuinely weak model produces. These assert the whole path.
+
+
+async def test_an_offline_run_records_every_case_as_model_served(
+    evaluation_settings: Settings,
+) -> None:
+    """CI's gate. The offline client is a real ``LLMClient`` and answers every call, so the new
+    integrity check must be invisible to it — a false provider failure here would break the
+    pull-request workflow on every run."""
+    result = await execute_run(
+        evaluation_settings, mode=EvaluationMode.OFFLINE, category=Category.KNOWLEDGE.value
+    )
+
+    assert result.metrics.cases_quarantined == ()
+    assert result.outcome is RunOutcome.NOT_APPLICABLE
+    assert result.provider_failed is False
+    assert result.passed is not None, "an offline run still gets a real verdict"
+    assert all(record.model_served for record in result.cases)
+    assert all(record.inference_attempts for record in result.cases), (
+        "every case must record what answered it, offline included"
+    )
+
+
+async def test_offline_attempts_name_the_offline_client_rather_than_a_gateway(
+    evaluation_settings: Settings,
+) -> None:
+    result = await execute_run(
+        evaluation_settings, mode=EvaluationMode.OFFLINE, category=Category.KNOWLEDGE.value
+    )
+    attempts = [a for record in result.cases for a in record.inference_attempts]
+
+    assert attempts, "the run made calls"
+    assert {a.status.value for a in attempts} == {"served"}
+    assert {a.stage.value for a in attempts} == {"routing", "synthesis"}
+    assert all(a.provider == OFFLINE_PROVIDER_ID for a in attempts)
+
+
+async def test_a_gateway_that_404s_every_call_is_a_provider_failure_not_a_threshold_failure(
+    evaluation_settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The Task 22.8 scenario, reproduced: a withdrawn model answering 404 for every call.
+
+    The run must not say the model performed badly. It must say the model did not answer.
+    """
+    result = await _run_with_failing_gateway(evaluation_settings, monkeypatch)
+
+    assert result.outcome is RunOutcome.PROVIDER_FAILURE
+    assert result.passed is None, "a provider outage produces no quality verdict"
+    assert result.thresholds.missed == (), "and names no missed threshold"
+    assert "PROVIDER FAILURE" in result.report()
+    assert "NOT model-quality metrics" in result.report()
+
+
+async def test_a_provider_failure_run_persists_with_no_verdict_and_keeps_its_diagnostics(
+    evaluation_settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``passed`` was always nullable and ``_verdict`` always rendered null as "not scored". The
+    honest third answer needed no migration — only somebody to stop collapsing it into "failed"."""
+    result = await _run_with_failing_gateway(evaluation_settings, monkeypatch)
+    run_id = await persist(evaluation_settings, result)
+
+    engines = Engines.create(evaluation_settings)
+    try:
+        async with privileged_session(engines.privileged_sessionmaker) as session:
+            stored = (
+                await session.execute(
+                    text("select passed, thresholds from evaluation_runs where id = :id"),
+                    {"id": run_id},
+                )
+            ).one()
+    finally:
+        await engines.dispose()
+
+    assert stored.passed is None, "not false — the model was never measured"
+    integrity = stored.thresholds["integrity"]
+    assert integrity["outcome"] == "provider_failure"
+    assert integrity["reason"]
+
+    runs = await latest_runs(evaluation_settings, limit=1)
+    assert runs[0]["verdict"] == "not scored"
+
+
+async def test_the_preflight_aborts_before_spending_the_dataset(
+    evaluation_settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One gateway call, not eighty. This is what should have happened to both historical runs."""
+    result = await _run_with_failing_gateway(evaluation_settings, monkeypatch)
+
+    assert result.cases == (), "no case may execute once the pinned model has failed its probe"
+    assert result.outcome is RunOutcome.PROVIDER_FAILURE
+    assert "Pre-flight" in (result.integrity.reason or "")
+    assert result.integrity.attempts_by_status == {"model_unavailable": 1}
+
+
+async def _run_with_failing_gateway(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> RunResult:
+    """A live-mode run whose gateway answers 404, with every other boundary left offline.
+
+    Live mode only so the pinned-model path and the integrity classifier actually run; the token,
+    the weather and the corpus stay offline, so this needs no credential and no network.
+    """
+    import httpx
+
+    from weathra.evaluation import harness as harness_module
+
+    live = settings.model_copy(
+        update={
+            "openrouter_api_key": SecretStr("test-credential-never-sent-anywhere"),
+            "llm_max_retries": 0,
+        }
+    )
+
+    real_build = harness_module.build_evaluation_app
+
+    def _offline_but_live(app_settings: Settings, *, mode: EvaluationMode):
+        # Provision and transport as offline; classify as live. The seam that lets a provider
+        # outage be exercised without a credential or a network.
+        return real_build(app_settings, mode=EvaluationMode.OFFLINE)
+
+    async def _always_404(*args: object, **kwargs: object) -> dict[str, object]:
+        raise ProviderUnavailable(
+            "openrouter rejected the request with status 404.",
+            details={"provider": "openrouter", "status": 404, "attempts": 1},
+        )
+
+    monkeypatch.setattr(OpenRouterClient, "complete_json", _always_404)
+    monkeypatch.setattr(OpenRouterClient, "complete", _always_404)
+
+    async with real_build(live, mode=EvaluationMode.OFFLINE) as prepared:
+        # The real gateway client, over the offline transport, in place of the scripted one.
+        prepared.app.state.inference.override(
+            OpenRouterClient(client=httpx.AsyncClient(), settings=live)
+        )
+        prepared.mode = EvaluationMode.LIVE
+        prepared.llm_provider = "openrouter"
+        prepared.llm_model = live.llm_model
+        probe = await _preflight(prepared, EvaluationMode.LIVE)
+        assert probe is not None
+        return _aborted_run(
+            live,
+            cases=select_cases(category=Category.KNOWLEDGE.value),
+            prepared=prepared,
+            started=datetime.now(UTC),
+            probe=probe,
+            category=Category.KNOWLEDGE.value,
+            case_id=None,
+            mode=EvaluationMode.LIVE,
+        )

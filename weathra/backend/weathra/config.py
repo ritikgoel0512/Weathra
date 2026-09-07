@@ -140,6 +140,14 @@ class Settings(BaseSettings):
         validation_alias="llm_json_max_attempts",
         description="Bounded retries when a JSON plan fails schema validation.",
     )
+    llm_rate_limit_max_wait_seconds: Annotated[float, Field(ge=0.0, le=120.0)] = Field(
+        default=30.0,
+        validation_alias="llm_rate_limit_max_wait_seconds",
+        description=(
+            "Ceiling on honouring a gateway's Retry-After. A stated delay beyond this stops the "
+            "retry rather than waiting: bounded patience, never an unbounded sleep."
+        ),
+    )
 
     # ---------------------------------------------------------------- weather providers
 
@@ -261,6 +269,28 @@ class Settings(BaseSettings):
     )
     saved_locations_limit: Annotated[int, Field(ge=1, le=500)] = Field(
         default=25, validation_alias="saved_locations_limit"
+    )
+
+    # ---------------------------------------------------------------- evaluation integrity
+
+    evaluation_min_served_rate: Annotated[float, Field(ge=0.0, le=1.0)] = Field(
+        default=1.0,
+        validation_alias="evaluation_min_served_rate",
+        description=(
+            "The proportion of a live run's cases the configured model must have served for the "
+            "run to be scored as model quality at all. Defaults to 1.0 because two gating "
+            "thresholds are 100%, and a 100% gate over a basis silently shrunk by quarantine is a "
+            "weaker claim wearing the same number. Lower it deliberately for an exploratory run."
+        ),
+    )
+    evaluation_llm_min_interval_seconds: Annotated[float, Field(ge=0.0, le=60.0)] = Field(
+        default=2.0,
+        validation_alias="evaluation_llm_min_interval_seconds",
+        description=(
+            "Minimum wall-clock spacing between evaluation cases in live mode. A property of how "
+            "the harness drives the API, never of the product: forty cases at two calls each "
+            "would otherwise reach a free tier's per-minute ceiling as one burst."
+        ),
     )
 
     # ---------------------------------------------------------------- validators

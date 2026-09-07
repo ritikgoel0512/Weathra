@@ -39,7 +39,15 @@ from typing import Any, Protocol, Self, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from weathra.domain.errors import ValidationFailed
+from weathra.domain.errors import (
+    AgentNotConfigured,
+    ProviderRateLimited,
+    ProviderTimeout,
+    ProviderUnavailable,
+    ValidationFailed,
+    WeathraError,
+)
+from weathra.domain.evidence import InferenceStatus
 
 __all__ = [
     "JSON_INSTRUCTION",
@@ -48,6 +56,7 @@ __all__ = [
     "Message",
     "Role",
     "TokenUsage",
+    "classify_inference_failure",
     "extract_json_object",
     "system_message",
     "user_message",
@@ -246,3 +255,41 @@ def _readable(error: ValidationError) -> str:
         location = ".".join(str(part) for part in detail["loc"]) or "(root)"
         parts.append(f"{location}: {detail['msg']}")
     return "; ".join(parts)
+
+
+# =========================================================================== failure classification
+
+
+def classify_inference_failure(error: WeathraError) -> tuple[InferenceStatus, int | None]:
+    """One provider failure, as the status and provider code an evidence record should carry.
+
+    Written once and shared by both call sites, because the alternative is two ``except`` ladders
+    that agree today and drift later — and the whole point of the classification is that a reader
+    can trust the difference between "the model was withdrawn" and "the model answered badly".
+
+    The HTTP status is what separates a **withdrawn model** from a **broken gateway**. Both arrive
+    as ``ProviderUnavailable``; only ``details["status"]`` tells them apart, and Task 22.8's live
+    runs were the 404 case. A reachability failure carries no status and is classified as a
+    timeout, because "could not reach it" and "did not answer in time" are the same condition to
+    everyone downstream.
+    """
+    status = error.details.get("status") if isinstance(error.details, dict) else None
+    http_status = status if isinstance(status, int) else None
+
+    if isinstance(error, ValidationFailed):
+        # The model answered. Being wrong about the schema is a quality result, not an outage.
+        return InferenceStatus.INVALID_OUTPUT, http_status
+    if isinstance(error, ProviderRateLimited):
+        return InferenceStatus.RATE_LIMITED, http_status or 429
+    if isinstance(error, ProviderTimeout):
+        return InferenceStatus.TIMEOUT, http_status
+    if isinstance(error, AgentNotConfigured):
+        return InferenceStatus.NOT_CONFIGURED, http_status
+    if isinstance(error, ProviderUnavailable):
+        if http_status == 404:
+            return InferenceStatus.MODEL_UNAVAILABLE, http_status
+        if http_status is None:
+            # No status at all: the request never got a reply. Reachability, not a bad request.
+            return InferenceStatus.TIMEOUT, None
+        return InferenceStatus.PROVIDER_ERROR, http_status
+    return InferenceStatus.PROVIDER_ERROR, http_status

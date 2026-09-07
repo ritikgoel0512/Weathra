@@ -41,7 +41,7 @@ import json
 import logging
 from datetime import UTC, datetime
 
-from weathra.agents.llm.base import LLMClient, Message
+from weathra.agents.llm.base import LLMClient, Message, classify_inference_failure
 from weathra.agents.plan import (
     Capability,
     RoutingPlan,
@@ -55,7 +55,14 @@ from weathra.domain.errors import (
     ProviderUnavailable,
     ValidationFailed,
 )
-from weathra.domain.evidence import AgentName, AgentStep, StepStatus
+from weathra.domain.evidence import (
+    AgentName,
+    AgentStep,
+    InferenceAttempt,
+    InferenceStage,
+    InferenceStatus,
+    StepStatus,
+)
 
 __all__ = ["ROUTING_SYSTEM_PROMPT", "catalog_capabilities", "route"]
 
@@ -133,9 +140,19 @@ async def route(
     source = "deterministic_fallback"
     attempts = 0
     note: str | None = None
+    attempt: InferenceAttempt
 
-    if client is not None:
+    if client is None:
+        # No credential. Recorded rather than left as an absence, so a reader can tell a run that
+        # had no model from a run whose model failed — they produce the same prose otherwise.
+        attempt = InferenceAttempt(
+            stage=InferenceStage.ROUTING,
+            status=InferenceStatus.NOT_CONFIGURED,
+            fallback_reason="No inference provider was configured; routed deterministically.",
+        )
+    else:
         attempts = 1
+        call_started = datetime.now(UTC)
         try:
             plan = await client.complete_json(
                 system=ROUTING_SYSTEM_PROMPT,
@@ -143,13 +160,47 @@ async def route(
                 schema=RoutingPlan,
             )
             source = "model"
-        except ValidationFailed as exc:
-            # Every bounded retry inside complete_json is spent. The question still gets answered.
-            note = f"The model could not produce a valid plan ({exc}); routed deterministically."
-            logger.warning("routing fell back to the deterministic router: %s", exc)
-        except (ProviderTimeout, ProviderRateLimited, ProviderUnavailable) as exc:
-            note = f"The inference provider was unavailable ({exc.code}); routed deterministically."
+            attempt = InferenceAttempt(
+                stage=InferenceStage.ROUTING,
+                status=InferenceStatus.SERVED,
+                provider=client.provider_id,
+                selected_model=client.model_id,
+                # ``complete_json`` returns the validated object rather than the completion, so
+                # the served model is the client's own. The synthesis stage reads the gateway's
+                # reported id, which is where a route substitution becomes visible.
+                served_model=client.model_id,
+                latency_ms=_elapsed_ms(call_started),
+            )
+        except (
+            ValidationFailed,
+            ProviderTimeout,
+            ProviderRateLimited,
+            ProviderUnavailable,
+        ) as exc:
+            status, http_status = classify_inference_failure(exc)
+            if status is InferenceStatus.INVALID_OUTPUT:
+                # Every bounded retry inside complete_json is spent. The model answered; it just
+                # could not answer in the shape a routing decision has to take. The question
+                # still gets answered, and this is a quality result rather than an outage.
+                note = (
+                    f"The model could not produce a valid plan ({exc}); routed deterministically."
+                )
+            else:
+                note = (
+                    f"The inference provider was unavailable ({exc.code}); "
+                    "routed deterministically."
+                )
             logger.warning("routing fell back to the deterministic router: %s", exc.code)
+            attempt = InferenceAttempt(
+                stage=InferenceStage.ROUTING,
+                status=status,
+                provider=client.provider_id,
+                selected_model=client.model_id,
+                http_status=http_status,
+                error_code=exc.code,
+                fallback_reason=note,
+                latency_ms=_elapsed_ms(call_started),
+            )
 
     if plan is None:
         plan = fallback_plan(state.question, now=moment)
@@ -174,12 +225,21 @@ async def route(
         ", ".join(capability.value for capability in plan.capabilities) or "nothing",
     )
 
-    return state.with_step(step).with_updates(
-        plan=plan,
-        routing_source=source,
-        routing_attempts=attempts,
-        unanswered_parts=plan.unanswerable_parts,
+    return (
+        state.with_step(step)
+        .with_inference_attempt(attempt)
+        .with_updates(
+            plan=plan,
+            routing_source=source,
+            routing_attempts=attempts,
+            unanswered_parts=plan.unanswerable_parts,
+        )
     )
+
+
+def _elapsed_ms(since: datetime) -> float:
+    """Wall-clock milliseconds since ``since``. The gateway call only."""
+    return max(0.0, (datetime.now(UTC) - since).total_seconds() * 1000.0)
 
 
 def _cross_check_scope(question: str, plan: RoutingPlan) -> tuple[RoutingPlan, str | None]:

@@ -22,6 +22,7 @@ from weathra.agents.llm.base import (
     Message,
     Role,
     TokenUsage,
+    classify_inference_failure,
     extract_json_object,
     system_message,
     user_message,
@@ -39,6 +40,7 @@ from weathra.domain.errors import (
     ProviderUnavailable,
     ValidationFailed,
 )
+from weathra.domain.evidence import InferenceStatus
 
 BASE_URL = "https://gateway.test/api/v1"
 COMPLETIONS = f"{BASE_URL}/chat/completions"
@@ -550,3 +552,138 @@ def test_a_provider_can_be_overridden_with_the_fake_for_tests() -> None:
     fake = FakeLLMClient(completions=["scripted"])
     provider.override(fake)
     assert provider.get() is fake
+
+
+# =========================================================================== task 22.8
+#
+# Failure classification. The Task 22.8 live runs failed because a withdrawn model's 404 and a
+# model that answered badly were indistinguishable by the time anything downstream looked. These
+# assert the distinction at the layer that first knows it.
+
+
+@pytest.mark.parametrize(
+    ("response", "expected", "expected_status"),
+    [
+        (httpx.Response(404, json={"error": "no endpoints found"}), "model_unavailable", 404),
+        (httpx.Response(503), "provider_error", 503),
+        (httpx.Response(500), "provider_error", 500),
+        (httpx.Response(400, json={"error": "bad request"}), "provider_error", 400),
+    ],
+    ids=["404-withdrawn", "503", "500", "400"],
+)
+@respx.mock
+async def test_a_gateway_status_classifies_to_its_own_inference_outcome(
+    response: httpx.Response, expected: str, expected_status: int
+) -> None:
+    """A 404 is a withdrawn model; a 5xx is a broken gateway. Both arrive as ProviderUnavailable,
+    and only the recorded status tells them apart — which is the whole of the Task 22.8 defect."""
+    respx.post(COMPLETIONS).mock(return_value=response)
+
+    with pytest.raises(ProviderUnavailable) as caught:
+        await _client().complete(system="s", messages=[user_message("q")])
+
+    status, http_status = classify_inference_failure(caught.value)
+    assert status.value == expected
+    assert http_status == expected_status
+    assert status.infrastructure_failure is True
+    assert status.served is False
+
+
+@respx.mock
+async def test_a_rate_limit_classifies_apart_from_unavailability() -> None:
+    respx.post(COMPLETIONS).mock(return_value=httpx.Response(429))
+
+    with pytest.raises(ProviderRateLimited) as caught:
+        await _client().complete(system="s", messages=[user_message("q")])
+
+    status, http_status = classify_inference_failure(caught.value)
+    assert status is InferenceStatus.RATE_LIMITED
+    assert http_status == 429
+    assert status is not InferenceStatus.PROVIDER_ERROR
+
+
+@respx.mock
+async def test_a_timeout_and_a_connection_failure_both_classify_as_timeout() -> None:
+    """Two transport realities, one condition to everyone downstream: no reply arrived."""
+    respx.post(COMPLETIONS).mock(side_effect=httpx.ConnectTimeout("slow"))
+    with pytest.raises(ProviderTimeout) as timed_out:
+        await _client().complete(system="s", messages=[user_message("q")])
+    assert classify_inference_failure(timed_out.value)[0] is InferenceStatus.TIMEOUT
+
+    respx.post(COMPLETIONS).mock(side_effect=httpx.ConnectError("refused"))
+    with pytest.raises(ProviderUnavailable) as unreachable:
+        await _client().complete(system="s", messages=[user_message("q")])
+    status, http_status = classify_inference_failure(unreachable.value)
+    assert status is InferenceStatus.TIMEOUT
+    assert http_status is None, "a reachability failure has no HTTP status to report"
+
+
+@respx.mock
+async def test_invalid_output_classifies_as_served_not_as_a_provider_failure() -> None:
+    """The single most important line in the classifier.
+
+    The model answered. It answered with something that is not a routing plan, which is a *quality*
+    result. Classifying it as infrastructure would let a weak model launder its failures as an
+    outage — the exact mirror of the defect this work exists to fix.
+    """
+    respx.post(COMPLETIONS).mock(return_value=httpx.Response(200, json=_reply("not json at all")))
+
+    with pytest.raises(ValidationFailed) as caught:
+        await _client(_settings(llm_json_max_attempts=1)).complete_json(
+            system="s", messages=[user_message("q")], schema=Routing
+        )
+
+    status, _ = classify_inference_failure(caught.value)
+    assert status is InferenceStatus.INVALID_OUTPUT
+    assert status.served is True
+    assert status.infrastructure_failure is False
+
+
+@respx.mock
+async def test_a_rejected_credential_stays_a_configuration_fault() -> None:
+    """Not an outage and not a failover trigger: retrying sends the same bad key again."""
+    respx.post(COMPLETIONS).mock(return_value=httpx.Response(401))
+
+    with pytest.raises(AgentNotConfigured) as caught:
+        await _client().complete(system="s", messages=[user_message("q")])
+
+    status, _ = classify_inference_failure(caught.value)
+    assert status is InferenceStatus.NOT_CONFIGURED
+    assert status.infrastructure_failure is False
+
+
+@respx.mock
+async def test_a_retry_after_within_the_ceiling_is_honoured() -> None:
+    """The gateway knows when its window opens and we do not. Sub-second linear backoff cannot
+    clear a per-minute rate limit however many times it is repeated."""
+    route = respx.post(COMPLETIONS).mock(
+        side_effect=[
+            httpx.Response(429, headers={"Retry-After": "0"}),
+            httpx.Response(200, json=_reply("recovered")),
+        ]
+    )
+
+    completion = await _client(_settings(llm_rate_limit_max_wait_seconds=30.0)).complete(
+        system="s", messages=[user_message("q")]
+    )
+
+    assert completion.text == "recovered"
+    assert route.call_count == 2
+
+
+@respx.mock
+async def test_a_retry_after_beyond_the_ceiling_stops_rather_than_waiting() -> None:
+    """Bounded patience. A delay longer than we are willing to make a caller wait is reported,
+    not slept through and not disguised as more attempts."""
+    route = respx.post(COMPLETIONS).mock(
+        return_value=httpx.Response(429, headers={"Retry-After": "600"})
+    )
+
+    with pytest.raises(ProviderRateLimited) as caught:
+        await _client(_settings(llm_rate_limit_max_wait_seconds=5.0)).complete(
+            system="s", messages=[user_message("q")]
+        )
+
+    assert route.call_count == 1, "a delay beyond the ceiling must not be retried"
+    assert caught.value.details["retry_after_seconds"] == 600.0
+    assert classify_inference_failure(caught.value)[0] is InferenceStatus.RATE_LIMITED

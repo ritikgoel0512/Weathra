@@ -73,6 +73,7 @@ bundle — see [`authentication.md`](authentication.md) for why the split is dra
 | `LLM_TIMEOUT_SECONDS` | `60.0` | behaviour | Per-request inference timeout |
 | `LLM_MAX_RETRIES` | `2` | behaviour | Transport retries on a retryable inference failure |
 | `LLM_JSON_MAX_ATTEMPTS` | `3` | behaviour | Attempts at a routing plan before the deterministic router takes over |
+| `LLM_RATE_LIMIT_MAX_WAIT_SECONDS` | `30.0` | behaviour | Ceiling on honouring a gateway 429's `Retry-After`; a longer stated delay stops the retry rather than waiting |
 | `DEFAULT_WEATHER_PROVIDER` | `open-meteo` | behaviour | Provider used when a request names none |
 | `DEFAULT_GEOCODER` | `open-meteo` | behaviour | Geocoder used when a request names none |
 | `DEFAULT_UNIT_SYSTEM` | `metric` | behaviour | `metric` or `imperial`, when neither the request nor a preference says |
@@ -104,6 +105,8 @@ bundle — see [`authentication.md`](authentication.md) for why the split is dra
 | `THREAD_RETENTION_DAYS` | `30` | behaviour | How long an inactive thread and its checkpoints are kept |
 | `SNAPSHOT_RETENTION_DAYS` | `90` | behaviour | How long forecast snapshots are kept |
 | `SAVED_LOCATIONS_LIMIT` | `25` | behaviour | Saved locations per person |
+| `EVALUATION_MIN_SERVED_RATE` | `1.0` | behaviour | Proportion of a live evaluation run's cases the configured model must have served for the run to be scored as model quality at all |
+| `EVALUATION_LLM_MIN_INTERVAL_SECONDS` | `2.0` | behaviour | Minimum spacing between live evaluation cases, so the dataset does not reach a free tier's per-minute ceiling as one burst |
 
 ## Notes on the ones that bite
 

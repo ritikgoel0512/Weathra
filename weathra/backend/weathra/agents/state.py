@@ -33,6 +33,7 @@ from weathra.domain.evidence import (
     AgentStep,
     Attribution,
     Finding,
+    InferenceAttempt,
     KnowledgeCitation,
     ToolCall,
     ToolResult,
@@ -110,6 +111,16 @@ class GraphState(BaseModel):
     plan: RoutingPlan | None = None
     routing_source: str = Field(default="model", pattern="^(model|deterministic_fallback)$")
     routing_attempts: int = Field(default=0, ge=0)
+
+    # ---------------------------------------------------------------- inference provenance
+
+    inference_attempts: tuple[InferenceAttempt, ...] = Field(
+        default=(),
+        description=(
+            "Every language model call attempt, in order, whatever became of it. What makes "
+            "'did a model write this answer' a question the evidence record can answer."
+        ),
+    )
 
     # ---------------------------------------------------------------- resolved context
 
@@ -233,6 +244,15 @@ class GraphState(BaseModel):
 
     def with_failure(self, reason: str) -> Self:
         return self.model_copy(update={"failures": (*self.failures, reason)})
+
+    def with_inference_attempt(self, attempt: InferenceAttempt) -> Self:
+        """Append one call attempt. Every attempt, including every failed one.
+
+        Appended rather than replaced: a run makes one attempt per stage today, and the failover
+        of ``specs/model-policy`` will make several. A field holding "the last attempt" would
+        quietly lose the earlier failures that explain the run.
+        """
+        return self.model_copy(update={"inference_attempts": (*self.inference_attempts, attempt)})
 
     # ---------------------------------------------------------------- reading
 

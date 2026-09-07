@@ -143,7 +143,13 @@ async def persist(settings: Settings, result: RunResult) -> str:
                 category_filter=result.configuration.category_filter,
                 case_filter=result.configuration.case_filter,
                 metrics=result.metrics.model_dump(mode="json"),
+                # The integrity report rides inside the threshold report's own JSONB column: it is
+                # the verdict object, and the caveat belongs with the verdict rather than beside
+                # it. No schema change — ``thresholds`` has always been JSONB.
                 thresholds=result.thresholds.model_dump(mode="json"),
+                # Null on a provider failure. ``passed`` was already nullable and ``_verdict``
+                # already renders null as "not scored"; the honest third answer needed no
+                # migration, only somebody to stop collapsing it into "failed".
                 passed=result.passed,
                 started_at=result.started_at,
                 completed_at=result.completed_at,
@@ -162,7 +168,17 @@ async def persist(settings: Settings, result: RunResult) -> str:
                         # Retained whether the case passed or failed: a failure is diagnosable
                         # from this without re-running it (``specs/evaluation``).
                         evidence=record.evidence,
-                        per_metric=record.per_metric,
+                        per_metric={
+                            **record.per_metric,
+                            # Denormalized out of ``evidence`` so "which cases did the model
+                            # actually answer" is one query rather than a JSON walk per row.
+                            "inference": {
+                                "model_served": record.model_served,
+                                "statuses": [
+                                    attempt.status.value for attempt in record.inference_attempts
+                                ],
+                            },
+                        },
                         latency_ms=record.latency_ms,
                         http_status=record.http_status,
                     )
@@ -172,7 +188,11 @@ async def persist(settings: Settings, result: RunResult) -> str:
     finally:
         await engines.dispose()
 
-    logger.info("stored evaluation run %s (%s)", run_id, "pass" if result.passed else "fail")
+    logger.info(
+        "stored evaluation run %s (%s)",
+        run_id,
+        "not scored" if result.passed is None else ("pass" if result.passed else "fail"),
+    )
     return run_id
 
 
@@ -193,6 +213,7 @@ async def latest_runs(settings: Settings, *, limit: int = 10) -> list[dict[str, 
                     "mode": row.mode,
                     "llm_model": row.llm_model,
                     "passed": row.passed,
+                    "verdict": _verdict(row.passed),
                     "started_at": row.started_at.isoformat(),
                 }
                 for row in rows

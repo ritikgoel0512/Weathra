@@ -35,6 +35,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from weathra.domain.evidence import InferenceAttempt
 from weathra.evaluation.cases import Category, EvaluationCase
 
 __all__ = [
@@ -176,6 +177,25 @@ class CaseOutcome(BaseModel):
     refused: bool = False
     carries_weather_data: bool = False
     error: str | None = None
+    inference_attempts: tuple[InferenceAttempt, ...] = Field(
+        default=(),
+        description=(
+            "Every language model call attempt this case made, read back out of its evidence "
+            "record. What makes 'was this case answered by the model' answerable at scoring time."
+        ),
+    )
+
+    @property
+    def model_served(self) -> bool:
+        """Whether the configured model materially served this case.
+
+        Every attempt served. A case with no attempt is not served: an offline case still records
+        its attempts against the offline client, so an empty tuple means no model was involved at
+        all rather than that one quietly succeeded.
+        """
+        return bool(self.inference_attempts) and all(
+            attempt.served for attempt in self.inference_attempts
+        )
 
 
 # =========================================================================== the figure extractor
@@ -659,7 +679,14 @@ class MetricsReport(BaseModel):
 
     results: dict[str, MetricResult]
     latency: LatencyReport
-    cases_scored: int = Field(ge=0)
+    cases_scored: int = Field(ge=0, description="Cases the metrics were computed over.")
+    cases_quarantined: tuple[str, ...] = Field(
+        default=(),
+        description=(
+            "Cases excluded from every numerator and denominator because the configured model "
+            "did not serve them. Counted as neither passes nor failures."
+        ),
+    )
 
     def result(self, name: MetricName) -> MetricResult:
         return self.results[name.value]
@@ -673,9 +700,19 @@ class MetricsReport(BaseModel):
 
 
 def compute_metrics(
-    outcomes: Sequence[CaseOutcome], dataset: Sequence[EvaluationCase]
+    outcomes: Sequence[CaseOutcome],
+    dataset: Sequence[EvaluationCase],
+    *,
+    quarantine: bool = True,
 ) -> MetricsReport:
-    """Every metric, over the outcomes of one run."""
+    """Every metric, over the outcomes of one run.
+
+    ``quarantine=False`` scores every outcome including those the configured model did not serve.
+    It exists for exactly one caller: the integrity classifier, which needs to know whether a
+    gated metric lost its applicable cases *to quarantine* or simply never had any — a filtered
+    run legitimately has inapplicable gates, and converting that into a provider failure would be
+    a false alarm every time somebody ran ``--category knowledge``.
+    """
     cases = {case.case_id: case for case in dataset}
     unknown = [outcome.case_id for outcome in outcomes if outcome.case_id not in cases]
     if unknown:
@@ -683,6 +720,29 @@ def compute_metrics(
             f"These outcomes name cases that are not in the dataset: {sorted(unknown)}. A metric "
             "cannot be computed against an expectation that does not exist."
         )
+
+    # Quarantine, applied once here rather than ten times inside the metrics. A case the
+    # configured model did not serve was answered by the deterministic router and the code-written
+    # summary, and scoring that as the model's work is the defect this exists to prevent. It is
+    # excluded from *both* halves of every fraction — the same treatment an inapplicable case
+    # already gets, and for the same reason: counting it either way would be a claim nobody earned.
+    quarantined = (
+        tuple(
+            outcome.case_id
+            for outcome in outcomes
+            if not _scoreable(outcome, cases[outcome.case_id])
+        )
+        if quarantine
+        else ()
+    )
+    if quarantined:
+        logger.warning(
+            "excluding %d case(s) the configured model did not serve: %s",
+            len(quarantined),
+            ", ".join(quarantined),
+        )
+    if quarantine:
+        outcomes = [outcome for outcome in outcomes if _scoreable(outcome, cases[outcome.case_id])]
 
     memory = _memory_correctness(outcomes, cases)
 
@@ -703,4 +763,17 @@ def compute_metrics(
         results={result.name.value: result for result in results},
         latency=_latency(outcomes),
         cases_scored=len(outcomes),
+        cases_quarantined=quarantined,
     )
+
+
+def _scoreable(outcome: CaseOutcome, case: EvaluationCase) -> bool:
+    """Whether this case's result may contribute to a metric.
+
+    A case that recorded no inference attempt at all is scored: that is every synthetic outcome in
+    the unit tests, and every run predating the provenance record. Quarantine applies only where
+    the run actually told us a model was asked and did not answer — absence of evidence is not
+    treated as evidence of fallback, because that would retroactively void records that are fine.
+    """
+    del case  # reserved: a case may later declare that it needs no inference at all
+    return not outcome.inference_attempts or outcome.model_served

@@ -146,6 +146,139 @@ measure Weathra's own work and not the network.
 record whether it passed or failed — a failing run's per-case evidence is what makes the failure
 diagnosable, and it is gone once the process exits.
 
+## Did the model actually answer?
+
+A live run's metrics are model-quality metrics **only when the configured model materially served
+the run**. This section exists because a run once proved they are not the same thing.
+
+### What went wrong
+
+Two Task 22.8 live runs are stored. Both are recorded `passed = false`, and **neither is a
+model-quality result** — but they failed in different ways, which is itself the point.
+
+| Run | Model | Routed by model | Synthesis succeeded | Recorded as |
+|---|---|---|---|---|
+| `86fd7e31…` | `nvidia/nemotron-nano-9b-v2:free` | **0 / 40** | 0 | threshold failure |
+| `fd31cf83…` | `nvidia/nemotron-3-super-120b-a12b:free` | **24 / 40** | 23 | threshold failure |
+
+The first run was executed after its model had been withdrawn upstream. Every inference call
+returned HTTP 404, so all forty cases routed deterministically and every synthesis step that ran
+failed. Weathra behaved exactly as designed — the supervisor fell back to the keyword router, the
+synthesis node fell back to `code_written_summary`, and every question still got a correct, fully
+attributed, fully grounded answer. That is the product working.
+
+The evaluation then scored those forty code-written answers as though a language model had written
+them, reported tool-selection accuracy of 23/33, missed its thresholds, and recorded the result as
+a **quality** failure of a model that had never answered a single call. The run record named the
+provider and the model — because it read them off the *configured* client, which names a model
+whether or not it replies.
+
+The second run is the more instructive one. Its replacement model *did* answer — for 24 of 40
+cases. The other 16 fell back. Its recorded tool-selection accuracy of 28/33 was therefore computed
+over a **mixture** of model-routed and fallback-routed cases, and is not a measurement of either.
+Why those 16 fell back cannot be recovered from the stored records: the classification that would
+have said `rate_limited` or `model_unavailable` did not exist yet. A free-tier account receiving
+forty cases at up to two calls each as a single unpaced burst is the most likely explanation, which
+is what `EVALUATION_LLM_MIN_INTERVAL_SECONDS` now addresses.
+
+That second run is exactly the case this work exists to make visible: **partially served, and
+therefore not interpretable in either direction.** Under the rules below both runs classify as
+provider failures and neither reports a threshold verdict.
+
+Both runs are retained unchanged, with `passed = false` as originally recorded. Rewriting a stored
+verdict would be the same category of dishonesty this section exists to prevent — those rows record
+what the system concluded at the time, and that is a fact about the runs. Nothing in either should
+be read as a measurement of the model it names.
+
+### What the record now says
+
+Every language model call attempt is recorded on the evidence record as an `InferenceAttempt`,
+with the stage, the attempt number, the outcome, the provider, the model selected, the model the
+gateway reported as having served it, the provider status where the failure had one, and why the
+run continued as it did.
+
+| Outcome | Meaning | Served? |
+|---|---|---|
+| `served` | A completion came back | yes |
+| `invalid_output` | The model answered; the output failed schema validation | **yes** |
+| `rate_limited` | 429 from the gateway | no |
+| `model_unavailable` | 404 — the model is not served | no |
+| `provider_error` | 5xx, another 4xx, or a completion with no text | no |
+| `timeout` | A timeout, or a connection or DNS failure | no |
+| `not_configured` | No inference credential, or one the gateway rejected | no |
+
+`invalid_output` counting as *served* is the load-bearing row. A model that answers with
+unparseable JSON has materially served the evaluation and performed badly — that is a quality
+result and is scored as one. Folding it into infrastructure would let a weak model launder its
+failures as an outage, which is the exact mirror of the defect above.
+
+### Quarantine, then gate
+
+A case is **model-served** when every attempt it made was served — not "at least one". A case whose
+routing came from the model and whose prose came from code is contaminated in precisely the
+dimension the wording metrics measure.
+
+An unserved case is **excluded from every numerator and every denominator**. It is not counted as a
+pass and not counted as a failure. This is the treatment an inapplicable case already receives, for
+the same reason.
+
+The obvious intuition — that a fallback run simply scores worse, so a partial one reads
+pessimistically — is wrong, and wrong in the direction that matters. The deterministic router keys
+off real vocabulary and routes many questions *correctly*, so tool-selection accuracy can be
+**inflated** by fallback; `code_written_summary` copies findings verbatim, so groundedness and
+numerical accuracy score *well*. A mixed run is not uniformly worse than a served one — it is
+differently shaped, and no interpolation recovers the model's number from it.
+
+The run is then classified `provider_failure` when either:
+
+1. the served-case proportion falls below `EVALUATION_MIN_SERVED_RATE` (default **1.0**); or
+2. quarantine leaves a gated threshold that *had* applicable cases with none.
+
+Rule 2 compares against the same metrics computed without quarantine, so a legitimately filtered
+run — `--category knowledge` has no numeric cases — is reported as unmeasured rather than as a
+provider failure. Rule 1 defaults to 1.0 because two gating thresholds are 100%, and a 100% gate
+over a basis silently shrunk by quarantine is a weaker claim wearing the same number.
+
+A `provider_failure` run reports **no threshold verdict**, states plainly that its metrics are not
+model-quality metrics, retains every case's evidence, and persists with `passed = NULL` — which
+`compare_runs` has always rendered as "not scored". No migration was needed: the column was already
+nullable and the honest third answer was already expressible; it was simply being collapsed into
+"failed".
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Scored; every applicable threshold met |
+| `1` | Scored; a threshold missed — **a genuine quality failure** |
+| `2` | Misconfiguration (live mode with no credential) |
+| `3` | **Provider failure — the model did not serve the run; no quality verdict** |
+
+A provider outage never again shares an exit code with a model that scored badly.
+
+### Pre-flight and pacing
+
+A live run asks the configured model one structured question before executing the dataset. A
+non-served answer aborts the run as a provider failure with **no case executed** — one gateway call
+instead of eighty. That is what should have happened to both historical runs.
+
+`EVALUATION_LLM_MIN_INTERVAL_SECONDS` (default **2.0**) spaces live cases so the dataset does not
+arrive at a free tier's per-minute ceiling as a single burst. It is a property of how the harness
+drives the API, never of the product.
+
+A 429 is retried within `LLM_RATE_LIMIT_MAX_WAIT_SECONDS` (default **30.0**), honouring the
+gateway's own `Retry-After` where it states one — the gateway knows when its window opens and
+sub-second linear backoff cannot clear a per-minute limit however often it is repeated. A stated
+delay beyond the ceiling stops the retry and reports the limit. There is no unbounded retry, and a
+provider limit is never resolved by adjusting a threshold, omitting a recorded failure, or
+substituting another model.
+
+### What is unchanged
+
+The product's graceful fallback is untouched. `/agent/ask` still returns 200 with a correct,
+attributed, grounded answer when the gateway is down. The only difference is that the evidence
+record now says so.
+
 ## Comparing runs
 
 Run records are persisted (`evaluation_runs`, `evaluation_case_results`) and can be compared. A

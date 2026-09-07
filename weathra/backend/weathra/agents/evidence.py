@@ -78,6 +78,7 @@ def build_record(
         data_classes=state.data_classes,
         llm_provider=provider_id,
         llm_model=model_id,
+        inference_attempts=state.inference_attempts,
         started_at=state.started_at,
         completed_at=finished,
         total_duration_ms=max(0.0, (finished - state.started_at).total_seconds() * 1000.0),

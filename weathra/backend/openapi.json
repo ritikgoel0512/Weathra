@@ -1382,6 +1382,15 @@
             "title": "Data Classes",
             "type": "array"
           },
+          "inference_attempts": {
+            "default": [],
+            "description": "Every language model call attempt this run made, in order. Empty on a run that needed no inference.",
+            "items": {
+              "$ref": "#/components/schemas/InferenceAttempt"
+            },
+            "title": "Inference Attempts",
+            "type": "array"
+          },
           "llm_model": {
             "anyOf": [
               {
@@ -1391,6 +1400,7 @@
                 "type": "null"
               }
             ],
+            "description": "The *configured* model, on the same terms as ``llm_provider``.",
             "title": "Llm Model"
           },
           "llm_provider": {
@@ -1402,7 +1412,7 @@
                 "type": "null"
               }
             ],
-            "description": "Null when the run answered without a model.",
+            "description": "The *configured* provider. Null when no inference was configured at all. This is not evidence that it answered \u2014 read ``inference_attempts`` for that.",
             "title": "Llm Provider"
           },
           "partial": {
@@ -2026,6 +2036,184 @@
         ],
         "title": "HorizonPoint",
         "type": "object"
+      },
+      "InferenceAttempt": {
+        "additionalProperties": false,
+        "description": "One language model call attempt, and what became of it.\n\n**Why this is on the evidence record and not only in a log.** ``specs/agent-orchestration``\nrequires the record to be sufficient for a reader to verify every claim in the answer without\nre-running it. \"A language model wrote this sentence\" is such a claim, and until this type\nexisted it was the one claim the record could not support: ``llm_provider`` and ``llm_model``\nare read off the *configured* client, so they name a model whether or not it answered.\n\n**The policy fields are nullable on purpose.** ``catalog_key``, ``policy_id``, ``plan`` and\n``resolution_reason`` are filled by the model policy layer when it lands. They are declared\nnow so that layer *populates an existing record* rather than introducing a second, parallel\none that can drift from this one \u2014 the same reason the telemetry event of\n``specs/llm-telemetry`` is a projection of this type rather than a re-derivation.",
+        "properties": {
+          "attempt_number": {
+            "default": 1,
+            "description": "1-based, within the stage.",
+            "minimum": 1.0,
+            "title": "Attempt Number",
+            "type": "integer"
+          },
+          "catalog_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Filled by the model policy layer.",
+            "title": "Catalog Key"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The ``WeathraError`` code, so the existing hierarchy is reused.",
+            "title": "Error Code"
+          },
+          "fallback_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the run continued as it did, in a reader's words.",
+            "title": "Fallback Reason"
+          },
+          "http_status": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Present where the failure carried one; a 404 is not a 500.",
+            "title": "Http Status"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Filled by the model policy layer.",
+            "title": "Plan"
+          },
+          "policy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Filled by the model policy layer.",
+            "title": "Policy Id"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "resolution_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Reason"
+          },
+          "selected_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What was asked for, before the gateway had a say.",
+            "title": "Selected Model"
+          },
+          "served_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "As the gateway reported it. Differs from ``selected_model`` when a route substituted one, which is a fact worth seeing rather than smoothing over.",
+            "title": "Served Model"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/InferenceStage"
+          },
+          "status": {
+            "$ref": "#/components/schemas/InferenceStatus"
+          }
+        },
+        "required": [
+          "stage",
+          "status"
+        ],
+        "title": "InferenceAttempt",
+        "type": "object"
+      },
+      "InferenceStage": {
+        "description": "Which call a language model was asked to make.\n\nThe *role* rather than the node, so a second node needing a structured decision records\n``ROUTING`` without a new member. These are the two roles the graph actually has.",
+        "enum": [
+          "routing",
+          "synthesis"
+        ],
+        "title": "InferenceStage",
+        "type": "string"
+      },
+      "InferenceStatus": {
+        "description": "How one language model call attempt ended.\n\nThe distinction this enum exists to hold is between a model that **answered badly** and a\nmodel that **did not answer**. ``INVALID_OUTPUT`` is the first: the gateway returned a\ncompletion and its content failed schema validation, which is a quality result and is scored\nas one. Every other non-served member is the second: no completion came back, so anything the\nrun went on to produce was produced without a model.\n\nCollapsing those two would let a genuinely weak model launder its failures as an outage, and\nwould let an outage be reported as a weak model. Task 22.8's live runs were the latter.",
+        "enum": [
+          "served",
+          "invalid_output",
+          "rate_limited",
+          "model_unavailable",
+          "provider_error",
+          "timeout",
+          "not_configured"
+        ],
+        "title": "InferenceStatus",
+        "type": "string"
       },
       "KnowledgeCitation": {
         "additionalProperties": false,
