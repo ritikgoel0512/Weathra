@@ -67,7 +67,7 @@ bundle — see [`authentication.md`](authentication.md) for why the split is dra
 | `DATABASE_POOL_MAX_OVERFLOW` | `2` | behaviour | Extra connections a burst may open |
 | `DATABASE_RESTRICTED_ROLE` | `weathra_request` | behaviour | Role a request-scoped session assumes so RLS applies to Weathra's own queries |
 | `LLM_PROVIDER` | `openrouter` | behaviour | Which client implementation the registry resolves |
-| `LLM_MODEL` | `nvidia/nemotron-nano-9b-v2:free` | behaviour | Any gateway model id. Configuration, never architecture |
+| `LLM_MODEL` | `nvidia/nemotron-3-super-120b-a12b:free` | behaviour | Any gateway model id. Configuration, never architecture |
 | `OPENROUTER_API_KEY` | — | **secret** | Absent by design in every offline path. Only `/ask` and `/stream` need it |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | behaviour | Gateway base URL |
 | `LLM_TIMEOUT_SECONDS` | `60.0` | behaviour | Per-request inference timeout |

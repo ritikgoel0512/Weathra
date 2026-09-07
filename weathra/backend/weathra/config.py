@@ -117,7 +117,7 @@ class Settings(BaseSettings):
 
     llm_provider: str = Field(default="openrouter", validation_alias="llm_provider")
     llm_model: str = Field(
-        default="nvidia/nemotron-nano-9b-v2:free",
+        default="nvidia/nemotron-3-super-120b-a12b:free",
         validation_alias="llm_model",
         description="Any gateway model id. Configuration, never architecture.",
     )
