@@ -494,6 +494,43 @@ forecast without a session, ask a question through `/ask` and check that every f
 appears in its evidence, open an authenticated stream and see it complete, and confirm a second
 account sees none of the first's data.
 
+### Verified in production
+
+Task 23.4 asks that a deployment succeed and that readiness report every dependency reachable.
+This records that verification. No credential, connection string, project reference or secret value
+from the release is recorded here — the evidence is the pipeline's own output and the state it left
+behind, which is what a later reader needs.
+
+**Date:** 2026-09-07. **Method:** the real `release.yml` pipeline, dispatched once by hand from
+`main`, against the real Supabase project and the real Render service. No mock, stub or local
+container stood in for any part of it.
+
+| What | How it was verified | Result |
+|---|---|---|
+| The four jobs ran in order | run `34121363240`, job graph `image → migrate → deploy → verify` | all four succeeded |
+| Migration finished *before* the deploy began | job timestamps | `migrate` completed 12:22:27Z, `deploy` started 12:22:29Z — the `needs:` edge holding, not timing |
+| Migrations applied under the privileged connection | `migrate` job environment | `WEATHRA_RUNTIME_MODE=privileged`, `DATABASE_URL_PRIVILEGED` only; no `DATABASE_URL` in scope |
+| No revision was outstanding | `alembic upgrade head` emitted no `Running upgrade` line | database already at head; the release applied no DDL |
+| The revision now live | `alembic current` | `0004_shared_read_policies (head)` — so the RLS policies of `0002` and `0004` are in place |
+| Render released the migrated commit | deploy `dep-dafap1ht0dsc73dbgq20` | created for `f9e24cd44771f9dd159f15b19b56a812af823829`, the run's own commit, and polled to `live` |
+| Auto-deploy stayed off | `render.yaml` | `autoDeployTrigger: "off"` — the `deploy` job remains the only route to production |
+| The service holds no privileged credential | `render.yaml` `envVars`, and the service booting at all | neither `DATABASE_URL_PRIVILEGED` nor `SUPABASE_SERVICE_ROLE_KEY` is declared; `Settings` refuses to construct in `request_serving` mode while the service-role key is set, so a healthy service is itself the proof it is absent |
+| Liveness | `GET /api/v1/health` | `status: ok`, `environment: production`, `version: 0.1.0` |
+| Readiness | `GET /api/v1/ready` | `ready: true`, `environment: production`. All seven dependencies `configured: true`, and **none** reports `reachable: false`. `database`, `vector_store`, `mcp_server` and `conversation_memory` report `reachable: true`; `weather_provider`, `authentication_provider` and `inference_provider` report `reachable: null`, which is the deliberate design recorded above — the probe does not call them, so readiness costs no provider quota |
+
+**On `reachable: null`.** Read the readiness clause as *no dependency reports itself unreachable*,
+because that is what the endpoint can honestly assert without spending Open-Meteo quota on every
+poll. A dependency that is genuinely unreachable reports `false`, which fails the `verify` job for
+a required one and warns for an optional one. Confirming the three unprobed providers end to end is
+the smoke path above, and for the weather provider the `/ask` and forecast steps of it.
+
+**Two releases before this one failed**, both on `migrate`, with `permission denied for table
+alembic_version` — the restricted role's fingerprint, raised by Alembic's first read before any
+revision ran. Nothing was left half-applied, and `db-identity.yml` was added to answer the question
+the failure did not: it reports which role the privileged DSN authenticates as on a GitHub-hosted
+runner, read-only. It proved `postgres`, the owner. That workflow is a diagnostic, not part of the
+release, and should be deleted now that the answer is known.
+
 ## Rollback
 
 **The backend.** Render keeps previous deploys; rolling back is redeploying the previous one, from
