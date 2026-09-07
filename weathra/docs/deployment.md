@@ -222,6 +222,73 @@ credential at all**, which is why the default suite and the offline evaluation r
 external. The frontend's configuration is public in its entirety, and CI asserts that the four
 secrets appear in neither its environment nor its built bundle (`npm run check:secrets`).
 
+### Which secret belongs to which destination
+
+Four destinations, and the split is not a preference — it is what the code actually reads. Names
+and purposes only; no value appears here or anywhere else in the repository.
+
+| Destination | Holds | Purpose |
+|---|---|---|
+| **Codespaces / local** | `backend/.env`, `frontend/.env.local` — both gitignored | Development. Never committed; the `.env.example` templates carry placeholders |
+| **GitHub Actions** | `DATABASE_URL_PRIVILEGED` | Migrations, retention, administrative routines |
+| | `SUPABASE_SERVICE_ROLE_KEY` | Evaluation test-user provisioning — its only consumer in the whole backend |
+| | `SUPABASE_URL` | Project URL for those jobs (public, but per-environment) |
+| **Render** (backend service) | `DATABASE_URL` | The request path, as `weathra_api` under the restricted role |
+| | `OPENROUTER_API_KEY` | `/ask` and `/stream` only — **optional**; the backend serves everything else without it |
+| | `SUPABASE_URL`, `CORS_ALLOWED_ORIGINS` | Required, not secret; per-environment |
+| **Vercel** (frontend) | `NEXT_PUBLIC_SUPABASE_URL` | Public |
+| | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public client key |
+| | `NEXT_PUBLIC_API_BASE_URL` | The Render backend's origin for that environment |
+
+**Vercel holds nothing else.** Not `DATABASE_URL`, not `DATABASE_URL_PRIVILEGED`, not
+`SUPABASE_SERVICE_ROLE_KEY`, not `OPENROUTER_API_KEY`. Every `NEXT_PUBLIC_` value is inlined into
+the browser bundle at build time, so a secret there is a published secret.
+
+**Two placements are deliberate and worth stating, because both look like omissions:**
+
+- **The Render service does not hold `SUPABASE_SERVICE_ROLE_KEY`.** That key bypasses every Row
+  Level Security policy, and `Settings` refuses to start a `request_serving` process which has it
+  set (`SERVICE_ROLE_ON_REQUEST_PATH_MESSAGE`, `weathra/config.py`). Adding it would not weaken a
+  check — the service would fail to boot. Its one consumer, `weathra/evaluation/provisioning.py`,
+  runs privileged in CI.
+- **The Render service does not hold `DATABASE_URL_PRIVILEGED` either. Settled, not pending.**
+  Migrations run from GitHub Actions. Render's pre-deploy command would have executed in the
+  service's own environment, so using it meant putting a privileged database credential inside the
+  container that serves browser traffic — a standing grant, bought to obtain an ordering guarantee
+  a CI job provides just as well. Decision 19 already puts every other privileged job in CI. Task
+  23.4 implements the workflow and may not satisfy the ordering by adding this variable to the
+  service.
+
+`resolve_url()` refuses to substitute either database connection for the other, in either
+direction. That is what makes keeping the two credentials apart worth doing;
+`backend/tests/test_secret_storage.py` guards it.
+
+### Provisioning: what a person has to do, once, per environment *(pending)*
+
+None of this can be done from the repository — each is a dashboard action by an account holder, and
+that is the point: the credential is entered where it will be used and never travels through Git, a
+pull request, or a chat transcript.
+
+**GitHub Actions** — repository *Settings → Secrets and variables → Actions → New repository
+secret*. Add `DATABASE_URL_PRIVILEGED`, `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_URL`. These are
+for privileged jobs only; the pull-request workflows must continue to reference none of them, which
+`test_ordinary_ci_needs_no_production_credential` enforces.
+
+**Render** — create the service from `render.yaml` (*New → Blueprint*, pointed at this repository),
+then set each variable declared `sync: false` under the service's *Environment* tab:
+`DATABASE_URL`, `OPENROUTER_API_KEY`, `SUPABASE_URL`, `CORS_ALLOWED_ORIGINS`. The blueprint names
+them and carries no value, so this step is unavoidable rather than a default someone might skip.
+
+**Vercel** — *Project Settings → Environment Variables*, per environment: the three `NEXT_PUBLIC_`
+values above, and nothing more.
+
+**Supabase** — register each environment's Vercel origin under *Authentication → URL Configuration*
+so the returning-link and password-recovery paths land on an allowed redirect.
+
+After the Render service is up, `curl https://<backend>/api/v1/ready` reports each dependency by
+name and never a credential value. That response is the evidence that secrets were injected and the
+backend started with them — which is the part of task 23.3 no repository change can satisfy.
+
 ## The pipelines
 
 ### On every pull request
@@ -242,15 +309,19 @@ actually receives, and a check that ran first would inspect a directory that doe
 
 ### On merge to `main` *(pending)*
 
-1. Build the backend container.
-2. **Apply migrations under the privileged connection, before the new release serves traffic.** The
-   order matters: a release serving requests against a schema it expects to have been migrated is
-   the failure this step exists to prevent. On Render this is the service's **pre-deploy command**,
-   which runs after the build and before the new instance receives traffic — the ordering is a
-   platform guarantee rather than something the workflow sequences by hand, and a failing
-   pre-deploy stops the deploy instead of half-releasing it.
-3. Release the new Render instance.
-4. Deploy the frontend to Vercel with that environment's public configuration.
+1. **Apply migrations from a GitHub Actions job, under `DATABASE_URL_PRIVILEGED`, before the new
+   release serves traffic.** Alembic runs with `WEATHRA_RUNTIME_MODE=privileged` against the direct
+   connection. **Only on its success may deployment proceed** — a failed migration stops the
+   release rather than half-completing it.
+2. Release the new Render instance, which serves under `DATABASE_URL` and never holds the
+   privileged one. The order matters: a release serving requests against a schema it expects to
+   have been migrated is the failure this step exists to prevent.
+3. Deploy the frontend to Vercel with that environment's public configuration.
+
+The privileged credential lives in CI rather than on the service, so the ordering is enforced by
+the workflow's job dependency rather than by a platform feature. That is the deliberate trade: one
+explicit `needs:` edge in a workflow, in exchange for the serving container never holding a
+credential that bypasses Row Level Security.
 
 ### On a schedule *(pending)*
 

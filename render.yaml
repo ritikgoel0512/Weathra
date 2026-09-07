@@ -1,0 +1,120 @@
+# Weathra — the Render service definition for the FastAPI backend.
+#
+# Task 23.3. This file declares the service and *names* every variable it needs. It holds no
+# credential and never will: a blueprint is committed source, and the repository is public, so a
+# value written here is a published value. Each secret below carries `sync: false`, which is
+# Render's way of saying "this variable exists, its value is entered on the service and is not in
+# this file" — the marker is the whole point, not a formality.
+#
+# What this file is NOT: it is not evidence that anything is provisioned. Declaring a variable here
+# does not create it. Until the service exists on Render and each `sync: false` value has been
+# entered there, the backend has no secrets and this is a description of intent. Task 23.3's
+# verification clause — "the deployed backend starts with the required secrets injected" — is
+# satisfied by a running service, not by this file.
+#
+# ---------------------------------------------------------------------------------------------
+# Which secrets belong here, and which deliberately do not
+#
+# The split is not a preference. It is what the code actually reads, checked against the source:
+#
+#   DATABASE_URL              here. The request path's connection, authenticating as `weathra_api`
+#                             and running under the restricted `weathra_request` role, so Row Level
+#                             Security applies to it.
+#
+#   OPENROUTER_API_KEY        here, and optional. The backend is required to start and serve every
+#                             non-agent capability without it; `/ask` and `/stream` are the only
+#                             paths that construct an inference client, and they do so lazily. An
+#                             unset key degrades the agent surface and nothing else.
+#
+#   SUPABASE_SERVICE_ROLE_KEY *** NOT HERE. *** It bypasses every RLS policy. `Settings` has a
+#                             validator that refuses to start a `request_serving` process which has
+#                             it set — see `SERVICE_ROLE_ON_REQUEST_PATH_MESSAGE` in
+#                             `weathra/config.py`. Adding it to this service would not weaken a
+#                             check; it would stop the service booting. Its one consumer in the
+#                             whole backend is `weathra/evaluation/provisioning.py`, which runs in
+#                             CI. It belongs to GitHub Actions secrets.
+#
+#   DATABASE_URL_PRIVILEGED   *** NOT HERE, and this is now a settled decision, not an omission. ***
+#                             Migrations, retention and the checkpointer's privileged path read it.
+#                             A request-serving process never resolves it — `resolve_url()` refuses
+#                             to substitute either connection for the other in either direction,
+#                             which is the invariant `test_secret_storage.py` guards.
+#
+#                             **Migrations run from GitHub Actions, not from this service.** Render's
+#                             pre-deploy command would have executed in *this* service's environment,
+#                             which would put a privileged database credential inside the container
+#                             that serves browser traffic — a permanent grant, to buy an ordering
+#                             guarantee that a CI job provides just as well. The privileged
+#                             credential stays in CI, where design decision 19 already puts every
+#                             other privileged job, and this service stays least-privileged.
+#
+#                             The release order is therefore: the GitHub Actions job runs Alembic
+#                             under DATABASE_URL_PRIVILEGED, and only on its success may deployment
+#                             proceed. Task 23.4 implements that workflow; it may not satisfy the
+#                             ordering by adding this variable here.
+#
+# Vercel holds none of the above. The frontend receives public configuration only; see
+# `weathra/frontend/.env.example` and `docs/configuration.md`.
+# ---------------------------------------------------------------------------------------------
+
+services:
+  - type: web
+    name: weathra-backend
+    runtime: python
+    plan: starter
+    # Not `free`: that instance type spins down when idle, and LangGraph, SQLAlchemy and the ONNX
+    # embedding runtime are all slow to import, so a spun-down service pays that cost on a user's
+    # first request. Task 23.4 covers this; it is set here because a plan is part of the service
+    # definition rather than something applied afterwards.
+    region: oregon
+    rootDir: weathra/backend
+    buildCommand: pip install --upgrade pip && pip install .
+    startCommand: uvicorn weathra.api.app:create_app --factory --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+
+    envVars:
+      # ---------------------------------------------------------------- secrets
+      # `sync: false` declares the name and withholds the value. Entered on the Render service.
+
+      - key: DATABASE_URL
+        sync: false
+
+      - key: OPENROUTER_API_KEY
+        sync: false
+
+      # ---------------------------------------------------------------- required, not secret
+
+      # The Supabase project URL. Public — the browser holds the same value as
+      # NEXT_PUBLIC_SUPABASE_URL. It is `sync: false` only because it differs per environment.
+      - key: SUPABASE_URL
+        sync: false
+
+      # The deployed frontend origin, so the browser's authenticated requests and SSE streams are
+      # permitted. Per environment; never a wildcard in a deployed environment.
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+
+      # ---------------------------------------------------------------- behaviour
+
+      # The mode this service runs in, and the reason the service-role key is refused above.
+      - key: WEATHRA_RUNTIME_MODE
+        value: request_serving
+
+      - key: WEATHRA_ENVIRONMENT
+        value: production
+
+      - key: LOG_LEVEL
+        value: INFO
+
+      - key: PYTHON_VERSION
+        value: "3.12"
+
+      # Supabase connection limits bind long before application throughput does, and every
+      # horizontally-scaled instance holds its own pool. A deployment setting, not a code constant.
+      - key: DATABASE_POOL_SIZE
+        value: "5"
+
+      # The MCP weather server runs in-process (design decision 1): no second service, no extra
+      # network hop per tool call, no extra cold start.
+      - key: MCP_TRANSPORT
+        value: in-process
