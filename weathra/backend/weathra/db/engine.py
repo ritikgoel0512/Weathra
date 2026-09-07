@@ -18,9 +18,9 @@ privileged connection" checkable: a request-serving process never resolves
 ``DATABASE_URL_PRIVILEGED``, and ``Settings`` refuses to start at all if a service-role key is
 present in that mode.
 
-Pool sizing is deliberately small. Cloud Run scales instances horizontally, so Postgres connection
-limits — not application throughput — are the binding constraint, which is why the pool size is a
-deployment setting rather than a code constant.
+Pool sizing is deliberately small. The backend runtime scales instances horizontally, so Postgres
+connection limits — not application throughput — are the binding constraint, which is why the pool
+size is a deployment setting rather than a code constant.
 """
 
 from __future__ import annotations

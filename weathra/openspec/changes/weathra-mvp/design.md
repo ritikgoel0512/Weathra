@@ -97,7 +97,7 @@ The import rule: `domain` ← `providers`/`geocoding`/`analytics` ← `weather`/
 
 **Alternative considered:** separate repositories for frontend and backend. Rejected for a capstone — one repo keeps the API contract, the docs, and CI in one place, and the applications remain separately built and deployed, which is what the requirement actually asks for.
 
-**Alternative considered:** MCP as its own Cloud Run service. Rejected for the MVP on cost and latency (an extra network hop on every tool call, an extra cold start), but the boundary is kept clean enough that promoting it is a deployment change rather than a rewrite.
+**Alternative considered:** MCP as its own separately deployed service. Rejected for the MVP on cost and latency (an extra network hop on every tool call, an extra cold start), but the boundary is kept clean enough that promoting it is a deployment change rather than a rewrite.
 
 ### 2. The graph controls tool execution; the model proposes and explains
 
@@ -215,7 +215,7 @@ Every retrieval result carries `data_class` — one of `current`, `forecast`, `h
 
 `CachedProvider` wraps any provider, keyed on `(provider, round(lat,4), round(lon,4), kind, range, unit_system)`. Coordinate rounding to ~11 m is far below Open-Meteo's kilometre-scale grid, so merged entries would have returned identical data anyway. Forecast entries get a short TTL, historical entries a long one — past weather does not change. A per-key `asyncio.Lock` collapses concurrent identical misses into one upstream call. `retrieved_at` and `from_cache` propagate to the response.
 
-The cache is process-local in the MVP. Multiple Cloud Run instances each keep their own, which multiplies upstream calls against a keyless provider — an acceptable trade for not operating Redis. The wrapper is the seam where a shared cache drops in.
+The cache is process-local in the MVP. Multiple backend instances each keep their own, which multiplies upstream calls against a keyless provider — an acceptable trade for not operating Redis. The wrapper is the seam where a shared cache drops in.
 
 **Alternative considered:** HTTP-level caching (`hishel`). Rejected — it cannot report `from_cache` in domain terms or key on unit system.
 
@@ -259,7 +259,7 @@ Tables:
 
 `profiles.user_id` references the Supabase Auth user and is the ownership key every other user-owned table carries — including the four SaaS-ready tables above that are user-owned, which get the same owner-restricting Row Level Security policy from the same migration pattern as the rest. The operational tables get no owner column and no owner policy: they are read to serve a request and written only through the administrative path, so an owner predicate on them would be meaningless. `llm_usage_events` is the one table with both shapes, which decision 27 addresses explicitly rather than by a nullable-owner shrug. There is no separate internal profile id: a second identifier would only create a mapping to get wrong, and the auth subject is already stable and opaque.
 
-Async SQLAlchemy with asyncpg through Supabase's connection pooler, with a deliberately small per-instance pool — Cloud Run scales instances horizontally and Postgres connection limits, not application throughput, are the binding constraint. Alembic owns schema and runs under the privileged connection; `pgvector` and the Row Level Security policies of decision 5 are established by migration, so the policies are versioned with the schema rather than clicked into a console.
+Async SQLAlchemy with asyncpg through Supabase's connection pooler, with a deliberately small per-instance pool — the backend runtime scales instances horizontally and Postgres connection limits, not application throughput, are the binding constraint. Alembic owns schema and runs under the privileged connection; `pgvector` and the Row Level Security policies of decision 5 are established by migration, so the policies are versioned with the schema rather than clicked into a console.
 
 ### 11. Memory: two stores, deliberately different
 
@@ -338,7 +338,7 @@ The stream endpoint returns a `StreamingResponse` over `text/event-stream`, driv
 
 The stream is authenticated exactly as the request/response endpoints are: the bearer token is validated before any run begins, the principal is captured for the lifetime of the stream, and a token that expires mid-run produces a terminal authentication error event rather than a silent stall. Because the token is validated up front and the principal held, a long stream does not re-validate on every event — the agent wall-clock budget bounds how long a stream can outlive its token, and that budget is set below the token lifetime.
 
-Client disconnects are caught and end the run without an unhandled error. Cloud Run supports streaming responses; the request timeout is configured above the agent wall-clock budget so the budget, not the platform, terminates a long run.
+Client disconnects are caught and end the run without an unhandled error. The backend runtime must support streaming responses, and its request and idle timeouts must sit above the agent wall-clock budget so the budget, not the platform, terminates a long run. The agent path emits progress events throughout, so a run that is still working is never an idle connection.
 
 ### 18. Frontend: App Router, TanStack Query for REST, a hook for SSE
 
@@ -411,17 +411,21 @@ Database-backed tests run against an ephemeral Postgres with pgvector provided b
 
 | Component | Target |
 |---|---|
-| Next.js frontend | Cloudflare |
-| FastAPI + LangGraph + MCP + analytics | Google Cloud Run (container) |
+| Next.js frontend | Vercel |
+| FastAPI + LangGraph + MCP + analytics | Render (container) |
 | Identity, email verification, password reset | Supabase Auth |
 | Postgres + pgvector + memory | Supabase |
 | Weather data | Open-Meteo (external) |
 | Inference | OpenRouter (external) |
 | CI/CD | GitHub Actions |
 
+**Superseded: Cloudflare and Google Cloud Run.** An earlier revision of this decision named Cloudflare for the frontend and Google Cloud Run for the backend, with secrets in Google Cloud Secret Manager injected through a Cloud Run service account. That is withdrawn. The reasons it was chosen — a host that serves a Next.js build at the edge, and a container runtime that scales horizontally and streams — are properties Vercel and Render both provide, so nothing downstream of the choice changes. The record is kept rather than overwritten because the constraints below are written against those properties, and a later reader should be able to tell which of them are vendor facts and which are requirements. Nothing had been built against the old target: no Dockerfile, no deploy workflow, no infrastructure definition existed, so the correction costs prose only.
+
+Two consequences of the new targets are load-bearing and are stated here rather than left to the deployment document. **Secrets on Render are the service's own environment variables and secret files, set server-side and never committed** — there is no IAM binding and no separate secret service, which removes a moving part rather than adding one. **Migrations run as Render's pre-deploy step**, which executes after the build and before the new release receives traffic; that is the ordering guarantee decision 21 requires, and it is a platform feature rather than something the workflow has to sequence by hand.
+
 Supabase project configuration that the application depends on is documented and version-controlled as configuration notes rather than left as undocumented console state: email confirmation required, the confirmation and recovery email templates carrying the one-time token so code entry works, redirect URLs for each environment's frontend origin, and the token lifetimes the agent budget is set below.
 
-GitHub Actions runs, on every pull request: backend lint, type-check, and tests (with a Postgres+pgvector service); frontend lint, type-check, unit tests, and build; the secret-exposure check of decision 19; and the offline evaluation run. On merge to the default branch: build and deploy the backend container to Cloud Run, deploy the frontend to Cloudflare, and apply Alembic migrations as a release step before the new revision takes traffic.
+GitHub Actions runs, on every pull request: backend lint, type-check, and tests (with a Postgres+pgvector service); frontend lint, type-check, unit tests, and build; the secret-exposure check of decision 19; and the offline evaluation run. On merge to the default branch: build and deploy the backend container to Render, deploy the frontend to Vercel, and apply Alembic migrations as a release step before the new backend release serves traffic.
 
 Development is browser-based (cloud IDE or Codespaces) against the hosted Supabase instance; nothing in the setup, test, or deploy path requires a specific local machine.
 
@@ -471,7 +475,7 @@ An administrative `override` is checked against the catalog before anything else
 
 `model_catalog`, `model_policies`, and `subscription_plans` are read on nearly every agent request and change perhaps weekly. Reading them per call is three queries on the hot path; caching them without expiry means an administrator's disable takes effect on redeploy, which `specs/model-catalog` forbids.
 
-So: a process-local snapshot with a TTL of `MODEL_CATALOG_CACHE_TTL_SECONDS` (60 by default), refreshed on read when stale. Multiple Cloud Run instances converge within one TTL, and that window is the documented staleness window the spec asks to be stated. No pub/sub, no cache-invalidation message, no second datastore — the same trade decision 8 makes for the provider cache, for the same reason.
+So: a process-local snapshot with a TTL of `MODEL_CATALOG_CACHE_TTL_SECONDS` (60 by default), refreshed on read when stale. Multiple backend instances converge within one TTL, and that window is the documented staleness window the spec asks to be stated. No pub/sub, no cache-invalidation message, no second datastore — the same trade decision 8 makes for the provider cache, for the same reason.
 
 The consequence is honest and worth stating: **a disable is not instant.** An administrator disabling a model may see it serve requests for up to one TTL on instances that have not refreshed. That is acceptable for a cost or quality decision and would not be for a safety one — which is why the safety controls (grounding, attribution, the tool catalog) are code, not catalog rows. An administrative override and a lab selection read through the cache but validate against the database directly, so an administrator never acts on a stale allowlist.
 
@@ -548,8 +552,8 @@ Account deletion removes a user's rows here alongside their threads, preferences
 
 - **A free-tier model may route badly or write sloppily.** Routing quality directly determines tool-selection accuracy, one of the gated metrics. → The deterministic fallback router keeps requests answerable when JSON parsing fails repeatedly; the model has no authority over numbers, so bad routing degrades relevance rather than correctness; and the model is a catalog row inside a policy's candidate list, so a better model is a data change measured by the same eval suite through the model comparison of decision 26.
 - **Grounding cannot be fully enforced.** The numeric audit will not catch a wrong figure that happens to appear somewhere in the evidence, and prose can mislead without stating a number. → The envelope carries structured findings alongside prose so the UI can show the real values, the zero-retrieval case is hard-blocked, `grounding.verified` is surfaced rather than hidden, and the evaluation suite measures hallucination and unsupported-claim rates explicitly.
-- **Cold starts plus a heavy import graph make first-request latency poor.** LangGraph, SQLAlchemy, and the ONNX embedding runtime are all slow to import on Cloud Run. → Minimum instances configured for the deployed service, the embedding model loaded lazily on first RAG use, and the agent path already streams progress so the wait is visible rather than blank.
-- **Postgres connection limits, not CPU, will bind first.** Horizontally-scaled Cloud Run instances each holding a pool can exhaust Supabase connections. → Connect through the Supabase pooler with a small per-instance pool, and treat pool size as a deployment setting rather than a code constant.
+- **Cold starts plus a heavy import graph make first-request latency poor.** LangGraph, SQLAlchemy, and the ONNX embedding runtime are all slow to import. → An instance type that does not idle-spin-down for the deployed service, the embedding model loaded lazily on first RAG use, and the agent path already streams progress so the wait is visible rather than blank.
+- **Postgres connection limits, not CPU, will bind first.** Horizontally-scaled backend instances each holding a pool can exhaust Supabase connections. → Connect through the Supabase pooler with a small per-instance pool, and treat pool size as a deployment setting rather than a code constant.
 - **Process-local caching multiplies upstream calls across instances.** → Acceptable against a keyless provider; the `CachedProvider` wrapper is the drop-in seam for a shared cache.
 - **What Changed? coverage depends on request traffic.** With opportunistic snapshot capture, a location nobody asked about yesterday has nothing to compare against. → The no-prior-snapshot state is a first-class, honest response; scheduled capture is post-MVP and named as such.
 - **Confidence communication is single-provider.** Without a second provider there is no consensus signal, so "confidence" rests on horizon distance and whatever spread Open-Meteo supplies. → The basis is disclosed in every uncertainty statement, per `specs/forecast-analysis`; multi-provider consensus is post-MVP.
@@ -575,7 +579,7 @@ Account deletion removes a user's rows here alongside their threads, preferences
 
 Nothing to migrate — this is the first code in the repository.
 
-**Bring-up order:** provision the Supabase project, enable pgvector, and configure Auth (email confirmation required, confirmation and recovery templates carrying the one-time token, redirect URLs per environment) → apply migrations, including the Row Level Security policies and the seeded catalog, policies, plans, and allowances → verify the backend serves the public weather, history, analysis, and comparison endpoints with no inference credential and no session → create a test account through the real sign-up and verification flow and verify a protected endpoint accepts its token and rejects a missing or expired one → ingest the RAG corpus → configure `OPENROUTER_API_KEY` and verify `/ask` and the authenticated SSE stream, with a resolution recorded in the evidence record and a usage event recorded for each call → grant the administrative role to the operating account and verify the administrative catalog, plan, usage, and lab endpoints → deploy the backend to Cloud Run → deploy the frontend to Cloudflare pointed at it → run the evaluation suite as an authenticated test user and record its results → run the first model comparison and seed the policy candidate lists from its recorded evidence.
+**Bring-up order:** provision the Supabase project, enable pgvector, and configure Auth (email confirmation required, confirmation and recovery templates carrying the one-time token, redirect URLs per environment) → apply migrations, including the Row Level Security policies and the seeded catalog, policies, plans, and allowances → verify the backend serves the public weather, history, analysis, and comparison endpoints with no inference credential and no session → create a test account through the real sign-up and verification flow and verify a protected endpoint accepts its token and rejects a missing or expired one → ingest the RAG corpus → configure `OPENROUTER_API_KEY` and verify `/ask` and the authenticated SSE stream, with a resolution recorded in the evidence record and a usage event recorded for each call → grant the administrative role to the operating account and verify the administrative catalog, plan, usage, and lab endpoints → deploy the backend to Render → deploy the frontend to Vercel pointed at it → run the evaluation suite as an authenticated test user and record its results → run the first model comparison and seed the policy candidate lists from its recorded evidence.
 
 **Rollback:** the backend is a container revision, so rollback is redeploying the previous revision; the frontend likewise. Migrations are additive in this change (no destructive operations), so a rolled-back revision runs against the newer schema without loss. Data rollback is not required — there is no pre-existing data.
 

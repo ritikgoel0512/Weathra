@@ -690,12 +690,73 @@ def test_the_roadmap_names_the_post_mvp_screens() -> None:
 def test_the_deployment_document_covers_the_topology_and_rollback() -> None:
     flat = _flat(_read("deployment.md"))
 
-    for target in ("Cloudflare", "Cloud Run", "Supabase", "Open-Meteo", "OpenRouter", "GitHub"):
+    for target in ("Vercel", "Render", "Supabase", "Open-Meteo", "OpenRouter", "GitHub"):
         assert target in flat, f"docs/deployment.md does not name {target}"
 
     assert "Rollback" in flat
     assert "alembic downgrade" in flat
-    assert "before the new revision takes traffic" in flat
+    assert "before the new release serves traffic" in flat
+
+
+WITHDRAWN_HOSTS = ("Cloudflare", "Cloud Run", "Google Cloud Secret Manager", "Artifact Registry")
+"""Runtimes and secret stores that were chosen once and are no longer part of the architecture."""
+
+SUPERSESSION_MARKERS = ("withdrawn", "superseded", "Superseded")
+"""Words a paragraph must carry to be allowed to name a withdrawn host."""
+
+
+def _paragraphs(text: str) -> list[str]:
+    """Blank-line-delimited blocks, which is the unit a decision is recorded in."""
+    return [block for block in re.split(r"\n\s*\n", text) if block.strip()]
+
+
+def test_the_withdrawn_hosting_decision_is_not_reintroduced() -> None:
+    """The selected runtimes are Vercel and Render, and drifting back must fail rather than pass.
+
+    Cloudflare and Google Cloud Run were the earlier choice, with production secrets in Google Cloud
+    Secret Manager behind a service-account IAM grant. Withdrawing a decision only sticks if
+    something notices its return — a stale provider name reads perfectly plausibly, which is how the
+    old one survived as long as it did.
+
+    So a withdrawn name is allowed in exactly one circumstance: a paragraph that says it is gone.
+    Recording *why* a choice was reversed is worth more than deleting the evidence it was ever made,
+    and this is what keeps that record from being mistaken for an instruction. Everywhere else — any
+    paragraph without a supersession marker, in any of these documents — is a failure.
+
+    The unit is the paragraph rather than the file, so a supersession note somewhere in a long
+    document cannot license a stale mention hundreds of lines away.
+    """
+    documents = {
+        f"docs/{name}": _read(name) for name in ("deployment.md", "configuration.md", "agents.md")
+    }
+    change = PROJECT_ROOT / "openspec" / "changes" / "weathra-mvp"
+    for name in ("tasks.md", "design.md", "proposal.md"):
+        path = change / name
+        assert path.is_file(), f"{path} is missing"
+        documents[f"openspec/changes/weathra-mvp/{name}"] = path.read_text()
+
+    offences: list[str] = []
+    for where, text in documents.items():
+        for paragraph in _paragraphs(text):
+            flat = _flat(paragraph)
+            if any(marker in flat for marker in SUPERSESSION_MARKERS):
+                continue
+            for term in WITHDRAWN_HOSTS:
+                if term in flat:
+                    offences.append(f"{where}: {term!r} in a paragraph that does not withdraw it")
+
+    assert not offences, (
+        "The selected runtimes are Vercel (frontend) and Render (backend). "
+        "These mentions read as current architecture:\n  " + "\n  ".join(offences)
+    )
+
+
+def test_the_selected_runtimes_are_named_in_the_task_list() -> None:
+    """The deployment tasks name what is actually being deployed to."""
+    tasks = _flat((PROJECT_ROOT / "openspec" / "changes" / "weathra-mvp" / "tasks.md").read_text())
+
+    assert "Render" in tasks, "no task names the backend runtime"
+    assert "Vercel" in tasks, "no task names the frontend runtime"
 
 
 def test_the_required_supabase_configuration_is_recorded() -> None:

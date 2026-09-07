@@ -13,7 +13,7 @@ without documentation fails the build, and so does a documented setting nothing 
 | Class | Meaning |
 |---|---|
 | **required** | The application will not start without it |
-| **secret** | Server-side only. Never in the frontend, never `NEXT_PUBLIC_`-prefixed, held in CI and Cloud Run secret storage |
+| **secret** | Server-side only. Never in the frontend, never `NEXT_PUBLIC_`-prefixed, held in GitHub Actions secrets and the Render service environment |
 | **behaviour** | Tuning with a documented default; safe to omit |
 | **public** | Deliberately shipped to browsers |
 
@@ -164,7 +164,7 @@ narrows the field.
 |---|---|---|
 | Local | `frontend/.env.local` | `backend/.env` |
 | CI | workflow `env:` — public placeholders only | workflow `env:` plus the Postgres service; no credentials at all |
-| Deployed | Cloudflare Pages environment variables | Cloud Run secrets, injected as environment variables |
+| Deployed | Vercel project environment variables, per environment | Render service environment variables, injected at container start |
 
 CI holds no credential. That is why the default suite and the offline evaluation run reach nothing
 external: recorded provider payloads, locally minted tokens, a deterministic embedder, and an
@@ -175,9 +175,17 @@ repository is public, so that is a property to check rather than assume. The com
 `.env.example` templates carry placeholders only and are deliberately *not* ignored; the
 repository `.gitignore` re-includes them explicitly so a broader pattern cannot quietly make the
 templates uncommittable. A real production secret never enters Git at all: it lives in
-server-side deployment secret storage — **Google Cloud Secret Manager**, surfaced to the service as
-Cloud Run environment secrets, with GitHub Actions secrets for the privileged jobs — and is
-injected as an environment variable at start.
+server-side deployment secret storage — **environment variables set on the Render service itself**,
+with GitHub Actions secrets for the privileged jobs that run in CI — and is injected as an
+environment variable at start. If a `render.yaml` blueprint defines the service, a secret variable
+is declared there with `sync: false`, which names the variable without carrying its value, so the
+blueprint stays committable.
+
+An earlier revision of this document routed production secrets through Google Cloud Secret Manager
+and a Cloud Run service account. That is withdrawn along with the hosting decision it belonged to;
+see [`deployment.md`](deployment.md). The rule it existed to serve is unchanged and is the durable
+part: **a real value exists in exactly two kinds of place — a developer's ignored local file, and
+server-side secret storage.**
 
 ### Putting the inference key into `backend/.env`
 

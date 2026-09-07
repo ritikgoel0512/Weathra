@@ -17,7 +17,7 @@ Three properties are load-bearing:
 Coordinates are rounded to four decimals (~11 m) in the key. Open-Meteo's grid is kilometre-scale,
 so merged entries would have returned identical data anyway.
 
-The cache is process-local. Multiple Cloud Run instances each keep their own, which multiplies
+The cache is process-local. Multiple backend instances each keep their own, which multiplies
 upstream calls — an accepted trade for not operating Redis, and this wrapper is the seam where a
 shared cache drops in.
 """

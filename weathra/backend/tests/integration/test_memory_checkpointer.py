@@ -63,7 +63,7 @@ async def test_graph_state_persists_across_a_reinstantiated_checkpointer(
     """The property design.md decision 11 chose the library checkpointer for.
 
     A *new* ``Checkpointer`` over a *new* pool stands in for a restarted process, or for the second
-    Cloud Run instance the load balancer happens to route the follow-up to.
+    backend instance the load balancer happens to route the follow-up to.
     """
     principal = principal_for(new_user_id())
     graph = one_turn_graph()

@@ -90,7 +90,7 @@ def sse_headers() -> dict[str, str]:
 
     ``no-cache`` and ``no-transform`` because an intermediary that buffered or compressed the body
     would hold every event until the run finished, which defeats the endpoint. ``X-Accel-Buffering``
-    is nginx-specific and harmless elsewhere; Cloud Run's proxy respects the cache directives.
+    is nginx-specific and harmless elsewhere; Render's proxy respects the cache directives.
     """
     return {
         "Cache-Control": "no-cache, no-transform",

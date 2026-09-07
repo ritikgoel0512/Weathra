@@ -154,7 +154,7 @@ Environment-based settings for both applications, with `.env.example` in each. T
 
 ### Deployment
 
-Next.js on Cloudflare; FastAPI with LangGraph, MCP, and analytics on Google Cloud Run; Postgres with pgvector and persistent memory on Supabase; GitHub Actions for CI/CD. Development is browser/cloud-based — no step in the setup, test, or deploy path may require a specific local machine.
+Next.js on Vercel; FastAPI with LangGraph, MCP, and analytics on Render; Postgres with pgvector and persistent memory on Supabase; GitHub for source control and GitHub Actions for CI/CD. Development is browser/cloud-based — no step in the setup, test, or deploy path may require a specific local machine.
 
 ### Out of scope for this change
 

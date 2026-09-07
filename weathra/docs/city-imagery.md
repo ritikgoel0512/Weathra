@@ -31,8 +31,8 @@ locale, and keying on the whole string would make `Berlin, Germany` and `Berlin,
 ## Configuring a provider
 
 Both supported providers authenticate with a secret. Set these in the **frontend deployment's
-injected server environment** — Cloudflare's environment variables, Cloud Run's, or a shell export
-for local work:
+injected server environment** — Vercel's project environment variables (the route handler that reads
+them runs server-side, not in the browser) — or a shell export for local work:
 
 ```
 CITY_IMAGE_PROVIDER=pexels        # or `unsplash`, or unset for no provider
