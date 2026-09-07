@@ -40,6 +40,18 @@ RELEASE = ".github/workflows/release.yml"
 # repository secret.
 ORDINARY_CI = ("backend.yml", "frontend.yml")
 
+# Neither ordinary CI nor the release pipeline, and recorded here because
+# `test_only_the_release_pipeline_reads_a_repository_secret` requires every workflow to sit on
+# one side of that boundary or be classified deliberately.
+#
+# `db-identity.yml` reads DATABASE_URL_PRIVILEGED — so it is not ordinary CI — and it cannot
+# deploy, migrate, or write: hand-dispatched only, no Render credential in scope, no Alembic
+# command, and a read-only PostgreSQL session. It exists to report which role the privileged DSN
+# authenticates as on a GitHub-hosted runner, which is the one fact the migrate job's
+# `permission denied for table alembic_version` does not tell us. Temporary: delete the workflow
+# and this entry once that is known.
+DIAGNOSTIC = ("db-identity.yml",)
+
 
 @pytest.fixture(scope="module")
 def release(repo_root: Path) -> dict[str, Any]:
@@ -296,7 +308,7 @@ def test_only_the_release_pipeline_reads_a_repository_secret(repo_root: Path) ->
     release pipeline has appeared without anyone deciding which side of the boundary it is on.
     """
     workflows = {path.name for path in (repo_root / ".github" / "workflows").glob("*.yml")}
-    unclassified = workflows - set(ORDINARY_CI) - {"release.yml"}
+    unclassified = workflows - set(ORDINARY_CI) - set(DIAGNOSTIC) - {"release.yml"}
     assert not unclassified, (
         f"a workflow exists that is neither ordinary CI nor the release pipeline: {unclassified}. "
         "Decide whether it may hold a production credential and record it here."
@@ -313,3 +325,60 @@ def test_ordinary_ci_never_deploys(repo_root: Path) -> None:
         rendered = (repo_root / ".github" / "workflows" / name).read_text()
         assert "api.render.com" not in rendered, f"{name} triggers a Render deploy"
         assert "deploys" not in rendered, f"{name} appears to trigger a deploy"
+
+
+# ------------------------------------------------------------------ 5. the diagnostic stays inert
+
+
+def test_the_diagnostic_workflow_can_only_be_dispatched_by_hand(repo_root: Path) -> None:
+    """A workflow holding the privileged DSN must not be reachable by pushing a commit.
+
+    `DIAGNOSTIC` is classified as credential-holding, so the compensating control is that nothing
+    but a person can start it. A `push` or `pull_request` trigger added here would put the
+    privileged connection on the ordinary contribution path, which is the boundary
+    `test_ordinary_ci_needs_no_production_credential` defends from the other side.
+    """
+    for name in DIAGNOSTIC:
+        path = repo_root / ".github" / "workflows" / name
+        assert path.is_file(), f"{name} is classified as a diagnostic but does not exist"
+
+        # PyYAML reads a bare `on` key as the boolean `True` — YAML 1.1 spells true that way.
+        parsed: dict[Any, Any] = yaml.safe_load(path.read_text())
+        triggers = set(parsed[True])
+        assert triggers == {"workflow_dispatch"}, (
+            f"{name} has triggers beyond workflow_dispatch: {sorted(triggers - {'workflow_dispatch'})}"
+        )
+
+        # Fail closed: an accidental dispatch must refuse before it connects to anything.
+        rendered = path.read_text()
+        assert "read-only-identity-probe" in rendered, (
+            f"{name} does not require an explicit confirmation input"
+        )
+
+
+def test_the_diagnostic_workflow_cannot_deploy_or_migrate(repo_root: Path) -> None:
+    """It reports an identity. Every other capability is absent rather than merely unused."""
+    for name in DIAGNOSTIC:
+        rendered = (repo_root / ".github" / "workflows" / name).read_text()
+
+        for forbidden in ("api.render.com", "RENDER_API_KEY", "RENDER_SERVICE_ID"):
+            assert forbidden not in rendered, f"{name} can reach Render via {forbidden}"
+
+        for forbidden in ("alembic upgrade", "alembic downgrade", "alembic stamp"):
+            assert forbidden not in rendered, f"{name} runs `{forbidden}`"
+
+        # The read-only session is the reason a probe against production is safe at all, and the
+        # write guard is what proves it at run time rather than in this comment.
+        assert "postgresql_readonly=True" in rendered, (
+            f"{name} does not open a read-only PostgreSQL session"
+        )
+        assert "write guard" in rendered, f"{name} does not verify the server-side write guard"
+
+        # It may reference the privileged secret. It may never print one.
+        assert "DATABASE_URL_PRIVILEGED: ${{ secrets.DATABASE_URL_PRIVILEGED }}" in rendered, (
+            f"{name} does not take the privileged URL from the repository secret"
+        )
+        assert re.search(r"\bDATABASE_URL\b(?!_)", rendered) is None, (
+            f"{name} has DATABASE_URL in scope; the diagnostic needs only the privileged URL"
+        )
+        assert "hide_password=False)}" not in rendered, f"{name} interpolates a rendered DSN"

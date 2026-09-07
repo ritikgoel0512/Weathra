@@ -1,0 +1,193 @@
+name: db identity diagnostic
+
+# Task 23.4 diagnosis, and nothing else. It answers one question — which PostgreSQL role does
+# DATABASE_URL_PRIVILEGED authenticate as on a GitHub-hosted runner — and it is deliberately
+# incapable of doing anything more.
+#
+# The question exists because `release.yml`'s migrate job fails on Alembic's very first read,
+# `SELECT alembic_version.version_num FROM alembic_version`, with `permission denied for table
+# alembic_version`, while the same DSN from a development environment connects as the table's
+# owner. Every other candidate cause has been eliminated by inspection: the connection path in
+# `env.py`, the workflow's secret mapping, the absence of any fallback between the two
+# connections, dotenv precedence, and the session pooler's role handling. What is left is the
+# identity the runner actually gets, and only the runner can report it.
+#
+# It is neither ordinary CI (it reads a production secret) nor the release pipeline (it cannot
+# reach Render, and it never invokes Alembic). `backend/tests/test_release_workflow.py` records
+# that classification and asserts the limits below. Delete this file once the identity is known.
+
+on:
+  # The only trigger. No push, no pull_request, no schedule, no workflow_call, no workflow_run:
+  # the sole way this runs is a person dispatching it by hand.
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type read-only-identity-probe to run'
+        required: true
+        type: string
+
+concurrency:
+  # Its own group, never `release-production`, so it can neither queue behind a release nor
+  # delay one.
+  group: db-identity-diagnostic
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  identity:
+    name: report the privileged connection's identity
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: weathra/backend
+
+    env:
+      # Byte-for-byte the migrate job's mapping (release.yml:121-123). These three are the whole
+      # of this job's configuration: neither Render credential is referenced anywhere in the
+      # file, which is what `test_the_diagnostic_workflow_cannot_deploy_or_migrate` asserts by
+      # searching for their names — so they are described here rather than named.
+      WEATHRA_RUNTIME_MODE: privileged
+      DATABASE_URL_PRIVILEGED: ${{ secrets.DATABASE_URL_PRIVILEGED }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+
+    steps:
+      - name: Refuse unless the dispatch was deliberate
+        # Runs before checkout, so `weathra/backend` does not exist yet.
+        working-directory: .
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [ "${CONFIRM}" != "read-only-identity-probe" ]; then
+            echo "::error::confirm must be exactly 'read-only-identity-probe'; refusing to connect."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install --constraint constraints.txt .
+
+      - name: Report the identity, read-only
+        run: |
+          python - <<'PROBE'
+          import hashlib
+          import sys
+
+          from alembic.config import Config
+          from sqlalchemy import engine_from_config, text
+          from sqlalchemy.exc import DBAPIError
+          from sqlalchemy.pool import NullPool
+
+          from weathra.config import Settings
+          from weathra.db.urls import ConnectionRole, resolve_url, sync_url
+
+          # Exactly env.py:38-39 and env.py:56-59 — the same Settings, the same resolve_url, the
+          # same asyncpg->psycopg rewrite, the same alembic.ini section, the same NullPool. What
+          # is deliberately absent is Alembic's migration runtime: env.py is never loaded, so no
+          # version table is written and no revision can run.
+          raw = resolve_url(Settings(), ConnectionRole.PRIVILEGED)
+          url = sync_url(raw)
+          rendered = url.render_as_string(hide_password=False)
+
+          # Anything that could carry the credential, longest first, so a substring cannot
+          # survive by being replaced inside a shorter match. Applied to every error string.
+          SECRETS = sorted(
+              {value for value in (raw, rendered, url.password or "") if value},
+              key=len,
+              reverse=True,
+          )
+
+
+          def scrub(message: str) -> str:
+              for value in SECRETS:
+                  message = message.replace(value, "[redacted]")
+              return message
+
+
+          # What the DSN *claims*, with the project reference and the password removed. The role
+          # name is not a credential: `postgres` and `weathra_api` are both written into the
+          # committed migrations. The fingerprint is 8 hex characters of SHA-256 over the whole
+          # string — one-way, and enough to tell two DSNs apart without printing either.
+          username = url.username or ""
+          local_part, _, reference = username.partition(".")
+          host = url.host or ""
+          print("---- what the DSN claims (sanitized) ----")
+          print(f"  dsn driver               = {url.drivername}")
+          print(f"  dsn role                 = {local_part}{'.<project-ref>' if reference else ''}")
+          print(f"  dsn host suffix          = ...{'.'.join(host.rsplit('.', 2)[-2:])}")
+          print(f"  dsn port                 = {url.port}")
+          print(f"  dsn database             = {url.database}")
+          print(f"  dsn query parameters     = {sorted(url.query) or 'none'}")
+          print(f"  dsn fingerprint sha256   = {hashlib.sha256(raw.encode()).hexdigest()[:8]}")
+
+          QUERY = text("""
+          select
+            current_user                                               as connected_role,
+            session_user                                               as authenticated_role,
+            current_database()                                         as current_database,
+            current_schema()                                           as current_schema,
+            current_setting('search_path')                             as search_path,
+            current_setting('transaction_read_only')                   as transaction_read_only,
+            coalesce(network(set_masklen(inet_server_addr(), 16))::text, 'n/a')
+                                                                       as server_network,
+            coalesce(inet_server_port()::text, 'n/a')                  as server_port,
+            case when to_regclass('public.alembic_version') is null then 'table absent'
+                 else has_table_privilege(current_user,
+                                          'public.alembic_version', 'SELECT')::text end
+                                                                       as alembic_version_select,
+            case when to_regclass('public.alembic_version') is null then 'table absent'
+                 else has_table_privilege(current_user,
+                                          'public.alembic_version', 'UPDATE')::text end
+                                                                       as alembic_version_update,
+            case when to_regclass('public.alembic_version') is null then 'table absent'
+                 else coalesce(pg_get_userbyid((select relowner from pg_class
+                        where oid = to_regclass('public.alembic_version'))), 'unknown') end
+                                                                       as alembic_version_owner,
+            has_schema_privilege(current_user, 'public', 'CREATE')::text as public_create,
+            has_schema_privilege(current_user, 'public', 'USAGE')::text  as public_usage
+          """)
+
+          engine_config = Config("alembic.ini")
+          section = engine_config.get_section(engine_config.config_ini_section, {})
+          section["sqlalchemy.url"] = rendered
+          engine = engine_from_config(section, prefix="sqlalchemy.", poolclass=NullPool)
+
+          try:
+              # `postgresql_readonly=True` makes the server itself refuse every write for the
+              # life of the session. The probe reports `transaction_read_only` and then proves
+              # the guarantee rather than asserting it.
+              connection = engine.connect().execution_options(postgresql_readonly=True)
+              with connection:
+                  print("---- what the server reports ----")
+                  for key, value in connection.execute(QUERY).mappings().one().items():
+                      print(f"  {key:24} = {value}")
+
+                  # The write guard, verified. A read-only transaction must reject DDL, so the
+                  # rejection is the pass condition and an accepted write is a failure — this
+                  # aborts the transaction, which is why it runs last. Deliberately a temporary
+                  # table: were the guard ever to let it through, the damage is a table that
+                  # disappears when the connection closes.
+                  print("---- write guard ----")
+                  try:
+                      connection.execute(text("create temporary table probe_write_check (x int)"))
+                  except DBAPIError as rejected:
+                      original = getattr(rejected, "orig", rejected)
+                      print(f"  write guard              = enforced ({type(original).__name__})")
+                  else:
+                      print("  write guard              = FAILED, the session accepted a write")
+                      sys.exit(1)
+          except Exception as error:  # noqa: BLE001 - the message is the diagnostic
+              print("---- probe failed ----")
+              print(f"  exception   = {type(error).__module__}.{type(error).__name__}")
+              print(f"  message     = {scrub(str(error))[:2000]}")
+              sys.exit(1)
+          PROBE
