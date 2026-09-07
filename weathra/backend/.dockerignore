@@ -1,0 +1,64 @@
+# Weathra — the backend image's build context.
+#
+# Task 23.4. Everything a Docker build can see is a candidate for the image, and an image layer is
+# forever: a file copied in and deleted in a later layer is still extractable from the published
+# image. So this file is a security boundary, not a build optimisation, and the two entries that
+# matter most are the first two.
+#
+# The build context is `weathra/backend/` (see `render.yaml`), so every path below is relative to
+# that directory.
+
+# ---------------------------------------------------------------------------- credentials
+#
+# `backend/.env` is where a developer's real DATABASE_URL, DATABASE_URL_PRIVILEGED and
+# OPENROUTER_API_KEY actually live. It is gitignored, so it never reaches Render's own build — but
+# a *local* `docker build` runs against the working tree, where the file is present and readable.
+# Without this line, `docker build` on any developer machine or Codespace would bake real
+# credentials into the image. `test_container.py` asserts this pattern is here.
+#
+# The negation that `.gitignore` needs for `.env.example` is deliberately absent: the image needs
+# no environment template, and excluding every `.env*` without exception is the safer rule.
+.env
+.env.*
+
+# Certificates and keys, on the same reasoning.
+*.pem
+*.key
+*.p12
+*.pfx
+
+# ---------------------------------------------------------------------------- local environments
+#
+# A host virtualenv holds platform-specific binaries built for the host, not for the image, and is
+# hundreds of megabytes. Copying one in would both bloat the image and shadow the interpreter the
+# build stage installs.
+.venv/
+venv/
+env/
+
+# ---------------------------------------------------------------------------- build noise
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# ---------------------------------------------------------------------------- not needed to serve
+#
+# The runtime image serves requests. It does not run the suite, and the evaluation artefact is a CI
+# output rather than an input.
+tests/
+evaluation-run.json
+
+# ---------------------------------------------------------------------------- vcs and editor
+.git/
+.gitignore
+.DS_Store
+*.swp

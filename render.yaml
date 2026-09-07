@@ -60,17 +60,42 @@
 services:
   - type: web
     name: weathra-backend
-    runtime: python
+
+    # Task 23.4. Docker rather than the native Python runtime: the image is built from
+    # `weathra/backend/Dockerfile`, pins its dependency tree through `constraints.txt`, and is the
+    # same artefact whether it is built here, in CI, or on a laptop. Render supports changing an
+    # existing service's runtime through a Blueprint sync, so this replaces the previous
+    # `runtime: python` service in place — the service keeps its id, its URL and its environment.
+    runtime: docker
+    dockerfilePath: ./weathra/backend/Dockerfile
+    dockerContext: ./weathra/backend
     plan: starter
     # Not `free`: that instance type spins down when idle, and LangGraph, SQLAlchemy and the ONNX
     # embedding runtime are all slow to import, so a spun-down service pays that cost on a user's
     # first request. Task 23.4 covers this; it is set here because a plan is part of the service
     # definition rather than something applied afterwards.
     region: oregon
-    rootDir: weathra/backend
-    buildCommand: pip install --upgrade pip && pip install .
-    startCommand: uvicorn weathra.api.app:create_app --factory --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/v1/health
+
+    # ------------------------------------------------------------------ release ordering
+    #
+    # *** Load-bearing. Do not set this back to `commit`. ***
+    #
+    # Task 23.4 requires that migrations are applied under the privileged connection **before the
+    # new release serves traffic**. Render's default is to deploy on every push to the tracked
+    # branch, which would race the migration job: a push to `main` would start a Render build
+    # immediately, and a container running new code against an un-migrated database would begin
+    # answering requests while `alembic upgrade head` was still running in GitHub Actions. The
+    # failure is not hypothetical — it is the ordinary outcome, because a container build is
+    # usually slower than a migration but not reliably so, which is the worst kind of race.
+    #
+    # With auto-deploy off, `main` moving changes nothing by itself. The only thing that releases
+    # this service is `.github/workflows/release.yml`, which calls Render's deploy API with an
+    # explicit `commitId` and only in a job that `needs:` the migration job. Ordering is therefore
+    # a property of the job graph rather than of relative build times.
+    #
+    # Quoted because YAML 1.1 reads a bare `off` as the boolean false.
+    autoDeployTrigger: "off"
 
     envVars:
       # ---------------------------------------------------------------- secrets
@@ -105,9 +130,6 @@ services:
 
       - key: LOG_LEVEL
         value: INFO
-
-      - key: PYTHON_VERSION
-        value: "3.12"
 
       # Supabase connection limits bind long before application throughput does, and every
       # horizontally-scaled instance holds its own pool. A deployment setting, not a code constant.

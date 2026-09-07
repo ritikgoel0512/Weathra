@@ -1,0 +1,117 @@
+# Weathra — the backend image's pinned dependency set. Task 23.4.
+#
+# `pyproject.toml` declares floors (`fastapi>=0.115`), which is the right thing for a package and
+# the wrong thing for a deployable artefact: two builds of the same commit, a week apart, would
+# install different versions, and a green CI run would then say nothing about what production
+# actually runs. This file closes that gap — `Dockerfile` installs with
+# `pip install --constraint constraints.txt .`, so the resolver may still build the graph from
+# `pyproject.toml` but may not choose a version other than the one pinned here.
+#
+# A dependency added to `pyproject.toml` without a matching pin here fails the image build rather
+# than floating silently. That is the intended behaviour, and it is the reminder to regenerate.
+#
+# GENERATED — do not hand-edit. Regenerate from a clean linux/amd64 interpreter, matching the
+# image's own base, so the pins describe the platform Render runs:
+#
+#     cd weathra/backend
+#     docker run --rm --platform linux/amd64 -v "$PWD":/src:ro python:3.12-slim bash -c '
+#         set -e
+#         pip install --quiet --upgrade pip setuptools wheel
+#         cp -r /src /build && cd /build
+#         pip install --quiet .
+#         pip freeze --exclude-editable
+#     ' | grep -v "^weathra==" | sort -f
+#
+# then re-apply this header. `weathra` itself is excluded: it is the thing being installed, not a
+# constraint on it. No credential appears here, and none can: these are package names and versions.
+#
+alembic==1.19.2
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.15.1
+asyncpg==0.31.0
+attrs==26.1.0
+certifi==2026.7.22
+cffi==2.1.1
+charset-normalizer==3.5.1
+click==8.5.0
+cryptography==50.0.1
+distro==1.9.0
+fastapi==0.141.1
+fastembed==0.8.0
+filelock==3.32.5
+flatbuffers==25.12.19
+fsspec==2026.7.0
+greenlet==3.5.5
+h11==0.16.0
+hf-xet==1.6.0
+httpcore2==2.12.0
+httpcore==1.0.9
+httptools==0.8.0
+httpx2==2.12.0
+httpx==0.28.1
+huggingface_hub==1.30.0
+idna==3.19
+jsonpatch==1.33
+jsonpointer==3.1.1
+jsonschema-specifications==2025.9.1
+jsonschema==4.26.0
+langchain-core==1.6.2
+langchain-protocol==0.0.19
+langgraph-checkpoint-postgres==3.1.2
+langgraph-checkpoint==4.2.0
+langgraph-prebuilt==1.1.0
+langgraph-sdk==0.4.4
+langgraph==1.2.11
+langsmith==0.12.2
+loguru==0.7.3
+Mako==1.4.1
+MarkupSafe==3.0.3
+mcp-types==2.1.1
+mcp==2.1.1
+mmh3==5.3.0
+numpy==2.5.3
+onnxruntime==1.29.0
+opentelemetry-api==1.44.0
+orjson==3.12.0
+ormsgpack==1.12.2
+packaging==26.3
+pgvector==0.5.0
+pillow==12.3.0
+protobuf==7.36.1
+psycopg-binary==3.3.5
+psycopg-pool==3.3.1
+psycopg==3.3.5
+pycparser==3.0
+pydantic-settings==2.15.0
+pydantic==2.13.5
+pydantic_core==2.46.5
+PyJWT==2.13.0
+python-dotenv==1.2.3
+python-multipart==0.0.32
+PyYAML==6.0.3
+py_rust_stemmers==0.1.8
+referencing==0.37.0
+requests-toolbelt==1.0.0
+requests==2.34.2
+rpds-py==2026.6.3
+setuptools==84.0.0
+sniffio==1.3.1
+SQLAlchemy==2.0.52
+sse-starlette==3.4.11
+starlette==1.6.0
+tenacity==9.1.4
+tokenizers==0.23.2
+tqdm==4.70.0
+truststore==0.10.4
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+urllib3==2.7.0
+uuid_utils==0.17.0
+uvicorn==0.52.4
+uvloop==0.22.1
+watchfiles==1.2.0
+websockets==16.1.1
+wheel==0.48.0
+xxhash==4.0.1
+zstandard==0.25.0

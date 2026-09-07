@@ -180,18 +180,35 @@ Each deployed environment must register its own frontend origin before either is
 
 | Secret | Held in | Used by |
 |---|---|---|
-| `SUPABASE_SERVICE_ROLE_KEY` | GitHub Actions secrets, Render service environment | Migrations, retention, evaluation provisioning — never a request path |
-| `DATABASE_URL` | Render service environment | The API and stream processes — authenticates as `weathra_api`, runs under the restricted role |
-| `DATABASE_URL_PRIVILEGED` | GitHub Actions secrets, Render service environment | Migrations and administrative routines |
-| `OPENROUTER_API_KEY` | Render service environment | `/ask` and `/stream` only |
+| `SUPABASE_SERVICE_ROLE_KEY` | GitHub Actions secrets **only** | Evaluation test-user provisioning. Never a request path, and never on the Render service — `Settings` refuses to start a `request_serving` process that has it set |
+| `DATABASE_URL` | Render service environment **only** | The API and stream processes — authenticates as `weathra_api`, runs under the restricted role |
+| `DATABASE_URL_PRIVILEGED` | GitHub Actions secrets **only** | Migrations and administrative routines. Deliberately absent from the Render service; see below |
+| `OPENROUTER_API_KEY` | Render service environment | `/ask` and `/stream` only — optional, and its absence degrades nothing else |
+| `RENDER_API_KEY` | GitHub Actions secrets | The `deploy` job of `release.yml`, to release a migrated commit |
+| `RENDER_SERVICE_ID` | GitHub Actions secrets | Which service that job releases |
 
-### Where a production secret actually lives *(pending)*
+An earlier revision of this table listed the service-role key and the privileged database URL as
+living in *both* GitHub Actions and the Render service environment. That was wrong, and it is
+recorded here rather than quietly corrected because the mistake is the natural one to make: both
+credentials are "backend" credentials, and it takes a second look to see that the backend has two
+halves with very different privileges. Neither belongs on the service that answers browser
+requests. `backend/tests/test_secret_storage.py` now fails if either is added to `render.yaml`.
+
+### Where a production secret actually lives
 
 Not in a file, and never in Git. Each of the four is set as an environment variable on the **Render
 service itself**, server-side, and Render injects it into the container at start — the backend reads
 it through `Settings` exactly as it reads a local `.env` value, and nothing in the image or the
 repository holds it. Rotation is editing the value and redeploying; no code or configuration file
 changes.
+
+The backend now ships as a container (see **The production image** below), which adds one place a
+credential could hide and does not: an image layer keeps whatever was copied into it even if a later
+layer deletes the file, so a `.env` swept into a build context is a published credential. Two
+independent things prevent it — `backend/.dockerignore` excludes every `.env*` from the build
+context, and the image's runtime stage copies no source tree at all, only the virtualenv built in
+the previous stage. The image is therefore publishable; every secret arrives at run time from the
+Render service environment.
 
 If a blueprint file (`render.yaml`) is used to define the service, secret values are **not** written
 into it. Render's blueprint syntax marks such a variable `sync: false`, which declares that the
@@ -233,6 +250,7 @@ and purposes only; no value appears here or anywhere else in the repository.
 | **GitHub Actions** | `DATABASE_URL_PRIVILEGED` | Migrations, retention, administrative routines |
 | | `SUPABASE_SERVICE_ROLE_KEY` | Evaluation test-user provisioning — its only consumer in the whole backend |
 | | `SUPABASE_URL` | Project URL for those jobs (public, but per-environment) |
+| | `RENDER_API_KEY`, `RENDER_SERVICE_ID` | Releasing a migrated commit on Render, from `release.yml` |
 | **Render** (backend service) | `DATABASE_URL` | The request path, as `weathra_api` under the restricted role |
 | | `OPENROUTER_API_KEY` | `/ask` and `/stream` only — **optional**; the backend serves everything else without it |
 | | `SUPABASE_URL`, `CORS_ALLOWED_ORIGINS` | Required, not secret; per-environment |
@@ -263,7 +281,14 @@ the browser bundle at build time, so a secret there is a published secret.
 direction. That is what makes keeping the two credentials apart worth doing;
 `backend/tests/test_secret_storage.py` guards it.
 
-### Provisioning: what a person has to do, once, per environment *(pending)*
+### Provisioning: what a person has to do, once, per environment
+
+**Status.** Production is provisioned. GitHub Actions holds `DATABASE_URL_PRIVILEGED`,
+`SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_URL`; the Render service `weathra-backend` exists on the
+Starter plan, holds `DATABASE_URL`, `OPENROUTER_API_KEY`, `SUPABASE_URL` and `CORS_ALLOWED_ORIGINS`,
+and serves `https://weathra-backend.onrender.com`. `DATABASE_URL` was verified to be the
+least-privileged `weathra_api` login through the Supabase session pooler on port 5432. What remains
+outstanding is named under **Still outstanding** at the end of this section.
 
 None of this can be done from the repository — each is a dashboard action by an account holder, and
 that is the point: the credential is entered where it will be used and never travels through Git, a
@@ -279,6 +304,19 @@ then set each variable declared `sync: false` under the service's *Environment* 
 `DATABASE_URL`, `OPENROUTER_API_KEY`, `SUPABASE_URL`, `CORS_ALLOWED_ORIGINS`. The blueprint names
 them and carries no value, so this step is unavoidable rather than a default someone might skip.
 
+**Render, the deploy credential** — *Account Settings → API Keys → Create API Key*, stored in
+GitHub Actions as `RENDER_API_KEY`, together with the service's own id (the `srv-…` value in the
+service's dashboard URL) as `RENDER_SERVICE_ID`. These exist because the release pipeline, not
+Render, decides when a release happens: see **On merge to `main`** below. An API key is
+account-scoped, so treat it as the most powerful credential in the store — it can reach every
+service on the account, which a deploy hook cannot.
+
+A deploy hook URL would need only one secret and would be narrower in scope. It is not used because
+it cannot answer the question the release has to ask: a hook returns once the deploy is *created*,
+and nothing about whether it reached `live`. The release would then verify readiness against
+whichever release happened to be serving, which is the failure the verification step exists to
+catch.
+
 **Vercel** — *Project Settings → Environment Variables*, per environment: the three `NEXT_PUBLIC_`
 values above, and nothing more.
 
@@ -288,6 +326,16 @@ so the returning-link and password-recovery paths land on an allowed redirect.
 After the Render service is up, `curl https://<backend>/api/v1/ready` reports each dependency by
 name and never a credential value. That response is the evidence that secrets were injected and the
 backend started with them — which is the part of task 23.3 no repository change can satisfy.
+
+**Still outstanding.** Two dashboard actions, both of which task 23.4 needs and neither of which the
+repository can perform:
+
+1. **Add `RENDER_API_KEY` and `RENDER_SERVICE_ID` to GitHub Actions secrets**, as above. Until they
+   exist, the `deploy` job refuses to run rather than failing obscurely mid-release.
+2. **Sync the blueprint**, so Render picks up `runtime: docker` and — the important one —
+   `autoDeployTrigger: "off"`. Until that sync happens the service still deploys on every push to
+   `main`, which is exactly the race the release ordering exists to remove: the committed
+   configuration says auto-deploy is off, and the running service does not yet agree.
 
 ## The pipelines
 
@@ -307,27 +355,99 @@ then the secret-containment check. The check runs *after* the build deliberately
 `NEXT_PUBLIC_` values at build time, so the bundle is the only place that shows what a browser
 actually receives, and a check that ran first would inspect a directory that does not exist and pass.
 
-### On merge to `main` *(pending)*
+### On merge to `main`
 
-1. **Apply migrations from a GitHub Actions job, under `DATABASE_URL_PRIVILEGED`, before the new
-   release serves traffic.** Alembic runs with `WEATHRA_RUNTIME_MODE=privileged` against the direct
-   connection. **Only on its success may deployment proceed** — a failed migration stops the
-   release rather than half-completing it.
-2. Release the new Render instance, which serves under `DATABASE_URL` and never holds the
-   privileged one. The order matters: a release serving requests against a schema it expects to
-   have been migrated is the failure this step exists to prevent.
-3. Deploy the frontend to Vercel with that environment's public configuration.
+**`release.yml`** — four jobs, and the order between them is the whole point:
 
-The privileged credential lives in CI rather than on the service, so the ordering is enforced by
-the workflow's job dependency rather than by a platform feature. That is the deliberate trade: one
-explicit `needs:` edge in a workflow, in exchange for the serving container never holding a
-credential that bypasses Row Level Security.
+```
+image  →  migrate  →  deploy  →  verify
+```
+
+1. **`image`** builds `weathra/backend/Dockerfile` and smoke-tests the result: the container must
+   start with only the configuration Render sets and answer `/api/v1/health`, and must not be
+   running as root. It runs first because it is the only job that cannot damage anything — a
+   Dockerfile that does not build is found here, rather than after the database has been migrated
+   for a release that was never going to start.
+2. **`migrate`** applies `alembic upgrade head` under `DATABASE_URL_PRIVILEGED` with
+   `WEATHRA_RUNTIME_MODE=privileged`. This includes the Row Level Security policies — revisions
+   `0002_row_level_security` and `0004_shared_read_policies` — which is why RLS is part of a release
+   rather than a one-time setup step. `DATABASE_URL` is deliberately not in this job's environment:
+   `resolve_url()` refuses to substitute one connection for the other, so there is no fallback to
+   the restricted role. The job refuses to start at all if the secret is unset, rather than
+   discovering it part-way through a revision.
+3. **`deploy`** calls Render's deploy API with an explicit `commitId` — this run's commit, not the
+   branch tip, which may already have moved on to a commit whose migrations have not run — and then
+   polls the deploy until Render reports it `live`. `build_failed`, `update_failed`,
+   `pre_deploy_failed`, `canceled` and `deactivated` fail the job; anything unrecognised keeps
+   waiting and times out, which is the fail-closed direction.
+4. **`verify`** asks the deployed service for `/api/v1/health` and `/api/v1/ready`, with bounded
+   retries, and fails unless readiness reports every required dependency reachable.
+
+**Why the ordering holds.** Two mechanisms, and both are needed:
+
+- **`needs:` between jobs.** GitHub Actions never runs a job whose dependency failed, so applying
+  migrations under the privileged connection **before the new release serves traffic** is a
+  property of the job graph rather than of relative timing.
+- **`autoDeployTrigger: "off"` in `render.yaml`.** This is the half that is easy to miss. Render's
+  default is to deploy on every push to the tracked branch — so with the default, pushing to `main`
+  would start a container build *in parallel with* the migration job, and a new release could begin
+  answering requests against an un-migrated database. The `needs:` edge would guarantee nothing,
+  because the release would not have come through the workflow at all. With auto-deploy off, `main`
+  moving changes nothing by itself, and the `deploy` job is the only route to production.
+
+The privileged credential stays in CI rather than moving to the service, so ordering is bought with
+one `needs:` edge instead of with a standing grant of a Row-Level-Security-bypassing connection to
+the container that serves browser traffic. Render's pre-deploy command was the alternative and was
+rejected for exactly that reason; `test_the_render_service_never_holds_the_privileged_database_url`
+holds the line, because the pressure to reverse it arrives disguised as a simplification.
+
+The release pipeline is the only workflow permitted to read a repository secret.
+`backend.yml` and `frontend.yml` hold none — a fork's CI has to work, and a contributor must never
+need the production password. `test_release_workflow.py` asserts both halves, and fails if a new
+workflow appears that has not been placed on one side of that boundary.
 
 ### On a schedule *(pending)*
 
 `weathra-retention`, under the privileged connection, against `THREAD_RETENTION_DAYS` and
 `SNAPSHOT_RETENTION_DAYS`. It refuses to run in anything but `WEATHRA_RUNTIME_MODE=privileged`, so a
 misconfigured invocation fails rather than silently doing nothing.
+
+## The production image
+
+The backend is deployed as a container. `render.yaml` sets `runtime: docker` and points at
+`weathra/backend/Dockerfile`, with `weathra/backend` as the build context; Render builds that image
+and runs it, and nothing else serves production traffic. Render supports changing an existing
+service's runtime through a Blueprint sync, so this replaced the previous native-Python service in
+place — same service id, same URL, same environment variables.
+
+**Two stages.** The build stage creates a virtualenv and installs the project into it. The runtime
+stage starts from a clean `python:3.12-slim`, adds `libgomp1` (OpenMP, which `onnxruntime` links
+against — `fastembed` needs it to produce the BGE-small embeddings the RAG corpus is indexed with)
+and `ca-certificates`, then copies **only that virtualenv**. It copies no source tree, which is the
+structural reason no credential can reach the image: there is nowhere for one to land even if the
+build context were wrong.
+
+**Reproducible installs.** `pyproject.toml` declares floors, which is right for a package and wrong
+for a deployable artefact — two builds of the same commit, a week apart, would install different
+versions, and a green CI run would then say nothing about what production runs. `constraints.txt`
+pins the fully resolved set and the image installs with `pip install --constraint constraints.txt .`.
+A dependency added to `pyproject.toml` without a matching pin fails the build rather than floating
+silently. Regenerate it from a clean `linux/amd64` interpreter whenever dependencies change; the
+exact command is in the file's own header.
+
+**Runtime shape.** A non-root user (`weathra`, uid 10001). `HF_HOME` and `FASTEMBED_CACHE_PATH` point
+at a directory that user owns, because `fastembed` fetches the ONNX weights on first use and would
+otherwise fail on a permission error at the first retrieval rather than at start-up. The server
+binds `0.0.0.0` on Render's assigned `$PORT`, under `exec` so uvicorn is PID 1 and receives SIGTERM
+directly — which is what lets in-flight requests drain instead of being killed alongside a shell.
+
+**What the image never does.** It never runs Alembic. Migrations belong to the release pipeline,
+under the privileged connection, before the image is released; a container that migrated on start
+would need `DATABASE_URL_PRIVILEGED` in the request-serving environment and would run the migration
+once per container rather than once per release.
+
+`backend/tests/test_container.py` asserts these properties statically, and the `image` job of
+`release.yml` builds the thing and starts it.
 
 ## Render settings that matter
 
@@ -352,10 +472,17 @@ through the pooler.
 
 ## Verifying a deployment
 
+The `verify` job of `release.yml` does this automatically after every release, with bounded
+retries, and fails the run unless readiness reports every required dependency reachable. By hand:
+
 ```bash
-curl https://<backend>/api/v1/health     # answers immediately, depends on nothing
-curl https://<backend>/api/v1/ready      # every dependency, configured and reachable
+curl https://weathra-backend.onrender.com/api/v1/health   # answers immediately, depends on nothing
+curl https://weathra-backend.onrender.com/api/v1/ready    # every dependency, configured and reachable
 ```
+
+Neither probe spends provider quota: `/ready` reports the weather provider as configured without
+calling it, deliberately, so that scraping readiness on every release and every few seconds costs
+nothing at Open-Meteo.
 
 `/ready` reports `database`, `weather_provider`, `vector_store`, `mcp_server`,
 `authentication_provider`, and `inference_provider` by name. It names what is missing and never a
@@ -369,7 +496,15 @@ account sees none of the first's data.
 
 ## Rollback
 
-**The backend.** Render keeps previous deploys; rolling back is redeploying the previous one. The constraint is the schema: a rollback across a migration is only safe if the migration was
+**The backend.** Render keeps previous deploys; rolling back is redeploying the previous one, from
+the service's *Deploys* tab or through the same API the release pipeline uses. Because auto-deploy
+is off, a rollback stays rolled back — pushing an unrelated commit to `main` does not quietly
+re-release the broken version, and the next release is a deliberate one.
+
+A rollback does **not** reverse a migration, and should not: the release pipeline migrates forward
+before deploying, so rolling the container back leaves the newer schema in place. That is safe
+precisely because of the discipline below, and it is the reason that discipline is not optional.
+The constraint is the schema: a rollback across a migration is only safe if the migration was
 backwards-compatible, so migrations are written additively — a column is added and populated before
 anything reads it, and a drop happens a release after the code that used it is gone. The migrations
 are verified to downgrade cleanly in CI (`alembic downgrade base` then back up), which is what makes

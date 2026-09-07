@@ -47,6 +47,12 @@ SERVER_SIDE_SECRETS = (
     "OPENROUTER_API_KEY",
 )
 
+# The workflows that run for ordinary contribution. These hold no production credential: a fork's
+# CI has to work, and a contributor must never need the production password. `release.yml` is
+# deliberately excluded — it is the one workflow that reads the secret store, and
+# `test_release_workflow.py` asserts what it may and may not read.
+ORDINARY_CI = ("backend.yml", "frontend.yml")
+
 # What the frontend is allowed to hold. Everything here is public by construction: a
 # `NEXT_PUBLIC_` value is inlined into the browser bundle at build time.
 FRONTEND_PUBLIC_NAMES = (
@@ -339,6 +345,38 @@ def test_the_render_service_does_not_idle_spin_down(render_blueprint: dict[str, 
     assert service.get("plan") != "free", "the free instance type spins down when idle"
 
 
+def test_the_image_that_serves_traffic_carries_no_credential(repo_root: Path) -> None:
+    """Task 23.4 put a container between the repository and production; it is a publishable one.
+
+    `render.yaml` holds names and no values, which was the whole of the story while Render built
+    the service from source. A Docker image is different: it is a build artefact that can be pulled,
+    and a layer keeps whatever was copied into it even if a later layer deletes the file. So the
+    same "no value in committed source" rule has to reach the Dockerfile and its build context.
+
+    `test_container.py` covers the image's structure. This asserts the narrow secret-storage half
+    here, beside the other declarations, so a reader auditing where credentials may live sees the
+    container without having to know that a second file exists.
+    """
+    backend = repo_root / "weathra" / "backend"
+
+    dockerfile = (backend / "Dockerfile").read_text()
+    for what, pattern in CREDENTIAL_SHAPES:
+        for found in pattern.finditer(dockerfile):
+            if found.re.groups == 2 and _dsn_is_a_placeholder(found[1], found[2]):
+                continue
+            raise AssertionError(f"the Dockerfile contains something shaped like {what}")
+
+    ignored = {
+        line.strip()
+        for line in (backend / ".dockerignore").read_text().splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+    assert ".env" in ignored and ".env.*" in ignored, (
+        "the image's build context does not exclude private environment files, so a local "
+        "`docker build` would bake a developer's real credentials into a layer"
+    )
+
+
 # ------------------------------------------------------------------ 5 & 6. CI holds no credential
 
 
@@ -362,7 +400,7 @@ def test_ordinary_ci_needs_no_production_credential(repo_root: Path) -> None:
     Asserted against the rendered YAML rather than the `env:` blocks alone, so a credential
     reintroduced through a `with:` input or an inline `run:` is caught too.
     """
-    for name in ("backend.yml", "frontend.yml"):
+    for name in ORDINARY_CI:
         rendered = yaml.safe_dump(
             yaml.safe_load((repo_root / ".github" / "workflows" / name).read_text())
         )

@@ -1,0 +1,277 @@
+name: release
+
+# Weathra — the production release pipeline. Task 23.4.
+#
+# Four jobs, in one order, and the order is the point:
+#
+#     image  →  migrate  →  deploy  →  verify
+#
+# `migrate` applies Alembic migrations — including the Row Level Security policies of revisions
+# 0002 and 0004 — under DATABASE_URL_PRIVILEGED. `deploy` releases the *same commit* on Render and
+# waits for it to be live. `verify` then asks the production service whether it is ready.
+#
+# Why a job graph rather than a pre-deploy command: Render's pre-deploy runs inside the service's
+# own environment, so using it would mean giving the browser-facing container a permanent
+# privileged database credential in exchange for an ordering guarantee `needs:` already provides.
+# Design decision 19 keeps every privileged job in CI. `render.yaml` and
+# `backend/tests/test_secret_storage.py` both hold that line.
+#
+# The race this closes: Render's default is to deploy on every push to `main`, which would start a
+# build the moment this workflow started — new code answering requests against an un-migrated
+# database. `render.yaml` sets `autoDeployTrigger: "off"`, so the only thing that releases this
+# service is the `deploy` job below.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "weathra/backend/**"
+      - "render.yaml"
+      - ".github/workflows/release.yml"
+  workflow_dispatch:
+
+concurrency:
+  # `cancel-in-progress: false`, deliberately. Cancelling a release mid-flight could stop it between
+  # the migration and the deploy, leaving a migrated database in front of the previous release.
+  # Queuing is the safe behaviour; releases are rare enough that waiting costs nothing.
+  group: release-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # Public. The production origin appears in `docs/deployment.md` and in the frontend's own
+  # configuration, so it is not a secret and does not belong in the secret store.
+  PRODUCTION_BASE_URL: https://weathra-backend.onrender.com
+
+jobs:
+  # ---------------------------------------------------------------------------------------------
+  image:
+    name: build and smoke-test the production image
+    runs-on: ubuntu-latest
+
+    # First, because it is the only job that cannot damage anything. A Dockerfile that does not
+    # build, or an image that does not answer `/health`, is found here — before the database has
+    # been migrated for a release that was never going to start.
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build
+        run: docker build --file weathra/backend/Dockerfile --tag weathra-backend:${{ github.sha }} weathra/backend
+
+      - name: Start it the way Render will
+        # Only the shape of configuration Render sets, and not one real value: no inference key, no
+        # service-role key, and a database URL that is well-formed and points nowhere. That last
+        # one is the interesting part. `/health` is documented as depending on nothing — a liveness
+        # probe that queried the database would report the *database's* health and let a rolling
+        # deploy kill instances that were perfectly able to serve — so a container that answers it
+        # with an unreachable database is the design working. What this step actually proves is
+        # that the image's imports resolve, the application factory builds, and uvicorn binds
+        # `$PORT` on every interface. Readiness against real dependencies is the `verify` job's
+        # question, and it is asked of the deployed service rather than of a local container.
+        run: |
+          docker run --detach --name smoke \
+            --env PORT=10000 \
+            --env WEATHRA_RUNTIME_MODE=request_serving \
+            --env WEATHRA_ENVIRONMENT=production \
+            --env SUPABASE_URL=https://ci.supabase.co \
+            --env DATABASE_URL=postgresql://weathra_api:unused@127.0.0.1:5432/postgres \
+            --publish 10000:10000 \
+            weathra-backend:${{ github.sha }}
+
+      - name: It answers liveness
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail --max-time 5 http://127.0.0.1:10000/api/v1/health > health.json; then
+              cat health.json
+              test "$(jq -r .status health.json)" = "ok"
+              test "$(jq -r .environment health.json)" = "production"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::the container never answered /api/v1/health"
+          docker logs smoke
+          exit 1
+
+      - name: It runs as a non-root user
+        # A convenience for an attacker who finds a write primitive is not one worth granting.
+        run: test "$(docker exec smoke id -u)" != "0"
+
+      - name: Stop it
+        if: always()
+        run: docker rm --force smoke || true
+
+  # ---------------------------------------------------------------------------------------------
+  migrate:
+    name: apply migrations under the privileged connection
+    needs: image
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: weathra/backend
+
+    env:
+      # The privileged connection, and *only* the privileged connection. DATABASE_URL is
+      # deliberately absent: `resolve_url()` refuses to substitute one for the other, so a missing
+      # privileged URL fails here rather than quietly migrating under the restricted role — which
+      # would fail halfway through, having already applied part of a revision.
+      WEATHRA_RUNTIME_MODE: privileged
+      DATABASE_URL_PRIVILEGED: ${{ secrets.DATABASE_URL_PRIVILEGED }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install --constraint constraints.txt .
+
+      - name: Fail closed if the privileged connection is not configured
+        # Without this the job would still fail — `resolve_url()` raises naming the missing
+        # variable — but it would fail after Alembic had opened its logging and started work. An
+        # explicit refusal is unambiguous, and it never reads the value, only its length.
+        run: |
+          if [ -z "${DATABASE_URL_PRIVILEGED}" ]; then
+            echo "::error::DATABASE_URL_PRIVILEGED is not set; refusing to migrate."
+            exit 1
+          fi
+          if [ -z "${SUPABASE_URL}" ]; then
+            echo "::error::SUPABASE_URL is not set; Settings cannot be constructed."
+            exit 1
+          fi
+
+      - name: Migrate, including the Row Level Security policies
+        # Revisions 0002 (row_level_security) and 0004 (shared_read_policies) are what make the
+        # restricted role safe to serve under, so they are part of a release rather than a
+        # one-time setup step. Alembic prints revision identifiers, never a connection string.
+        run: alembic upgrade head
+
+      - name: Record the revision now live
+        run: alembic current
+
+  # ---------------------------------------------------------------------------------------------
+  deploy:
+    name: release the migrated commit on Render
+    needs: migrate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Fail closed if the deploy credentials are not configured
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: |
+          if [ -z "${RENDER_API_KEY}" ] || [ -z "${RENDER_SERVICE_ID}" ]; then
+            echo "::error::RENDER_API_KEY and RENDER_SERVICE_ID must be set; refusing to release."
+            exit 1
+          fi
+
+      - name: Trigger the deploy for this exact commit
+        id: trigger
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: |
+          set -euo pipefail
+          # `commitId` is what ties the release to the commit that was just migrated. Without it
+          # Render deploys the branch tip, which may already have moved on to a commit whose
+          # migrations have not run.
+          response=$(curl --silent --show-error --fail --max-time 60 \
+            --request POST \
+            --header "Authorization: Bearer ${RENDER_API_KEY}" \
+            --header "Content-Type: application/json" \
+            --data "{\"commitId\":\"${GITHUB_SHA}\",\"clearCache\":\"do_not_clear\"}" \
+            "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys")
+          deploy_id=$(printf '%s' "$response" | jq -r '.id // empty')
+          if [ -z "$deploy_id" ]; then
+            echo "::error::Render did not return a deploy id."
+            exit 1
+          fi
+          echo "deploy-id=${deploy_id}" >> "$GITHUB_OUTPUT"
+          echo "Render deploy ${deploy_id} created for commit ${GITHUB_SHA}."
+
+      - name: Wait for it to be live
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          DEPLOY_ID: ${{ steps.trigger.outputs.deploy-id }}
+        run: |
+          set -euo pipefail
+          # Bounded: 80 polls at 15s is 20 minutes, comfortably more than a cold image build and
+          # far less than a hung job. An unrecognised status keeps waiting and therefore times out,
+          # which is the fail-closed direction — `verify` must not run against an unreleased commit.
+          for attempt in $(seq 1 80); do
+            status=$(curl --silent --show-error --fail --max-time 30 \
+              --header "Authorization: Bearer ${RENDER_API_KEY}" \
+              "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys/${DEPLOY_ID}" \
+              | jq -r '.status // "unknown"')
+            echo "deploy ${DEPLOY_ID}: ${status}"
+            case "$status" in
+              live)
+                exit 0
+                ;;
+              build_failed|update_failed|pre_deploy_failed|canceled|deactivated)
+                echo "::error::Render deploy ${DEPLOY_ID} ended as ${status}."
+                exit 1
+                ;;
+            esac
+            sleep 15
+          done
+          echo "::error::Render deploy ${DEPLOY_ID} did not reach 'live' within 20 minutes."
+          exit 1
+
+  # ---------------------------------------------------------------------------------------------
+  verify:
+    name: verify the released service
+    needs: deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Liveness
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            if curl --silent --fail --max-time 15 "${PRODUCTION_BASE_URL}/api/v1/health" > health.json; then
+              cat health.json
+              test "$(jq -r .status health.json)" = "ok"
+              test "$(jq -r .environment health.json)" = "production"
+              exit 0
+            fi
+            sleep 6
+          done
+          echo "::error::${PRODUCTION_BASE_URL}/api/v1/health did not answer."
+          exit 1
+
+      - name: Readiness reports every dependency reachable
+        # `/ready` reports each dependency by name and never a credential value, and it reaches no
+        # weather provider — the probe deliberately does not spend Open-Meteo quota, so scraping it
+        # on every release costs nothing. `ready` is true only when every *required* dependency
+        # answered; an unconfigured inference provider is reported but is not required.
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            if curl --silent --fail --max-time 30 "${PRODUCTION_BASE_URL}/api/v1/ready" > ready.json; then
+              jq '{ready, version, environment, dependencies: [.dependencies[] | {name, configured, reachable, required}]}' ready.json
+              test "$(jq -r .environment ready.json)" = "production"
+              if [ "$(jq -r .ready ready.json)" = "true" ]; then
+                unreachable=$(jq -r '[.dependencies[] | select(.reachable == false) | .name] | join(", ")' ready.json)
+                if [ -n "$unreachable" ]; then
+                  echo "::warning::reachable=false for optional dependencies: ${unreachable}"
+                fi
+                exit 0
+              fi
+              echo "not ready yet: $(jq -r '[.dependencies[] | select(.required and .reachable == false) | .name] | join(", ")' ready.json)"
+            fi
+            sleep 6
+          done
+          echo "::error::${PRODUCTION_BASE_URL}/api/v1/ready never reported ready."
+          exit 1
