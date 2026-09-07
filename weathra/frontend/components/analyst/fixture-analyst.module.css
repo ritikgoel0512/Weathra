@@ -1,0 +1,828 @@
+/*
+ * `02-ai-weather-analyst.png`'s geometry.
+ *
+ * Measured from the artifact at its 1440 reference width: the workspace bar, the 1fr/340 split
+ * between the thread and the rail, the right-aligned question bubble against the left-aligned
+ * answer card, and the two-track observed/forecast pair inside the answer.
+ */
+
+/* ---------------------------------------------------------------- workspace bar */
+
+.workspaceBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  flex-wrap: wrap;
+}
+
+.workspaceMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: var(--radius-md);
+  color: var(--color-accent);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+.workspaceText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  margin-right: auto;
+}
+
+.workspaceTitle {
+  font-family: var(--family-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.workspaceMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--type-meta-size);
+  color: var(--color-text-muted);
+  margin: 0;
+  flex-wrap: wrap;
+}
+
+.liveDot {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-transform: uppercase;
+  letter-spacing: var(--type-label-tracking);
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  color: var(--color-status-ok);
+}
+
+.liveDot::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+}
+
+.workspaceActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* ---------------------------------------------------------------- columns */
+
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-5);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------- context note */
+
+.contextNote {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  align-self: center;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+  font-size: var(--type-meta-size);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.contextNote b {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------- turns */
+
+.turnByline {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin: 0 56px var(--space-2) 0;
+}
+
+.turnRole {
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.turnTime {
+  font-size: var(--type-meta-size);
+  color: var(--color-text-muted);
+}
+
+.askTurn {
+  display: flex;
+  flex-direction: column;
+}
+
+.askRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.askBubble {
+  max-width: 640px;
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-overlay);
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.askAvatar,
+.answerAvatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+  color: var(--color-text-secondary);
+}
+
+.answerAvatar {
+  color: var(--color-accent);
+  border-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
+}
+
+.answerTurn {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.answerCard {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-overlay);
+  overflow: hidden;
+}
+
+.answerHead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5) 0;
+}
+
+.answerBand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--color-border-subtle);
+  flex-wrap: wrap;
+}
+
+.grounding {
+  font-size: var(--type-meta-size);
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+
+.answerBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
+.dataPair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.dataPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+  min-width: 0;
+}
+
+.dataPanelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.dataPanel dd[data-tone="accent"] {
+  color: var(--color-accent);
+}
+
+.interpretation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+
+.answerFooter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--color-border-subtle);
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-label-size);
+  color: var(--color-text-muted);
+  flex-wrap: wrap;
+}
+
+.answerFooter > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.answerProvenance {
+  margin-left: auto;
+}
+
+/* ---------------------------------------------------------------- composer */
+
+.composerZone {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-top: var(--space-5);
+  margin-top: auto;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.suggestion {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+  font-size: var(--type-ui-size);
+  color: var(--color-text-secondary);
+  cursor: default;
+}
+
+.composer {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-inset);
+  overflow: hidden;
+}
+
+.composerBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+  flex-wrap: wrap;
+}
+
+.composerFacet {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.composerFacet b {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.composerFacetLabel {
+  color: var(--color-text-muted);
+}
+
+.composerField {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  min-height: 96px;
+  padding: var(--space-4);
+}
+
+.composerPlaceholder {
+  flex: 1;
+  align-self: flex-start;
+  font-size: var(--type-body-size);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.composerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.composerIcon {
+  color: var(--color-text-muted);
+}
+
+.composerSend {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+/* ---------------------------------------------------------------- rail */
+
+.agentRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+}
+
+.agentOrb {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+  background:
+    radial-gradient(circle at 40% 35%, color-mix(in srgb, var(--color-accent) 65%, transparent), transparent 60%),
+    var(--color-surface-base);
+}
+
+.agentName {
+  font-size: var(--type-card-size);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.agentProcess {
+  font-size: var(--type-meta-size);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.sourceTile {
+  position: relative;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  overflow: hidden;
+  aspect-ratio: 3 / 2;
+}
+
+.sourceField {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sourceFieldGround {
+  fill: #04121a;
+}
+
+.sourceStrand {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 1.2;
+}
+
+.sourceChips {
+  position: absolute;
+  left: var(--space-3);
+  bottom: var(--space-3);
+  display: flex;
+  gap: var(--space-2);
+}
+
+.sourceList {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sourceRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.sourceRow:last-child {
+  border-bottom: none;
+}
+
+.sourceDot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: var(--color-status-ok);
+}
+
+.sourceText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-right: auto;
+}
+
+.sourceText b {
+  font-size: var(--type-ui-size);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.sourceText span {
+  font-size: var(--type-meta-size);
+  color: var(--color-text-muted);
+}
+
+.sourceCheck {
+  color: var(--color-status-ok);
+}
+
+.memoryList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: var(--type-meta-size);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.memoryList li {
+  padding-left: var(--space-4);
+  position: relative;
+}
+
+.memoryList li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 5px;
+  height: 5px;
+  background: var(--color-accent);
+}
+
+.calibration {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--type-meta-size);
+  line-height: 1.5;
+  color: var(--color-status-warning);
+  margin: 0;
+}
+
+.railStatus {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  font-size: var(--type-label-size);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------- responsive */
+
+@media (max-width: 1279px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dataPair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .thread {
+    padding: var(--space-4);
+  }
+
+  .turnByline {
+    margin-right: 0;
+  }
+
+  .askRow {
+    flex-direction: row-reverse;
+    justify-content: flex-start;
+  }
+
+  .askBubble {
+    max-width: none;
+  }
+
+  .answerFooter {
+    gap: var(--space-3);
+  }
+
+  .answerProvenance {
+    margin-left: 0;
+  }
+}
+
+/* ---------------------------------------------------------------- audit corrections */
+
+/*
+ * The question bubble. The artifact gives it about 55% of the thread's width, leaving a wide left
+ * gutter that is most of what makes the turn read as *addressed* to the agent; at the 640px cap it
+ * was taking about 75% and the balance was gone.
+ */
+.askBubble {
+  max-width: 56%;
+}
+
+/*
+ * The data rows. The artifact sets "Pressure Drop" and "Current Humidity" a step smaller than the
+ * surrounding body, which is why its panels are shorter than these were.
+ */
+.dataPanel dt {
+  font-size: var(--type-meta-size);
+}
+
+/*
+ * The Active Data Sources tile ran about 40px shorter than the artifact's and its striations were
+ * faint enough to read as an empty panel. 3:2 was still too wide; the artifact's tile is close to
+ * 3:2 *of the rail's inner width*, which at 340 is nearer 4:3.
+ */
+.sourceTile {
+  aspect-ratio: 4 / 3;
+}
+
+.sourceStrand {
+  stroke-width: 1.6;
+}
+
+/*
+ * The avatars. Glyph-in-a-circle read as an icon where the artifact has a portrait. No photograph is
+ * used — these are tonal discs of the same size and weight, which is what carries at 38px, with the
+ * agent's kept accented so the two turns stay distinguishable.
+ */
+.askAvatar {
+  border: none;
+  background: radial-gradient(circle at 42% 34%, #6b7a8b 0%, #46525f 46%, #2b343d 100%);
+  color: transparent;
+}
+
+.answerAvatar {
+  border: 1px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+  background:
+    radial-gradient(circle at 38% 32%, color-mix(in srgb, var(--color-accent) 62%, transparent), transparent 64%),
+    #10212c;
+  color: color-mix(in srgb, var(--color-accent) 80%, transparent);
+}
+
+/* ---------------------------------------------------------------- vertical rhythm, measured
+ *
+ * The screen ran 207px taller than the artifact's content, and the DOM probe showed it was not one
+ * component but seven small excesses. Each value below is the difference the probe reported between
+ * the rendered box and the artifact's own, so the total closes without anything being deleted.
+ *
+ *   workspace bar    +18    context note  +13    question turn  +45
+ *   answer turn      +70    composer      +39    sources tile   +23
+ *   analyst context  +40
+ */
+
+/* +18: the artifact's bar is 63 tall against 81 here. */
+.workspaceBar {
+  padding: var(--space-3) var(--space-5);
+}
+
+/* +13: 38 against the artifact's 25. */
+.contextNote {
+  padding: var(--space-1) var(--space-4);
+}
+
+/* +45: 137 against 92. The bubble's own padding and the byline's gap are the whole difference. */
+.turnByline {
+  margin: 0 56px var(--space-1) 0;
+}
+
+.askBubble {
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--type-body-size);
+}
+
+/* +70: 522 against 452, spread across the card's four stacked regions. */
+.answerBody {
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+}
+
+.answerHead {
+  padding: var(--space-2) var(--space-5) 0;
+}
+
+.answerBand {
+  padding: var(--space-2) var(--space-5);
+}
+
+.dataPanel {
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+
+.interpretation {
+  padding: var(--space-3);
+}
+
+.answerFooter {
+  padding: var(--space-2) var(--space-5);
+}
+
+/* +39: the field's floor and the zone's rule spacing. */
+.composerZone {
+  padding-top: var(--space-4);
+  gap: var(--space-3);
+}
+
+.composerField {
+  min-height: 78px;
+}
+
+/*
+ * +23: 3/2 was the artifact's ratio after all — the rail's inner width is 292 and the artifact's
+ * tile is 202 tall, which is 1.45. Moving to 4/3 in the previous pass overshot by 24.
+ */
+.sourceTile {
+  aspect-ratio: 3 / 2;
+}
+
+/* +40: the context panel's own stack. */
+.memoryList {
+  gap: var(--space-1);
+}
+
+.thread {
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+}
+
+.rail {
+  gap: var(--space-3);
+}
+
+/*
+ * The Active Data Sources panel, which the probe found carrying 175 of the remaining 188px on its
+ * own: 498 tall against the artifact's 323, with the tile itself already correct at 200. The excess
+ * was entirely in the three source rows — 60px each against the artifact's 26 — because each row
+ * had a full space-3 of padding above and below two stacked lines of text.
+ */
+.sourceRow {
+  padding: var(--space-2) 0;
+  gap: var(--space-2);
+}
+
+.sourceText b {
+  line-height: 1.25;
+}
+
+.sourceText span {
+  line-height: 1.2;
+}
+
+/* The remaining small excesses the same probe reported. */
+.workspaceBar {
+  padding: var(--space-2) var(--space-5);
+}
+
+.askBubble {
+  padding: var(--space-2) var(--space-4);
+}
+
+.agentRow {
+  padding: var(--space-2);
+}
+
+.composerField {
+  min-height: 64px;
+}
+
+/*
+ * The last of it. After the row padding came down the panel still measured 447 against 323, and the
+ * tile inside it is already correct at 200 — so the remainder is the head and the list's own rows.
+ */
+.sourceRow {
+  padding: 5px 0;
+}
+
+.sourceList {
+  gap: 0;
+}
+
+/*
+ * The remaining 95px, all of it in the rail: its three panels each carry a head, a body and a gap,
+ * and the artifact sets every one of them tighter than the shared `panelBodyTight` does. Scoped to
+ * this rail so the shared panel keeps its own spacing everywhere else it is used.
+ */
+.rail section > div:last-child {
+  padding: var(--space-3) var(--space-4);
+  gap: var(--space-3);
+}
+
+.rail section > header {
+  padding: var(--space-3) var(--space-4);
+}
+
+.memoryList li {
+  padding-left: var(--space-3);
+}
+
+.railStatus {
+  margin-top: calc(var(--space-1) * -1);
+}

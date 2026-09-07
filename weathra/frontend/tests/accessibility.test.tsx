@@ -17,6 +17,7 @@
  */
 
 import { render, screen, waitFor, within, type RenderResult } from "@testing-library/react";
+import type { ReactNode } from "react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
@@ -401,15 +402,42 @@ describe("every product screen names itself", () => {
 
 /* ---------------------------------------------------------- shared surfaces */
 
+
+/**
+ * The shell inside its session boundary, which is where it is mounted now.
+ *
+ * The rail's SAVED LOCATIONS section asks the backend for the person's places, so the shell needs
+ * the query layer and the API client the boundary provides. The one request it makes is answered
+ * with an empty list: none of these tests is about saved places.
+ */
+function withShellProviders(shell: ReactNode): ReactNode {
+  return (
+    <SessionBoundary
+      initialStatus="active"
+      accessToken={() => "test-token"}
+      fetch={async () =>
+        new Response(JSON.stringify({ count: 0, limit: 20, locations: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      }
+    >
+      {shell}
+    </SessionBoundary>
+  );
+}
+
 describe("the shared surfaces", () => {
   it("names every control in the application shell, including the drawer control", () => {
     const { container } = render(
-      <AppShell
-        identity={{ name: "person@example.test", email: "person@example.test", monogram: "P", known: true }}
-        signOutControl={<button type="button">Sign out</button>}
-      >
-        <h1>A screen</h1>
-      </AppShell>,
+      withShellProviders(
+        <AppShell
+          identity={{ name: "person@example.test", email: "person@example.test", monogram: "P", known: true }}
+          signOutControl={<button type="button">Sign out</button>}
+        >
+          <h1>A screen</h1>
+        </AppShell>,
+      ),
     );
 
     expectAccessible(container);
@@ -421,13 +449,18 @@ describe("the shared surfaces", () => {
 
   it("conveys the current navigation entry without relying on colour", () => {
     render(
-      <AppShell identity={{ name: "p", email: "p@example.test", monogram: "P", known: true }}>
-        <h1>A screen</h1>
-      </AppShell>,
+      withShellProviders(
+        <AppShell identity={{ name: "p", email: "p@example.test", monogram: "P", known: true }}>
+          <h1>A screen</h1>
+        </AppShell>,
+      ),
     );
 
-    // `usePathname` is mocked to "/", so the Dashboard entry is the current one.
-    const current = screen.getByRole("link", { name: /Dashboard/ });
+    // `usePathname` is mocked to "/", so the Dashboard entry is the current one. The top bar's
+    // breadcrumb names it too, so this asks the rail.
+    const current = within(screen.getByRole("navigation", { name: "Weathra" })).getByRole("link", {
+      name: /Dashboard/,
+    });
     expect(current).toHaveAttribute("aria-current", "page");
   });
 
@@ -544,9 +577,11 @@ describe("keyboard-only operation", () => {
   it("closes the navigation drawer with Escape, and leaves focus somewhere real", async () => {
     const person = userEvent.setup();
     render(
-      <AppShell identity={{ name: "p", email: "p@example.test", monogram: "P", known: true }}>
-        <h1>A screen</h1>
-      </AppShell>,
+      withShellProviders(
+        <AppShell identity={{ name: "p", email: "p@example.test", monogram: "P", known: true }}>
+          <h1>A screen</h1>
+        </AppShell>,
+      ),
     );
 
     const control = screen.getByRole("button", { name: "Menu" });

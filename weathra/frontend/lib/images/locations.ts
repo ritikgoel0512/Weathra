@@ -1,0 +1,91 @@
+/**
+ * The location-image model: what a resolved image is, and how a place becomes a stable key.
+ *
+ * Shared by the client component and the server provider, so it holds no secret and imports
+ * nothing server-only. The provider itself is `provider.server.ts`.
+ */
+
+/** How the image on screen was obtained. Reported so a reviewer is never guessing. */
+export type LocationImageSource =
+  /** A photograph from the configured third-party provider. */
+  | "provider"
+  /** A photograph committed to `public/locations/photos/`, used when no provider is configured. */
+  | "local"
+  /** The deterministic artwork this repository draws. Always available. */
+  | "generated";
+
+export interface ResolvedLocationImage {
+  /** Where the browser fetches the image from. */
+  readonly url: string;
+  /**
+   * What the image actually shows, for the `alt` text.
+   *
+   * Deliberately not "a photo of Berlin": a provider result is a photograph *someone took* in or
+   * near a place, and the generated fallback is not a photograph of anywhere. Each source describes
+   * itself honestly, because an `alt` that overclaims is a small lie in an accessible name.
+   */
+  readonly description: string;
+  readonly source: LocationImageSource;
+  /** Who took it, when the provider says. Rendered as a credit where the licence asks for one. */
+  readonly credit?: { readonly name: string; readonly url?: string };
+  /** Native pixel size, when known. Lets a caller size an `<img>` and avoid a reflow. */
+  readonly width?: number;
+  readonly height?: number;
+}
+
+/**
+ * The stable key for a place.
+ *
+ * Everything downstream — the local photo lookup, the generated artwork's filename, the provider
+ * cache — is keyed on this, so the same place resolves to the same image on every render, every
+ * machine and every capture. Derived from the name's first segment only: the backend's
+ * `display_name` carries a country that varies with the resolver's locale, and keying on it would
+ * make "Berlin, Germany" and "Berlin, DE" two different places.
+ */
+export function locationKey(displayName: string): string {
+  const head = displayName.split(",")[0] ?? displayName;
+  return head
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * The places whose generated artwork exists in `public/locations/`.
+ *
+ * Anything else falls back to `generic`, so an unlisted place still gets a frame rather than a hole.
+ * Kept in step with `CITIES` in `scripts/generate-location-art.mjs` by
+ * `lib/images/locations.test.ts`, which reads both rather than trusting this comment.
+ */
+export const DRAWN_LOCATIONS: ReadonlySet<string> = new Set([
+  "berlin",
+  "munich",
+  "hamburg",
+  "tokyo",
+  "london",
+  "new-york",
+  "paris",
+  "springfield",
+]);
+
+/** The generated artwork for a place. The last resort, and the one that cannot fail. */
+export function generatedImageFor(displayName: string): ResolvedLocationImage {
+  const key = locationKey(displayName);
+  const asset = DRAWN_LOCATIONS.has(key) ? key : "generic";
+  return {
+    url: `/locations/${asset}.svg`,
+    // Says what it is. It is not a photograph and does not claim to depict this place.
+    description: `${displayName}, shown as generated decorative artwork`,
+    source: "generated",
+  };
+}
+
+/** The endpoint the client asks. One place, so no component holds a provider URL. */
+export const LOCATION_IMAGE_ENDPOINT = "/api/location-image";
+
+/** The query the endpoint takes. */
+export function locationImageQuery(displayName: string): string {
+  return `${LOCATION_IMAGE_ENDPOINT}?place=${encodeURIComponent(displayName)}`;
+}

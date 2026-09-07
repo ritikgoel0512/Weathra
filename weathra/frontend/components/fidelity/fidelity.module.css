@@ -1,0 +1,1010 @@
+/*
+ * The Visily chrome, shared by every fidelity-fixture screen.
+ *
+ * All seven product artifacts under `docs/design/screens/` are drawn from one small vocabulary —
+ * a panel with a heading strip, a badge-plus-meta section label, a display title, a labelled meter,
+ * three button weights, a monospaced technical value, and a status strip along the bottom. Each
+ * screen used to re-derive those, and they drifted apart. They are defined once here and measured
+ * from the artifacts rather than chosen: the reference width is 1440, the rail 248, the content
+ * gutter 24.
+ *
+ * Loaded only by the per-screen `fixture-*.tsx` components, which render only when the build-time
+ * fidelity flag is on. Nothing in the production path imports this file.
+ */
+
+/*
+ * The artifacts set every technical value — station ids, temperatures, hashes, durations — in a
+ * monospace. Declared locally rather than as a global token: it is a property of how the mockups
+ * draw sample telemetry, not a decision the production design system has taken.
+ */
+.page {
+  --fidelity-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Roboto Mono", Menlo, monospace;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------- page heading */
+
+.pageHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+}
+
+.pageHeadText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.sectionLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.sectionMeta {
+  font-family: var(--fidelity-mono);
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.displayTitle {
+  font-family: var(--family-display);
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.pageSubtitle {
+  font-size: var(--type-body-size);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.pageActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* ---------------------------------------------------------------- panels */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border-subtle);
+  flex-wrap: wrap;
+}
+
+/*
+ * The artifacts' large region headings — EXECUTION FLOW, GROUNDED DATA SOURCES, DETERMINISTIC
+ * METRICS — are set wide, light and tracked-out rather than as ordinary card titles.
+ */
+.regionTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-family: var(--family-display);
+  font-size: 1.375rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.panelTitle {
+  font-family: var(--family-display);
+  font-size: var(--type-section-size);
+  font-weight: var(--type-section-weight);
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.panelSubtitle {
+  font-size: var(--type-meta-size);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.panelBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  min-width: 0;
+}
+
+.panelBodyTight {
+  padding: var(--space-4) var(--space-5);
+  gap: var(--space-3);
+}
+
+.microTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin: 0;
+}
+
+.microTitleMuted {
+  color: var(--color-text-muted);
+}
+
+.prose {
+  font-size: var(--type-body-size);
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.emphasis {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.strong {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.mono {
+  font-family: var(--fidelity-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- intelligence header
+ *
+ * The tinted strip with the agent orb that opens Weathra Intelligence, Comparison Intelligence,
+ * Anomaly Intelligence and Workspace Intelligence Synthesis. One shape, four screens.
+ */
+
+.intelHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  border-bottom: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  flex-wrap: wrap;
+}
+
+.intelMark {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+  background:
+    radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--color-accent) 60%, transparent), transparent 62%),
+    var(--color-surface-inset);
+}
+
+.intelHeadText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  margin-right: auto;
+}
+
+.intelTitle {
+  font-family: var(--family-display);
+  font-size: var(--type-heading-size);
+  font-weight: 600;
+  color: var(--color-accent);
+  margin: 0;
+}
+
+.intelAgent {
+  font-family: var(--fidelity-mono);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------- meters */
+
+.meter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.meterHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.meterLabel {
+  font-family: var(--fidelity-mono);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.meterValue {
+  font-family: var(--fidelity-mono);
+  font-size: var(--type-meta-size);
+  color: var(--color-accent);
+}
+
+.meterTrack {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-inset);
+  overflow: hidden;
+}
+
+.meterFill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+}
+
+.meterFill[data-tone="good"] {
+  background: var(--color-status-ok);
+}
+
+.meterFill[data-tone="critical"] {
+  background: var(--color-status-error);
+}
+
+.meterValue[data-tone="good"] {
+  color: var(--color-status-ok);
+}
+
+.meterValue[data-tone="critical"] {
+  color: var(--color-status-error);
+}
+
+/* ---------------------------------------------------------------- buttons */
+
+.accentButton,
+.ghostButton,
+.dangerButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 10px var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--type-ui-size);
+  font-weight: 600;
+  cursor: default;
+  white-space: nowrap;
+}
+
+.accentButton {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  border: 1px solid var(--color-accent);
+}
+
+.ghostButton {
+  background: var(--color-surface-inset);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-subtle);
+}
+
+.dangerButton {
+  background: var(--color-status-error);
+  color: #ffffff;
+  border: 1px solid var(--color-status-error);
+}
+
+.linkButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--type-ui-size);
+  font-weight: 600;
+  color: var(--color-accent);
+  cursor: default;
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+/* ---------------------------------------------------------------- chips */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+  font-family: var(--fidelity-mono);
+  font-size: var(--type-label-size);
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+
+.chipAccent {
+  border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  color: var(--color-accent);
+}
+
+.chipOk {
+  border-color: color-mix(in srgb, var(--color-status-ok) 45%, transparent);
+  background: var(--color-status-ok-surface);
+  color: var(--color-status-ok);
+}
+
+.chipWarn {
+  border-color: color-mix(in srgb, var(--color-status-warning) 45%, transparent);
+  background: var(--color-status-warning-surface);
+  color: var(--color-status-warning);
+}
+
+.chipCritical {
+  border-color: color-mix(in srgb, var(--color-status-error) 45%, transparent);
+  background: var(--color-status-error-surface);
+  color: var(--color-status-error);
+}
+
+/* ---------------------------------------------------------------- callouts */
+
+.callout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+}
+
+.calloutAccent {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+
+.calloutCritical {
+  border-color: color-mix(in srgb, var(--color-status-error) 40%, transparent);
+  background: var(--color-status-error-surface);
+}
+
+.calloutWarn {
+  border-color: color-mix(in srgb, var(--color-status-warning) 40%, transparent);
+  background: var(--color-status-warning-surface);
+}
+
+.calloutTitle {
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.calloutTitleCritical {
+  color: var(--color-status-error);
+}
+
+.calloutBody {
+  font-size: var(--type-meta-size);
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------- stat rows and grids */
+
+.statRows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.statRows > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.statRows dt {
+  font-family: var(--fidelity-mono);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.statRows dd {
+  font-family: var(--fidelity-mono);
+  font-size: var(--type-ui-size);
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.statCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+  min-width: 0;
+}
+
+.statCardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.statCardLabel {
+  font-family: var(--fidelity-mono);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.statCardValue {
+  font-family: var(--fidelity-mono);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.statCardNote {
+  font-size: var(--type-meta-size);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------- status strip
+ *
+ * Every product artifact closes on the same rule-and-strip: two or three left-aligned technical
+ * facts, then the product version pushed right.
+ */
+
+.statusStrip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-subtle);
+  font-family: var(--fidelity-mono);
+  font-size: var(--type-label-size);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin: var(--space-2) 0 0;
+}
+
+.statusOk {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-status-ok);
+}
+
+.statusOk::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+}
+
+.statusRight {
+  margin-left: auto;
+}
+
+.statusChip {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+}
+
+/* ---------------------------------------------------------------- charts */
+
+.chartGrid {
+  stroke: var(--color-border-subtle);
+  stroke-width: 1;
+  stroke-dasharray: 2 5;
+}
+
+.chartTick {
+  fill: var(--color-text-muted);
+  font-family: var(--fidelity-mono);
+  font-size: 10px;
+}
+
+.chartLine {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chartLineMuted {
+  fill: none;
+  stroke: var(--color-text-muted);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chartLineDashed {
+  fill: none;
+  stroke: var(--color-text-muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 5;
+}
+
+.chartArea {
+  fill: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  stroke: none;
+}
+
+.chartBar {
+  fill: var(--color-class-forecast);
+}
+
+.chartBarAccent {
+  fill: color-mix(in srgb, var(--color-accent) 70%, transparent);
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-family: var(--fidelity-mono);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.legendSwatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--color-accent);
+}
+
+.legendSwatchMuted {
+  background: var(--color-text-muted);
+}
+
+.legendSwatchBar {
+  background: var(--color-class-forecast);
+}
+
+.legendSwatchLine {
+  width: 14px;
+  height: 2px;
+  border-radius: 0;
+}
+
+/* ---------------------------------------------------------------- responsive
+ *
+ * Reflow only. Below the wide tier the artifacts' two- and three-track rows become one track and
+ * the panels keep their internal geometry, so the design language survives the narrower viewport
+ * rather than being replaced by a different one.
+ */
+
+@media (max-width: 1023px) {
+  .displayTitle {
+    font-size: 1.625rem;
+  }
+
+  .regionTitle {
+    font-size: 1.125rem;
+  }
+}
+
+@media (max-width: 767px) {
+  .pageHead {
+    align-items: flex-start;
+  }
+
+  .panelHead,
+  .panelBody {
+    padding: var(--space-4);
+  }
+
+  .statusStrip {
+    gap: var(--space-3);
+  }
+
+  .statusRight {
+    margin-left: 0;
+  }
+}
+
+/* ---------------------------------------------------------------- the decadal field
+ *
+ * `01-dashboard.png` and `04-compare-cities.png` both fill their baseline band with a dense
+ * trading-terminal panel: a fine grid, a long run of candles, and three long-period curves over
+ * the top. Reproduced for its role and geometry — a dark technical field for an overlay card to sit
+ * on — from a deterministic sequence. It encodes no measurement and is labelled as decoration.
+ */
+
+.decadalSvg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 240px;
+}
+
+.decadalGround {
+  fill: #050b14;
+}
+
+.decadalGrid {
+  stroke: #16324a;
+  stroke-width: 1;
+}
+
+.decadalUp {
+  fill: #2dd4bf;
+}
+
+.decadalUp rect,
+.decadalDown rect {
+  fill: inherit;
+}
+
+.decadalDown {
+  fill: #f43f6e;
+}
+
+.decadalCurveA {
+  fill: none;
+  stroke: #38bdf8;
+  stroke-width: 2;
+}
+
+.decadalCurveB {
+  fill: none;
+  stroke: #c084fc;
+  stroke-width: 2;
+}
+
+.decadalCurveC {
+  fill: none;
+  stroke: #fb923c;
+  stroke-width: 2;
+}
+
+/* ---------------------------------------------------------------- correction pass 1
+ *
+ * Measured against the artifacts from the first rendered capture. Five things were wrong across the
+ * set: the interpretation and analytics badges were the design system's magenta and violet where
+ * every artifact draws them teal, the intelligence header wrapped its badge onto a second line in
+ * the narrower rails, several capitalised actions were rendered sentence case, the sentence-case
+ * stat rows were being forced to capitals, and the shared meter track was a hairline where the
+ * artifacts draw a visible bar.
+ */
+
+/*
+ * The artifacts colour AI INTERPRETATION and ANALYTICS teal.
+ *
+ * Production's data-class palette gives each class its own hue — magenta for interpretation, violet
+ * for analytics — which is a deliberate design-system decision and stays exactly as it is. The
+ * artifacts predate it and draw both teal, and a magenta chip beside a teal one is the most
+ * noticeable colour difference in a side-by-side. The override is scoped to the fixture page root,
+ * so it reaches only what a fidelity screen renders.
+ */
+.page {
+  --color-class-interpretation: #22d3ee;
+  --color-class-interpretation-surface: #06323d;
+  --color-class-analytics: #22d3ee;
+  --color-class-analytics-surface: #06323d;
+}
+
+.intelHead {
+  flex-wrap: nowrap;
+}
+
+.intelHeadText {
+  overflow: hidden;
+}
+
+.buttonCaps {
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-size: var(--type-label-size);
+  font-weight: 700;
+}
+
+/* The artifacts set the Observed Data / Forecast Vector rows in sentence case, not capitals. */
+.statRowsPlain dt {
+  font-family: var(--family-body);
+  font-size: var(--type-ui-size);
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--color-text-secondary);
+}
+
+.meterTrack {
+  height: 5px;
+}
+
+/* ---------------------------------------------------------------- correction pass 2 */
+
+/*
+ * The intelligence header, at both widths it has to work at.
+ *
+ * Two failures got here in order. Wrapping freely broke "Anomaly Intelligence" over two lines in the
+ * 460 rail, which the artifact never does. `nowrap` fixed the wrap and introduced a worse defect:
+ * the title overran its box and was clipped to "Anomaly Intelligenc". The cause of both is that the
+ * title, the agent line and the badge were competing for one row's width.
+ *
+ * So the title is allowed to shrink instead. It keeps its line, and where the row is tight it steps
+ * down a size rather than wrapping or truncating — which is what the artifact's own header does
+ * between the Dashboard's wide panel and the rail's narrow one.
+ */
+.intelTitle {
+  white-space: nowrap;
+  font-size: clamp(1rem, 1.4vw, var(--type-heading-size));
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* The agent line is the one that may wrap, and the badge never shrinks below its content. */
+.intelHead > :last-child {
+  flex: 0 0 auto;
+}
+
+/*
+ * The area under the recorded curve. Taken down to 9% in an earlier pass on the belief it was too
+ * heavy; against the artifact at full size it had become invisible, and the curve read as a bare
+ * line. 16% is where the artifact's wash actually sits.
+ */
+.chartArea {
+  fill: color-mix(in srgb, var(--color-accent) 16%, transparent);
+}
+
+/* ---------------------------------------------------------------- correction pass 3
+ *
+ * `nowrap` on the intelligence header was the right fix for the 460 rail and the wrong one at 360:
+ * it truncated "Workspace Intelligence Synthesis" to one word and squeezed the agent line into a
+ * column. The header holds its single line only where there is room for one.
+ */
+
+@media (max-width: 1023px) {
+  .intelHead {
+    flex-wrap: wrap;
+  }
+
+  .intelTitle {
+    white-space: normal;
+  }
+}
+
+/*
+ * The artifacts separate the closing facts with a pipe rule, not with whitespace alone. Applied on
+ * the strip itself so every screen gets it; the dot-led first fact and the right-hand pair are
+ * excluded, because the artifact does not put a pipe before or after those.
+ */
+.statusStrip > span + span:not(.statusRight):not(.statusChip)::before {
+  content: "|";
+  margin-right: var(--space-5);
+  color: var(--color-border-strong);
+}
+
+/* ---------------------------------------------------------------- scale correction
+ *
+ * Every measurement behind the previous pass's spacing was 3.33% too large.
+ *
+ * The approved PNGs are 1488px wide, and both measuring tools normalised the 1440-wide render into
+ * "1488-space" to compare against them. But 1488 is not the artifacts' page width — it is 1440 plus
+ * a 24px Visily export frame on each side, which `08-authentication.png` shows directly, being the
+ * one light-grounded screen whose frame is visible to a threshold. So the artifacts' page is 1440,
+ * exactly what is rendered here, the correct scale is 1:1, and scaling the render up by 3.33%
+ * reported every region larger than it was. Corrections calibrated against those numbers tightened
+ * each screen by roughly that much too far, which is why re-measuring at 1:1 found seven of eight
+ * screens *short* rather than centred on their targets.
+ *
+ * What follows is measured at 1:1, from row profiles rather than from band edges: the artifact's
+ * last panel edge, the strip's own divider, and its glyph rows, all read inside the frame.
+ *
+ * On `01-dashboard.png`: the panel ends at y2166, the strip's divider sits at y2190, and its text
+ * occupies y2228–2241. That is 38px between the divider and the text. This rendered 20px.
+ */
+.statusStrip {
+  padding-top: 34px;
+}
+
+/* ---------------------------------------------------------------- chips and marks
+ *
+ * Measured at 1:1 against the approved screens (page = 1440 inside the 24px export frame).
+ */
+
+/*
+ * The badge.
+ *
+ * `03-historical-analytics.png`'s EXTREME badge measures 51 x 20; this rendered 70 x 25. The extra
+ * 19px of width is what pushed "THERMAL DELTA" onto a second line where the artifact keeps it on
+ * one, and the same surplus is what crowded the Anomaly Intelligence title into its own chip.
+ *
+ * Scoped to the fixture screens by attribute rather than by class, because the badge's own class is
+ * hashed into `primitives.module.css`. `span` qualifies it so it cannot reach `.metricNote`, which
+ * is a `<p>` carrying `data-tone` for a different purpose. Production's badge is untouched, and so
+ * are the data-class colours and the non-hue carriers `lib/design/tokens.test.ts` checks.
+ */
+.page span[data-tone],
+.page span[data-class] {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-pill);
+}
+
+/*
+ * The artifacts draw AI INTERPRETATION filled rather than outlined: a solid accent pill carrying
+ * dark text, where every other class stays a tinted outline. That is the same accent/contrast
+ * pairing the primary button uses, so it reads at either appearance; the class still states itself
+ * in words, so hue is still not the only carrier.
+ */
+.page span[data-class="interpretation"] {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  border-left-width: 1px;
+  color: var(--color-accent-contrast);
+}
+
+/*
+ * The intelligence mark.
+ *
+ * The artifact draws a bright cyan ring around a dark disc with a small textured sphere inside it —
+ * circular, not the hexagon the previous report claimed. Magnifying `06-saved-locations.png` at the
+ * synthesis head shows the ring plainly. This rendered a plain teal ball with no ring and no inner
+ * form.
+ */
+.intelMark {
+  position: relative;
+  border: 2px solid var(--color-accent);
+  background: var(--color-surface-base);
+  overflow: hidden;
+}
+
+.intelMark::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--color-accent) 70%, transparent), transparent 55%),
+    radial-gradient(circle at 70% 72%, color-mix(in srgb, var(--color-accent) 45%, transparent), transparent 50%),
+    color-mix(in srgb, var(--color-accent) 16%, var(--color-surface-inset));
+}
+
+/* The sphere's meridians, which is what gives the artifact's inner form its texture. */
+.intelMark::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  box-shadow:
+    inset 9px 0 0 -8px color-mix(in srgb, var(--color-accent) 55%, transparent),
+    inset -9px 0 0 -8px color-mix(in srgb, var(--color-accent) 55%, transparent);
+  background:
+    linear-gradient(
+      to bottom,
+      transparent 0 30%,
+      color-mix(in srgb, var(--color-accent) 50%, transparent) 30% calc(30% + 1px),
+      transparent calc(30% + 1px) 62%,
+      color-mix(in srgb, var(--color-accent) 45%, transparent) 62% calc(62% + 1px),
+      transparent calc(62% + 1px) 100%
+    );
+}
+
+/*
+ * The panel title beside it. `03-historical-analytics.png` fits "Anomaly Intelligence" on one line
+ * with clear air before the chip; this clipped the final letter behind it. The compact badge above
+ * returns most of the room, and wrapping rather than overflowing is what keeps a longer title from
+ * ever being cut again.
+ */
+.intelTitle {
+  overflow-wrap: anywhere;
+}
+
+/*
+ * The accent chip, as `05-agent-evidence.png` draws ACTIVE TOOL: a fully rounded outline pill in
+ * the sans face, uppercase, sitting on the same row as the layer name. This rendered it in the
+ * monospace face, title case, with a small-radius rectangle, and wide enough that the row wrapped
+ * and put it on a line of its own.
+ *
+ * The casing is done here rather than in the fixture data so the string in `lib/fixtures/visily.ts`
+ * — and anything reading it — is unchanged.
+ */
+.chipAccent,
+.chipWarn,
+.chipCritical {
+  font-family: var(--family-body);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: var(--radius-pill);
+  padding: 3px 10px;
+}
+
+/*
+ * The stat card's label, which the artifact keeps on one line.
+ *
+ * `03-historical-analytics.png` sets "THERMAL DELTA" in 88px beside a 51px chip inside a 190px
+ * card; this had a 70px chip and a label wide enough that the two together overran the card and the
+ * label wrapped. The chip above returns 19px and the tracking here returns the rest. The base
+ * `.chip` is deliberately left alone: the artifact's evidence chips really are mono in a
+ * small-radius rectangle, and only the toned ones are pills.
+ */
+.statCardLabel {
+  letter-spacing: 0.03em;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* The toned chips take the artifact's tighter side padding; 10px still left the row 13px over. */
+.chipAccent,
+.chipWarn,
+.chipCritical {
+  padding: 3px 7px;
+}

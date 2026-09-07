@@ -1,0 +1,813 @@
+/*
+ * `04-compare-cities.png`'s geometry.
+ *
+ * Measured from the artifact at 1440: the two equal city cards, the 1fr/340 synthesis split, the
+ * seven-row differential matrix on its day/left/right tracks, the 1fr/368 pulse row, and the
+ * 1fr/1.4fr baseline band with its overlay card.
+ */
+
+/* ---------------------------------------------------------------- selector */
+
+.selector {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-raised);
+  flex-wrap: wrap;
+}
+
+.selectorNode {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--type-ui-size);
+  font-weight: 600;
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-primary);
+}
+
+.selectorSwap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+  color: var(--color-text-secondary);
+}
+
+.selectorDivider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--color-border-subtle);
+}
+
+.selectorWindow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-base);
+  font-size: var(--type-ui-size);
+  font-weight: 600;
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-primary);
+}
+
+/* ---------------------------------------------------------------- city cards */
+
+.cities {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.cityCard {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  overflow: hidden;
+}
+
+.cityBanner {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-5);
+  height: 100%;
+  min-height: 168px;
+}
+
+.cityChips {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.cityStation {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: rgb(4 12 20 / 0.72);
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-label-size);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #e9eff6;
+}
+
+.cityNames {
+  display: flex;
+  flex-direction: column;
+}
+
+.cityName {
+  font-family: var(--family-display);
+  font-size: 1.625rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+  text-shadow: 0 1px 6px rgb(0 0 0 / 0.6);
+}
+
+.cityCountry {
+  font-size: var(--type-meta-size);
+  color: rgb(233 239 246 / 0.82);
+  margin: 0;
+  text-shadow: 0 1px 4px rgb(0 0 0 / 0.6);
+}
+
+.cityReading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-5) var(--space-4);
+}
+
+.cityTemp {
+  display: flex;
+  align-items: flex-start;
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.cityDegree {
+  font-size: 1.25rem;
+  margin-top: 4px;
+}
+
+.cityCondition {
+  font-size: var(--type-ui-size);
+  font-weight: 600;
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin: var(--space-2) 0 0;
+}
+
+.cityFlags {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.cityFlags li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-label-size);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.cityStats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--color-border-subtle);
+  margin: 0;
+}
+
+.cityStats dt {
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.cityStats dd {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-ui-size);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: var(--space-1) 0 0;
+}
+
+.cityStats dd svg {
+  color: var(--color-accent);
+}
+
+/* ---------------------------------------------------------------- intelligence */
+
+.intelBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: var(--space-5);
+  padding: var(--space-5);
+}
+
+.intelMain {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.reasonPair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+}
+
+.reasonAccent {
+  border-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 7%, transparent);
+}
+
+.reasonHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--color-text-muted);
+}
+
+/*
+ * The artifact separates this column with a rule rather than boxing it. The inset panel read as a
+ * card inside a card, which the artifact does not have.
+ */
+.intelAside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: 0 0 0 var(--space-5);
+  border-left: 1px solid var(--color-border-subtle);
+  min-width: 0;
+}
+
+.intelAside > :last-child {
+  margin-top: auto;
+}
+
+/* ---------------------------------------------------------------- band head */
+
+.bandHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.bandHeadText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.bandTitle {
+  font-family: var(--family-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------- matrix */
+
+.matrix {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  overflow: hidden;
+}
+
+.matrixRow {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.matrixRow:last-child {
+  border-bottom: none;
+}
+
+/*
+ * No zebra striping: the artifact draws seven identical rows separated by a hairline, and the
+ * alternating fill read as a table of results rather than as the artifact's matrix.
+ */
+
+.matrixDay {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-ui-size);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.matrixCell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  justify-content: center;
+  border-right: 1px solid var(--color-border-subtle);
+}
+
+.matrixCellRight {
+  border-right: none;
+}
+
+.matrixIcon {
+  color: var(--color-accent);
+}
+
+.matrixTemp {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  min-width: 3.5rem;
+}
+
+/* ---------------------------------------------------------------- pulse row */
+
+.pulseRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 368px;
+  gap: var(--space-4);
+  align-items: stretch;
+}
+
+.pulseHeadText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pulseWrap {
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  overflow-x: auto;
+}
+
+.pulseSvg {
+  display: block;
+  width: 100%;
+  min-width: 320px;
+  height: auto;
+}
+
+.pulseBar {
+  fill: #5eead4;
+}
+
+.metricsPanel {
+  background: var(--color-surface-raised);
+}
+
+.metricList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.metricRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+}
+
+.metricIcon {
+  color: var(--color-accent);
+}
+
+.metricName {
+  font-size: var(--type-ui-size);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-right: auto;
+}
+
+.metricValue {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-ui-size);
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+/* ---------------------------------------------------------------- baseline band */
+
+.baseline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  overflow: hidden;
+}
+
+.baselineText {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  min-width: 0;
+}
+
+.baselineTitle {
+  font-family: var(--family-display);
+  font-size: 1.625rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.baselineDeltas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  width: 100%;
+  margin: var(--space-2) 0;
+}
+
+.deltaCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+}
+
+.deltaCard dt {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.deltaCard dd {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: 1.375rem;
+  font-weight: 600;
+  color: var(--color-accent);
+  margin: 0;
+}
+
+.baselineVisual {
+  position: relative;
+  min-height: 300px;
+  border-left: 1px solid var(--color-border-subtle);
+  overflow: hidden;
+}
+
+
+
+
+
+
+
+
+
+.zScoreCard {
+  position: absolute;
+  top: var(--space-5);
+  right: var(--space-5);
+  width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: rgb(11 18 27 / 0.94);
+}
+
+.zScoreHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.zScoreLabel {
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin: 0;
+  max-width: 6.5rem;
+}
+
+.zScoreValue {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------- summary */
+
+.summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-5);
+  align-items: center;
+}
+
+.summaryText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  /* The artifact sets this paragraph to about 78 characters, over five lines. */
+  max-width: 78ch;
+}
+
+.summaryActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* ---------------------------------------------------------------- responsive */
+
+@media (max-width: 1279px) {
+  .intelBody,
+  .pulseRow {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .cities,
+  .intelBody,
+  .pulseRow,
+  .baseline,
+  .reasonPair,
+  .summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .baselineVisual {
+    border-left: none;
+    border-top: 1px solid var(--color-border-subtle);
+  }
+}
+
+@media (max-width: 767px) {
+  .matrixRow {
+    grid-template-columns: 80px minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .matrixTemp {
+    min-width: 0;
+    font-size: 1rem;
+  }
+
+  .cityReading,
+  .cityStats {
+    padding: var(--space-4);
+  }
+
+  .intelBody {
+    padding: var(--space-4);
+    gap: var(--space-4);
+  }
+
+  .zScoreCard {
+    position: static;
+    width: auto;
+    margin: var(--space-4);
+  }
+}
+
+/* ---------------------------------------------------------------- audit corrections */
+
+/*
+ * The city name back inside the image.
+ *
+ * This was the worst defect on the screen: the banner's own `min-height` exceeded the image frame's
+ * measured height, so the overlay's lower half — the city name and country — was pushed out of the
+ * photograph and onto the card body beneath it. The artifact puts both plainly on the image. With
+ * the frame now at the artifact's 35:8 the overlay must not force it taller, so the min-height goes.
+ */
+.cityBanner {
+  min-height: 0;
+  height: 100%;
+  gap: var(--space-3);
+}
+
+/* The artifact stacks OBSERVED above the station chip; they were sharing one row. */
+.cityChips {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+/*
+ * The matrix row pitch, measured off the separators: the artifact's is 71px. `--space-5` gave 76
+ * and `--space-4` gave 63, so neither token lands it — 20px does.
+ */
+.matrixRow {
+  padding: 20px var(--space-5);
+}
+
+/*
+ * The z-score card sits centre-right over the field in the artifact, not at its top corner, and its
+ * label wraps after "MODEL" rather than mid-word as "MODEL Z-" / "SCORE".
+ */
+.zScoreCard {
+  top: 50%;
+  transform: translateY(-50%);
+  right: var(--space-5);
+}
+
+.zScoreLabel {
+  max-width: none;
+  white-space: nowrap;
+}
+
+.zScoreHead {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+/*
+ * DETERMINISTIC METRICS is set wide and wrapped over two lines in the artifact; on one line at this
+ * size it read as an ordinary card title rather than as the artifact's region heading.
+ */
+.regionTitleWrap {
+  display: block;
+  max-width: 12ch;
+}
+
+.regionTitleWrap h2 {
+  display: block;
+  white-space: normal;
+  line-height: 1.15;
+}
+
+/*
+ * The synthesis aside has no divider in the artifact — the column separation is whitespace — and its
+ * action sits directly under the meters rather than pinned to the panel's floor.
+ */
+.intelAside {
+  padding: 0;
+  border-left: none;
+}
+
+.intelAside > :last-child {
+  margin-top: var(--space-2);
+}
+
+/* The artifact separates the closing facts with pipes. */
+.statusPipes span + span::before {
+  content: "|";
+  margin-right: var(--space-5);
+  color: var(--color-border-strong);
+}
+
+/* The baseline field fills the band, matching the Dashboard's. */
+.baselineVisual {
+  min-height: 340px;
+}
+
+/*
+ * The lower analytics were the remaining height shortfall once the banner and the matrix were
+ * right: the pulse chart and the decadal band are both shallower here than the artifact's, and the
+ * decadal band is the same measurement the Dashboard's needed.
+ */
+.baselineVisual {
+  min-height: 404px;
+}
+
+.pulseWrap {
+  padding-bottom: var(--space-6);
+}
+
+/*
+ * The city card's lower half. The artifact's whole card band is 330 and its banner 146, which
+ * leaves 184 for the reading and the stat row against the 160 this was giving — the banner itself
+ * is correct and does not move again.
+ */
+.cityReading {
+  padding: var(--space-5) var(--space-5) var(--space-5);
+}
+
+.cityStats {
+  padding: var(--space-4) var(--space-5) var(--space-5);
+}
+
+/* The artifact's matrix band and the panels below it each carry a little more than this had. */
+.intelBody {
+  padding: var(--space-5) var(--space-5) var(--space-6);
+}
+
+.baselineText {
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-5) var(--space-6);
+}
+
+/* ---------------------------------------------------------------- 1:1 re-measurement
+ *
+ * Re-measured against `04-compare-cities.png` at true 1:1 (see `fidelity.module.css` — the earlier
+ * figures were 3.33% high because the artifacts' 1488px width was read as their page width rather
+ * than 1440 plus a 24px export frame).
+ *
+ * Panel bands, page-relative, artifact against rendered:
+ *
+ *   city row          192–522   330   |   193–545   352   +22
+ *   intelligence      554–956   402   |   561–955   394    -8
+ *   matrix           1056–1554  498   |  1050–1533  483   -15
+ *   pulse row        1585–2062  477   |  1549–1999  450   -27
+ *   baseline         2094–2537  443   |  2015–2445  430   -13
+ *   summary          2568–2788  220   |  2461–2666  205   -15
+ *
+ * The city row is the one band that overshoots and it is left alone: its banner was measured
+ * directly and is right, and moving it again would undo that.
+ *
+ * This screen's panel gap is its own. A row profile across the artifact's panel boundaries reads
+ * 31px here (y1554→1585, y2537→2568) against 24px on `01-dashboard.png` (y1727→1751) — the two
+ * mockups genuinely differ, so the gap is set on this screen rather than on the shared `.page`,
+ * which would have widened Dashboard's already-correct boundaries. 24px is taken rather than the
+ * full 31: two of this screen's six boundaries have a section label inside them and already measure
+ * close, so the larger value would push those past the artifact to buy the other four.
+ */
+/*
+ * 24 was taken over the artifact's 31 last pass because two of this screen's boundaries looked
+ * already-correct. They only looked that way because the shared top bar was 23px too tall and every
+ * offset below it was carrying that error; with the chrome corrected the boundaries re-measure at a
+ * flat 24 against the artifact's 31/32, so the artifact's own value is what it takes.
+ */
+.comparePage {
+  gap: 31px;
+}
+
+.intelBody {
+  padding-bottom: 40px;
+}
+
+.matrix {
+  padding-bottom: var(--space-4);
+}
+
+.pulseWrap {
+  padding-bottom: 60px;
+}
+
+.baselineVisual {
+  min-height: 417px;
+}
+
+.summary {
+  padding: var(--space-2) 0;
+}

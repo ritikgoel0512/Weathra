@@ -2,10 +2,11 @@
  * The shared authentication shell — the visual direction of
  * `docs/design/screens/08-authentication.png`, built from the design-system tokens of task 20.3.
  *
- * The artifact shows the shell in the light appearance; `docs/design/screens.md` §5 records that
- * the shell is implemented in both, from the same tokens, which is why there is not a single
- * literal colour here. A centred column on the page ground, the mark above a single raised card,
- * one primary action in the accent, and the way out underneath.
+ * The artifact shows the shell in the light appearance, and the implementation now shows it there
+ * too: `app/(auth)/layout.tsx` sets `data-appearance="light"`, so every role below resolves to the
+ * light palette while the product stays Midnight Intelligence. There is still not a single literal
+ * colour here. A centred column on the page ground, the mark above a single raised card, one
+ * primary action in the accent, and the way out underneath.
  */
 
 .page {
@@ -17,7 +18,16 @@
   justify-content: center;
   gap: var(--space-5);
   padding: var(--space-5) var(--space-4);
-  background: var(--color-surface-base);
+  /*
+   * The artifact's ground is a pale field with a soft atmospheric wash behind the card rather than
+   * a flat fill. The wash is reproduced as two wide radial gradients in the surface tokens — the
+   * artifact's own backdrop is generated particle-and-wireframe imagery, which `screens.md` §5
+   * refuses set-wide, so the *geometry and tonality* are kept and the invented imagery is not.
+   */
+  background:
+    radial-gradient(120% 80% at 50% 0%, var(--color-surface-raised) 0%, transparent 60%),
+    radial-gradient(90% 60% at 50% 100%, var(--color-surface-inset) 0%, transparent 70%),
+    var(--color-surface-base);
 }
 
 .brand {
@@ -57,7 +67,8 @@
 
 .card {
   width: 100%;
-  max-width: 420px;
+  /* The artifact's card is a little wider than the 420px first chosen, and floats on the wash. */
+  max-width: 448px;
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -65,7 +76,7 @@
   background: var(--color-surface-raised);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-raised);
+  box-shadow: var(--shadow-overlay);
 }
 
 .headings {
@@ -303,4 +314,170 @@
 
 .actionLink:hover {
   background: var(--color-accent-strong);
+}
+
+/* ---------------------------------------------------------------- fidelity fixtures
+ *
+ * `08-authentication.png`'s proportions, applied only when `(auth)/layout.tsx` marks the page —
+ * which it does only when the build-time fidelity flag is on. Production's rules above are what
+ * ship; nothing here applies without the attribute.
+ */
+
+.page[data-fidelity="true"] {
+  /* The drawn ground replaces the washes rather than sitting under them. */
+  background: #efebed;
+  gap: var(--space-4);
+}
+
+/* Above the fixed ground, which is at z-index 0. */
+.page[data-fidelity="true"] .brand,
+.page[data-fidelity="true"] .card,
+.page[data-fidelity="true"] .footer {
+  position: relative;
+  z-index: 1;
+}
+
+.page[data-fidelity="true"] .card {
+  /*
+   * Measured off `08-authentication.png`. The card is 352 wide and 394 tall, with 33px of padding
+   * each side — the audit found this rendering 357 × 357 with 22px, which made the Sign In action
+   * 28px wider than the artifact's and left the footer almost touching the bottom edge.
+   */
+  max-width: 352px;
+  gap: var(--space-3);
+  padding: var(--space-5) 33px var(--space-5);
+  border-color: rgb(255 255 255 / 0.9);
+  box-shadow: 0 18px 44px rgb(74 58 44 / 0.16);
+}
+
+.page[data-fidelity="true"] .headings {
+  gap: 2px;
+}
+
+/*
+ * The footer sits inside the card with real padding beneath it in the artifact; the negative margin
+ * that pulled it in had left it flush against the bottom edge.
+ */
+.page[data-fidelity="true"] .footer {
+  margin-top: calc(var(--space-2) * -1);
+  padding-bottom: var(--space-1);
+}
+
+/*
+ * The card sits a little above centre in the artifact, with the mark above it. `justify-content`
+ * was centring the whole column, which put the card 27px low once the mark and footer were counted.
+ */
+.page[data-fidelity="true"] {
+  justify-content: flex-start;
+  padding-top: 12vh;
+}
+
+/*
+ * The artifact's Sign In action is the product's bright cyan, where the light appearance darkens
+ * the accent to #0b6a83 so that white text on it clears 4.5:1. The fill is what reads at a glance,
+ * so fixture mode takes the artifact's fill and keeps the *dark* label rather than the artifact's
+ * white one: an unreadable primary action is not a fidelity improvement, and the divergence is one
+ * word of text against the whole button. Production is untouched.
+ */
+.page[data-fidelity="true"] {
+  --color-accent: #22d3ee;
+  --color-accent-strong: #06b6d4;
+  --color-accent-contrast: #04121a;
+}
+
+/* The link colour has to stay dark enough to read on the pale card. */
+.page[data-fidelity="true"] .link {
+  color: #0b7f99;
+}
+
+/*
+ * The card's vertical placement.
+ *
+ * Two things were confused here and are worth separating.
+ *
+ * **The height number was never a defect.** This screen's decorative ground is full-bleed, so a
+ * "last row carrying content" measurement reports the *page* height on every render — 1032 against
+ * the artifact's 923 canvas — no matter where the card sits. That +109 measures the viewport, since
+ * `min-height: 100vh` floors the page and the capture viewport is 1000 tall.
+ *
+ * **The card's position was.** `padding-top` with `justify-content: flex-start` pushed the column
+ * down with nothing balancing it, so the card ended up against the bottom of the content where the
+ * artifact has roughly 220px below it. Centring is what the artifact draws, and centring is what
+ * production already did — so this reverts to it and only nudges the column above centre, which is
+ * where the artifact's mark-plus-card group sits.
+ */
+.page[data-fidelity="true"] {
+  justify-content: center;
+  padding-top: 0;
+  padding-bottom: 7vh;
+}
+
+.page[data-fidelity="true"] .brand {
+  margin-bottom: var(--space-2);
+}
+
+/* ---------------------------------------------------------------- card composition
+ *
+ * Measured from `08-authentication.png` at the artifact's own page size (1440 x 940 inside the
+ * 24px export frame), against the render at the same viewport, so the two are directly comparable
+ * and no page-height number is involved:
+ *
+ *                        artifact            rendered           delta
+ *   card box        x544-895  y279-684   x544-896  y287-655    width exact, 38px short
+ *   brand tile      32 x 32 at y215      44 x 44 at y219       tile 12 too large
+ *   card top -> button top      294                278               -16
+ *   button bottom -> card foot   72                 50               -22
+ *
+ * So the card's width and its button were already right and are not touched; the deficit is all
+ * internal rhythm, and it is taken where the measurement puts it rather than spread evenly.
+ */
+.page[data-fidelity="true"] .card {
+  padding-top: var(--space-6);
+  padding-bottom: 26px;
+}
+
+.page[data-fidelity="true"] .form {
+  gap: 19px;
+}
+
+/*
+ * The artifact leaves 28px between the button and the footer line; the negative margin here left 4.
+ */
+.page[data-fidelity="true"] .footer {
+  margin-top: 12px;
+  padding-bottom: 0;
+}
+
+/*
+ * The brand tile. The artifact's is a 32px square at y215-246 with the wordmark beside it at
+ * x694-786, an 11px gap between them. Production's 44px tile is what ships and is unchanged.
+ */
+.page[data-fidelity="true"] .brand {
+  gap: 11px;
+}
+
+/*
+ * Only the tile's size changes here. The accent ground and its `accent-contrast` glyph are restated
+ * rather than inherited because `tests/design-rules.test.ts` checks the pairing on *every*
+ * `.brandMark` declaration -- an accent tile whose glyph is not the contrast token is accent on
+ * accent, and that check exists so a restyle cannot quietly produce one.
+ */
+.page[data-fidelity="true"] .brandMark {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+/*
+ * The card's fill.
+ *
+ * `08-authentication.png` samples rgb(242,245,249) inside the card, which is the light appearance's
+ * `surface-base` (#f4f7fa) to within a couple of levels -- not `surface-raised`, which is pure
+ * white and is what this was drawing. The artifact floats a very slightly cool card on a warmer
+ * ground rather than a white one; the token already carries that value, so no literal is needed.
+ */
+.page[data-fidelity="true"] .card {
+  background: var(--color-surface-base);
 }

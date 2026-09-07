@@ -25,7 +25,9 @@ import type { ReactNode } from "react";
 
 import {
   AttributionFooter,
+  Badge,
   DataClassBadge,
+  Meter,
   Metric,
   MethodNote,
   ProvenanceSection,
@@ -58,7 +60,8 @@ const HEADLINE: readonly { statistic: Statistic; measure: Measure; label: string
   { statistic: "minimum", measure: "temperature_min", label: "Lowest temperature" },
   { statistic: "maximum", measure: "temperature_max", label: "Highest temperature" },
   { statistic: "total", measure: "precipitation_sum", label: "Total precipitation" },
-  { statistic: "mean", measure: "wind_speed_max", label: "Mean daily maximum wind" },
+  { statistic: "mean", measure: "wind_speed_max", label: "Mean wind speed" },
+  { statistic: "mean", measure: "relative_humidity", label: "Mean humidity" },
 ];
 
 /** What a `StatisticResult` reads as, or the backend's reason for having no value. */
@@ -375,5 +378,107 @@ export function ClassKey(): ReactNode {
       <DataClassBadge dataClass="analytics" />
       <span className={styles.note}>what Weathra computed from it</span>
     </p>
+  );
+}
+
+/* ------------------------------------------------------- deviation and anomaly */
+
+export interface DeviationAnalysisProps {
+  readonly comparison: BaselineComparison | null;
+}
+
+/**
+ * "Deviation Analysis" — the bars `03-historical-analytics.png` puts under the baseline figures.
+ *
+ * The artifact labels three of them Temperature Drift, Precipitation Lag and Atmospheric
+ * Instability, filled to percentages nobody computed. Weathra computes one of the three honestly:
+ * the z-score against the baseline is exactly a normalised measure of temperature deviation, so
+ * that bar carries it, scaled so three standard deviations fills the track and the note says so.
+ * The other two have no computed equivalent — there is no precipitation-lag or instability
+ * statistic in `BaselineComparison` — so they keep their tracks and say the figure is not computed.
+ */
+export function DeviationAnalysis({ comparison }: DeviationAnalysisProps): ReactNode {
+  const zResult = comparison?.z_score;
+  const z = isComputed(zResult) ? (zResult?.value ?? null) : null;
+  const drift = typeof z === "number" ? Math.min(Math.abs(z) / 3, 1) : null;
+
+  return (
+    <section className={styles.deviation} aria-label="Deviation analysis">
+      <h3 className={styles.panelSubtitle}>Deviation analysis</h3>
+      <Meter
+        label="Temperature drift"
+        value={drift}
+        unavailable="Not computed"
+        note={
+          typeof z === "number"
+            ? `z = ${z.toFixed(2)} against the baseline; the track is three standard deviations.`
+            : "The backend reported no z-score for this window."
+        }
+      />
+      <Meter
+        label="Precipitation lag"
+        value={null}
+        unavailable="Not computed"
+        note="No precipitation-lag statistic is produced for this window."
+      />
+      <Meter
+        label="Atmospheric instability"
+        value={null}
+        unavailable="Not computed"
+        note="No instability index is produced for this window."
+      />
+    </section>
+  );
+}
+
+/**
+ * "Anomaly Intelligence" — the right-hand panel of `03-historical-analytics.png`.
+ *
+ * The artifact fills it with a model's narrative about the archive. This screen consults no model:
+ * every figure on it is retrieved or computed, and `docs/design/screens.md` §8 records that it
+ * therefore carries no interpretation region. The panel is kept, and says that plainly rather than
+ * being dropped — its absence changed the screen's composition, and "no model wrote anything here"
+ * is a fact worth stating on a product built around who produced which number.
+ *
+ * What it does carry are the key figures the deterministic comparison produced, which is what a
+ * reader wants from a panel in that position.
+ */
+export function AnomalyIntelligence({ comparison }: DeviationAnalysisProps): ReactNode {
+  const zResult = comparison?.z_score;
+  const z = isComputed(zResult) ? (zResult?.value ?? null) : null;
+  const difference = comparison ? formatSigned(comparison.difference) : null;
+
+  return (
+    <section className={styles.anomaly} aria-label="Anomaly intelligence">
+      <header className={styles.anomalyHead}>
+        <h3 className={styles.panelSubtitle}>Anomaly intelligence</h3>
+        <Badge tone="neutral">Deterministic</Badge>
+      </header>
+
+      <p className={styles.note}>
+        Deterministic. Every figure is retrieved or computed.
+      </p>
+
+      <dl className={styles.anomalyFacts}>
+        <div className={styles.anomalyFact}>
+          <dt>Difference from baseline</dt>
+          <dd>{difference ?? "Not computed"}</dd>
+        </div>
+        <div className={styles.anomalyFact}>
+          <dt>Z-score</dt>
+          <dd>{typeof z === "number" ? z.toFixed(2) : "Not computed"}</dd>
+        </div>
+        <div className={styles.anomalyFact}>
+          <dt>Percentile</dt>
+          {/*
+            The artifact shows one. A percentile needs the ranked distribution the baseline was
+            drawn from, and `BaselineComparison` carries the mean, the deviation and the extremes
+            only — so it is stated as not reported rather than derived from figures that cannot
+            support it.
+          */}
+          <dd>Not reported</dd>
+        </div>
+      </dl>
+    </section>
   );
 }

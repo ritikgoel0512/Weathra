@@ -384,6 +384,12 @@ select.control {
   border-radius: var(--radius-md);
   background: var(--color-surface-inset);
   overflow-x: auto;
+  /*
+   * Without this the row cannot shrink below the width of its tabs, and `overflow-x` never gets a
+   * chance to act: a flex item's automatic minimum size is its content. Four tabs then pushed the
+   * page open by 70 pixels at 360, which is the horizontal page scroll `specs/web-ui` rules out.
+   */
+  min-width: 0;
 }
 
 .tab {
@@ -772,4 +778,350 @@ select.control {
   font-size: var(--type-meta-size);
   line-height: var(--type-meta-line);
   color: var(--color-text-muted);
+}
+
+/*
+ * The hero variant — the wide leading band `01-dashboard.png` opens with.
+ *
+ * The artifact's band is a photograph of a city at dusk under a dark gradient. Generated decorative
+ * imagery is refused set-wide (`docs/design/screens.md` §5) and there is no approved asset, so the
+ * band keeps its geometry and its tonality and drops the photograph: a deep atmospheric wash built
+ * from the surface tokens, which is what the correction pass agreed a hero with no asset behind it
+ * should be. Same height, same full-bleed position, same reading order.
+ */
+.provenanceSection[data-variant="hero"] {
+  padding: var(--space-5);
+  background:
+    radial-gradient(120% 140% at 85% 0%, var(--color-surface-overlay) 0%, transparent 55%),
+    radial-gradient(90% 120% at 0% 100%, var(--color-surface-inset) 0%, transparent 60%),
+    var(--color-surface-raised);
+}
+
+/* ---------------------------------------------------------------- location imagery
+ *
+ * The photographic regions of `01-dashboard.png` and `04-compare-cities.png`. The frame is fixed
+ * whether a photograph is present or not, so the page does not change shape when one is added.
+ */
+
+.locationImage {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-inset);
+  isolation: isolate;
+}
+
+/*
+ * Measured off the artifacts rather than chosen.
+ *
+ * `01-dashboard.png`'s hero band measures 263px over a 1136 content column — 4.32:1. Three numbers
+ * preceded it: 32/9 (353px, 72 too tall), then 4/1 (284 by the ratio, but 300 rendered, because the
+ * overlay's content overflowed and `aspect-ratio` is only a hint once it does). 108/25 is the
+ * artifact's band, and `fixture.module.css` tightens the overlay so the content fits inside it.
+ *
+ * `04-compare-cities.png`'s banner is 146px over a 560 card — 3.84:1. Two wrong numbers preceded
+ * that one and both came from measuring badly: 16/5 (175px) was 29px too tall, and a saturation
+ * scan that began *inside* the image reported 128px and made it 16px too short. 146 is a column
+ * probe from above the card to below the image, reading where the photograph's luminance starts and
+ * where it settles to the card ground.
+ *
+ * The name falling out of the image was never the aspect ratio — it was the overlay's own
+ * `min-height` exceeding the frame. That is fixed in `fixture-compare.module.css`.
+ */
+.locationImage[data-variant="hero"] {
+  aspect-ratio: 108 / 25;
+  min-height: 200px;
+}
+
+.locationImage[data-variant="banner"] {
+  aspect-ratio: 23 / 6;
+  min-height: 120px;
+}
+
+.locationPhoto,
+.locationField {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/*
+ * The fallback field. Deterministic per place through `--field-angle`, and built from surface and
+ * accent tokens so it belongs to the palette rather than sitting on top of it. Deliberately does
+ * not resemble a photograph.
+ */
+.locationField {
+  background:
+    radial-gradient(70% 110% at 78% 8%, var(--color-accent) 0%, transparent 46%),
+    radial-gradient(90% 130% at 18% 4%, var(--color-accent-muted) 0%, transparent 52%),
+    linear-gradient(
+      var(--field-angle, 210deg),
+      var(--color-surface-overlay) 0%,
+      var(--color-surface-inset) 55%,
+      var(--color-surface-base) 100%
+    );
+  opacity: 0.9;
+}
+
+/*
+ * Heavy enough at the foot for a readout to meet 4.5:1 over any photograph.
+ *
+ * Built with `color-mix` over `surface-base` rather than a literal colour function, because the
+ * primitive layer may not name a colour — `lib/design/tokens.test.ts` asserts it over the raw file,
+ * comments included, and a scrim is exactly the
+ * place a literal would otherwise creep in. The ground darkens the image towards the same colour
+ * the page already is, which is also why the band reads as part of the page rather than pasted on.
+ */
+.locationScrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-surface-base) 20%, transparent) 0%,
+    color-mix(in srgb, var(--color-surface-base) 55%, transparent) 50%,
+    color-mix(in srgb, var(--color-surface-base) 88%, transparent) 100%
+  );
+}
+
+/*
+ * The lighter wash the approved artifacts show, requested explicitly through `scrim="soft"`.
+ *
+ * Still a gradient towards the page ground, and still heaviest where text sits, but light enough
+ * through the upper two thirds that the artwork reads. Text over it is the name and a badge rather
+ * than a measurement, and each carries its own shadow.
+ */
+.locationScrim[data-scrim="soft"] {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-surface-base) 4%, transparent) 0%,
+    color-mix(in srgb, var(--color-surface-base) 16%, transparent) 52%,
+    color-mix(in srgb, var(--color-surface-base) 62%, transparent) 100%
+  );
+}
+
+.locationOverlay {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 100%;
+  padding: var(--space-4);
+  gap: var(--space-2);
+}
+
+/* A tab the artifact draws that this build does not implement: present, quiet, and inert. */
+.tab[data-unavailable="true"] {
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+/*
+ * Four tabs do not fit 360 pixels, and the row was pushing the page open by 70. It scrolls inside
+ * itself instead — the page's own horizontal scroll is what `specs/web-ui` rules out, not a
+ * container's, and a wrapped tab row stops reading as one control.
+ */
+@media (max-width: 767px) {
+  .tablist {
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .tablist .tab {
+    flex: none;
+    white-space: nowrap;
+  }
+}
+
+/* ---------------------------------------------------------------- empty chart
+ *
+ * A chart region with no series to draw. The frame and its gridlines stay — the artifacts fix the
+ * geometry, and a paragraph in a plot's place reads as a different screen — and the reason sits
+ * inside it where the series would be.
+ */
+
+.emptyChart {
+  display: flex;
+  flex-direction: column;
+  justify-content: stretch;
+}
+
+.emptyChartPlot {
+  position: relative;
+  flex: 1 1 auto;
+  display: grid;
+  place-items: center;
+  min-height: inherit;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+}
+
+/* Four evenly spaced rules, the way a value axis would divide the plot. */
+.emptyChartGrid {
+  position: absolute;
+  inset: var(--space-4);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--color-border-subtle) 0,
+    var(--color-border-subtle) 1px,
+    transparent 1px,
+    transparent 25%
+  );
+  opacity: 0.5;
+}
+
+.emptyChartReason {
+  position: relative;
+  max-width: 32ch;
+  text-align: center;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+/* ---------------------------------------------------------------- meter
+ *
+ * The bar geometry the artifacts use for confidence, health and deviation. An unavailable bar keeps
+ * the track at full size with no fill, so a panel of them has the same shape whether the figures
+ * exist or not.
+ */
+
+.meter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.meterHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.meterLabel {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.meterValue {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.meter[data-known="false"] .meterValue {
+  color: var(--color-text-muted);
+}
+
+.meterTrack {
+  position: relative;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  overflow: hidden;
+}
+
+.meterFill {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+}
+
+.meterNote {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+/* ---------------------------------------------------------------- fixture banner
+ *
+ * Fixed, loud, and not dismissible. Sample weather in a product built on provenance must never be
+ * mistaken for a measurement once a screenshot leaves the reviewer's screen.
+ */
+
+/*
+ * Sticky rather than fixed: it must take layout space so it cannot sit over the brand, and must
+ * still be on screen after scrolling so it survives a screenshot of any part of the page.
+ */
+.fixtureBanner {
+  position: sticky;
+  top: 0;
+  z-index: 999;
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-status-error-surface);
+  border-bottom: 2px solid var(--color-status-error);
+  color: var(--color-status-error);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.fixtureBanner strong {
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+}
+
+.fixtureBanner span {
+  color: var(--color-text-secondary);
+}
+
+/*
+ * The photographer's credit, where a provider's licence asks for one.
+ *
+ * Bottom-right, small and quiet, over the scrim's heaviest region so it stays readable on any
+ * image. Present only when the provider named someone — the generated artwork credits nobody
+ * because there is nobody to credit.
+ */
+.locationCredit {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-2);
+  margin: 0;
+  font-size: var(--type-label-size);
+  /*
+   * Token expressions rather than literals, for two reasons: the primitive layer may not name a
+   * colour (`lib/design/tokens.test.ts` asserts it over this file), and a literal light grey would
+   * have been invisible in the light appearance, where the scrim below is light too. Derived from
+   * the text and surface tokens, the credit and its halo invert together with everything else.
+   */
+  color: color-mix(in srgb, var(--color-text-primary) 72%, transparent);
+  text-shadow: 0 1px 3px color-mix(in srgb, var(--color-surface-base) 82%, transparent);
+}
+
+.locationCredit a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+/* The field sits under the image, so a transparent edge never shows the page ground. */
+.locationField {
+  z-index: 0;
+}
+
+.locationPhoto {
+  z-index: 1;
+}
+
+.locationScrim {
+  z-index: 2;
+}
+
+.locationOverlay {
+  z-index: 3;
 }

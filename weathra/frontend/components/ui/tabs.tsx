@@ -19,6 +19,16 @@ import styles from "./primitives.module.css";
 export interface TabDescriptor {
   readonly id: string;
   readonly label: string;
+  /**
+   * A section the artifact draws that this build does not implement.
+   *
+   * `07-settings.png` shows four tabs; two of them — AI Intelligence and Transparency — have
+   * nothing behind them (`docs/design/screens.md` §8: model selection is not caller-selectable, and
+   * transparency is the labelling on every screen rather than a page). Dropping them changed the
+   * tab row's composition; presenting them as working would advertise sections that do not exist.
+   * So they are drawn, disabled, and say why in words rather than by colour alone.
+   */
+  readonly unavailable?: string;
 }
 
 export interface TabsProps {
@@ -48,14 +58,20 @@ export function Tabs({ tabs, activeId, onChange, label, idPrefix }: TabsProps): 
       const index = tabs.findIndex((tab) => tab.id === activeId);
       if (index < 0) return;
 
+      // Arrow keys skip the sections that are drawn but not implemented: a roving tab index that
+      // stopped on a disabled tab would strand a keyboard user on a control that does nothing.
+      const selectable = tabs.filter((tab) => !tab.unavailable);
+      const here = selectable.findIndex((tab) => tab.id === activeId);
+      if (here < 0 || selectable.length === 0) return;
+
       let next: number | null = null;
-      if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
-      else if (event.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
+      if (event.key === "ArrowRight") next = (here + 1) % selectable.length;
+      else if (event.key === "ArrowLeft") next = (here - 1 + selectable.length) % selectable.length;
       else if (event.key === "Home") next = 0;
-      else if (event.key === "End") next = tabs.length - 1;
+      else if (event.key === "End") next = selectable.length - 1;
       if (next === null) return;
 
-      const target = tabs[next];
+      const target = selectable[next];
       if (!target) return;
       event.preventDefault();
       onChange(target.id);
@@ -68,6 +84,32 @@ export function Tabs({ tabs, activeId, onChange, label, idPrefix }: TabsProps): 
     <div className={styles.tablist} role="tablist" aria-label={label} onKeyDown={onKeyDown}>
       {tabs.map((tab) => {
         const selected = tab.id === activeId;
+        if (tab.unavailable) {
+          return (
+            /*
+              The marking rides on `aria-label` rather than a visually-hidden span. The span was
+              absolutely positioned with no positioned ancestor inside the scrolling tab row, so it
+              escaped the row's clipping and pushed the page open by 70 pixels at 360 — the
+              horizontal page scroll `specs/web-ui` rules out. A label carries the same words to the
+              same readers and occupies no space at all.
+            */
+            <button
+              key={tab.id}
+              className={styles.tab}
+              id={tabId(prefix, tab.id)}
+              type="button"
+              role="tab"
+              aria-selected={false}
+              aria-disabled="true"
+              aria-label={`${tab.label} — ${tab.unavailable}`}
+              data-unavailable="true"
+              tabIndex={-1}
+              disabled
+            >
+              {tab.label}
+            </button>
+          );
+        }
         return (
           <button
             key={tab.id}

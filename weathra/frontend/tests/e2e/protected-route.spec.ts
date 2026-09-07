@@ -125,8 +125,11 @@ test.describe("signing in", () => {
     await signIn(page);
 
     await expect(page).toHaveURL("/");
-    await expect(page.getByRole("navigation", { name: "Weathra" })).toBeVisible();
-    await expect(page.getByText("Sam Rivers")).toBeVisible();
+    const rail = page.getByRole("navigation", { name: "Weathra" });
+    await expect(rail).toBeVisible();
+    // The top bar names the same person again, as every product artifact does, so this asks the
+    // rail rather than the page.
+    await expect(rail.getByText("Sam Rivers")).toBeVisible();
     await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
   });
 

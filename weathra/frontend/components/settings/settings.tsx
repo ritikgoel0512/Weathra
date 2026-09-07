@@ -42,11 +42,27 @@ import {
 } from "./sections";
 import styles from "./settings.module.css";
 
+import { FixtureSettings } from "./fixture-settings";
+import { usingVisilyFixtures } from "@/lib/fixtures/visily";
+
 const TAB_PREFIX = "settings";
 
+/**
+ * The four sections `07-settings.png` draws, in its order.
+ *
+ * Two of them are drawn and disabled. `docs/design/screens.md` §8 records why neither is
+ * implemented — model selection is not caller-selectable (`specs/model-policy`), and transparency
+ * is the data-class labelling, attribution and evidence record on every screen rather than a page —
+ * and that reasoning has not changed. What changed is the conclusion drawn from it: leaving them
+ * out altered the artifact's tab row, and the section is part of the composition even when its
+ * content is not this build's to write. Disabled, marked, and unreachable by keyboard, they
+ * advertise nothing while keeping the row the artifact's shape.
+ */
 const TABS = [
   { id: "general", label: "General" },
+  { id: "intelligence", label: "AI Intelligence", unavailable: "not in this release" },
   { id: "account", label: "Account" },
+  { id: "transparency", label: "Transparency", unavailable: "not in this release" },
 ] as const;
 
 export interface SettingsProps {
@@ -91,6 +107,16 @@ function GeneralTab(): ReactNode {
 }
 
 export function Settings({ signOutControl }: SettingsProps): ReactNode {
+  /*
+   * Visual-fidelity review only.
+   *
+   * The flag's value is baked into the bundle at build time, so in a deployed build this comparison
+   * is always false and nothing below it is reachable — but it is a *runtime* comparison against a
+   * baked object rather than a folded constant, so the branch and the fixture screen do ship. See
+   * `lib/fixtures/visily.ts` for what that does and does not guarantee. Nothing below changes. — the
+   * production screen keeps every control it actually honours.
+   */
+  if (usingVisilyFixtures()) return <FixtureSettings />;
   const [tab, setTab] = useState<string>(TABS[0].id);
 
   return (
@@ -98,9 +124,7 @@ export function Settings({ signOutControl }: SettingsProps): ReactNode {
       <header className={styles.heading}>
         <h1 className={styles.title}>Settings</h1>
         <p className={styles.subtitle}>
-          Your units, your default location and forecast range, your conversations&rsquo; memory,
-          and your Weathra data. Everything here belongs to your account and follows you across
-          sessions and devices.
+          Units, defaults, conversation memory and your Weathra data.
         </p>
       </header>
 

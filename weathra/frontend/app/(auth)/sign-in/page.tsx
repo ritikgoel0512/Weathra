@@ -30,6 +30,8 @@ import {
   safeDestination,
 } from "@/lib/routes";
 
+import { AUTH_FIXTURE, usingVisilyFixtures } from "@/lib/fixtures/visily";
+
 export const metadata: Metadata = { title: "Sign in" };
 
 export default async function SignInPage({
@@ -47,7 +49,16 @@ export default async function SignInPage({
   return (
     <AuthShell
       title="Welcome back"
-      subtitle="Agentic weather intelligence, forecast analysis, and analytics."
+      footerInside={usingVisilyFixtures()}
+      /*
+       * The artifact's line is shorter than production's and drops the middle clause. In fixture
+       * mode it is reproduced verbatim; production keeps its own, which says more.
+       */
+      subtitle={
+        usingVisilyFixtures()
+          ? AUTH_FIXTURE.subtitle
+          : "Agentic weather intelligence, forecast analysis, and analytics."
+      }
       footer={
         <>
           Don&rsquo;t have an account?{" "}

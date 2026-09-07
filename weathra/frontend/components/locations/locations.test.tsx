@@ -27,7 +27,11 @@ vi.mock("@/lib/supabase/browser", () => ({
   },
 }));
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/locations" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/locations",
+  useRouter: () => ({ replace: () => {}, refresh: () => {}, push: () => {} }),
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 /* ------------------------------------------------------------------- fixtures */
 

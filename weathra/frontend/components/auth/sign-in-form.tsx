@@ -36,6 +36,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState, type FormEvent, type ReactNode } from "react";
 
+import { EyeIcon } from "@/components/shell/icons";
 import { Button, Input } from "@/components/ui";
 import {
   DEFAULT_PROTECTED_PATH,
@@ -47,6 +48,10 @@ import { supabaseBrowserClient } from "@/lib/supabase/browser";
 
 import styles from "./auth.module.css";
 import { SIGN_IN_FAILED, TOO_MANY_ATTEMPTS, isRateLimited, isUnverified } from "./failures";
+
+import { AUTH_FIXTURE, usingVisilyFixtures } from "@/lib/fixtures/visily";
+
+import { FixtureRememberRow } from "./fixture-auth";
 
 interface FieldErrors {
   readonly email?: string;
@@ -134,6 +139,10 @@ export function SignInForm({ destination }: SignInFormProps): ReactNode {
     [email, password, pending, router, target],
   );
 
+  /* Fixed when the bundle is built, and always false in a deployed one. The form's behaviour is
+   * identical either way; only its copy and one disabled control differ. */
+  const fidelity = usingVisilyFixtures();
+
   return (
     <form className={styles.form} onSubmit={onSubmit} noValidate>
       {failure ? (
@@ -146,6 +155,8 @@ export function SignInForm({ destination }: SignInFormProps): ReactNode {
         label="Email"
         type="email"
         name="email"
+        /* The artifact prints a sample address in the field. Placeholder only — nothing prefilled. */
+        placeholder={fidelity ? AUTH_FIXTURE.emailPlaceholder : undefined}
         autoComplete="email"
         inputMode="email"
         autoFocus
@@ -160,6 +171,8 @@ export function SignInForm({ destination }: SignInFormProps): ReactNode {
         label="Password"
         type={passwordVisible ? "text" : "password"}
         name="password"
+        /* The artifact draws the field with a masked value in it. Placeholder only. */
+        placeholder={fidelity ? "••••••••" : undefined}
         autoComplete="current-password"
         required
         value={password}
@@ -173,19 +186,32 @@ export function SignInForm({ destination }: SignInFormProps): ReactNode {
             aria-label={passwordVisible ? "Hide password" : "Show password"}
             onClick={() => setPasswordVisible((visible) => !visible)}
           >
-            {passwordVisible ? "Hide" : "Show"}
+            <EyeIcon off={passwordVisible} />
           </button>
         }
       />
 
-      <div className={styles.aside}>
-        <Link className={styles.link} href={FORGOT_PASSWORD_PATH}>
-          Forgot password?
-        </Link>
-      </div>
+      {/*
+        The artifact puts a remember-me checkbox opposite the forgotten-password link. Weathra has
+        no remember-me, so in fixture mode the box is rendered disabled beside the real link, and in
+        production the link stands alone as it always has. One link either way.
+      */}
+      {fidelity ? (
+        <FixtureRememberRow>
+          <Link className={styles.link} href={FORGOT_PASSWORD_PATH}>
+            {AUTH_FIXTURE.forgot}
+          </Link>
+        </FixtureRememberRow>
+      ) : (
+        <div className={styles.aside}>
+          <Link className={styles.link} href={FORGOT_PASSWORD_PATH}>
+            Forgot password?
+          </Link>
+        </div>
+      )}
 
       <Button type="submit" variant="primary" fullWidth busy={pending}>
-        {pending ? "Signing in…" : "Sign in"}
+        {pending ? "Signing in…" : fidelity ? AUTH_FIXTURE.submit : "Sign in"}
       </Button>
     </form>
   );

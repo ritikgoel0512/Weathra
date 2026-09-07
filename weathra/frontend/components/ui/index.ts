@@ -66,3 +66,14 @@ export type {
   ProvenanceSectionProps,
   UncertaintyIndicatorProps,
 } from "./provenance";
+
+export { LocationImage, slugForLocation } from "./location-image";
+export type { LocationImageProps } from "./location-image";
+
+export { EmptyChart } from "./chart-frame";
+export type { ChartFrameProps } from "./chart-frame";
+
+export { Meter } from "./meter";
+export type { MeterProps } from "./meter";
+
+export { FixtureBanner } from "./fixture-banner";

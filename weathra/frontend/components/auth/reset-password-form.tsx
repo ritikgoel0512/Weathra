@@ -31,6 +31,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useState, type FormEvent, type ReactNode } from "react";
 
+import { EyeIcon } from "@/components/shell/icons";
 import { Button, Input } from "@/components/ui";
 import { passwordFailureMessage } from "@/lib/auth/password";
 import { DEFAULT_PROTECTED_PATH, safeDestination } from "@/lib/routes";
@@ -178,7 +179,7 @@ export function ResetPasswordForm({ email, destination }: ResetPasswordFormProps
               aria-label={passwordVisible ? "Hide password" : "Show password"}
               onClick={() => setPasswordVisible((visible) => !visible)}
             >
-              {passwordVisible ? "Hide" : "Show"}
+              <EyeIcon off={passwordVisible} />
             </button>
           }
         />

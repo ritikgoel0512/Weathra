@@ -29,7 +29,11 @@ vi.mock("@/lib/supabase/browser", () => ({
   },
 }));
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/evidence/run-1" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/evidence/run-1",
+  useRouter: () => ({ replace: () => {}, refresh: () => {}, push: () => {} }),
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 /* ------------------------------------------------------------------- fixtures */
 
@@ -499,7 +503,7 @@ describe("the tool calls and their results", () => {
   it("lists each call with the agent that made it, its arguments and what came back", async () => {
     const person = userEvent.setup();
     renderScreen();
-    const tools = await screen.findByRole("region", { name: "Tool activity" });
+    const tools = await screen.findByRole("region", { name: "MCP evidence" });
 
     const calls = within(tools).getAllByRole("listitem");
     expect(calls).toHaveLength(3);
@@ -531,7 +535,7 @@ describe("the tool calls and their results", () => {
 
   it("reports a failed tool call as a failure, with the backend's code and message", async () => {
     renderScreen();
-    const tools = await screen.findByRole("region", { name: "Tool activity" });
+    const tools = await screen.findByRole("region", { name: "MCP evidence" });
 
     const failed = at(within(tools).getAllByRole("listitem"), 1);
     expect(failed).toHaveAttribute("data-tool", "weather_history");
@@ -643,7 +647,7 @@ describe("the timings", () => {
   it("reports each agent's and each tool call's own duration", async () => {
     renderScreen();
     const flow = await screen.findByRole("region", { name: "Execution flow" });
-    const tools = screen.getByRole("region", { name: "Tool activity" });
+    const tools = screen.getByRole("region", { name: "MCP evidence" });
 
     expect(at(within(flow).getAllByRole("listitem"), 0)).toHaveTextContent("120 ms");
     expect(at(within(flow).getAllByRole("listitem"), 5)).toHaveTextContent("1.2 s");
@@ -860,7 +864,7 @@ describe("nothing on the screen came from anywhere but the record", () => {
 
     expect(within(flow).getAllByRole("listitem")).toHaveLength(STORED_EVIDENCE.agents.length);
     expect(
-      within(screen.getByRole("region", { name: "Tool activity" })).getAllByRole("listitem"),
+      within(screen.getByRole("region", { name: "MCP evidence" })).getAllByRole("listitem"),
     ).toHaveLength(STORED_EVIDENCE.tool_calls.length);
     expect(
       within(screen.getByRole("region", { name: "Grounded data sources" })).getAllByRole("row"),
@@ -919,6 +923,40 @@ describe("nothing on the screen came from anywhere but the record", () => {
     expect(text).toContain("weather_forecast");
     expect(text).toContain("arithmetic mean of usable points");
     expect(text).toContain("forecast-uncertainty.md");
+  });
+});
+
+/**
+ * Heading levels — found by the manual accessibility pass for task 21.8.
+ *
+ * The panels in this screen's columns are siblings of one another, so they carry the same heading
+ * level. "Deterministic analytics" and "Final grounded synthesis" were third-level, which in a
+ * heading list reads them as parts of whichever panel happened to precede them — a containment the
+ * screen does not have. The `heading-order` audit never caught it, because descending from h2 to h3
+ * is a legal order; only reading the heading list as a list shows it.
+ *
+ * "Deterministic analytics" also changed level with its own data: its no-statistics branch has
+ * always rendered an `h2`.
+ */
+describe("the panel headings do not claim panels contain one another", () => {
+  it("gives every panel on the screen the same heading level", async () => {
+    renderScreen();
+    await screen.findByRole("region", { name: "Deterministic analytics" });
+
+    for (const name of [
+      "Execution flow",
+      "MCP evidence",
+      "Grounded data sources",
+      "Deterministic analytics",
+      "Forecast uncertainty",
+      "Retrieved knowledge",
+      "Final grounded synthesis",
+    ]) {
+      expect(
+        screen.getByRole("heading", { name, level: 2 }),
+        `"${name}" is not a second-level heading, so it reads as part of the panel before it`,
+      ).toBeInTheDocument();
+    }
   });
 });
 

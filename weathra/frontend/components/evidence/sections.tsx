@@ -349,13 +349,13 @@ function ToolEntry({ activity }: { readonly activity: ToolActivity }): ReactNode
  */
 export function ToolActivityPanel({ record }: { readonly record: RunRecord }): ReactNode {
   return (
-    <section className={styles.panel} aria-label="Tool activity" data-evidence-section="tools">
+    <section className={styles.panel} aria-label="MCP evidence" data-evidence-section="tools">
       <header className={styles.panelHeader}>
-        <h2 className={styles.panelTitle}>Tool activity</h2>
+        <h2 className={styles.panelTitle}>MCP evidence</h2>
       </header>
 
       <p className={styles.note}>
-        Every retrieval this run made went through Weathra&rsquo;s approved tool interface. Nothing
+        Every retrieval went through the approved tool interface. Nothing
         here was called by the browser.
       </p>
 
@@ -534,8 +534,14 @@ export function DeterministicAnalytics({ record }: { readonly record: RunRecord 
 
   return (
     <div data-evidence-section="analytics">
-      {/* Inside this screen's own h2 panels, so its title is a third-level heading. */}
-      <ProvenanceSection dataClass="analytics" title="Deterministic analytics" headingLevel={3}>
+      {/*
+        A second-level heading, because this panel is a *sibling* of "Grounded data sources" and
+        "Forecast uncertainty" in the same column — not a subsection of either. It was a third-level
+        heading, which put it under whichever h2 preceded it in the heading list and claimed a
+        containment the screen does not have; the same panel's no-statistics branch above has always
+        been an h2, so the level also changed with the data.
+      */}
+      <ProvenanceSection dataClass="analytics" title="Deterministic analytics">
         <ul className={styles.figures}>
           {record.statistics.map((result, index) => (
             <StatisticFigure key={`${result.statistic}-${result.measure}-${index}`} result={result} />
@@ -729,7 +735,6 @@ export function FinalSynthesis({ record }: { readonly record: RunRecord }): Reac
   return (
     <div data-evidence-section="synthesis">
       <InterpretationPanel
-        headingLevel={3}
         title="Final grounded synthesis"
         provider={record.llmProvider}
         model={record.llmModel}
@@ -812,5 +817,45 @@ export function RecordProvenance({ record }: { readonly record: RunRecord }): Re
         )}
       </p>
     </AttributionFooter>
+  );
+}
+
+/* -------------------------------------------------------- the empty workspace */
+
+/** One region of the workspace, drawn with nothing in it. */
+function EmptyPanel({ title, note }: { readonly title: string; readonly note: string }): ReactNode {
+  return (
+    <section className={styles.panel} aria-label={title}>
+      <header className={styles.panelHeader}>
+        <h2 className={styles.panelTitle}>{title}</h2>
+      </header>
+      <p className={styles.note}>{note}</p>
+    </section>
+  );
+}
+
+/**
+ * The evidence workspace with no run selected.
+ *
+ * Same regions, same two columns, same order as a populated record — `05-agent-evidence.png` is a
+ * workspace and this keeps its silhouette. Each panel says what it will hold rather than explaining
+ * the feature: a person arriving from the navigation learns the shape of an evidence record by
+ * looking at it.
+ */
+export function EvidenceWorkspaceSkeleton(): ReactNode {
+  return (
+    <div className={styles.columns}>
+      <div className={styles.column}>
+        <EmptyPanel title="Execution flow" note="The agents a run took, in order, with their timings." />
+        <EmptyPanel title="MCP evidence" note="Every tool call the run made, and what each returned." />
+        <EmptyPanel title="Context used" note="The location, period and units the run resolved to." />
+      </div>
+      <div className={styles.column}>
+        <EmptyPanel title="Grounded data sources" note="Each provider read, with the window it covered." />
+        <EmptyPanel title="Deterministic analytics" note="Figures Weathra computed, with their methods." />
+        <EmptyPanel title="Retrieved knowledge" note="Passages cited from the weather-knowledge corpus." />
+        <EmptyPanel title="Final grounded synthesis" note="The model's reading, checked against the figures above." />
+      </div>
+    </div>
   );
 }

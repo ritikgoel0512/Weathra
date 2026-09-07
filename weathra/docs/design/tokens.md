@@ -26,11 +26,18 @@ Two decisions are therefore recorded as decisions rather than as observations:
 
 ## Colour
 
-Every colour is a semantic token. No component names a colour; it names a role. The dark appearance
-is the default (`:root`); the light appearance is the same roles under a
-`prefers-color-scheme: light` override, derived rather than designed separately.
+Every colour is a semantic token. No component names a colour; it names a role. Midnight
+Intelligence is declared on `:root` and is the product; the light appearance is declared on
+`[data-appearance="light"]`, which only the `(auth)` route group sets.
 
-| Token | Dark | Light | Role |
+**Neither is selected by `prefers-color-scheme`, and that is the correction.** These roles used to
+carry a second set of values served under a media query, so the appearance followed the visitor's
+operating system: an operator whose machine reported light was shown a *Dashboard* in a palette none
+of the seven product artifacts depicts. Every suite passed anyway, because they assert contrast and
+structure rather than which direction shipped. The appearance now follows the screen — seven
+artifacts dark, `08-authentication.png` light — which is what the set actually specifies.
+
+| Token | Product (dark) | Auth shell (light) | Role |
 |---|---|---|---|
 | `surface-base` | `#05080c` | `#f4f7fa` | The page ground |
 | `surface-raised` | `#0b121b` | `#ffffff` | Cards and panels |
@@ -88,8 +95,8 @@ the ground and on a card; the primary action's label on the accent; the focus bo
 ground; each data class on its own badge ground at 4.5:1 and on a card at 3:1, since a class colour
 is also a chart series; and each status on its own ground and on a card.
 
-Two values moved to satisfy this, and are recorded because the next person to adjust them should
-know they are not arbitrary:
+One value moved to satisfy this, and is recorded because the next person to adjust it should know it
+is not arbitrary:
 
 - The dark `border-strong` was lightened to `#4e6a86`; the first choice measured 2.42:1 against the
   ground, below the 3:1 a focus boundary needs.
@@ -103,14 +110,19 @@ so both are self-hosted — a person opening Weathra makes no request to a font 
 
 | Role | Face | Size | Line height | Weight |
 |---|---|---|---|---|
-| `display` | Plus Jakarta Sans | 2rem | 1.15 | 600 |
-| `heading` | Plus Jakarta Sans | 1.5rem | 1.2 | 600 |
+| `display` | Plus Jakarta Sans | 1.75rem | 1.15 | 600 |
+| `heading` | Plus Jakarta Sans | 1.25rem | 1.2 | 600 |
 | `section` | Plus Jakarta Sans | 1.125rem | 1.3 | 600 |
 | `card` | Plus Jakarta Sans | 0.9375rem | 1.35 | 600 |
 | `body` | Inter | 0.9375rem | 1.55 | 400 |
 | `ui` | Inter | 0.875rem | 1.4 | 500 |
 | `label` | Inter | 0.6875rem | 1.2 | 600, uppercase, 0.08em tracking |
 | `meta` | Inter | 0.75rem | 1.45 | 400 |
+
+The display and heading steps were tightened in the pixel-fidelity pass. The product artifacts are
+compact enterprise analytics — `01-dashboard.png`'s page title sits at roughly 1.75rem against a
+1440-pixel frame — and the original 2rem/1.5rem made every screen read as a looser product than the
+one approved. The body, UI, label and meta roles were already the artifacts' sizes and did not move.
 
 The record's **Numeric** role is not a size: it is `font-variant-numeric: tabular-nums`, applied
 wherever a figure is shown, so a column of values in a comparison table or a period delta does not
@@ -128,9 +140,9 @@ Heading role.
 | Layout | 360px floor, 768px compact breakpoint, 1280px wide breakpoint, 248px navigation (64px collapsed), 1440px content maximum |
 
 Elevation is restrained on purpose: a premium analytical surface reads as flat panels separated by a
-step of lightness, not as a stack of drop shadows. The dark and light appearances carry different
-shadow values — a dark shadow under a white card is a smudge — and those are the only non-colour
-tokens the light override redeclares.
+step of lightness, not as a stack of drop shadows. The two appearances carry different shadow values
+— a dark shadow under a white card is a smudge — and those are the only non-colour tokens the light
+appearance redeclares.
 
 ## Accessibility, as implemented
 

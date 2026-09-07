@@ -37,7 +37,11 @@ vi.mock("@/lib/supabase/browser", () => ({
   },
 }));
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/settings" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/settings",
+  useRouter: () => ({ replace: () => {}, refresh: () => {}, push: () => {} }),
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 /** The one sign-out flow, stubbed at the server boundary rather than replaced by another. */
 const signOutAction = vi.fn(async () => {});

@@ -1,0 +1,1255 @@
+/*
+ * `01-dashboard.png`'s geometry.
+ *
+ * Measured from the artifact rather than derived from content: the hero band, the 2:1 intelligence
+ * row, the seven-track day strip, the 2:1 pulse row and the 1:1.6 baseline band are all fixed here,
+ * so the page has the artifact's shape whatever is inside it. Every colour is a design token.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------- hero */
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) auto minmax(0, 1.1fr);
+  align-items: end;
+  gap: var(--space-5);
+  width: 100%;
+}
+
+.heroLeft {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.heroChips {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.stationId {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  color: var(--color-text-secondary);
+}
+
+.heroPlaceRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.heroPlace {
+  font-family: var(--family-display);
+  font-size: 2.4rem;
+  line-height: 1.1;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.gmt {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-muted);
+  color: var(--color-accent-contrast);
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+}
+
+.heroMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  font-size: var(--type-meta-size);
+  color: var(--color-text-secondary);
+}
+
+.heroTemp {
+  text-align: right;
+  min-width: 0;
+}
+
+.heroTempValue {
+  font-family: var(--family-display);
+  font-size: 3.4rem;
+  line-height: 1;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.heroDegree {
+  font-size: 1.6rem;
+  vertical-align: super;
+}
+
+.heroCondition {
+  font-size: var(--type-section-size);
+  color: var(--color-text-primary);
+}
+
+.heroStats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+
+.heroStats dt {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.heroStats dd {
+  margin: 0;
+  font-family: var(--family-display);
+  font-size: var(--type-section-size);
+  font-weight: var(--type-section-weight);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- intelligence row */
+
+.intelRow {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.intelCard,
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  min-width: 0;
+}
+
+.intelHead {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-3);
+}
+
+.intelMark {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-muted);
+  border: 2px solid var(--color-accent);
+}
+
+.intelTitle {
+  font-family: var(--family-display);
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
+  color: var(--color-accent);
+}
+
+.intelAgent,
+.grounding {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  color: var(--color-text-muted);
+}
+
+.intelHeadAside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+  text-align: right;
+}
+
+.intelBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.intelText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.microTitle {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.intelProse {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-primary);
+}
+
+.subPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-left: 2px solid var(--color-accent-muted);
+  border-radius: var(--radius-md);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+}
+
+.intelMatrix {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.footnote {
+  font-size: var(--type-meta-size);
+  color: var(--color-text-muted);
+}
+
+.intelActions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.ghostButton,
+.accentButton,
+.linkButton {
+  font-family: var(--family-body);
+  font-size: var(--type-ui-size);
+  font-weight: var(--type-ui-weight);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.ghostButton {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-text-primary);
+}
+
+.accentButton {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-accent);
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+.linkButton {
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--color-accent);
+}
+
+/* ---------------------------------------------------------------- side panels */
+
+.intelSide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.panelTitle {
+  font-family: var(--family-display);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.alert {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-status-error-surface);
+  border: 1px solid var(--color-status-error);
+  border-radius: var(--radius-md);
+}
+
+.alertTitle {
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  color: var(--color-status-error);
+}
+
+.alertBody {
+  font-size: var(--type-meta-size);
+  color: var(--color-status-error);
+}
+
+.statRows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.statRows > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.statRows dt {
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.statRows dd {
+  margin: 0;
+  font-family: var(--family-display);
+  font-size: var(--type-card-size);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.positive {
+  color: var(--color-status-ok);
+}
+
+.snapshotList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.snapshotRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.snapshotPlace {
+  font-size: var(--type-ui-size);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-primary);
+}
+
+.snapshotTemp {
+  font-family: var(--family-display);
+  font-size: var(--type-card-size);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.snapshotTrend[data-direction="up"] {
+  color: var(--color-status-ok);
+}
+
+.snapshotTrend[data-direction="down"] {
+  color: var(--color-status-error);
+}
+
+/* ---------------------------------------------------------------- forecast strip */
+
+.bandHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.bandLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.bandMeta {
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  color: var(--color-text-muted);
+}
+
+.bandTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.bandTitle {
+  font-family: var(--family-display);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-primary);
+}
+
+.days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-2);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  text-align: center;
+}
+
+.dayName {
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  color: var(--color-text-secondary);
+}
+
+.dayIcon {
+  color: var(--color-accent);
+}
+
+.dayTemp {
+  font-family: var(--family-display);
+  font-size: var(--type-heading-size);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.dayCondition {
+  font-size: 0.625rem;
+  letter-spacing: var(--type-label-tracking);
+  color: var(--color-text-muted);
+}
+
+.dayRange {
+  display: flex;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+  width: 100%;
+  justify-content: center;
+  font-size: var(--type-meta-size);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.dayRange em {
+  display: block;
+  font-style: normal;
+  font-size: 0.625rem;
+  color: var(--color-text-muted);
+}
+
+/* ---------------------------------------------------------------- pulse row */
+
+.pulseRow {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.legend {
+  display: flex;
+  gap: var(--space-3);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  color: var(--color-text-muted);
+}
+
+.legendTemp::before,
+.legendPrecip::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 2px;
+}
+
+.legendTemp::before {
+  background: var(--color-accent);
+}
+
+.legendPrecip::before {
+  background: var(--color-class-forecast);
+}
+
+.pulseSvg,
+.baselineSvg {
+  width: 100%;
+  height: auto;
+}
+
+.pulseGrid {
+  stroke: var(--color-border-subtle);
+  stroke-width: 1;
+}
+
+.pulseTick {
+  fill: var(--color-text-muted);
+  font-size: 9px;
+}
+
+.pulseBar {
+  fill: var(--color-class-forecast);
+}
+
+.pulseCurve {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 2;
+}
+
+.baseA {
+  fill: none;
+  stroke: var(--color-class-interpretation);
+  stroke-width: 1.6;
+}
+
+.baseB {
+  fill: none;
+  stroke: var(--color-class-historical);
+  stroke-width: 1.6;
+}
+
+.baseC {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 1.6;
+}
+
+.pulseFooter {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-5);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+  margin: 0;
+}
+
+.pulseFooter dt {
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.pulseFooter dd {
+  margin: 0;
+  font-family: var(--family-display);
+  font-size: var(--type-card-size);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.pulseFooter button {
+  margin-left: auto;
+}
+
+/*
+ * Sized, not scaled. `transform: scale()` leaves the element's layout box at its original size but
+ * paints outside it, which pushed the page 210 pixels wide at 1440 and more at every narrower tier —
+ * the horizontal page scroll `specs/web-ui` rules out. The glyph is drawn large instead.
+ */
+.precipVisual {
+  display: grid;
+  place-items: center;
+  padding: var(--space-4) 0;
+  color: var(--color-accent);
+  margin: var(--space-4) 0;
+}
+
+.precipRisk {
+  text-align: center;
+  font-family: var(--family-display);
+  font-size: var(--type-heading-size);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-primary);
+}
+
+.precipDetail {
+  text-align: center;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+}
+
+/* ---------------------------------------------------------------- baseline band */
+
+.baselineRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+  gap: var(--space-4);
+  align-items: stretch;
+  padding: var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.baselineText {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.baselineTitle {
+  font-family: var(--family-display);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-primary);
+}
+
+.deltaBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  width: 100%;
+}
+
+.deltaBox dt {
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.deltaBox dd {
+  margin: 0;
+  font-family: var(--family-display);
+  font-size: var(--type-heading-size);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-primary);
+}
+
+.baselineVisual {
+  position: relative;
+  min-width: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+  padding: var(--space-3);
+}
+
+.extremeCard {
+  position: absolute;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  width: 190px;
+  padding: var(--space-3);
+  background: var(--color-surface-overlay);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.extremeLabel {
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  color: var(--color-text-muted);
+}
+
+.extremeValue {
+  font-family: var(--family-display);
+  font-size: var(--type-heading-size);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-primary);
+}
+
+.extremeNote {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+}
+
+/* ---------------------------------------------------------------- status strip */
+
+.statusStrip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  color: var(--color-text-muted);
+}
+
+.statusOk {
+  color: var(--color-status-ok);
+}
+
+.statusRight {
+  margin-left: auto;
+}
+
+.statusChip {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+/* ---------------------------------------------------------------- narrow tiers */
+
+@media (max-width: 1279px) {
+  .intelRow,
+  .pulseRow,
+  .baselineRow,
+  .intelBody {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .heroTemp {
+    text-align: left;
+  }
+
+  .days {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 599px) {
+  .days {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ---------------------------------------------------------------- correction pass 1
+ *
+ * Measured against `01-dashboard.png` from the first rendered capture. Four things were wrong: the
+ * chart panel's own title was set as a tracked-out label where the artifact sets it as display type,
+ * the baseline band's field was three faint lines against the artifact's dense panel and had none
+ * of its overlay readings, the anomaly alert and the snapshot rows had no marks, and the historical
+ * delta had no icon tile.
+ */
+
+/* The artifact sets "Climate Pulse Analytics" in mixed-case display type, not as a label. */
+.chartTitle {
+  font-family: var(--family-display);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-primary);
+}
+
+/* The field fills its half of the band edge to edge; the padding was letterboxing it. */
+.baselineVisual {
+  padding: 0;
+  overflow: hidden;
+}
+
+.baselinePills {
+  position: absolute;
+  left: var(--space-4);
+  bottom: var(--space-4);
+  display: flex;
+  gap: 1px;
+  margin: 0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.baselinePills > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  background: rgb(11 18 27 / 0.92);
+}
+
+.baselinePills dt {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.baselinePills dd {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-meta-size);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.extremeCard {
+  background: rgb(11 18 27 / 0.94);
+}
+
+.extremeHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.deltaRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.deltaIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  color: var(--color-accent);
+}
+
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.alertIcon {
+  flex: none;
+  color: var(--color-status-error);
+}
+
+.snapshotPin {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-text-muted);
+}
+
+.heroMeta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.heroAgent {
+  color: var(--color-accent);
+}
+
+/*
+ * The artifact colours AI INTERPRETATION, ANALYTICS, FORECAST-adjacent chips teal. Same override
+ * and same reasoning as `components/fidelity/fidelity.module.css` — scoped to this page's root, so
+ * it reaches only what the fidelity Dashboard renders.
+ */
+.page {
+  --color-class-interpretation: #22d3ee;
+  --color-class-interpretation-surface: #06323d;
+  --color-class-analytics: #22d3ee;
+  --color-class-analytics-surface: #06323d;
+}
+
+/*
+ * Four tracks, not three: adding the artifact's pin pushed the trend arrow onto a second implicit
+ * row and made each snapshot twice as tall as the artifact's.
+ */
+.snapshotRow {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+/*
+ * The artifact's timezone chip is outlined cyan on the photograph, not a filled dark tile — filled
+ * gave dark text on dark teal, which was both wrong and unreadable.
+ */
+.gmt {
+  background: rgb(4 18 26 / 0.55);
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent-strong);
+  letter-spacing: var(--type-label-tracking);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- correction pass 2 */
+
+/*
+ * The artifact's baseline field is about 300 tall and the text column is shorter than that, so the
+ * band was being sized by the text and the field came out squat.
+ */
+.baselineVisual {
+  min-height: 300px;
+}
+
+/* 190 wide at right:16 was clipping the note against the panel edge. */
+.extremeCard {
+  right: var(--space-3);
+  bottom: auto;
+  top: var(--space-4);
+  width: 208px;
+}
+
+/* The artifact fills under the intra-day curve, as it does on the historical chart. */
+.pulseArea {
+  fill: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  stroke: none;
+}
+
+/* ---------------------------------------------------------------- audit corrections
+ *
+ * Every value here was measured off `01-dashboard.png` at its 1488 reference width rather than
+ * chosen, and each entry names the difference the audit found.
+ */
+
+/*
+ * The place name: the artifact sets "Berlin, Germany" 236px wide; 2.4rem rendered it 267px. The
+ * ratio puts the artifact at about 2.1rem, which is what this is.
+ */
+.heroPlace {
+  font-size: 2.1rem;
+}
+
+/*
+ * The agent line wrapped to two lines, which the artifact never does — and the extra line pushed
+ * the whole intelligence panel down. Tracking, not size, was the cause: the label tracking on a
+ * 60-character string overran the column.
+ */
+.intelAgent {
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * The anomaly alert ran about half again the artifact's height once the warning mark was given its
+ * own column. The mark is smaller and the box tighter, which is how the artifact draws it.
+ */
+.alert {
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+
+.alertIcon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.alertBody {
+  line-height: 1.4;
+}
+
+/*
+ * The precipitation panel. The artifact gives its illustration real vertical depth — a dimensional
+ * cloud mass with rainfall under it and a circular cyan mark at its shoulder — where this was a
+ * thin line glyph in a shallow panel, and it read as a placeholder beside the artifact.
+ */
+/*
+ * The illustration block, third attempt and the reason for each.
+ *
+ * 132px put "42% Integrated Risk" 60px below the artifact's line; 96px undershot the other way and
+ * made the whole pulse row shallower than the artifact's, because on this screen it is the
+ * precipitation panel that sets the row's depth, not the chart beside it. 122 lands the heading and
+ * the row together.
+ */
+.precipVisual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 122px;
+  padding: var(--space-3) 0 var(--space-2);
+}
+
+.rainCloud {
+  width: 104px;
+  height: auto;
+}
+
+/* The artifact centres TYPE and LOAD as two columns, not as a right-aligned list. */
+.precipStats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin: var(--space-3) 0 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-subtle);
+  text-align: center;
+}
+
+.precipStats > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+.precipStats dt {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.precipStats dd {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-ui-size);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+/*
+ * The baseline field measured 221px against the artifact's 243, and the candles sat in a band
+ * through the middle with dead space above and below — so the panel read as a chart that had not
+ * finished loading. The field fills its box now, and the box is the artifact's height.
+ */
+/*
+ * The band, measured: the artifact's is 190 sheet-px of a 700-wide sheet — 404 real — and its text
+ * column to field ratio is nearer 1:2.1 than the 1:1.6 this had. The field was still 85px short and
+ * the prose column correspondingly too wide.
+ */
+.baselineRow {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2.1fr);
+}
+
+.baselineVisual {
+  min-height: 404px;
+}
+
+/* The artifact places this card centre-right over the field, not at its top corner. */
+.extremeCard {
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
+}
+
+.extremeHead {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+/*
+ * The hero readout sat about 20px lower in the frame than the artifact's once the band height was
+ * right; the overlay's own bottom padding was the remainder.
+ */
+.hero {
+  padding-bottom: 0;
+}
+
+/* The artifact's precipitation panel carries more body padding than the others on this screen. */
+.pulseRow > section:last-child {
+  padding-bottom: var(--space-2);
+}
+
+/* ---------------------------------------------------------------- section geometry, measured
+ *
+ * From the DOM probe against the artifact's own band boundaries:
+ *
+ *   hero            300 vs 263   +37
+ *   intelligence    464 vs 501   -37
+ *   forecast days   203 vs 215   -12
+ *   pulse row       437 vs 494   -57
+ *   baseline        453 vs ~380  +90
+ */
+
+/*
+ * The hero. 4/1 gave 284 and the overlay's own content pushed it to 300; the artifact's band is 263.
+ * `aspect-ratio` is only a hint once content overflows, so the overlay has to fit inside it — the
+ * gap and the padding come down with the ratio.
+ */
+.hero {
+  gap: var(--space-4);
+}
+
+.heroLeft {
+  gap: var(--space-1);
+}
+
+.heroStats {
+  row-gap: var(--space-1);
+}
+
+/* -37: the artifact's intelligence panel is deeper than this was. */
+.intelBody {
+  padding: var(--space-5);
+  gap: var(--space-5);
+}
+
+.intelText {
+  gap: var(--space-3);
+}
+
+.subPanel {
+  padding: var(--space-4);
+}
+
+/* -12: the day cards carry a little more height in the artifact. */
+.day {
+  padding: var(--space-4) var(--space-3);
+}
+
+/*
+ * -57 on the pulse row, which on this screen is set by whichever of its two panels is deeper. Both
+ * gain: the chart its plot height, the precipitation panel its body padding.
+ */
+.pulseSvg {
+  min-height: 248px;
+}
+
+.precipDetail {
+  margin-bottom: var(--space-3);
+}
+
+/* +90: 404 overshot. The artifact's field is nearer 340 once the text column is the right width. */
+.baselineVisual {
+  min-height: 340px;
+}
+
+/*
+ * The extreme card's note was clipping at the card's lower edge: 208px of width is not enough for
+ * the artifact's three lines of it, and the card had no room to grow.
+ */
+.extremeCard {
+  width: 226px;
+  padding: var(--space-3) var(--space-4);
+}
+
+.extremeNote {
+  line-height: 1.45;
+}
+
+/*
+ * The remaining 111px, by section rather than by page total.
+ *
+ *   intelligence row   464 vs 501   the matrix column's stack is tighter than the artifact's
+ *   pulse row          437 vs 494   set by whichever panel is deeper; the chart's plot is short
+ *   day strip          203 vs 215
+ */
+.pulseSvg {
+  min-height: 300px;
+}
+
+.intelMatrix {
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
+}
+
+.intelActions {
+  margin-top: var(--space-4);
+}
+
+.day {
+  padding: var(--space-5) var(--space-3);
+}
+
+.snapshotRow {
+  padding: var(--space-3);
+}
+
+/* ---------------------------------------------------------------- 1:1 re-measurement
+ *
+ * Re-measured against `01-dashboard.png` at true 1:1 (see the note in `fidelity.module.css` — the
+ * artifacts' page is 1440 inside a 24px export frame, not 1488, so every earlier figure on this
+ * screen was 3.33% high and the sections came out short).
+ *
+ * Panel bands, page-relative, artifact against rendered:
+ *
+ *   hero              88–351   263   |   111–380   269    +6
+ *   intelligence     394–895   501   |   396–908   512   +11
+ *   day strip        986–1201  215   |  1002–1223  221    +6
+ *   pulse row       1233–1727  494   |  1239–1711  472   -22
+ *   baseline row    1751–2167  416   |  1727–2101  374   -42
+ *
+ * The two deep visual panels carry all of the remaining deficit; everything above them is within
+ * 11px and is left alone. The pulse row's height is set by whichever of its two panels is deeper,
+ * which is the chart, so the plot area takes the 22.
+ */
+.pulseSvg {
+  min-height: 322px;
+}
+
+.baselineVisual {
+  min-height: 382px;
+}
+
+/*
+ * The status strip, which this screen draws itself rather than through the shared `StatusStrip`.
+ *
+ * Row profile of `01-dashboard.png` below the last panel: the panel's lower edge is at y2166, the
+ * strip's divider at y2190, and its text at y2228–2241 with a chip edge at y2244. So the artifact
+ * puts 24px between panel and divider and 54px between divider and the strip's own foot; this had
+ * 16 and 36. Because this class is local, the correction made to the shared strip in
+ * `fidelity.module.css` did not reach this screen.
+ */
+.statusStrip {
+  padding-top: 34px;
+  margin-top: var(--space-2);
+}

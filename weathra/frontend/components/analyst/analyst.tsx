@@ -44,8 +44,12 @@ import { runStepsFrom } from "@/lib/analyst/run";
 import { useSession } from "@/lib/session/provider";
 import { useAgentStream, type AgentStreamState } from "@/hooks/use-agent-stream";
 
+import { AnalystRail } from "./rail";
 import { AnalystIntroduction, AnswerView, QuestionTurn, RunProgress } from "./sections";
 import styles from "./analyst.module.css";
+
+import { FixtureAnalyst } from "./fixture-analyst";
+import { usingVisilyFixtures } from "@/lib/fixtures/visily";
 
 /**
  * Starter questions, as the artifact's chip row.
@@ -179,6 +183,15 @@ function TurnView({
 }
 
 export function Analyst(): ReactNode {
+  /*
+   * Visual-fidelity review only.
+   *
+   * The flag's value is baked into the bundle at build time, so in a deployed build this comparison
+   * is always false and nothing below it is reachable — but it is a *runtime* comparison against a
+   * baked object rather than a folded constant, so the branch and the fixture screen do ship. See
+   * `lib/fixtures/visily.ts` for what that does and does not guarantee. Nothing below changes.
+   */
+  if (usingVisilyFixtures()) return <FixtureAnalyst />;
   // The shared 401 mechanism. A stream that ends with an authentication code reaches exactly the
   // same expired-session state a refused REST call does.
   const { markExpired } = useSession();
@@ -256,21 +269,66 @@ export function Analyst(): ReactNode {
   const empty = question.trim() === "";
   const live = turns.at(-1)?.run === null ? state : null;
 
+  /**
+   * The run the rail describes: the one in flight, or the last one that finished.
+   *
+   * `live` is null the moment a run settles — its state moves onto the turn — so a rail reading
+   * only `live` reported "complete" beside "no agents have run yet". The rail is about the most
+   * recent run either way, so it is given whichever that is.
+   */
+  const railRun = turns.at(-1)?.run ?? live;
+
+  /** The most recent completed answer, for the rail. Never a run still in flight. */
+  const settled = [...turns].reverse().find((turn) => turn.run?.terminal?.kind === "final")?.run
+    ?.terminal;
+  const answer = settled?.kind === "final" ? settled.answer : null;
+  const evidenceId = settled?.kind === "final" ? settled.evidenceId : null;
+
+  /**
+   * Start a fresh conversation — the artifact's "New Analysis".
+   *
+   * It drops the thread as well as the transcript, so the next question opens a new one on the
+   * backend rather than resolving against turns nobody can see any more.
+   */
+  const startOver = useCallback(() => {
+    if (busy) return;
+    setTurns([]);
+    setThreadId(null);
+    setQuestion("");
+    composer.current?.focus();
+  }, [busy]);
+
   return (
     <section className={styles.analyst} aria-label="AI Weather Analyst">
+      {/*
+        The workspace header of `02-ai-weather-analyst.png`: what this screen is, whether a
+        conversation is open, and the one action that exists for it. The artifact also carries a
+        "History" control; the threads endpoint exists but no screen lists them, and a control with
+        nowhere to go is worse than none — recorded in `docs/design/screens.md` §8.
+      */}
       <header className={styles.heading}>
-        <h1 className={styles.title}>AI Weather Analyst</h1>
-        <p className={styles.subtitle}>
-          Ask a weather question. Weathra routes it to its agents, retrieves and computes what it
-          needs, and answers with every figure labelled and attributed.
+        <div className={styles.headingRow}>
+          <div className={styles.headingText}>
+            <h1 className={styles.title}>AI Weather Analyst</h1>
+            <p className={styles.subtitle}>
+              Every figure labelled, attributed, and traceable to its run.
+            </p>
+          </div>
+          <div className={styles.headingActions}>
+            <Button size="sm" disabled={busy || turns.length === 0} onClick={startOver}>
+              New analysis
+            </Button>
+          </div>
+        </div>
+        <p className={styles.thread} data-thread={threadId ? "true" : undefined}>
+          {threadId
+            ? "Active conversation \u2014 follow-up questions use its context."
+            : "No conversation open yet. The first question starts one."}
         </p>
-        {threadId ? (
-          <p className={styles.thread} data-thread="true">
-            Follow-up questions use this conversation&rsquo;s context.
-          </p>
-        ) : null}
       </header>
 
+      <div className={styles.workspace}>
+        <div className={styles.main}>
       <div className={styles.transcript}>
         {turns.length === 0 ? (
           <AnalystIntroduction />
@@ -303,6 +361,32 @@ export function Analyst(): ReactNode {
       </div>
 
       <form className={styles.composer} onSubmit={onSubmit}>
+        {/*
+          `02-ai-weather-analyst.png` puts a FOCUS / DEPTH row above the composer. Both are shown
+          read-only rather than as controls: the focus is whatever the last run resolved to, which
+          the person changes by asking about somewhere else, and there is no depth setting to
+          change — `specs/model-policy` keeps model behaviour out of the caller's hands. A pair of
+          dropdowns that altered nothing would be the fabrication this pass exists to remove.
+        */}
+        <div className={styles.composerContext}>
+          <span className={styles.composerContextItem}>
+            <span className={styles.composerContextTerm}>Focus</span>
+            <span className={styles.composerContextValue}>
+              {answer?.resolved?.locations?.[0]?.display_name ?? "Your default location"}
+            </span>
+          </span>
+          <span className={styles.composerContextItem}>
+            <span className={styles.composerContextTerm}>Units</span>
+            <span className={styles.composerContextValue}>
+              {answer?.resolved?.unit_system ?? "From your preferences"}
+            </span>
+          </span>
+          <span className={styles.composerContextItem}>
+            <span className={styles.composerContextTerm}>Depth</span>
+            <span className={styles.composerContextValue}>Full synthesis</span>
+          </span>
+        </div>
+
         <Field
           label="Your weather question"
           description="Enter to send, Shift+Enter for a new line. Follow-ups use this conversation's context."
@@ -332,6 +416,20 @@ export function Analyst(): ReactNode {
           </Button>
         </div>
       </form>
+        </div>
+
+        <AnalystRail
+          live={railRun}
+          answer={answer}
+          evidenceId={evidenceId}
+          /*
+            The stream's `final` event carries an `AnswerEnvelope`, and conversation-memory
+            availability is on `AskResponse` — the REST shape — not on the envelope. So the rail is
+            told nothing about memory here rather than being told a guess, and it omits the line.
+          */
+          memory={null}
+        />
+      </div>
     </section>
   );
 }

@@ -29,7 +29,11 @@ vi.mock("@/lib/supabase/browser", () => ({
   },
 }));
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/analyst" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/analyst",
+  useRouter: () => ({ replace: () => {}, refresh: () => {}, push: () => {} }),
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 /* ------------------------------------------------------------------- fixtures */
 
@@ -371,7 +375,7 @@ describe("a streamed answer", () => {
     await ask("What should I expect?");
 
     expect(await screen.findByText("MODERATE CONFIDENCE")).toBeInTheDocument();
-    expect(screen.getByText(/Confidence decreases with horizon distance/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Confidence decreases with horizon distance/)[0]!).toBeInTheDocument();
     expect(screen.getByText(/48 h into the forecast horizon/)).toBeInTheDocument();
     expect(screen.getByText(/supplies no forecast spread/i)).toBeInTheDocument();
     // No percentage anywhere: Weathra reads one provider and has none to state.
@@ -407,7 +411,7 @@ describe("a streamed answer", () => {
     renderAnalyst();
     await ask("What should I expect?");
 
-    const link = await screen.findByRole("link", { name: "View full agent evidence" });
+    const link = (await screen.findAllByRole("link", { name: "View full agent evidence" }))[0]!;
     expect(link).toHaveAttribute("href", "/evidence/evidence-7");
   });
 

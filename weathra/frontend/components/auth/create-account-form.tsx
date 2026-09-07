@@ -34,6 +34,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useState, type FormEvent, type ReactNode } from "react";
 
+import { EyeIcon } from "@/components/shell/icons";
 import { Button, Input } from "@/components/ui";
 import { looksLikeAnAddress } from "@/lib/auth/email";
 import { PASSWORD_MINIMUM_LENGTH, passwordFailureMessage } from "@/lib/auth/password";
@@ -167,7 +168,7 @@ export function CreateAccountForm(): ReactNode {
               aria-label={passwordVisible ? "Hide password" : "Show password"}
               onClick={() => setPasswordVisible((visible) => !visible)}
             >
-              {passwordVisible ? "Hide" : "Show"}
+              <EyeIcon off={passwordVisible} />
             </button>
           }
         />

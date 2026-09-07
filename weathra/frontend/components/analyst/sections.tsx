@@ -31,6 +31,7 @@ import type { ReactNode } from "react";
 import {
   AttributionFooter,
   Badge,
+  DataClassBadge,
   EmptyState,
   InterpretationPanel,
   MethodNote,
@@ -79,12 +80,26 @@ export interface RunProgressProps {
  * than a plausible-looking sequence.
  */
 export function RunProgress({ steps, streaming, gap = false }: RunProgressProps): ReactNode {
+  /*
+   * Collapsed once the run finishes.
+   *
+   * `02-ai-weather-analyst.png` leads with the answer; the step-by-step execution belongs to
+   * `05-agent-evidence.png`, which is a whole screen for it. Rendering the full timeline above every
+   * finished answer made the Analyst read as a developer tool — the log was the tallest thing on the
+   * page and the answer sat beneath it. While the run is streaming the steps are the only thing
+   * there is to show, so it opens; when the answer arrives it closes to a summary line, and anyone
+   * who wants the detail can open it or follow the evidence link.
+   */
   return (
     <section className={styles.progress} aria-label="Run progress" data-progress="true">
-      <header className={styles.progressHeader}>
-        <h2 className={styles.progressTitle}>Run progress</h2>
-        {streaming ? <Badge tone="accent">Running</Badge> : null}
-      </header>
+      <details open={streaming}>
+        <summary className={styles.progressHeader}>
+          <h2 className={styles.progressTitle}>Run progress</h2>
+          {streaming ? <Badge tone="accent">Running</Badge> : null}
+          <span className={styles.progressCount}>
+            {steps.length === 0 ? "no steps" : `${steps.length} steps`}
+          </span>
+        </summary>
 
       {steps.length === 0 ? (
         <p className={styles.note} role="status" aria-live="polite">
@@ -116,11 +131,12 @@ export function RunProgress({ steps, streaming, gap = false }: RunProgressProps)
         </ol>
       )}
 
-      {gap ? (
-        <p className={styles.note}>
-          An event was missing from the stream, so this list is not the whole run.
-        </p>
-      ) : null}
+        {gap ? (
+          <p className={styles.note}>
+            An event was missing from the stream, so this list is not the whole run.
+          </p>
+        ) : null}
+      </details>
     </section>
   );
 }
@@ -190,7 +206,19 @@ export function AnswerView({ answer, evidenceId = null }: AnswerViewProps): Reac
   const grounding = answer.grounding;
 
   return (
-    <div className={styles.answer}>
+    /*
+      One agent response, as `02-ai-weather-analyst.png` composes it: an agent header, the
+      interpretation, the retrieved and computed figures as compact side-by-side subcards, and the
+      provenance beneath. It used to be a run of unrelated full-width panels, which read as a
+      report rather than as a reply.
+    */
+    <article className={styles.answer}>
+      <header className={styles.agentHead}>
+        <span className={styles.agentMark} aria-hidden="true" />
+        <span className={styles.agentName}>Weathra Intelligence Agent</span>
+        <RunSummaryLine answer={answer} evidenceId={evidenceId} />
+      </header>
+
       {/* Asked rather than assumed: a reference the run could not resolve. */}
       {answer.clarification_question ? (
         <div className={styles.clarification} role="note">
@@ -224,21 +252,32 @@ export function AnswerView({ answer, evidenceId = null }: AnswerViewProps): Reac
         )}
       </InterpretationPanel>
 
-      {/* Each part its own class, its own source. */}
-      {groups.map((group) => (
-        <ProvenanceSection
-          key={group.key}
-          dataClass={group.dataClass}
-          title={GROUP_TITLES[group.dataClass]}
-          attribution={attributionOf(group.attribution)}
-        >
-          <ul className={styles.findings}>
-            {group.findings.map((finding, index) => (
-              <FindingRow key={`${finding.label}-${index}`} finding={finding} />
-            ))}
-          </ul>
-        </ProvenanceSection>
-      ))}
+      {/* The artifact's fixed pair, from the run's own attribution and resolved context. */}
+      <RunFacts answer={answer} />
+
+      {/*
+        Anything else the run produced, by class. The pair above is the artifact's fixed geometry;
+        this is whatever findings a particular run actually carried, and is often nothing.
+      */}
+      {groups.length > 0 ? (
+        <div className={styles.subcards}>
+          {groups.map((group) => (
+            <ProvenanceSection
+              key={group.key}
+              dataClass={group.dataClass}
+              title={GROUP_TITLES[group.dataClass]}
+              attribution={attributionOf(group.attribution)}
+              headingLevel={3}
+            >
+              <ul className={styles.findings}>
+                {group.findings.map((finding, index) => (
+                  <FindingRow key={`${finding.label}-${index}`} finding={finding} />
+                ))}
+              </ul>
+            </ProvenanceSection>
+          ))}
+        </div>
+      ) : null}
 
       {/* Required on every forecast figure: the band, and the basis it rests on. */}
       {confidence && answer.uncertainty?.basis ? (
@@ -300,7 +339,7 @@ export function AnswerView({ answer, evidenceId = null }: AnswerViewProps): Reac
       ) : null}
 
       <EvidenceSummary answer={answer} evidenceId={evidenceId} />
-    </div>
+    </article>
   );
 }
 
@@ -413,9 +452,158 @@ export function AnalystIntroduction(): ReactNode {
  */
 export function QuestionTurn({ question }: { readonly question: string }): ReactNode {
   return (
-    <div className={styles.question} data-turn="question">
-      <p className={styles.questionRole}>Your question</p>
-      <p className={styles.questionText}>{question}</p>
+    /* The artifact's right-aligned question bubble, above the agent's reply. */
+    <div className={styles.questionRow} data-turn="question">
+      <div className={styles.question}>
+        <p className={styles.questionRole}>You</p>
+        <p className={styles.questionText}>{question}</p>
+      </div>
     </div>
+  );
+}
+
+/* ------------------------------------------------ observed data / forecast vector */
+
+/** One row of a subcard: a term, and either its value or why there isn't one. */
+function Fact({
+  term,
+  value,
+}: {
+  readonly term: string;
+  readonly value: string | null;
+}): ReactNode {
+  return (
+    <div className={styles.factRow}>
+      <dt className={styles.factTerm}>{term}</dt>
+      <dd className={styles.factValue} data-reported={value ? "true" : "false"}>
+        {value ?? "Not reported"}
+      </dd>
+    </div>
+  );
+}
+
+export interface RunFactsProps {
+  readonly answer: AnswerEnvelope;
+}
+
+/**
+ * The OBSERVED DATA / FORECAST VECTOR pair `02-ai-weather-analyst.png` puts under the synthesis.
+ *
+ * The artifact fills them with a pressure drop, a humidity reading, a precipitation window and a
+ * 94% confidence. Weathra does not have those figures for every run — and inventing them is the one
+ * thing this product must not do — so the pair is built from what the *envelope* actually carries:
+ * the attribution entries the run recorded, the context it resolved to, and the backend's own
+ * uncertainty statement.
+ *
+ * **Both cards render on every answer.** The geometry is the artifact's and does not depend on the
+ * data; a field the run did not report says so. That is the whole distinction this screen is built
+ * on — missing data changes the content, never the layout.
+ *
+ * Attribution is split by the data class the backend stamped on it, so an observed reading lands in
+ * the observed card and a forecast in the forecast one. Nothing is re-classified here.
+ */
+export function RunFacts({ answer }: RunFactsProps): ReactNode {
+  const attribution = answer.attribution ?? [];
+  // `current` is the backend's own class for an observation; there is no separate "observed".
+  const observed = attribution.find((entry) => entry.data_class === "current");
+  const forecast = attribution.find((entry) => entry.data_class === "forecast");
+  const resolved = answer.resolved ?? null;
+  const uncertainty = answer.uncertainty ?? null;
+  const horizon = uncertainty?.horizon?.[0] ?? null;
+
+  return (
+    <div className={styles.subcards}>
+      <section className={styles.subcard} aria-label="Observed data">
+        <header className={styles.subcardHead}>
+          <DataClassBadge dataClass="observed" />
+          <h3 className={styles.subcardTitle}>Observed data</h3>
+        </header>
+        <dl className={styles.facts}>
+          <Fact term="Location" value={observed?.location.display_name ?? resolved?.locations?.[0]?.display_name ?? null} />
+          <Fact term="Provider" value={observed?.provider ?? null} />
+          <Fact term="Retrieved" value={observed?.retrieved_at ?? null} />
+        </dl>
+        {observed ? null : (
+          <p className={styles.subcardNote}>This run retrieved no observation.</p>
+        )}
+      </section>
+
+      <section className={styles.subcard} aria-label="Forecast vector">
+        <header className={styles.subcardHead}>
+          <DataClassBadge dataClass="forecast" />
+          <h3 className={styles.subcardTitle}>Forecast vector</h3>
+        </header>
+        <dl className={styles.facts}>
+          <Fact
+            term="Window"
+            value={
+              resolved?.period
+                ? `${formatLocalStamp(resolved.period.start_local)} to ${formatLocalStamp(resolved.period.end_local)}`
+                : null
+            }
+          />
+          <Fact term="Provider" value={forecast?.provider ?? null} />
+          <Fact
+            term="Confidence"
+            value={
+              horizon?.confidence
+                ? `${horizon.confidence} at ${horizon.hours_ahead} h`
+                : null
+            }
+          />
+          <Fact
+            term="Spread"
+            value={
+              uncertainty
+                ? uncertainty.spread_available
+                  ? "Supplied by the provider"
+                  : "Not supplied"
+                : null
+            }
+          />
+        </dl>
+      </section>
+    </div>
+  );
+}
+
+
+/* -------------------------------------------------------- the compact run status */
+
+/**
+ * The run, in one line.
+ *
+ * `02-ai-weather-analyst.png` shows a status chip beside the agent's name, not a step-by-step
+ * timeline: the full trace is a whole screen of its own at `/evidence/{id}`, and reproducing it
+ * above every answer made the Analyst read as a trace viewer. This states what ran and offers the
+ * way to the detail; nothing is lost, and the answer leads.
+ */
+export function RunSummaryLine({
+  answer,
+  evidenceId,
+}: {
+  readonly answer: AnswerEnvelope;
+  readonly evidenceId: string | null;
+}): ReactNode {
+  const record = answer.evidence;
+  const agents = record?.agents?.length ?? 0;
+  const tools = record?.tool_calls?.length ?? 0;
+
+  return (
+    <span className={styles.runSummary}>
+      <span className={styles.runSummaryItem}>
+        {agents > 0 ? `${agents} agents` : "No agent reported"}
+      </span>
+      <span className={styles.runSummaryItem}>
+        {tools > 0 ? `${tools} tools` : "No tool call"}
+      </span>
+      {evidenceId ? (
+        <Link className={styles.runSummaryLink} href={evidencePath(evidenceId)}>
+          View agent evidence
+        </Link>
+      ) : (
+        <span className={styles.runSummaryItem}>No evidence record</span>
+      )}
+    </span>
   );
 }

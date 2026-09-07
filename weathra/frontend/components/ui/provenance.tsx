@@ -368,6 +368,13 @@ export interface ProvenanceSectionProps {
   readonly footer?: ReactNode;
   /** See `InterpretationPanelProps.headingLevel` — task 21.8. Two by default. */
   readonly headingLevel?: 2 | 3;
+  /**
+   * How the region is presented. `panel` is the default card; `hero` is the wide leading band the
+   * Dashboard artifact opens with. It changes the frame only — the badge, the heading and the
+   * attribution footer are identical, because those are what make the region a provenance region
+   * rather than a decoration, and a variant that could drop them would not be a variant.
+   */
+  readonly variant?: "panel" | "hero";
 }
 
 /**
@@ -386,6 +393,7 @@ export function ProvenanceSection({
   attribution,
   footer,
   headingLevel = 2,
+  variant = "panel",
 }: ProvenanceSectionProps): ReactNode {
   if (isInterpretation(dataClass)) {
     return (
@@ -403,6 +411,7 @@ export function ProvenanceSection({
       className={styles.provenanceSection}
       data-class={dataClass}
       data-tier={tier}
+      data-variant={variant}
       aria-label={title}
     >
       <header className={styles.provenanceHeader}>

@@ -337,3 +337,120 @@
   color: var(--color-text-muted);
   font-weight: 600;
 }
+
+/*
+ * The artifact's main row: the archive chart wide on the left, the baseline comparison beside it.
+ * `2fr 1fr` rather than an even split, because the chart is the screen's subject and an even split
+ * makes the two read as a pair of equals.
+ */
+.mainRow {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (max-width: 1023px) {
+  .mainRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/*
+ * The metric row across the top, framed as cards.
+ *
+ * The figures were already the artifact's; the frame was not — they sat on the page ground as loose
+ * label/value pairs, so the row read as a caption strip rather than as the six cards the artifact
+ * opens with. `> *` reaches the `Metric` primitive without the primitive having to grow a variant
+ * that only this screen would use.
+ */
+.tiles > * {
+  padding: var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+/*
+ * The metric row across the top of the artifact is one row. `auto-fill` at a narrower track keeps
+ * it one row at the desktop widths the artifact is drawn at, and lets it wrap rather than squeeze
+ * below them — the same reasoning as the Dashboard's forecast strip.
+ */
+.tiles {
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+}
+
+/*
+ * Nested inside a side column, the same tiles get one per row. Two 180-pixel tracks technically fit
+ * a third of the page, but the labels there — "Difference from the baseline (mean temperature)" —
+ * wrap to five lines and the row stops reading as figures.
+ */
+.column .tiles {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* The control bar sits tighter than a form: it is a header strip, not the screen's subject. */
+.controls {
+  padding: var(--space-3);
+  gap: var(--space-3) var(--space-2);
+}
+
+/* Deviation bars and the anomaly panel — the artifact's lower two-column row. */
+.deviation,
+.anomaly {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.panelSubtitle {
+  font-family: var(--family-display);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+}
+
+.anomalyHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.anomalyFacts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.anomalyFact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.anomalyFact dt {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.anomalyFact dd {
+  margin: 0;
+  font-family: var(--family-display);
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}

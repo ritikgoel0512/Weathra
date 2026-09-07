@@ -21,7 +21,26 @@ The screens are worth judging populated, and populated means the two stubs the b
 the identity provider and the FastAPI backend — so no database, no provider key and no inference
 credential are needed, and every screen shows the same thing every time.
 
-### In Cloud Shell (this project's environment)
+### In this GitHub Codespace (current environment)
+
+**The project moved from Cloud Shell to a GitHub Codespace, and that removes the blocker §8
+records.** Nothing in §8 was a property of Weathra; both halves of it were properties of Cloud
+Shell's *authenticated* preview proxy. A Codespace forwards a port to the operator's own
+`localhost` over SSH — VS Code Desktop connected to the Codespace does it automatically, and
+`gh codespace ports forward 3100:3100 54321:54321 54322:54322` does it from a terminal — so the
+browser and the app share an origin with no proxy in between, and `credentials: "omit"` has nothing
+to fail against.
+
+No harness is needed, and `scripts/manual-pass-serve.sh` is not used here: it refuses to run
+outside Cloud Shell by design, and the proxy and `fetch` patch it exists to install are exactly what
+this environment does not need. The four commands under *On your own machine* below are the whole
+setup — run them **in the Codespace**, forward the three ports, and open
+`http://127.0.0.1:3100/sign-in` **on your own machine**.
+
+**Verified on 2026-09-06**, at commit `88da7ea`: all twelve screens were driven populated this way,
+sign-in included, with every data call succeeding. §8's two blockers do not arise.
+
+### In Cloud Shell (the previous environment)
 
 One command, from `frontend/`:
 
@@ -234,6 +253,46 @@ Nothing else on this screen has been observed yet. The remaining Sign In items �
 order, whether every control is reachable and operable by keyboard alone, whether any stop traps
 focus, and the disabled-submit behaviour — are unrecorded.
 
+### An agent-driven interactive review — **performed 2026-09-06**, and it is not any of the three passes above
+
+- **Date:** 2026-09-06 · **Commit reviewed:** `88da7ea5c93e58d640f8d512b43759d15ed664ae`
+- **Operator:** Claude Opus 5, driving a real Chromium through Playwright in the Codespace, against
+  the populated production build on `127.0.0.1:3100`
+- **Instrument, named as §7 requires:** scripted keyboard input and CDP's
+  `Accessibility.getFullAXTree` in one browser engine. **Not** a screen reader, **not** a person,
+  **not** a handset.
+
+**What this is worth, and what it is not.** It is a real interactive session — keys pressed, states
+provoked, the computed accessibility tree read back — rather than a re-run of the suites, and it
+found two defects the suites do not catch. It is **not** a substitute for any of the three passes
+above: nothing here was *heard*, nothing was judged by a person, and nothing was touched with a
+thumb. Every claim below is a measurement, and the measurements are pasted.
+
+**Surfaces:** all twelve screens, plus the ambiguous-location chooser, the destructive confirmation,
+the Analyst mid-stream, the evidence not-found state, and form validation.
+**Viewports:** 1440×900, 1280×800, 1024×800, 1024×600, 900×800, 640×400 (200% zoom on a 1280×800
+screen), 420×800, 360×780 and 360×480.
+
+| Check | Result |
+|---|---|
+| Sign in by keyboard alone | **Pass.** Email focused on load; `Tab` → password → *Show password* → *Forgot password?* → *Sign in*; `Enter` submits. |
+| Skip link | **Pass.** First stop in the tab order; `Enter` moves focus to `#weathra-main`. |
+| Collapsed rail by keyboard | **Pass.** Tabbing reaches each entry, the focused entry's label paints (`opacity: 1`), `Enter` navigates. |
+| Planned entries' accessible names | **Pass.** Computed name is `"Forecast Explorer — not yet available"`; the visible chip is `aria-hidden` and the words come from visually-hidden text. |
+| Drawer at 360 | **Defect, fixed — see §10.** Opened and closed by keyboard with `aria-expanded` correct, but Escape from inside it left `document.activeElement` as `body`. |
+| Unit radios | **Pass.** `ArrowRight` moves and checks: Imperial checked by arrow alone. |
+| Destructive confirmation | **Pass.** Reached and opened by keyboard; focus moves into the panel; the gate is a labelled `Type DELETE to confirm` field; *Cancel* is reachable. Escape does not close it — it is an inline confirmation rather than a modal, so this is recorded as behaviour, not as a defect. |
+| Candidate chooser | **Pass.** `H3 Which place did you mean?` in the heading list (the §6 fix, confirmed live); group labelled *Places matching what you entered*; each option carries region, country, coordinates and time zone; a `role="status"` announces `'Springfield' matches more than one place…`. |
+| Analyst live region | **Pass, as structure.** During the stream the progress list is `<ol aria-live="polite">` carrying `Routing · Done · Forecast agent, Historical agent…`; the `aria-live` is dropped when streaming ends, so the finished list is not re-announced. Whether it *sounds* right is pass one's question and stays open. |
+| Settings save | **Pass.** `role="status"` moves `No unsaved changes.` → `You have unsaved changes.` → `Your preferences are saved.` |
+| Evidence scroll region | **Pass.** At 420px: `role="group"`, name `Grounded data sources table`, `tabindex="0"`, overflowing by 529px, focusable, and `ArrowRight` scrolls it (`scrollLeft` 0 → 80). |
+| Form validation | **Pass.** `aria-invalid="true"` plus `aria-describedby` wiring `Enter a valid email address.` and `At least 12 characters…` to their own fields. |
+| Heading and landmark structure, all twelve screens | **One defect, fixed — see §10.** Landmarks are clean: `navigation "Weathra"`, `main`, and a named `region` per card. |
+| Reduced motion | **Pass.** Under `prefers-reduced-motion: reduce` every computed `transition-duration` and `animation-duration` is `1e-05s`. |
+| 200% zoom / reflow | **Pass.** At 640×400 — 200% zoom on a 1280×800 screen — `/`, `/settings`, `/evidence/run-stub` and `/locations` each report `0px` horizontal document and body overflow, and the shell drops to its drawer tier. |
+| Focus-ring findability | **Not settled here.** Screenshots at focus stops on `/settings` and `/evidence/run-stub` in both appearances show the accent ring clearly against card, overlay and filled-button grounds. That is a reading of a screenshot, not a person finding their place on a busy screen, which is what §3 asks. |
+| A refused sign-in | **Blocked.** `tests/e2e/supabase-stub.mjs` returns a session for `grant_type=password` whatever the password is, so the refused-credentials state cannot be provoked through this harness. Not a defect and not a pass — unreachable. |
+
 ### Pass three — handset — **NOT PERFORMED**
 
 No physical-device verification has been carried out. Target sizes pass WCAG 2.2's `target-size` rule
@@ -323,6 +382,16 @@ gets pasted evidence or stays open.** For a screen-reader pass that means the ac
 Speech Viewer text in NVDA, or the equivalent — not a yes.
 
 ## 8. Environment limitation — Cloud Shell's preview proxy cannot carry this app's XHR
+
+> **Superseded on 2026-09-06.** The project now runs in a GitHub Codespace, which forwards a port to
+> the operator's own `localhost` over SSH rather than through an authenticated HTTP proxy. Both
+> blockers below are properties of Cloud Shell's proxy, not of Weathra, and neither arises here: all
+> twelve screens were driven populated at `127.0.0.1:3100` on 2026-09-06, sign-in included. §1
+> records the setup. This section is kept because the analysis is still correct about Cloud Shell,
+> and because its conclusion — which passes it bounded — is what §9 was written against.
+>
+> **What it changes for task 21.8:** the three human passes are no longer *unreachable*. They are
+> undone.
 
 **Established by observation on 2026-09-04**, in Chrome on Windows 11 against the Cloud Shell preview
 URL. Recorded because it bounds what any manual pass can cover from this environment, and because the
@@ -422,11 +491,89 @@ That is not a manual pass over twelve screens. Recorded as what it is.
 
 **Conclusion: task 21.8 stays `[ ]`.** The honest options were to leave it open or to reinterpret
 "plus a recorded manual pass" as satisfied by the automated half, and the second would be a
-reinterpretation of the requirement rather than a completion of it. §8 records why the remaining
-human verification is not reachable from this environment, and the ways out are infrastructure
-decisions rather than implementation work.
+reinterpretation of the requirement rather than a completion of it.
 
-## 10. Still outstanding after this worksheet
+**Reviewed again on 2026-09-06 at commit `88da7ea`**, and the conclusion is unchanged — but for a
+different reason, and the difference matters. §5 now carries an agent-driven interactive review that
+did press the keys, provoke the states and read the computed accessibility tree, and it found two
+defects the suites had not (§10). It is still not the manual pass the task names: nothing in it was
+heard by a person, judged by a person, or touched on a handset, and those are precisely the three
+things §2–§4 exist to ask. An agent reading an accessibility tree and a person listening to a screen
+reader are not the same instrument, and recording the first as the second would be the §7 failure
+again with a different author.
+
+What *has* changed is the obstacle. §8's blockers were Cloud Shell's; this is a Codespace, ports
+forward to the operator's own `localhost`, and the setup is four commands. The remaining work is no
+longer an infrastructure decision — it is three passes that need a person, a screen reader and a
+phone, and roughly an afternoon.
+
+## 10. Two defects found by the interactive review, and fixed
+
+Recorded here rather than in §5 for the reason §6 gives: what was found is separable from who found
+it, and both of these rest on a measurement anybody can repeat.
+
+### 10.1 Dismissing the drawer dropped focus
+
+**What was wrong.** Below 768 the navigation is a drawer, and closing it hides the navigation with
+`visibility`. A focused element inside something hidden loses focus to the document — so a keyboard
+user who opened the menu at 360px, moved into it, and pressed Escape was left with
+`document.activeElement === document.body`: nothing focused, at the top of the page, with the next
+`Tab` restarting from the beginning.
+
+**Why the suites missed it.** `tests/e2e/accessibility.spec.ts` already asserted that Escape closes
+the drawer, by checking `aria-expanded` flips to `false`. It does, and it did. The flag was right and
+the focus was gone; the assertion was not looking at focus. `app-shell.tsx`'s own comment claimed
+"the control that opened it is where focus can return to", and nothing implemented the return.
+
+**The fix.** A `dismiss()` beside the existing `close()`: it returns focus to the drawer control, but
+only when focus is actually inside the drawer, so dismissing it from elsewhere does not snatch focus.
+Escape and the scrim call it; the route-change close deliberately does not, because following an
+entry hands focus to the screen that opened and pulling it back would undo that.
+
+**Pinned by a test** that focuses a link inside the open drawer, presses Escape, and asserts the
+control is focused — the assertion the old one was missing.
+
+### 10.2 Two panels on Agent Evidence claimed to contain one another
+
+**What was wrong.** `evidence.tsx` renders the right-hand column as siblings:
+
+```
+<div className={styles.column}>
+  <GroundedSources … />          h2  "Grounded data sources"
+  <DeterministicAnalytics … />   h3  "Deterministic analytics"
+  …
+  <FinalSynthesis … />           h3  "Final grounded synthesis"
+</div>
+```
+
+Two of the six panels were third-level headings. In a heading list — which is how most screen-reader
+users move around a screen — that reads *Deterministic analytics* as a part of *Grounded data
+sources*, and *Final grounded synthesis* as a part of *Retrieved knowledge*. Neither containment
+exists; they are siblings in the same column, drawn as peers with the same panel treatment. That is
+WCAG 1.3.1, the same fault §6 found in the chooser: a relationship conveyed one way visually and
+another programmatically.
+
+`sections.tsx` said so itself — *"Inside this screen's own h2 panels, so its title is a third-level
+heading"* — a premise the composition does not support. And `DeterministicAnalytics` changed level
+with its own data: its no-statistics branch has always rendered an `h2`, so the same panel was `h2`
+when empty and `h3` when populated.
+
+**Why the suites missed it.** `heading-order` in `tests/accessibility/audit.ts` checks that levels do
+not *skip*. Descending h2 → h3 is legal, so nothing was violated. What was wrong is only visible when
+the heading list is read as a list, which is what §2 asks a person to do and what the tree dump in §5
+did mechanically.
+
+**The fix.** Both call sites drop `headingLevel={3}` and take the default of 2.
+`InterpretationPanel` and `ProvenanceSection` already default to 2, so this is the removal of two
+overrides rather than a new capability, and no styling changes — `.panelTitle` and
+`.interpretationTitle` carry the type role, not the element.
+
+**Pinned by a test** asserting all six panels on a populated record are level 2.
+
+**What neither fix settles:** whether the heading list, once level, *reads* usefully. That is §2, and
+it stays open.
+
+## 11. Still outstanding after this worksheet
 
 WebKit. Not a manual item — its Playwright project is written and opt-in, and it needs only its
 system libraries (`sudo npx playwright install-deps webkit`, then

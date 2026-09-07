@@ -1,0 +1,872 @@
+/*
+ * `05-agent-evidence.png`'s geometry.
+ *
+ * Measured from the artifact at 1440: the audit header with its four-fact block, the 364/1fr split
+ * between the execution timeline and the evidence column, the connected timeline itself, the
+ * four-column source table, and the 1fr/460 memory row.
+ */
+
+/* ---------------------------------------------------------------- audit header */
+
+.auditHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding: var(--space-5);
+  flex-wrap: wrap;
+}
+
+.auditText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.auditId {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-label-size);
+  font-weight: 700;
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.auditStats {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+  margin: 0;
+}
+
+.auditStats dt {
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.auditStats dd {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-ui-size);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: var(--space-1) 0 0;
+}
+
+.auditStats dd[data-tone="accent"] {
+  color: var(--color-accent);
+}
+
+.auditDot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  background: var(--color-status-ok);
+}
+
+/* ---------------------------------------------------------------- columns */
+
+.columns {
+  display: grid;
+  grid-template-columns: 364px minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.leftColumn,
+.rightColumn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------- execution flow */
+
+.flow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.flowNode {
+  position: relative;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+
+/* The connector the artifact draws down the timeline, between one mark and the next. */
+.flowNode:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 17px;
+  top: 34px;
+  bottom: calc(var(--space-4) * -1);
+  width: 1px;
+  background: color-mix(in srgb, var(--color-accent) 40%, transparent);
+}
+
+.flowMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--color-status-ok) 60%, transparent);
+  background: var(--color-surface-base);
+  color: var(--color-status-ok);
+}
+
+.flowCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+  min-width: 0;
+}
+
+/* One row: the state pill wrapped under the name at 364 wide, which the artifact never does. */
+.flowCardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: nowrap;
+}
+
+.flowName {
+  font-size: var(--type-ui-size);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.flowMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-label-size);
+  color: var(--color-text-muted);
+  margin: 0;
+  flex-wrap: wrap;
+}
+
+.flowMeta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.flowNote {
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--color-border-subtle);
+  font-size: var(--type-meta-size);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------- MCP */
+
+.mcpCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
+  background: var(--color-surface-inset);
+}
+
+.mcpHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.mcpName {
+  font-size: var(--type-ui-size);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-right: auto;
+}
+
+.mcpBolt {
+  color: var(--color-accent);
+}
+
+.mcpFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.mcpLatency {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-label-size);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-status-ok);
+}
+
+/* ---------------------------------------------------------------- source table */
+
+.sourcesHeadText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sourcesSubtitle {
+  font-size: var(--type-meta-size);
+  font-style: italic;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 320px;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  /* The artifact's rows are 53px; the first pass ran to 68 and made the table the tallest thing
+     in the column. */
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--color-border-subtle);
+  vertical-align: middle;
+}
+
+.table thead th {
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  padding-top: var(--space-3);
+  padding-bottom: var(--space-3);
+}
+
+.table tbody th {
+  font-size: var(--type-ui-size);
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.table tbody td {
+  font-size: var(--type-ui-size);
+  color: var(--color-text-secondary);
+}
+
+/* ---------------------------------------------------------------- deterministic analytics */
+
+.analyticsHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.analyticsTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--family-display);
+  font-size: var(--type-section-size);
+  font-weight: 600;
+  color: var(--color-accent);
+  margin: 0;
+}
+
+.analytics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.analyticsValue {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0;
+  flex-wrap: wrap;
+}
+
+.analyticsFlag {
+  font-size: var(--type-label-size);
+  font-weight: 600;
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+}
+
+.analyticsFlag[data-tone="critical"] {
+  color: var(--color-status-error);
+}
+
+.analyticsFlag[data-tone="warn"] {
+  color: var(--color-status-warning);
+}
+
+.analyticsFlag[data-tone="accent"] {
+  color: var(--color-accent);
+}
+
+.analyticsNote {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+  font-size: var(--type-meta-size);
+  font-style: italic;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------- RAG */
+
+.ragCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+}
+
+.ragHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.ragTitle {
+  font-size: var(--type-ui-size);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0;
+  margin-right: auto;
+}
+
+.ragSimilarity {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-label-size);
+  color: var(--color-text-muted);
+}
+
+.ragQuote {
+  font-size: var(--type-meta-size);
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.ragFooter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  font-size: var(--type-label-size);
+  flex-wrap: wrap;
+}
+
+.ragSource {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+.ragIndexed {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
+}
+
+/* ---------------------------------------------------------------- synthesis */
+
+.synthesisPanel {
+  border-color: color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+
+.synthesisHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border-subtle);
+  flex-wrap: wrap;
+}
+
+.synthesisMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  color: var(--color-accent);
+}
+
+.synthesisHeadText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  margin-right: auto;
+}
+
+.synthesisConfidence {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-label-size);
+  font-weight: 700;
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.synthesisActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.synthesisBody {
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+}
+
+.synthesisProse {
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.evidenceChips {
+  display: flex;
+  gap: var(--space-3);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  flex-wrap: wrap;
+}
+
+.evidenceChipLabel {
+  color: var(--color-text-muted);
+}
+
+.evidenceChips b {
+  color: var(--color-text-primary);
+}
+
+/* ---------------------------------------------------------------- memory row */
+
+.lower {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 460px;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.memoryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+.memoryList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  list-style: none;
+  padding: 0;
+  margin: var(--space-3) 0 0;
+  font-size: var(--type-meta-size);
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+
+.memoryList li {
+  position: relative;
+  padding-left: var(--space-4);
+}
+
+.memoryList li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  width: 5px;
+  height: 5px;
+  background: var(--color-accent);
+}
+
+.memoryNote {
+  color: var(--color-text-muted);
+}
+
+.stabilityHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.stabilityChip {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-label-size);
+  font-weight: 700;
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-status-ok);
+}
+
+.stabilityNote {
+  border-color: color-mix(in srgb, var(--color-status-warning) 30%, transparent);
+}
+
+.signature {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin: 0;
+}
+
+.signature dt {
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.signature dd {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-ui-size);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: var(--space-1) 0 0;
+}
+
+.signatureRight {
+  text-align: right;
+}
+
+.signatureHash {
+  color: var(--color-text-muted) !important;
+  font-weight: 400 !important;
+}
+
+/* ---------------------------------------------------------------- responsive */
+
+@media (max-width: 1279px) {
+  .columns {
+    grid-template-columns: 320px minmax(0, 1fr);
+  }
+
+  .lower {
+    grid-template-columns: minmax(0, 1fr) 380px;
+  }
+
+  .analytics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1023px) {
+  .columns,
+  .lower {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .auditStats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4);
+  }
+}
+
+@media (max-width: 767px) {
+  .auditHead {
+    padding: var(--space-4);
+  }
+
+  .memoryGrid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+
+  .synthesisHead {
+    padding: var(--space-4);
+  }
+
+  .signature {
+    flex-direction: column;
+  }
+
+  .signatureRight {
+    text-align: left;
+  }
+}
+
+/* ---------------------------------------------------------------- correction pass 1 */
+
+/*
+ * The artifact's COMPLETED pill is a small tracked-out grey chip, not a filled green one. Filled
+ * green made six of them the loudest thing on the screen.
+ */
+.flowState {
+  border-color: var(--color-border-subtle);
+  background: var(--color-surface-overlay);
+  color: var(--color-text-muted);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* "REFERENCE R-442", as drawn. */
+.ragReference {
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+}
+
+/* ---------------------------------------------------------------- audit corrections */
+
+/*
+ * The left column, measured — and scoped to the wide tier, which is the mistake this replaces.
+ *
+ * The artifact's column is 372px against 364 here, and the 8px it was short was enough that three
+ * agent names wrapped where the artifact keeps each on one line. Appending the override at the end
+ * of the file put it *after* the media queries, so a fixed 372px track survived into the 360 tier
+ * and overflowed the viewport by 298px. It belongs inside the tier it describes.
+ */
+@media (min-width: 1280px) {
+  .columns {
+    grid-template-columns: 372px minmax(0, 1fr);
+  }
+}
+
+/*
+ * `nowrap` plus the wider column is what keeps each name on one line; dropping a type step as well
+ * was over-correction and left them visibly smaller than the artifact's. Size restored, and the
+ * state pill gives back the few pixels the longest name needs.
+ */
+.flowState {
+  padding: 2px var(--space-1);
+}
+
+@media (min-width: 1280px) {
+  .flowName {
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+  }
+}
+
+/*
+ * The source table. The artifact keeps "Berlin Metropolitan Area" and "30-Year Normal (1991-2020)"
+ * on one line each; both wrapped here because the location and period columns were free to shrink to
+ * their content. Fixing the column widths stops that, and the horizontal padding comes in to pay
+ * for it — the artifact's cells are tighter than these were.
+ */
+.table th,
+.table td {
+  padding: var(--space-3) var(--space-4);
+}
+
+@media (min-width: 1280px) {
+  .table {
+    table-layout: fixed;
+  }
+
+  .table thead th:nth-child(1),
+  .table tbody th:nth-child(1) {
+    width: 21%;
+  }
+
+  .table thead th:nth-child(2),
+  .table tbody td:nth-child(2) {
+    width: 27%;
+  }
+
+  .table thead th:nth-child(3),
+  .table tbody td:nth-child(3) {
+    width: 30%;
+  }
+
+  .table thead th:nth-child(4),
+  .table tbody td:nth-child(4) {
+    width: 22%;
+  }
+
+  .table tbody td:nth-child(2),
+  .table tbody td:nth-child(3) {
+    white-space: nowrap;
+  }
+}
+
+/*
+ * The artifact's rows measure 53px. 10px of vertical padding took them to 47 — past the target — so
+ * 12px, which lands at 53.
+ */
+.table tbody th,
+.table tbody td {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+/*
+ * The remaining 86px, from the section-boundary comparison rather than the page total.
+ *
+ * No single region was short by much — the audit header, the flow cards, the analytics row and the
+ * RAG entries each carry a little less padding than the artifact's, and the two columns sit closer
+ * together. Each comes up to the artifact's own value; nothing is padded arbitrarily and no spacer
+ * is added.
+ */
+.auditHead {
+  padding: var(--space-5) var(--space-5) var(--space-6);
+}
+
+.flowCard {
+  padding: var(--space-4);
+  gap: var(--space-3);
+}
+
+.flow {
+  gap: var(--space-5);
+}
+
+.mcpCard {
+  padding: var(--space-4) var(--space-4) var(--space-5);
+}
+
+.ragCard {
+  padding: var(--space-4) var(--space-4) var(--space-5);
+  gap: var(--space-3);
+}
+
+.synthesisBody {
+  padding: var(--space-5);
+}
+
+.columns {
+  gap: var(--space-5);
+}
+
+.leftColumn,
+.rightColumn {
+  gap: var(--space-5);
+}
+
+/* ---------------------------------------------------------------- the MCP head row
+ *
+ * `05-agent-evidence.png` puts ACTIVE TOOL and the layer name on one row; this wrapped the chip
+ * onto a line of its own. Measured at 1:1, the cause is the title's size and nothing else:
+ *
+ *                    artifact        current
+ *   chip              81 x 20        95 x 24
+ *   layer name       169 wide       205 wide
+ *   'W' cap height     9px           11px
+ *
+ * The width ratio (205/169 = 1.21) and the cap-height ratio (11/9 = 1.22) agree, so the name is set
+ * larger here rather than tracked wider or gapped wider — and 9px of cap is `--type-meta-size`
+ * (12px), not the `--type-ui-size` (14px) this was using. The artifact's row then measures 81 + 10
+ * + 169 = 260 inside 289px of card, and this one 95 + 12 + ~176 = 283, so it fits on one line for
+ * the reason the artifact does rather than by being squeezed.
+ *
+ * `flex-wrap: wrap` on `.mcpHead` is deliberately left in place: at 768 and 360 the card is far
+ * narrower and the row *should* still wrap there.
+ */
+.mcpName {
+  font-size: var(--type-meta-size);
+}
+
+/*
+ * The bolt.
+ *
+ * With the layer name at its measured size the chip and the name share a row, but the bolt then
+ * became the thing that wrapped: chip 95 + name 177 + the glyph still exceeds the card's 293px of
+ * inner width, where the artifact's 81 + 169 + glyph just fits. In `05-agent-evidence.png` the bolt
+ * is a decorative mark sitting at the card's top-right corner rather than a third item competing
+ * for the row -- it measures x587-610 against a card whose inner edge is 607, i.e. flush with the
+ * padding. Taking it out of the flex flow is what reproduces that, and it costs the row nothing.
+ */
+.mcpCard {
+  position: relative;
+}
+
+.mcpBolt {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+}
+
+/*
+ * The chip's own width, measured rather than guessed: the artifact's ACTIVE TOOL text spans 60px
+ * with a 7px cap, this one 77px with an 8px cap, which puts the whole chip at 95 against 81. That
+ * 14px is exactly what pushes the layer name into the bolt's corner -- with the chip at the
+ * artifact's width the name ends at 574 and the bolt begins there, which is the artifact's own
+ * clearance. Scoped to this screen's accent chip so the Historical stat chips keep their size.
+ */
+.mcpHead span[class*="chip"] {
+  font-size: 9px;
+  letter-spacing: 0.03em;
+  padding: 3px 6px;
+}
+
+.mcpHead {
+  gap: 10px;
+}

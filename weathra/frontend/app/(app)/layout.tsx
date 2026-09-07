@@ -16,7 +16,8 @@
  * middleware did not run, sends the person to sign-in plainly rather than reconstructing a
  * destination it cannot see from a layout.
  *
- * Inside the shell, `SessionBoundary` (task 20.9) carries the session for the *client* half: the
+ * Inside `ProtectedFrame`, `SessionBoundary` (task 20.9) carries the session for the *client* half:
+ * the
  * query cache, the API client, the 401 interceptor, and the expired-session state. It is seeded
  * `active` because the line above has already validated the session with Supabase — which is why
  * no screen in this group ever renders a pending state it does not need, and why there is nothing
@@ -26,11 +27,10 @@
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { AppShell } from "@/components/shell/app-shell";
+import { ProtectedFrame } from "@/components/shell/protected-frame";
 import { SignOutForm } from "@/components/shell/sign-out-form";
 import { identityFrom } from "@/lib/auth/identity";
 import { SIGN_IN_PATH } from "@/lib/routes";
-import { SessionBoundary } from "@/lib/session/provider";
 import { currentUser } from "@/lib/supabase/server";
 
 export default async function ProtectedLayout({
@@ -46,8 +46,8 @@ export default async function ProtectedLayout({
   }
 
   return (
-    <AppShell identity={identityFrom(user)} signOutControl={<SignOutForm />}>
-      <SessionBoundary initialStatus="active">{children}</SessionBoundary>
-    </AppShell>
+    <ProtectedFrame identity={identityFrom(user)} signOutControl={<SignOutForm />}>
+      {children}
+    </ProtectedFrame>
   );
 }

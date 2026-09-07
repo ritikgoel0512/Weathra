@@ -129,6 +129,7 @@
   gap: var(--space-3);
 }
 
+/* The card is now a banner over a body, so its own padding moves to the body. */
 .candidate {
   display: flex;
   flex-direction: column;
@@ -435,4 +436,105 @@
   flex-direction: column;
   gap: var(--space-2);
   min-width: 0;
+}
+
+/* ---------------------------------------------------------------- the matrix */
+
+.matrix {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  font-variant-numeric: tabular-nums;
+}
+
+.matrixCaption {
+  padding-bottom: var(--space-2);
+  text-align: left;
+  color: var(--color-text-muted);
+}
+
+.matrix th,
+.matrix td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border-subtle);
+  white-space: nowrap;
+}
+
+.matrix thead th {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.matrix tbody th {
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-secondary);
+}
+
+.matrix td {
+  color: var(--color-text-primary);
+}
+
+/* An absent figure says why, in the muted role, so it can never be read as a value. */
+.matrixAbsent {
+  color: var(--color-text-muted);
+  white-space: normal;
+}
+
+/* ---------------------------------------------------------------- the summary */
+
+.summaryFacts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.summaryFact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.summaryFact dt {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.summaryFact dd {
+  margin: 0;
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* The name and rank sit on the banner, as `04-compare-cities.png` places them. */
+.candidate .candidateHead {
+  margin: 0;
+  align-items: center;
+}
+
+/* The artifact's two lower charts, side by side. */
+.chartRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .chartRow {
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  }
 }

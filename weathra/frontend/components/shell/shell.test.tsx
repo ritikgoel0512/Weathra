@@ -16,6 +16,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Identity } from "@/lib/auth/identity";
+import { SessionBoundary } from "@/lib/session/provider";
 import { NAVIGATION } from "@/lib/navigation";
 import { MVP_SCREENS, POST_MVP_SCREENS } from "@/lib/routes";
 
@@ -26,7 +27,20 @@ const pathname = vi.fn<() => string>(() => "/");
 
 vi.mock("next/navigation", () => ({
   usePathname: () => pathname(),
+  useRouter: () => ({ replace: () => {}, refresh: () => {}, push: () => {} }),
+  useSearchParams: () => new URLSearchParams(),
 }));
+
+/**
+ * A link in the persistent rail.
+ *
+ * The top bar's breadcrumb names the Dashboard too — `01-dashboard.png` shows both — so a global
+ * query for a link called "Dashboard" is ambiguous by design rather than by accident. These
+ * assertions are about the rail, so they ask the rail.
+ */
+function navLink(name: string): HTMLElement {
+  return within(screen.getByRole("navigation", { name: "Weathra" })).getByRole("link", { name });
+}
 
 const IDENTITY: Identity = {
   name: "sam@example.test",
@@ -39,11 +53,36 @@ beforeEach(() => {
   pathname.mockReturnValue("/");
 });
 
-function renderShell(identity: Identity = IDENTITY) {
+/**
+ * The shell as it is actually mounted — inside the session boundary.
+ *
+ * It moved there so the rail's SAVED LOCATIONS section can ask the backend for the person's places
+ * (`components/shell/protected-frame.tsx`), which means the shell now needs the query layer and the
+ * API client the boundary provides. The boundary takes an injected `fetch`, so these tests answer
+ * the one request the rail makes with an empty list: none of them is about saved places, and an
+ * empty list is the state a new account is in.
+ */
+beforeEach(() => {
+  // The rail builds an API client, which reads its base URL from the public environment.
+  process.env.NEXT_PUBLIC_API_BASE_URL = "http://backend.test";
+});
+
+function renderShell(identity: Identity = IDENTITY, locations: unknown[] = []) {
   return render(
-    <AppShell identity={identity} signOutControl={<button type="submit">Sign out</button>}>
-      <h1>Screen content</h1>
-    </AppShell>,
+    <SessionBoundary
+      initialStatus="active"
+      accessToken={() => "test-token"}
+      fetch={async () =>
+        new Response(JSON.stringify({ count: locations.length, limit: 20, locations }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      }
+    >
+      <AppShell identity={identity} signOutControl={<button type="submit">Sign out</button>}>
+        <h1>Screen content</h1>
+      </AppShell>
+    </SessionBoundary>,
   );
 }
 
@@ -90,17 +129,38 @@ describe("every MVP product screen is reachable", () => {
     }
   });
 
-  it("shows all twelve destinations, in the recorded order", () => {
+  it("shows all twelve destinations, keeping the recorded order within each group", () => {
     renderShell();
     const navigation = screen.getByRole("navigation", { name: "Weathra" });
-    const items = within(navigation)
-      .getAllByRole("listitem")
-      .map((item) => item.textContent);
 
-    expect(items).toHaveLength(12);
-    NAVIGATION.forEach((entry, index) => {
-      expect(items[index]).toContain(entry.title);
-    });
+    // The built destinations and the not-yet-built ones are now two groups rather than one flat
+    // list — the product artifacts show a short primary navigation, and twelve equal entries did
+    // not read as one. All twelve are still here and still links; what changed is the weight.
+    const shown = within(navigation)
+      .getAllByRole("link")
+      .map((link) => link.textContent ?? "")
+      .filter((text) => NAVIGATION.some((entry) => text.includes(entry.title)));
+
+    for (const entry of NAVIGATION) {
+      expect(shown.some((text) => text.includes(entry.title))).toBe(true);
+    }
+
+    // Within each group, the recorded order is unchanged.
+    const positionOf = (title: string) => shown.findIndex((text) => text.includes(title));
+    for (const status of ["mvp", "planned"] as const) {
+      const group = NAVIGATION.filter((entry) => entry.status === status).map((e) => e.title);
+      const positions = group.map(positionOf);
+      expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    }
+
+    // And every built destination is listed before every planned one.
+    const lastBuilt = Math.max(
+      ...NAVIGATION.filter((e) => e.status !== "planned").map((e) => positionOf(e.title)),
+    );
+    const firstPlanned = Math.min(
+      ...NAVIGATION.filter((e) => e.status === "planned").map((e) => positionOf(e.title)),
+    );
+    expect(lastBuilt).toBeLessThan(firstPlanned);
   });
 
   it("marks a planned destination as not yet available, in words", () => {
@@ -146,19 +206,13 @@ describe("the active route", () => {
   it("marks the Dashboard on the root path without claiming every path", () => {
     pathname.mockReturnValue("/");
     const { unmount } = renderShell();
-    expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    expect(navLink("Dashboard")).toHaveAttribute("aria-current", "page");
     unmount();
 
     pathname.mockReturnValue("/compare");
     renderShell();
-    expect(screen.getByRole("link", { name: "Dashboard" })).not.toHaveAttribute("aria-current");
-    expect(screen.getByRole("link", { name: "Compare Cities" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    expect(navLink("Dashboard")).not.toHaveAttribute("aria-current");
+    expect(navLink("Compare Cities")).toHaveAttribute("aria-current", "page");
   });
 
   it("marks a destination for a path nested beneath it", () => {
@@ -189,8 +243,11 @@ describe("the signed-in identity", () => {
 
   it("shows a declared name with the address beneath it", () => {
     renderShell({ name: "Sam Okafor", email: "sam@example.test", monogram: "S", known: true });
-    expect(screen.getByText("Sam Okafor")).toBeInTheDocument();
-    expect(screen.getByText("sam@example.test")).toBeInTheDocument();
+    // The rail's identity panel. The top bar names the same person again, as the artifacts do, so
+    // this is scoped rather than global — the address appears only here.
+    const rail = within(screen.getByRole("navigation", { name: "Weathra" }));
+    expect(rail.getByText("Sam Okafor")).toBeInTheDocument();
+    expect(rail.getByText("sam@example.test")).toBeInTheDocument();
   });
 
   it("shows no invented persona, title or role", () => {

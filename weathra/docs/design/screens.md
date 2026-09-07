@@ -161,12 +161,17 @@ Two of the artifacts' own additions are kept, because `specs/memory` allows a pr
 explicitly sets: the **time format** and **primary time zone** controls in `07`. They are display
 preferences, they are optional, and no spec scenario depends on them.
 
-**The authentication shell's appearance.** `08-authentication.png` shows the shell in the **light**
-appearance. This is not a departure from the Midnight Intelligence direction: the light appearance
-is derived from the same token set and selected by `prefers-color-scheme`
-([`design-system.md`](design-system.md) §1). The shell is implemented in both appearances from
-those tokens, and the artifact is the reference for its structure, spacing and control treatment
-rather than for a single appearance. Nothing else in the set is light.
+**The authentication shell's appearance.** `08-authentication.png` shows the shell in a **light**
+appearance. Nothing else in the set is light, and the artifact is the reference for its structure,
+spacing and control treatment rather than for an appearance — so the shell is implemented in
+Midnight Intelligence, from the same tokens as every other screen.
+
+This paragraph used to end differently. It said the shell was implemented "in both appearances",
+because a light appearance was derived from the same token set and served under
+`prefers-color-scheme`. That is no longer true and should not have survived as long as it did: the
+override meant an operator on a light system saw the *whole product* — Dashboard included — in a
+palette no product artifact depicts. It was removed in the visual correction pass and is recorded in
+§8. The reading of `08` is unchanged; only the conclusion drawn from it is.
 
 **A naming collision to avoid.** `01` and `04` label their forecast strips "Forecast Explorer" and
 "Forecast Delta Explorer". **Forecast Explorer** is the name of a post-MVP screen
@@ -254,6 +259,23 @@ implementation decides beyond them. Written during implementation and reviewed i
 | 2026-09-04 | All eight | ~~The brand mark is drawn as a bare glyph, without the filled accent tile every artifact shows.~~ **Corrected in task 21.9.** The mark now sits in an accent tile with `accent-contrast` on it, in both shells | This was a fidelity defect rather than a decision — a visible divergence on every screen with no reason recorded anywhere. Tokens only, glyph unchanged; the accent/`accent-contrast` pairing is asserted statically and the tile is asserted as painted in both engines. Task 21.9. |
 | 2026-09-04 | `08-authentication.png` | The mark is a weather glyph where this one artifact's tile appears to enclose a "W" letterform. **Unresolved — flagged for the owner** | The glyph matches the other seven artifacts and is consistent across all twelve implemented screens, and no document specifies the mark. Choosing between a letterform and a glyph is a brand decision rather than a fidelity defect, so task 21.9 recorded it instead of taking it. Task 21.9. |
 
+| 2026-09-06 | All eight | **Correction, not a divergence.** The appearance is chosen by screen, not by the visitor's system. `prefers-color-scheme` is gone; `:root` is Midnight Intelligence and the `(auth)` group takes `data-appearance="light"` | The seven product artifacts are Midnight Intelligence and `08-authentication.png` is light. The old override handed that choice to the operating system instead, so an operator whose machine reported light was served a *Dashboard* matching none of the seven — found by looking at a rendered screen, because every suite passed against it. Both halves of the set are now reproduced as drawn. |
+| 2026-09-06 | All seven product artifacts | The top bar is implemented: breadcrumb, search field, and the signed-in person. Its **notification bell is not** | The strip was absent entirely, which was a large part of why a rendered screen and its artifact did not read as the same product. The bell is the one element with no truthful form — Weathra has no notifications, Weather Watch is post-MVP, and the artifacts draw it carrying an unread dot. The breadcrumb shows the real path rather than the artifacts' fixed `Dashboard › Meteorology Analytics`, and the search is a location search — the resolver Weathra actually has — rather than the artifacts' "locations or data". |
+| 2026-09-06 | `01-dashboard.png` | The hero band is reproduced in geometry and tonality, without the photograph, the station identifier or the "Agent Ready" line. Its four secondary measures are kept as slots, and one the provider did not report reads "Not reported" | §5 refuses generated decorative imagery set-wide and there is no approved asset, so the band keeps its height and gets an atmospheric wash from the surface tokens. Keeping the four slots and naming the absent ones is what preserves the composition without inventing a wind speed; dropping them would lose the hero, and filling them would lose the product. |
+| 2026-09-06 | `01-dashboard.png` | The day strip draws the days the backend returned, without a condition glyph or caption, and is not called "Forecast Explorer" | The horizon is the person's saved preference and the provider answers with what it has; drawing the artifact's seven would mean drawing days nobody forecast. The forecast carries a high and a low and no condition field, so there is no icon rather than a guessed one. The name is reserved for a post-MVP screen (§5). |
+| 2026-09-06 | `01-dashboard.png` | The closing status rule carries the provider, the place and the units, not "DATA FLOW: ACTIVE · SYSTEM HASH: B882-X90A-BERL · v4.8.2-STABLE" | Same rule, same position; a hash and a version string are invented values, and the facts put in their place are ones the screen already holds. |
+| 2026-09-06 | `08-authentication.png` | The password visibility control is now the artifact's eye glyph rather than the words "Show"/"Hide" | The earlier decision was that an icon-only control needs a name supplied separately and an invisible name is an unchecked one. The name is `aria-label`, and every test for these three forms queries the button *by* that name — so it is asserted on every run rather than merely present, which meets the original concern without keeping the words. |
+| 2026-09-06 | `08-authentication.png` | "Remember me" is still not implemented | Supabase persists the session either way; a checkbox that changed nothing would be exactly the fabrication this pass exists to remove. Implementing it truthfully means session-scoped rather than persistent auth cookies, which is an authentication-behaviour change rather than a visual one. |
+| 2026-09-06 | `07-settings.png` | Measurement units are now the artifact's segmented control | It was a row of separate chips. The control is still two real radio inputs in a real fieldset, positioned out of sight rather than removed, so the group semantics and arrow-key selection a segmented control usually loses are kept. |
+| 2026-09-06 | `03-historical-analytics.png` | The metric row is framed as cards and the archive chart moved into a wide left column with the baseline comparison beside it | The figures were already the artifact's; the frame and the arrangement were not, so the screen read as a form above a stack rather than as the artifact's control strip, metric row and main row. The right-hand slot holds the deterministic baseline comparison, which is what Weathra computes, where the artifact's "Anomaly Intelligence" is a model narrative this screen does not produce. |
+
+| 2026-09-06 | All seven product artifacts | The rail's SAVED LOCATIONS section is implemented, without a temperature beside each place | The places are the person's own. A temperature per row means one weather request per saved place on every screen, each with its own loading and failure state, for figures the briefing already presents properly for the place they chose — the same trade §8 already records for the Saved Locations cards. The shell moved inside the session boundary (`components/shell/protected-frame.tsx`) so the rail can ask for the list at all; the expired-session state still replaces only the screen, so a lapsed session does not take the navigation with it. |
+| 2026-09-06 | `01-dashboard.png` | "Saved Snapshots", "Climate Pulse Analytics" and "Precipitation Logic" are implemented; none carries the artifact's figures | Snapshots list the saved places without per-place temperatures, for the reason above. The pulse chart draws the forecast's **hourly** series and says so when the provider supplies none — a real state, not an error. The precipitation panel carries what the forecast reported for precipitation and the backend's own uncertainty statement, in place of the artifact's "42% Integrated Risk", a convective type and a mm/h load: no endpoint produces any of the three, and an integrated-risk percentage is the invented confidence §5 refuses set-wide. |
+| 2026-09-06 | `02-ai-weather-analyst.png` | The right rail is implemented — Agent Status, Active Data Sources, Analyst Context, confidence and grounding, and the evidence action — filled from the run rather than from the artifact | This reverses the 2026-09-04 entry that declined to reproduce the rail. What made it unreproducible was its *content*: an agent version, a compute-load figure, generated source imagery, and "Synthesis Confidence 98.2%". The panels have real content behind them — the stream's own status and agents, the answer's attribution, `ResolvedContext` with where each value came from, and the backend's `UncertaintyStatement` and `GroundingReport` — so the composition is reproduced and the fabrications are not. Where a run has not happened yet each panel says what it is waiting for. |
+| 2026-09-06 | `02-ai-weather-analyst.png` | "New Analysis" is implemented; "History" is not | Starting over is real: it drops the transcript and the thread, so the next question opens a new one. A thread-listing endpoint exists but no screen lists them, and a control with nowhere to go is worse than none. |
+| 2026-09-06 | `04-compare-cities.png` | "Forecast Delta Explorer" is implemented as a place × statistic matrix, not the artifact's per-day grid; "Comparison Synthesis Summary" is an account of how the comparison was made | This reverses the 2026-09-04 entry that declined the matrix. The refusal was of the artifact's *axis*: `ComparisonResult` carries each candidate's statistics over the shared window, not a per-day series per place, and the artifact's seven columns would mean a retrieval per place per day for a question this screen does not ask. The same idea over the axis the data has — every figure behind the ranking, readable across places — needs no extra request and no invention. The summary carries the criterion, mode, statistics, local-time basis and tie tolerance, because the endpoint is deterministic and there is no model prose to show and no confidence anybody computed. |
+| 2026-09-06 | `06-saved-locations.png` | "Workspace Intelligence Synthesis" and "Node Comparison" are implemented as a counted summary and a route to Compare Cities | The artifact's "Global Vector Analysis" and grounding-health percentages are figures no endpoint produces, and a health score over a list of place names would be a claim about nothing. What the panel carries is arithmetic over the records themselves — places, distinct time zones, countries, remaining allowance — which is deterministic and checkable. Comparison is a real screen that already seeds itself from this list, so the panel is a route to it rather than a summary of it. |
+
 The first two entries are design-system divergences found while implementing the tokens; the rest
 are screen-level and are recorded as their screens are built.
 
@@ -262,3 +284,109 @@ eight artifacts, and the divergences this log did not already carry — is
 [`fidelity-review.md`](fidelity-review.md). Nine further deliberate divergences were recorded there
 rather than duplicated into this log: three on the Dashboard, one on the Analyst, three on Historical
 Analytics, one on Agent Evidence, three on Settings and two on the authentication shell.
+
+## 9. The fidelity-fixture review mode
+
+The divergences above are all *production* decisions, and they stand. Every one of them exists
+because the artifact draws a figure Weathra does not produce, and the product must not invent one.
+
+That leaves a reviewing problem this section records the answer to. Comparing an implemented screen
+against a populated mockup means comparing two pictures, and a screen showing "Unavailable" in the
+slots the mockup fills with weather is not the same *layout* as the mockup — a card sized for two
+forecast days is not a card sized for seven, and every fidelity pass before this one drifted for
+exactly that reason. The reviewer could not tell a geometry error from an absent figure.
+
+So there are now two things, and they are kept apart by a build-time flag:
+
+* **Production** — everything above. No fabricated figure, no invented confidence, and every panel
+  says what it is waiting for when it has nothing.
+* **Fidelity fixtures** — the eight artifacts rendered as the real components, from content
+  transcribed out of the pictures, reached only when `NEXT_PUBLIC_VISILY_FIDELITY_FIXTURES=true`.
+
+### What the flag is, and what keeps it out of production
+
+`NEXT_PUBLIC_VISILY_FIDELITY_FIXTURES` is read in exactly one place,
+`lib/fixtures/visily.ts:usingVisilyFixtures()`, and its value is fixed when the bundle is built. It
+is not a runtime toggle: there is no query parameter, no header and no cookie that turns it on in a
+deployed build, because nothing a request can do changes what the bundle was built with.
+
+**It is not stripped from the bundle, and this document previously claimed it was.** Checked against
+the emitted chunks of a real `npm run build` with the flag unset: the flag compiles to a runtime
+comparison against a baked environment object rather than to a folded constant, so the branches are
+not eliminated and the fixture screens ship as unreachable code. The comparison is still always
+false in that build. The guarantee is therefore *unreachability*, not absence —
+[`lib/fixtures/visily.ts`](../../frontend/lib/fixtures/visily.ts) records the measurement and the
+one-line change that would make it absence instead, should that ever be required.
+
+The flag appears in no committed configuration — not `.env.example`, not `.env.local`, not CI. The
+only place it is ever set is the review harness, `.manual-pass/codespaces-fidelity-serve.sh`, which
+is gitignored. `lib/fixtures/fixtures.test.ts` asserts the real screen renders when it is unset.
+
+Four further properties, because one flag would not be enough for content shaped like weather:
+
+1. **It never reaches the network.** Fixtures are substituted where a *screen* asks for its data,
+   not where the data is fetched. The API client, the Supabase clients and the backend are
+   untouched, so no real endpoint ever returns a fixture value.
+2. **It never reaches a database.** Nothing here is persisted, and fixture mode performs no writes.
+3. **It says so on screen.** `components/ui/fixture-banner.tsx` renders a fixed, undismissable
+   marker across the top of the viewport for as long as the mode is on. It is deliberately not
+   subtle: its job is to survive being screenshotted, so that sample weather cannot later be
+   mistaken for real output in a deck or a bug report.
+4. **The controls are inert.** Every button and field the artifacts draw that Weathra has no
+   counterpart for is rendered as a `type="button"` or a disabled input. Nothing in fixture mode
+   navigates anywhere it could not honestly go.
+
+### What fixture mode changes that production keeps
+
+These are the differences between the two modes, and every one of them is a case where the artifact
+shows something production has decided not to. They are listed so that nobody reads a fidelity
+screenshot as a statement about what the product does.
+
+| Element | Fixture mode | Production |
+| --- | --- | --- |
+| Every weather figure on all eight screens | Transcribed from the mockup | Retrieved, attributed, or absent |
+| Rail navigation | The artifact's four entries under its labels | All seven MVP destinations under theirs, plus the roadmap |
+| Breadcrumb second segment | `Meteorology Analytics`, the artifact's filler | The screen you are actually on |
+| Search placeholder | "Search locations or data…" | "Search locations…" — there is no data search |
+| Notification bell | Drawn, `aria-hidden`, not focusable, no control behind it | Absent; Weathra has no notifications |
+| Top-bar avatar | A tonal disc with a presence dot | The person's monogram |
+| Rail identity | The artifact's name and a person glyph | The signed-in person and their address |
+| AI INTERPRETATION / ANALYTICS badges | Teal, as every artifact draws them | The data-class palette's magenta and violet |
+| Settings controls | All five drawn; three have no backend field | Only what `PreferenceUpdate` carries |
+| Authentication card | 352 wide, on drawn imagery, with a disabled "Remember me" | 448 wide, on two flat washes, no remember-me |
+| Authentication action | The artifact's bright cyan fill | The light appearance's darkened accent |
+
+Two of those deserve their reasoning stated rather than tabulated.
+
+**The badge colours.** Production gives each data class its own hue, which is how a reader tells an
+observation from an interpretation at a glance. The artifacts predate that and draw both teal. The
+override is scoped to the fixture pages' own roots, so production's palette is untouched — but a
+fidelity screenshot is *not* evidence about the data-class colours, and should not be read as any.
+
+**The authentication action.** The artifact's fill is the product's bright cyan with white text,
+which is about 1.9:1. Fixture mode takes the fill and keeps the dark label: the fill is what reads
+at a glance, and an unreadable primary action is not a fidelity improvement. The label is one word
+against the whole button, and it is the one place this mode knowingly departs from the picture.
+
+### The imagery
+
+`08-authentication.png` and the city heroes are generated imagery in the artifacts. §5 refuses to
+invent that for the product and still does — but the ground is most of the authentication artifact's
+pixels, and the hero is the largest element on the Dashboard, so a comparison that omitted them
+compared very little.
+
+Both are therefore **originated in this repository**: `frontend/scripts/generate-location-art.mjs`
+draws the city artwork (sky gradient, cloud decks, a warm horizon, three skyline layers with aerial
+perspective, one generic tower) and `components/auth/fixture-auth.tsx` draws the authentication
+ground. No photograph, no third-party asset, nothing downloaded, and no licence question. Both are
+deterministic — every value derives from a hash of the name or the index — so regenerating produces
+no diff and a screenshot comparison is stable. Neither encodes a measurement: the skylines are
+generic massing, and `LocationImage` describes them as generated artwork rather than as a scene.
+
+### Where the review is done
+
+`.manual-pass/codespaces-fidelity-serve.sh` builds and serves the fixture mode from a browser-based
+Codespace on one private forwarded port, against the two local stubs, with the real Supabase
+configuration overridden. `.manual-pass/capture.mjs` renders all eight screens at 1440, 1024, 768
+and 360 and reports any horizontal overflow. Both are gitignored: they are review instruments, not
+product code.

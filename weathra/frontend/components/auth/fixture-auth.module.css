@@ -1,0 +1,68 @@
+/*
+ * `08-authentication.png`'s ground and card proportions, in fixture mode only.
+ *
+ * The overrides reach the shared auth shell through `[data-fidelity="true"]` on the page element,
+ * set by `(auth)/layout.tsx` when the flag is on. Production's own rules in `auth.module.css` are
+ * untouched — nothing here applies without the attribute.
+ */
+
+/* ---------------------------------------------------------------- the ground */
+
+.ground {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.groundSvg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.groundField {
+  /* The artifact's ground samples rgb(239,235,237): a neutral, faintly cool grey, not the
+     warm beige this had. The difference showed up as the whole page reading warm. */
+  fill: #efebed;
+}
+
+.groundMote {
+  fill: #96703f;
+}
+
+.groundWire {
+  fill: none;
+  stroke: #ffffff;
+  /* Page pixels now that the viewBox is the page, rather than 0.22 of a 100-unit square. */
+  stroke-width: 1;
+  opacity: 0.8;
+}
+
+/* ---------------------------------------------------------------- remember-me row */
+
+.rememberRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.remember {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--type-ui-size);
+  color: var(--color-text-secondary);
+}
+
+/*
+ * Sized and squared to the artifact's box. `accent-color` is deliberately absent: it is disabled,
+ * so it never shows a checked state to tint.
+ */
+.rememberBox {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border-radius: 3px;
+}

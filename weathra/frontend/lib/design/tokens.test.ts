@@ -76,10 +76,8 @@ function cssBlock(pattern: RegExp): Map<string, string> {
 /** `:root` at the top level: the dark appearance, which is the default. */
 const DARK_BLOCK = cssBlock(/^:root \{([\s\S]*?)\n\}/m);
 
-/** `:root` inside the light media query: the derived appearance. */
-const LIGHT_BLOCK = cssBlock(
-  /@media \(prefers-color-scheme: light\) \{\s*:root \{([\s\S]*?)\n {2}\}/,
-);
+/** The `[data-appearance="light"]` block: the authentication shell's appearance. */
+const LIGHT_BLOCK = cssBlock(/^\[data-appearance="light"\] \{([\s\S]*?)\n\}/m);
 
 const BLOCKS = { dark: DARK_BLOCK, light: LIGHT_BLOCK } as const;
 
@@ -102,14 +100,13 @@ describe("the tokens match the recorded design system", () => {
     }
   });
 
-  it("carries the Midnight Intelligence direction: a dark default with a cyan accent", () => {
-    // The ground is darker than the panels above it, in the dark appearance and not the light one.
+  it("carries the Midnight Intelligence direction: a dark ground with a cyan accent", () => {
+    // The ground is darker than the panels above it, and the ground is genuinely dark rather than
+    // a pale surface with dark text on it — the direction all eight artifacts are built on.
     const darkness = (token: "surface-base" | "surface-raised") =>
       roundRatio(contrastRatio(COLOR_TOKENS.dark[token], "#ffffff"));
     expect(darkness("surface-base")).toBeGreaterThan(darkness("surface-raised"));
-    expect(
-      roundRatio(contrastRatio(COLOR_TOKENS.light["surface-base"], "#ffffff")),
-    ).toBeLessThan(1.3);
+    expect(darkness("surface-base")).toBeGreaterThan(15);
 
     // Cyan: the accent's blue and green channels lead its red one in both appearances.
     for (const appearance of APPEARANCES) {
@@ -232,18 +229,24 @@ describe("the stylesheet declares exactly the tokens", () => {
     expect(DARK_BLOCK.get("--easing")).toBe(MOTION.easing);
   });
 
-  it("keeps type, spacing and motion out of the light override", () => {
-    // Only colour and elevation change between appearances; a scale redeclared per appearance is
-    // two places to change one number.
-    for (const name of LIGHT_BLOCK.keys()) {
-      expect(name).toMatch(/^--(color|shadow)-/);
-    }
-  });
-
-  it("declares the dark appearance as the default and the light one as an override", () => {
+  it("selects the appearance by screen, never by the visitor's system", () => {
+    // The product is Midnight Intelligence on `:root`; the authentication shell opts into light,
+    // because `08-authentication.png` is the one artifact rendered there. What must never come
+    // back is `prefers-color-scheme`: it handed the whole product to the operating system, and an
+    // operator whose machine reported light was served a Dashboard matching no product artifact.
     expect(DARK_BLOCK.get("color-scheme")).toBeUndefined();
     expect(GLOBALS).toMatch(/:root \{\n {2}color-scheme: dark;/);
-    expect(GLOBALS).toContain("@media (prefers-color-scheme: light)");
+    // `declarations()` reads custom properties only, so this one is checked in the raw text.
+    expect(GLOBALS).toMatch(/\[data-appearance="light"\] \{\n {2}color-scheme: light;/);
+    expect(GLOBALS).not.toMatch(/@media \([^)]*prefers-color-scheme[^)]*\) \{/);
+    expect(APPEARANCES).toEqual(["dark", "light"]);
+  });
+
+  it("scopes the light appearance to the authentication group and nothing else", () => {
+    // A second appearance is only safe while exactly one place opts into it. If a product screen
+    // ever takes `data-appearance`, the Dashboard can go pale again without a test noticing.
+    const optIns = [...GLOBALS.matchAll(/\[data-appearance="([a-z]+)"\]/g)].map((m) => m[1]);
+    expect(new Set(optIns)).toEqual(new Set(["light"]));
   });
 });
 

@@ -12,9 +12,15 @@ presentation primitives), and every screen in group 21.
 
 ## 1. Appearance and palette
 
-**Midnight Intelligence**, dark-first, with **cyan** as the single accent. The light appearance is
-derived from the same token set rather than designed separately, and is selected by
-`prefers-color-scheme` (design.md decision 18).
+**Midnight Intelligence**, with **cyan** as the single accent, for the product; the
+authentication shell is **light**. Both come from one token set, and **neither is chosen by the
+visitor's system**.
+
+That last part is the correction. The appearance used to follow `prefers-color-scheme`, which meant
+an operator whose machine reported light was served a *Dashboard* in a palette none of the seven
+product artifacts depicts. The appearance now follows the screen, which is what the artifacts
+specify: `:root` is Midnight Intelligence, and the `(auth)` route group sets
+`data-appearance="light"` because `08-authentication.png` is drawn there.
 
 Colour is carried entirely by semantic tokens. No screen picks a colour; it picks a role.
 
@@ -29,6 +35,7 @@ Colour is carried entirely by semantic tokens. No screen picks a colour; it pick
 | `accent`, `accent-muted` | The cyan accent: primary action, active navigation, series emphasis |
 | `class-observed`, `class-forecast`, `class-historical`, `class-analytics`, `class-interpretation` | The five data classes (§9) — the badge, the chart series, and the card edge all read from these |
 | `status-error`, `status-warning`, `status-ok`, `status-quota` | Failure, caution, confirmation, and an exhausted allowance |
+| `status-error-solid`, `status-error-on-solid` | The fill and label of an urgent destructive action, where `status-error` is a text colour and too light to fill a button |
 
 The approved artifacts under [`screens/`](screens/) show the appearance these tokens produce: a
 near-black ground, panels raised a step above it, a single cyan accent carrying the primary action
@@ -283,8 +290,13 @@ Sign In · Create Account · Verify Email / Enter Verification Code · Verificat
 Verification Failed / Expired Code · Resend Verification Code · Forgot Password · Reset Password.
 
 The artifact of record is [`screens/08-authentication.png`](screens/08-authentication.png),
-approved as the shell for all eight screens; it shows the **light** appearance, which is derived
-from the same tokens as the dark one, and the shell is implemented in both.
+approved as the shell for all eight screens. It is rendered in a **light** appearance, which the
+implementation does not reproduce: §1 records that Weathra ships Midnight Intelligence only, and the
+artifact is the reference for this shell's structure, spacing and control treatment. Everything the
+artifact fixes about the shell — the centred card, the mark and wordmark above it, the display title
+with one line of context, the labelled fields, the trailing visibility control, the secondary route
+beside the field group, the single full-width primary action in the accent, and the route out
+beneath the card — is reproduced from the product's own tokens.
 
 Shell rules:
 
@@ -325,8 +337,8 @@ region on a screen nobody thought had one. Task 21.8 found exactly that, twice.
 
 Keyboard operation of every action on every screen, authentication and product alike. Every input
 labelled; every interactive control carrying an accessible name. A visible focus indicator using
-`border-strong`, never `outline: none`. Body text at 4.5:1 in both appearances, verified against
-these tokens rather than per component. Data class is never carried by colour alone — the badge
+`border-strong`, never `outline: none`. Body text at 4.5:1, verified against these tokens rather
+than per component. Data class is never carried by colour alone — the badge
 label carries it. Charts do not rely on hover to disclose a value. A scrollable container is a tab
 stop while it scrolls, per §13.
 

@@ -35,7 +35,7 @@ const VIEWPORTS = [
 
 /** Every MVP screen, with something that appears only once the screen itself has rendered. */
 const PRODUCT_SCREENS = [
-  { name: "Dashboard", path: "/", marker: "Your Weathra Intelligence briefing" },
+  { name: "Dashboard", path: "/", marker: "Current conditions" },
   { name: "AI Weather Analyst", path: "/analyst", marker: "Your weather question" },
   { name: "Historical Analytics", path: "/historical", marker: "Recorded observations" },
   { name: "Compare Cities", path: "/compare", marker: "Location 1" },
@@ -167,6 +167,9 @@ test.describe("no page scrolls sideways, at any recorded width", () => {
     await signIn(page);
     await page.goto("/locations");
 
+    // The add form is a disclosure now — `06-saved-locations.png` shows one "Add New Node"
+    // control in the header, not a form owning the page. Opening it is the real first step.
+    await page.locator("summary", { hasText: "Add a location" }).click();
     await page.getByLabel("Place").fill("Springfield");
     await page.getByRole("button", { name: "Save location" }).click();
 
@@ -400,7 +403,12 @@ test.describe("the shell keeps the three recorded tiers", () => {
         // Reached with Tab rather than `.focus()`: `:focus-visible` is a heuristic about how focus
         // arrived, and programmatic focus on a link does not satisfy it in either engine. Tabbing
         // from the entry before it is what a keyboard user actually does.
-        await page.getByRole("link", { name: /^Compare Cities/ }).focus();
+        // The entry immediately before the longest one. The rail now lists the six built
+        // destinations first and the six not-yet-built ones under their own heading, so the
+        // predecessor of "Weather Intelligence Report" is the first planned entry rather than the
+        // last built one. Tabbing from whatever precedes it is the point; which entry that is, is
+        // not.
+        await page.getByRole("link", { name: /^Forecast Explorer/ }).focus();
         await page.keyboard.press("Tab");
         await expect(longest).toBeFocused();
       },
@@ -438,7 +446,13 @@ test.describe("the shell keeps the three recorded tiers", () => {
     await signIn(page);
     await page.getByRole("button", { name: "Menu", exact: true }).click();
 
-    const settings = page.getByRole("link", { name: /^Settings/ });
+    // The *last* entry in the rail, whichever it is. It used to be Settings; the rail now ends
+    // with the not-yet-built group, and this test is about the final entry being reachable rather
+    // than about which destination happens to sit there.
+    const settings = page
+      .getByRole("navigation", { name: "Weathra" })
+      .getByRole("link")
+      .last();
     await expect(settings).toBeVisible();
 
     // Scrolling it into view is the browser's own affordance; that it *can* be scrolled to is the
@@ -455,6 +469,33 @@ test.describe("the shell keeps the three recorded tiers", () => {
     });
     expect(scrolled.canScroll, "the navigation entries cannot scroll on a short viewport").toBe(true);
     expect(scrolled.scrollTop).toBeGreaterThan(0);
+  });
+
+  /**
+   * Dismissing the drawer must not drop focus — found by the manual pass for task 21.8.
+   *
+   * Closing it hides the navigation with `visibility`; a focused element inside something hidden
+   * loses focus to the document, so Escape from inside the drawer left `document.activeElement`
+   * as `body` and the next Tab restarted at the top of the page. The existing tier test checks
+   * `aria-expanded` flips, which it did — the flag was right and the focus was gone.
+   */
+  test("returns focus to the drawer control when the drawer is dismissed", async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 780 });
+    await signIn(page);
+
+    const control = page.getByRole("button", { name: "Menu", exact: true });
+    await control.focus();
+    await page.keyboard.press("Enter");
+    await expect(control).toHaveAttribute("aria-expanded", "true");
+
+    // Move focus inside the drawer, as somebody who opened it to look would.
+    const inside = page.getByRole("navigation", { name: "Weathra" }).getByRole("link").first();
+    await inside.focus();
+    await expect(inside).toBeFocused();
+
+    await page.keyboard.press("Escape");
+    await expect(control).toHaveAttribute("aria-expanded", "false");
+    await expect(control, "focus was dropped when the drawer closed").toBeFocused();
   });
 
   test("reflows the content rather than shrinking the desktop layout", async ({ page }) => {
@@ -589,7 +630,7 @@ test.describe("keyboard operation and visible focus", () => {
     await page.keyboard.press("Enter");
 
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByText("Your Weathra Intelligence briefing")).toBeVisible();
+    await expect(page.getByText("Current conditions")).toBeVisible();
   });
 
   test("reaches every control on every product screen with Tab, and never traps focus", async ({ page }) => {
@@ -621,6 +662,18 @@ test.describe("keyboard operation and visible focus", () => {
           // them; `visibility` is still read separately, because it inherits and hides in place.
           if (element.getClientRects().length === 0) return false;
           if (getComputedStyle(element).visibility !== "visible") return false;
+          /**
+           * Inside a collapsed disclosure.
+           *
+           * Saved Locations' "Add a location" form is a `<details>`, so its fields are not tab
+           * stops until it is opened — and a closed `<details>` still reports client rects for its
+           * contents in Blink, so the box test above does not catch them. This is not a control the
+           * walk is owed: the `<summary>` that reveals them *is* in the walk, is keyboard-operable,
+           * and opening it puts every field in the tab order. The requirement is unchanged — every
+           * control a person can currently reach must be reachable by Tab — and a field behind a
+           * disclosure is not currently one of them.
+           */
+          if (element.closest("details:not([open])") !== null) return false;
           /**
            * A radio group is one tab stop, not one per option.
            *
@@ -707,7 +760,19 @@ test.describe("keyboard operation and visible focus", () => {
     }
   });
 
-  test("shows a visible ring in the light appearance too", async ({ browser }) => {
+  /**
+   * A system asking for light gets Midnight Intelligence, and still gets a focus ring.
+   *
+   * This test used to assert the opposite half: that a `colorScheme: "light"` context was served a
+   * light ground, so the ring it measured was the light appearance's. That appearance is gone — it
+   * was a palette no product artifact depicts, and serving it meant an operator on a light system
+   * saw a product matching none of them. What is worth holding on to is the part that was never
+   * about a second palette: the preference must not be able to take the ring away, and now it must
+   * not be able to take the *direction* away either. Both are asserted here rather than trusted.
+   */
+  test("serves Midnight Intelligence, with its focus ring, to a system asking for light", async ({
+    browser,
+  }) => {
     const context = await browser.newContext({ colorScheme: "light" });
     const page = await context.newPage();
 
@@ -720,11 +785,14 @@ test.describe("keyboard operation and visible focus", () => {
       const shadowed = style.boxShadow !== "none" && style.boxShadow.trim() !== "";
       return { visible: outlined || shadowed, detail: `${style.outlineStyle} / ${style.boxShadow}` };
     });
-    expect(ring.visible, `no focus indicator in the light appearance: ${ring.detail}`).toBe(true);
+    expect(
+      ring.visible,
+      `no focus indicator under a light system preference: ${ring.detail}`,
+    ).toBe(true);
 
-    // And the appearance really is the light one, so this measured the light ring.
+    // `surface-base`, the Midnight Intelligence ground — not a derived light one.
     const ground = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-    expect(ground).toBe("rgb(244, 247, 250)");
+    expect(ground, "a light system preference changed the appearance").toBe("rgb(5, 8, 12)");
 
     await context.close();
   });
@@ -733,6 +801,9 @@ test.describe("keyboard operation and visible focus", () => {
     await signIn(page);
     await page.goto("/locations");
 
+    // The add form is a disclosure now — `06-saved-locations.png` shows one "Add New Node"
+    // control in the header, not a form owning the page. Opening it is the real first step.
+    await page.locator("summary", { hasText: "Add a location" }).click();
     await page.getByLabel("Place").fill("Springfield");
     await page.getByRole("button", { name: "Save location" }).click();
 
@@ -917,6 +988,9 @@ test.describe("the candidate chooser's question", () => {
     await signIn(page);
     await page.goto("/locations");
 
+    // The add form is a disclosure now — `06-saved-locations.png` shows one "Add New Node"
+    // control in the header, not a form owning the page. Opening it is the real first step.
+    await page.locator("summary", { hasText: "Add a location" }).click();
     await page.getByLabel("Place").fill("Springfield");
     await page.getByRole("button", { name: "Save location" }).click();
 
@@ -1012,7 +1086,7 @@ test.describe("body text meets 4.5:1 as rendered, in both appearances", () => {
       await page.getByLabel("Email").fill(CREDENTIALS.email);
       await page.getByLabel("Password", { exact: true }).fill(CREDENTIALS.password);
       await page.getByRole("button", { name: "Sign in" }).click();
-      await expect(page.getByText("Your Weathra Intelligence briefing")).toBeVisible();
+      await expect(page.getByText("Current conditions")).toBeVisible();
 
       // The screen's own heading, its subtitle — which is the muted role, the hardest of the three —
       // and the navigation's current entry.

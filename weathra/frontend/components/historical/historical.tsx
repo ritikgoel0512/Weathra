@@ -42,6 +42,8 @@ import { PREFERENCES_KEY, SAVED_LOCATIONS_KEY } from "@/lib/query/keys";
 
 import { PrecipitationChart, RecordedAgainstBaselineChart } from "./charts";
 import {
+  AnomalyIntelligence,
+  DeviationAnalysis,
   BaselinePanel,
   ClassKey,
   HeadlineFigures,
@@ -49,6 +51,9 @@ import {
   PeriodComparisonPanel,
 } from "./sections";
 import styles from "./historical.module.css";
+
+import { FixtureHistorical } from "./fixture-historical";
+import { usingVisilyFixtures } from "@/lib/fixtures/visily";
 
 /** What the window is asked for, before it is asked for. */
 interface Range {
@@ -231,6 +236,15 @@ function Analysis({ enquiry }: { readonly enquiry: Enquiry }): ReactNode {
 
       <ClassKey />
 
+      {/*
+        The artifact's main row: the archive chart occupying the wide left column, and the
+        baseline comparison — its "Anomaly Intelligence" slot — beside it rather than beneath. The
+        panel there is deterministic: a z-score and the baseline it is against, which is what
+        Weathra actually computes. The artifact's own panel is a model narrative about the same
+        figures, and this screen consults no model (`docs/design/screens.md` §8).
+      */}
+      <div className={styles.mainRow}>
+        <div className={styles.column}>
       {history.state.kind === "loading" ? (
         <LoadingState label="Retrieving the archive" lines={6} />
       ) : history.state.kind === "error" ? (
@@ -272,16 +286,6 @@ function Analysis({ enquiry }: { readonly enquiry: Enquiry }): ReactNode {
           )}
         </Observations>
       ) : null}
-
-      <div className={styles.columns}>
-        <div className={styles.column}>
-          {comparison.state.kind === "loading" ? (
-            <LoadingState label="Comparing the two periods" lines={4} />
-          ) : comparison.state.kind === "error" ? (
-            <ErrorState failure={comparison.state.failure} onRetry={comparison.retry} />
-          ) : comparison.state.kind === "ready" ? (
-            <PeriodComparisonPanel comparison={comparison.state.data} />
-          ) : null}
         </div>
 
         <div className={styles.column}>
@@ -294,11 +298,42 @@ function Analysis({ enquiry }: { readonly enquiry: Enquiry }): ReactNode {
           ) : null}
         </div>
       </div>
+
+      {/* The artifact's lower row: deviation bars on the left, the anomaly panel on the right. */}
+      <div className={styles.mainRow}>
+        <div className={styles.column}>
+          <DeviationAnalysis
+            comparison={baseline.state.kind === "ready" ? baseline.state.data : null}
+          />
+        </div>
+        <div className={styles.column}>
+          <AnomalyIntelligence
+            comparison={baseline.state.kind === "ready" ? baseline.state.data : null}
+          />
+        </div>
+      </div>
+
+      {comparison.state.kind === "loading" ? (
+        <LoadingState label="Comparing the two periods" lines={4} />
+      ) : comparison.state.kind === "error" ? (
+        <ErrorState failure={comparison.state.failure} onRetry={comparison.retry} />
+      ) : comparison.state.kind === "ready" ? (
+        <PeriodComparisonPanel comparison={comparison.state.data} />
+      ) : null}
     </div>
   );
 }
 
 export function HistoricalAnalytics(): ReactNode {
+  /*
+   * Visual-fidelity review only.
+   *
+   * The flag's value is baked into the bundle at build time, so in a deployed build this comparison
+   * is always false and nothing below it is reachable — but it is a *runtime* comparison against a
+   * baked object rather than a folded constant, so the branch and the fixture screen do ship. See
+   * `lib/fixtures/visily.ts` for what that does and does not guarantee. Nothing below changes.
+   */
+  if (usingVisilyFixtures()) return <FixtureHistorical />;
   const preferences = useApiQuery({
     key: PREFERENCES_KEY,
     request: (client) => client.preferences(),
@@ -356,8 +391,7 @@ export function HistoricalAnalytics(): ReactNode {
       <header className={styles.heading}>
         <h1 className={styles.title}>Historical Analytics</h1>
         <p className={styles.subtitle}>
-          What the archive recorded, how it compares with an earlier window, and how it sits against
-          the years before it. Every figure is retrieved or computed by Weathra — none is estimated.
+          The archive, an earlier window, and the years behind them. Nothing estimated.
         </p>
       </header>
 

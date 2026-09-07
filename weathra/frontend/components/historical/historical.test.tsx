@@ -29,7 +29,11 @@ vi.mock("@/lib/supabase/browser", () => ({
   },
 }));
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/historical" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/historical",
+  useRouter: () => ({ replace: () => {}, refresh: () => {}, push: () => {} }),
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 /* ------------------------------------------------------------------- fixtures */
 
@@ -472,7 +476,9 @@ describe("data classes and provenance", () => {
 
     // The observations are HISTORICAL; the statistics over them are ANALYTICS.
     expect(within(retrieved[0] as HTMLElement).getByText("HISTORICAL")).toBeInTheDocument();
-    expect(within(computed[0] as HTMLElement).getByText("ANALYTICS")).toBeInTheDocument();
+    // A computed region may carry more than one badged figure; that the first computed region is
+    // badged ANALYTICS is the claim, not that it holds exactly one badge.
+    expect(within(computed[0] as HTMLElement).getAllByText("ANALYTICS").length).toBeGreaterThan(0);
 
     // No model wrote anything on this screen, so there is no interpretation region at all.
     expect(container.querySelectorAll('[data-tier="interpretation"]')).toHaveLength(0);
@@ -482,7 +488,9 @@ describe("data classes and provenance", () => {
     renderScreen();
 
     const tiles = await screen.findByRole("region", { name: "Figures for the selected period" });
-    expect(within(tiles).getAllByText("ANALYTICS").length).toBe(5);
+    // Six cards now, as `03-historical-analytics.png` draws them. The claim is that *every* card is
+    // badged computed, not that there are five of them.
+    expect(within(tiles).getAllByText("ANALYTICS").length).toBe(6);
     expect(within(tiles).getByText("15.6")).toBeInTheDocument();
     expect(within(tiles).getAllByText(/arithmetic mean of usable points/).length).toBeGreaterThan(0);
   });
@@ -491,7 +499,9 @@ describe("data classes and provenance", () => {
     renderScreen();
 
     const tiles = await screen.findByRole("region", { name: "Figures for the selected period" });
-    expect(within(tiles).getByText("Not computable")).toBeInTheDocument();
+    // More than one card can be uncomputed; the claim is that an uncomputed one says so *and*
+    // carries the backend's own reason, which the second assertion pins to a specific card.
+    expect(within(tiles).getAllByText("Not computable").length).toBeGreaterThan(0);
     expect(within(tiles).getByText(/supplied no wind speed for this range/)).toBeInTheDocument();
   });
 });

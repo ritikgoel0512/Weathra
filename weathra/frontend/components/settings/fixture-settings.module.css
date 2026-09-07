@@ -1,0 +1,417 @@
+/*
+ * `07-settings.png`'s geometry.
+ *
+ * Measured from the artifact at 1440: the head with its 40px accent tile, the four-tab strip in its
+ * own inset track, and the three-track preference grid — group intro / label and description /
+ * control — with the control column right-aligned at a fixed 260.
+ */
+
+/* ---------------------------------------------------------------- head */
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.headMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  margin-top: 4px;
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+.headText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------- tabs */
+
+.tabs {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-raised);
+  flex-wrap: wrap;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 10px var(--space-5);
+  border-radius: var(--radius-md);
+  border: none;
+  background: none;
+  font-size: var(--type-ui-size);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: default;
+}
+
+.tab[data-active="true"] {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+/* ---------------------------------------------------------------- groups */
+
+.group {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: var(--space-5);
+  padding-top: var(--space-7);
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.group[data-first="true"] {
+  border-top: none;
+  padding-top: var(--space-4);
+  margin-top: 0;
+}
+
+.groupIntro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.groupTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-family: var(--family-display);
+  font-size: 1.375rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.groupIcon {
+  color: var(--color-accent);
+}
+
+.groupBlurb {
+  font-size: var(--type-body-size);
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+/*
+ * The artifact's rows sit about 85px apart; the first pass ran them at 24 and the whole tab came
+ * out 55px shorter than the artifact with a visibly denser rhythm.
+ */
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+  min-width: 0;
+}
+
+.row {
+  display: grid;
+  /* 300, not 260: at 260 the station and timezone values were both ellipsised, and the artifact
+     shows each in full. */
+  grid-template-columns: minmax(0, 1fr) 344px;
+  align-items: start;
+  gap: var(--space-5);
+}
+
+.rowText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.rowLabel {
+  font-size: var(--type-card-size);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.rowDescription {
+  font-size: var(--type-meta-size);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.rowControl {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.rowChip {
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-label-size);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- controls */
+
+.segmented {
+  display: inline-flex;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-raised);
+  overflow: hidden;
+}
+
+.segment {
+  padding: 10px var(--space-5);
+  border: none;
+  background: none;
+  font-size: var(--type-label-size);
+  font-weight: 700;
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+.segment[data-active="true"] {
+  background: var(--color-surface-overlay);
+  color: var(--color-text-primary);
+}
+
+.select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 176px;
+  padding: 10px var(--space-3) 10px var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+}
+
+.selectWide {
+  min-width: 248px;
+}
+
+.selectValue {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-meta-size);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------------------------------------------------------------- save strip */
+
+.saveStrip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding-top: var(--space-5);
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  flex-wrap: wrap;
+}
+
+.saveDivider {
+  width: 1px;
+  height: 16px;
+  background: var(--color-border-subtle);
+}
+
+.saveTime {
+  text-transform: none;
+  letter-spacing: 0.04em;
+}
+
+.saveActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  margin-left: auto;
+}
+
+.finePrint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-label-size);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin: var(--space-4) 0 0;
+  flex-wrap: wrap;
+}
+
+.legalLinks {
+  display: flex;
+  gap: var(--space-5);
+}
+
+/* ---------------------------------------------------------------- responsive */
+
+@media (max-width: 1279px) {
+  .group {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1023px) {
+  .group {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+}
+
+@media (max-width: 767px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+  }
+
+  .rowControl {
+    justify-content: flex-start;
+  }
+
+  .select,
+  .selectWide {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .saveActions {
+    margin-left: 0;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .segment {
+    padding: 10px var(--space-4);
+  }
+}
+
+/* ---------------------------------------------------------------- audit corrections */
+
+/*
+ * The timezone value was still being ellipsised to "Central European Time (CE…" after two attempts
+ * at widening the column. Widening was the wrong lever: the string is 27 characters of monospace,
+ * and at `--type-meta-size` it simply needs more room than a 344px control column leaves once the
+ * GMT chip is beside it. The control column takes the last of the row's slack and the value's type
+ * steps down to the label size, which is what the artifact sets it at.
+ */
+/*
+ * Scoped to the wide tier. Appended after the media queries, a fixed 372px control track survived
+ * into the 360 tier and overflowed by 36px — the same mistake as the evidence column.
+ */
+@media (min-width: 1280px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr) 372px;
+  }
+}
+
+.selectValue {
+  font-size: var(--type-label-size);
+  letter-spacing: 0.01em;
+}
+
+@media (min-width: 1280px) {
+  .selectWide {
+    min-width: 268px;
+  }
+}
+
+/*
+ * The tab strip measured about 75px narrower than the artifact's; the difference is per-tab
+ * horizontal padding, not the strip.
+ */
+.tab {
+  padding: 10px var(--space-6);
+}
+
+/* The artifact's save action is a fuller button than this was. */
+.saveStrip button[class*="accentButton"] {
+  padding: 12px var(--space-5);
+}
+
+/*
+ * The vertical rhythm. The artifact's first row sits level with its group heading; here the intro
+ * column started higher than the rows beside it, which is what left the tab shorter overall than
+ * the artifact by about 117px even after the row gap was opened up.
+ */
+.rows {
+  padding-top: 2px;
+}
+
+.group {
+  align-items: start;
+}
+
+/*
+ * The gap between the tab strip and the first group measured 49px against the artifact's 72, which
+ * is most of why the tab still came out shorter overall than the artifact even after the row rhythm
+ * was opened up.
+ */
+.group[data-first="true"] {
+  padding-top: var(--space-6);
+}
+
+/*
+ * The tab is still shorter than the artifact's overall. The rows and the first group's top padding
+ * are both at the artifact's measurements now, so the remainder is the space between the two
+ * groups, which the artifact sets wider than a single token step.
+ */
+.group {
+  padding-top: 56px;
+  margin-top: var(--space-5);
+}
+
+.group[data-first="true"] {
+  padding-top: var(--space-6);
+  margin-top: 0;
+}
+
+/* The last 31px: the save strip and the fine print sit further from the groups in the artifact. */
+.saveStrip {
+  padding-top: var(--space-6);
+  margin-top: var(--space-4);
+}
+
+/*
+ * Re-measured at true 1:1 (see `fidelity.module.css`). The tab's last band lands at y904–946
+ * against the artifact's y912–952 — aligned within 8px — but `07-settings.png` carries 64px below
+ * that band where this had 42. The save strip's own foot is the difference, so it takes it.
+ */
+.saveStrip {
+  padding-bottom: 22px;
+}

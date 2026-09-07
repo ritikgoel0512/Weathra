@@ -201,14 +201,36 @@
 
 /* -------------------------------------------------------------- execution flow */
 
+/*
+ * The execution flow as `05-agent-evidence.png` draws it: a continuous vertical pipeline with a
+ * circular status node per agent, not a stack of bordered cards.
+ *
+ * The connector used to be a 6-pixel dot and a hairline between boxes, which read as a list that
+ * happened to have bullets. The line now runs the whole height behind the nodes, each node is a
+ * ringed circle carrying its own status colour, and the steps lost their individual frames so the
+ * column reads as one pipeline. Status is still a colour *and* the word beside it, so nothing here
+ * rests on hue alone.
+ */
 .steps {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-4);
   margin: 0;
-  padding: 0;
+  padding: 0 0 0 var(--space-5);
   list-style: none;
   min-width: 0;
+}
+
+/* The pipeline itself, from the first node to the last. */
+.steps::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--color-border-subtle);
 }
 
 .step {
@@ -216,46 +238,35 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  padding: var(--space-3);
-  padding-left: var(--space-5);
-  background: var(--color-surface-inset);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
   min-width: 0;
 }
 
-/* The artifact's connected rail, drawn from the border token rather than as an image. */
+/* The status node, sitting on the line. */
 .step::before {
   content: "";
   position: absolute;
-  left: var(--space-3);
-  top: var(--space-4);
-  width: 6px;
-  height: 6px;
+  left: calc(-1 * var(--space-5) + 1px);
+  top: 4px;
+  width: 12px;
+  height: 12px;
   border-radius: var(--radius-pill);
-  background: var(--color-text-muted);
+  background: var(--color-surface-base);
+  border: 2px solid var(--color-text-muted);
 }
 
 .step[data-status="succeeded"]::before {
-  background: var(--color-status-ok);
+  border-color: var(--color-status-ok);
+  background: var(--color-status-ok-surface);
 }
 
 .step[data-status="failed"]::before {
-  background: var(--color-status-error);
+  border-color: var(--color-status-error);
+  background: var(--color-status-error-surface);
 }
 
 .step[data-status="skipped"]::before {
-  background: var(--color-status-warning);
-}
-
-.step + .step::after {
-  content: "";
-  position: absolute;
-  left: calc(var(--space-3) + 2px);
-  top: calc(-1 * var(--space-3) - 1px);
-  width: 2px;
-  height: calc(var(--space-3) + var(--space-4));
-  background: var(--color-border-subtle);
+  border-color: var(--color-status-warning);
+  background: var(--color-status-warning-surface);
 }
 
 .stepHead {

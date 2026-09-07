@@ -18,7 +18,20 @@
  * operational control from those images has any representation in the design system.
  */
 
-/** The two appearances. Dark is the default; light is derived from the same roles. */
+/**
+ * The two appearances, and the rule that decides between them.
+ *
+ * **Neither is chosen by the visitor's system.** A `prefers-color-scheme: light` override used to
+ * serve the light palette for the whole product, which meant an operator whose system reported
+ * light saw a Dashboard matching none of the seven product artifacts. That override is gone.
+ *
+ * What replaces it is the division the artifacts themselves draw. The seven product screens are
+ * Midnight Intelligence, and that is `:root`. `08-authentication.png` — the approved shell for all
+ * eight authentication screens — is rendered light, so the `(auth)` route group opts into it with
+ * `data-appearance="light"` on its own element. The appearance is a property of *which screen you
+ * are on*, which is what the artifacts specify, rather than of the machine it was opened on, which
+ * none of them mention.
+ */
 export type Appearance = "dark" | "light";
 
 export const APPEARANCES: readonly Appearance[] = ["dark", "light"];
@@ -59,6 +72,8 @@ export const COLOR_TOKEN_NAMES = [
   // Status — §1
   "status-error",
   "status-error-surface",
+  "status-error-solid",
+  "status-error-on-solid",
   "status-warning",
   "status-warning-surface",
   "status-ok",
@@ -109,6 +124,8 @@ const DARK: Palette = {
 
   "status-error": "#f87171",
   "status-error-surface": "#2c1214",
+  "status-error-solid": "#d40924",
+  "status-error-on-solid": "#ffffff",
   "status-warning": "#fb923c",
   "status-warning-surface": "#2b1a0b",
   "status-ok": "#4ade80",
@@ -118,7 +135,7 @@ const DARK: Palette = {
 };
 
 /**
- * The light appearance, derived rather than designed separately.
+ * The light appearance: the authentication shell, and nothing else.
  *
  * Same roles, same hue families, inverted surface ramp. Each hue is darkened until it carries the
  * same 4.5:1 obligation against a light surface that its dark counterpart carries against a dark
@@ -155,6 +172,8 @@ const LIGHT: Palette = {
 
   "status-error": "#b42318",
   "status-error-surface": "#fdeceb",
+  "status-error-solid": "#c00d24",
+  "status-error-on-solid": "#ffffff",
   "status-warning": "#b54708",
   "status-warning-surface": "#fdf0e3",
   "status-ok": "#136f35",
@@ -211,6 +230,21 @@ export const DATA_CLASS_NAMES: readonly DataClassName[] = DATA_CLASSES;
 const STATUSES = ["error", "warning", "ok", "quota"] as const;
 
 export const CONTRAST_REQUIREMENTS: readonly ContrastRequirement[] = [
+  /*
+   * The urgent destructive action.
+   *
+   * `status-error` is a *text* colour, light enough to read as words on a dark ground, and filling
+   * a button with it gives the soft coral this had rather than the saturated red the approved
+   * screens draw. `status-error-solid` is that fill, and it exists as its own role because the two
+   * jobs have opposite contrast requirements: one has to be light against the page, the other dark
+   * enough to carry a white label. This pair is what makes the second true.
+   */
+  {
+    foreground: "status-error-on-solid",
+    background: "status-error-solid",
+    minimum: 4.5,
+    because: "the urgent action's label is read on its fill",
+  },
   ...TEXT_SURFACES.map((background) => ({
     foreground: "text-primary" as const,
     background,

@@ -27,7 +27,11 @@ vi.mock("@/lib/supabase/browser", () => ({
   },
 }));
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/compare" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/compare",
+  useRouter: () => ({ replace: () => {}, refresh: () => {}, push: () => {} }),
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 /* ------------------------------------------------------------------- fixtures */
 
@@ -487,9 +491,11 @@ describe("a composite criterion", () => {
     await userEvent.selectOptions(await screen.findByLabelText("Criterion"), "outdoor_suitability");
     await compare();
 
+    // Stated on the ranking and again in the account of how the comparison was made — the
+    // disclosure follows the score wherever the score is shown.
     expect(
-      await screen.findByText(/Weathra's own heuristic, not an authoritative index/),
-    ).toBeInTheDocument();
+      (await screen.findAllByText(/Weathra's own heuristic, not an authoritative index/)).length,
+    ).toBeGreaterThan(0);
   });
 });
 
@@ -516,7 +522,11 @@ describe("data classes and failures", () => {
     await compare();
     await screen.findByRole("region", { name: "Ranked by warmest" });
 
-    expect(container.querySelectorAll('[data-tier="computed"]')).toHaveLength(1);
+    // The screen carries several computed regions — the ranking, the figures matrix, the account of
+    // how the comparison was made — and, since the delta explorer was added, retrieved ones too:
+    // each place's own forecast is retrieved data and is badged as such. The claim that matters is
+    // the last line, and it is the one that has never changed: **nothing here is model-written.**
+    expect(container.querySelectorAll('[data-tier="computed"]').length).toBeGreaterThanOrEqual(1);
     expect(container.querySelectorAll('[data-tier="interpretation"]')).toHaveLength(0);
     expect(within(screen.getByRole("region", { name: "Ranked by warmest" })).getByText("ANALYTICS")).toBeInTheDocument();
   });

@@ -108,6 +108,12 @@
 
 /* ----------------------------------------------------------------------- cards */
 
+/*
+ * `06-saved-locations.png` lays the cards out four across on a wide desktop. `auto-fill` at a
+ * card-sized track reaches four at the artifact's width and keeps a card card-sized when there are
+ * fewer — the strip does not stretch two saves into two banners, and no record is invented to fill
+ * a column.
+ */
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -189,4 +195,144 @@
   flex-wrap: wrap;
   gap: var(--space-2);
   align-items: center;
+}
+
+/* ---------------------------------------------------------------- workspace panels */
+
+.panelRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .panelRow {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.summaryFact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.summaryFact dt {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.summaryFact dd {
+  margin: 0;
+  font-family: var(--family-display);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.panelAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  color: var(--color-accent);
+  font-size: var(--type-ui-size);
+  font-weight: var(--type-ui-weight);
+  text-decoration: none;
+}
+
+.panelAction:hover {
+  background: var(--color-surface-inset);
+}
+
+/* The status rule the artifact closes on, carrying facts this screen already holds. */
+.statusStrip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-subtle);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+/* The add form as a disclosure: one control in the header, the form only when it is wanted. */
+/*
+ * No `display` here. Setting one on a `<details>` overrides the user agent's own rule for hiding
+ * everything but the summary while it is closed, which left the form's inputs in the tab order of
+ * a collapsed panel — two controls a Tab walk could reach but nobody could see. The layout belongs
+ * to the body below instead.
+ */
+.addBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+}
+
+.addSummary {
+  cursor: pointer;
+  font-family: var(--family-display);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+}
+
+.addSummary:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* The attention strip: a status row that reports a real condition or says all is quiet. */
+.attention {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-left: 3px solid var(--color-status-ok);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+}
+
+.attention[data-tone="warning"] {
+  border-left-color: var(--color-status-warning);
+}
+
+.attentionTitle {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-primary);
+}
+
+/* The heading inside the disclosure control: the control is the summary, the heading is a heading. */
+.addSummary .panelTitle {
+  display: inline;
 }

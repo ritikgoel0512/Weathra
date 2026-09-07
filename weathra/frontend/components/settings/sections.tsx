@@ -93,23 +93,40 @@ function UnitChoice({
   readonly onChange: (units: UnitSystem) => void;
   readonly disabled: boolean;
 }): ReactNode {
+  const chosen = UNIT_OPTIONS.find((option) => option.value === value);
+
   return (
     <fieldset className={styles.choices}>
       <legend className={styles.legend}>Measurement units</legend>
-      {UNIT_OPTIONS.map((option) => (
-        <label className={styles.choice} key={option.value}>
-          <input
-            type="radio"
-            name="unit_system"
-            value={option.value}
-            checked={value === option.value}
-            disabled={disabled}
-            onChange={() => onChange(option.value)}
-          />
-          <span className={styles.choiceLabel}>{option.label}</span>
-          <span className={styles.choiceDetail}>{option.detail}</span>
-        </label>
-      ))}
+      {/*
+        `07-settings.png` draws this as one segmented control, not as a row of separate chips, and
+        that is what the wrapper below produces. The controls underneath are still two real radio
+        inputs in a real fieldset: a segmented control built from buttons would lose the group
+        semantics, the arrow-key selection the browser gives a radio group for free, and the
+        `checked` state assistive technology reads. The inputs are positioned out of sight rather
+        than `display: none`, so they keep taking focus and the ring is drawn on the segment.
+      */}
+      <div className={styles.segmented}>
+        {UNIT_OPTIONS.map((option) => (
+          <label className={styles.segment} key={option.value}>
+            <input
+              type="radio"
+              name="unit_system"
+              value={option.value}
+              checked={value === option.value}
+              disabled={disabled}
+              onChange={() => onChange(option.value)}
+            />
+            <span className={styles.segmentLabel}>{option.label}</span>
+          </label>
+        ))}
+      </div>
+      {/*
+        The detail the chips used to carry inline. It stays on the screen — which units a system
+        means is the only thing that makes the choice meaningful — but under the control, where the
+        artifact puts its own description, rather than inside a segment.
+      */}
+      {chosen ? <p className={styles.choiceDetail}>{chosen.detail}</p> : null}
     </fieldset>
   );
 }

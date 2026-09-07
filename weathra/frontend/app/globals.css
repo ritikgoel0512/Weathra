@@ -6,9 +6,10 @@
  * both appearances. A value changed in one place and not the other fails that test rather than
  * shipping a palette that half the application does not use.
  *
- * Dark-first: `:root` carries Midnight Intelligence, and the light appearance is derived from the
- * same roles under a `prefers-color-scheme` override. Components reference roles — never a literal
- * colour — so a screen cannot invent one.
+ * `:root` carries Midnight Intelligence, which is the product. The authentication shell opts into
+ * the light appearance with `data-appearance="light"`, because that is what its own approved
+ * artifact shows; nothing else does, and no system preference selects either. Components reference
+ * roles — never a literal colour — so a screen cannot invent one.
  */
 
 :root {
@@ -50,6 +51,8 @@
   /* Status */
   --color-status-error: #f87171;
   --color-status-error-surface: #2c1214;
+  --color-status-error-solid: #d40924;
+  --color-status-error-on-solid: #ffffff;
   --color-status-warning: #fb923c;
   --color-status-warning-surface: #2b1a0b;
   --color-status-ok: #4ade80;
@@ -65,11 +68,18 @@
   --family-display: var(--font-display), "Plus Jakarta Sans", system-ui, sans-serif;
   --family-body: var(--font-body), Inter, system-ui, sans-serif;
 
-  --type-display-size: 2rem;
+  /*
+   * Tightened toward the artifacts' density. The product screens are compact enterprise analytics —
+   * `01`'s page title sits at roughly 1.75rem against a 1440-pixel frame, not the 2rem the scale
+   * started at, and an oversized display size was a large part of why the implementation read as a
+   * different, looser product. Only the display and heading steps move; the body, UI, label and
+   * meta roles are already the artifacts' sizes and are left alone.
+   */
+  --type-display-size: 1.75rem;
   --type-display-line: 1.15;
   --type-display-weight: 600;
 
-  --type-heading-size: 1.5rem;
+  --type-heading-size: 1.25rem;
   --type-heading-line: 1.2;
   --type-heading-weight: 600;
 
@@ -135,54 +145,69 @@
 }
 
 /*
- * The light appearance, derived from the same roles. Only the colour tokens move: type, spacing,
- * radii and motion are appearance-independent, and redeclaring them here would be two places to
- * change a scale.
+ * The light appearance — the authentication shell, and nothing else.
+ *
+ * This used to be `@media (prefers-color-scheme: light)`, which handed the whole product to the
+ * visitor's operating system: an operator whose machine reported light was served a Dashboard in a
+ * palette none of the seven product artifacts depicts. That is a fidelity defect no suite could
+ * catch, because the suites assert contrast and structure rather than which direction shipped, and
+ * it was found by looking at a rendered screen.
+ *
+ * The replacement is the division the artifacts draw themselves. Seven product screens are Midnight
+ * Intelligence and that is `:root` above. `docs/design/screens/08-authentication.png` — the
+ * approved shell for all eight authentication screens — is rendered light, so `app/(auth)/layout`
+ * sets `data-appearance="light"` on its own element and takes this block. Appearance follows the
+ * screen, which is what the artifacts specify; it no longer follows the machine, which none of them
+ * mention.
+ *
+ * `color-scheme` is re-declared so form controls, scrollbars and the caret inside the auth card are
+ * painted for a light ground. Only colour and elevation move: type, spacing, radii and motion are
+ * appearance-independent, and redeclaring a scale here would be two places to change one number.
  */
-@media (prefers-color-scheme: light) {
-  :root {
-    color-scheme: light;
+[data-appearance="light"] {
+  color-scheme: light;
 
-    --color-surface-base: #f4f7fa;
-    --color-surface-raised: #ffffff;
-    --color-surface-overlay: #ffffff;
-    --color-surface-inset: #eef2f7;
+  --color-surface-base: #f4f7fa;
+  --color-surface-raised: #ffffff;
+  --color-surface-overlay: #ffffff;
+  --color-surface-inset: #eef2f7;
 
-    --color-border-subtle: #dbe2ea;
-    --color-border-strong: #7d8ea0;
+  --color-border-subtle: #dbe2ea;
+  --color-border-strong: #7d8ea0;
 
-    --color-text-primary: #0b141d;
-    --color-text-secondary: #3c4c5c;
-    --color-text-muted: #546678;
+  --color-text-primary: #0b141d;
+  --color-text-secondary: #3c4c5c;
+  --color-text-muted: #546678;
 
-    --color-accent: #0b6a83;
-    --color-accent-strong: #08505f;
-    --color-accent-muted: #0891b2;
-    --color-accent-contrast: #ffffff;
+  --color-accent: #0b6a83;
+  --color-accent-strong: #08505f;
+  --color-accent-muted: #0891b2;
+  --color-accent-contrast: #ffffff;
 
-    --color-class-observed: #046c4e;
-    --color-class-observed-surface: #e6f6ef;
-    --color-class-forecast: #1d4ed8;
-    --color-class-forecast-surface: #e8eefc;
-    --color-class-historical: #8a4b04;
-    --color-class-historical-surface: #fdf2e0;
-    --color-class-analytics: #6d28d9;
-    --color-class-analytics-surface: #f0eafd;
-    --color-class-interpretation: #a21caf;
-    --color-class-interpretation-surface: #fbeaf9;
+  --color-class-observed: #046c4e;
+  --color-class-observed-surface: #e6f6ef;
+  --color-class-forecast: #1d4ed8;
+  --color-class-forecast-surface: #e8eefc;
+  --color-class-historical: #8a4b04;
+  --color-class-historical-surface: #fdf2e0;
+  --color-class-analytics: #6d28d9;
+  --color-class-analytics-surface: #f0eafd;
+  --color-class-interpretation: #a21caf;
+  --color-class-interpretation-surface: #fbeaf9;
 
-    --color-status-error: #b42318;
-    --color-status-error-surface: #fdeceb;
-    --color-status-warning: #b54708;
-    --color-status-warning-surface: #fdf0e3;
-    --color-status-ok: #136f35;
-    --color-status-ok-surface: #e7f6ec;
-    --color-status-quota: #5b21b6;
-    --color-status-quota-surface: #efe9fb;
+  --color-status-error: #b42318;
+  --color-status-error-surface: #fdeceb;
+  --color-status-error-solid: #c00d24;
+  --color-status-error-on-solid: #ffffff;
+  --color-status-warning: #b54708;
+  --color-status-warning-surface: #fdf0e3;
+  --color-status-ok: #136f35;
+  --color-status-ok-surface: #e7f6ec;
+  --color-status-quota: #5b21b6;
+  --color-status-quota-surface: #efe9fb;
 
-    --shadow-raised: 0 1px 2px rgb(15 23 32 / 0.08);
-    --shadow-overlay: 0 16px 40px rgb(15 23 32 / 0.16);
-  }
+  --shadow-raised: 0 1px 2px rgb(15 23 32 / 0.08);
+  --shadow-overlay: 0 16px 40px rgb(15 23 32 / 0.16);
 }
 
 *,

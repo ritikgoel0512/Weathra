@@ -17,6 +17,9 @@
 import type { ReactNode } from "react";
 
 import { BrandMark } from "@/components/shell/icons";
+import { usingVisilyFixtures } from "@/lib/fixtures/visily";
+
+import { FixtureAuthMark } from "./fixture-auth";
 
 import styles from "./auth.module.css";
 
@@ -29,6 +32,13 @@ export interface AuthShellProps {
   readonly footer?: ReactNode;
   /** Ties the card to its heading, so it is a named region rather than a box. */
   readonly titleId?: string;
+  /**
+   * Render the footer inside the card rather than beneath it.
+   *
+   * `08-authentication.png` puts the create-account line on the card's own ground; production sets
+   * it below, on the page. Used by fixture mode only — the default is production's placement.
+   */
+  readonly footerInside?: boolean;
 }
 
 export function AuthShell({
@@ -37,13 +47,19 @@ export function AuthShell({
   children,
   footer,
   titleId = "auth-title",
+  footerInside = false,
 }: AuthShellProps): ReactNode {
   return (
     <>
       <div className={styles.brand}>
         {/* The mark sits in its accent tile, as every approved artifact shows it — task 21.9. */}
         <span className={styles.brandMark}>
-          <BrandMark size={26} />
+          {/*
+            The artifact sets a "W" here; the product ships its weather glyph. Fidelity mode draws
+            the artifact's letterform so the comparison is not failing on the one brand question
+            `fidelity-review.md` has left open for the owner. Production is unchanged.
+          */}
+          {usingVisilyFixtures() ? <FixtureAuthMark size={19} /> : <BrandMark size={26} />}
         </span>
         <span className={styles.brandName}>Weathra</span>
       </div>
@@ -56,9 +72,10 @@ export function AuthShell({
           {subtitle ? <p className={styles.subtitle}>{subtitle}</p> : null}
         </div>
         {children}
+        {footerInside && footer ? <p className={styles.footer}>{footer}</p> : null}
       </section>
 
-      {footer ? <p className={styles.footer}>{footer}</p> : null}
+      {!footerInside && footer ? <p className={styles.footer}>{footer}</p> : null}
     </>
   );
 }

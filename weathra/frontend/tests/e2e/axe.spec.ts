@@ -38,7 +38,7 @@ const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 const WIDTHS = [360, 1440] as const;
 
 const PRODUCT_SCREENS = [
-  { name: "Dashboard", path: "/", marker: "Your Weathra Intelligence briefing" },
+  { name: "Dashboard", path: "/", marker: "Current conditions" },
   { name: "AI Weather Analyst", path: "/analyst", marker: "Your weather question" },
   { name: "Historical Analytics", path: "/historical", marker: "Recorded observations" },
   { name: "Compare Cities", path: "/compare", marker: "Location 1" },
@@ -167,6 +167,9 @@ test.describe("axe-core, the interactive states", () => {
     await signIn(page);
     await page.goto("/locations");
 
+    // The add form is a disclosure now — `06-saved-locations.png` shows one "Add New Node"
+    // control in the header, not a form owning the page. Opening it is the real first step.
+    await page.locator("summary", { hasText: "Add a location" }).click();
     await page.getByLabel("Place").fill("Springfield");
     await page.getByRole("button", { name: "Save location" }).click();
     await expect(

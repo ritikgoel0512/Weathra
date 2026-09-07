@@ -1,0 +1,610 @@
+/*
+ * `06-saved-locations.png`'s geometry.
+ *
+ * Measured from the artifact at 1440: the attention strip, the four-track node grid, and the
+ * 1fr/368 synthesis row. No imagery anywhere — the artifact has none, and this file is the record
+ * of that decision as much as the component is.
+ */
+
+/* ---------------------------------------------------------------- search */
+
+.search {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 256px;
+  padding: 10px var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+}
+
+.searchPlaceholder {
+  font-size: var(--type-ui-size);
+}
+
+/* ---------------------------------------------------------------- attention strip */
+
+.attention {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--color-status-error) 40%, transparent);
+  background: var(--color-status-error-surface);
+  flex-wrap: wrap;
+}
+
+.attentionMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--color-status-error) 45%, transparent);
+  color: var(--color-status-error);
+}
+
+.attentionText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  margin-right: auto;
+}
+
+.attentionTitle {
+  font-size: var(--type-ui-size);
+  font-weight: 700;
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-status-error);
+  margin: 0;
+}
+
+.attentionBody {
+  font-size: var(--type-meta-size);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.attentionActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* ---------------------------------------------------------------- node cards */
+
+.nodes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.node {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-raised);
+  min-width: 0;
+}
+
+.nodeHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.nodeSince {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.nodeSince::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  background: var(--color-status-ok);
+}
+
+.nodeSince[data-freshness="stale"]::before {
+  background: var(--color-status-warning);
+}
+
+.nodeMenu {
+  color: var(--color-text-muted);
+  font-size: 1.125rem;
+  line-height: 1;
+}
+
+.nodeNames {
+  display: flex;
+  flex-direction: column;
+}
+
+.nodeName {
+  font-family: var(--family-display);
+  font-size: 1.375rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.nodeCountry {
+  font-size: var(--type-meta-size);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.nodeReading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.nodeTemp {
+  display: flex;
+  align-items: flex-start;
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: 2.25rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.nodeDegree {
+  font-size: 1.125rem;
+  margin-top: 2px;
+}
+
+.nodeCondition {
+  font-size: var(--type-meta-size);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin: 0;
+}
+
+.nodeRange {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  text-align: right;
+}
+
+.nodeRange > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+.nodeRange dt {
+  font-size: var(--type-label-size);
+  color: var(--color-text-muted);
+}
+
+.nodeRange dd {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-meta-size);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.nodeStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.nodeStats > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+  min-width: 0;
+}
+
+.nodeStats dt {
+  font-size: var(--type-label-size);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.nodeStats dd {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-meta-size);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.nodeStats dd svg {
+  color: var(--color-accent);
+  flex: none;
+}
+
+.nodeFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+  margin-top: auto;
+}
+
+/* ---------------------------------------------------------------- lower row */
+
+.lower {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 368px;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.synthesisBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: var(--space-5);
+  padding: var(--space-5);
+}
+
+.synthesisMain {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.driftRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.driftLabel {
+  font-size: var(--type-ui-size);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.driftValue {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-ui-size);
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.driftNote {
+  font-size: var(--type-meta-size);
+  font-style: italic;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.synthesisAside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.synthesisAside > :last-child {
+  margin-top: auto;
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.comparisonSwap {
+  color: var(--color-accent);
+}
+
+.comparisonNodes {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
+.comparisonNode {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+}
+
+.comparisonInitial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  font-size: var(--type-meta-size);
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.comparisonName {
+  font-size: var(--type-ui-size);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-right: auto;
+}
+
+.comparisonValue {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-ui-size);
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.comparisonDelta {
+  align-self: center;
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-base);
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-label-size);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.consensus {
+  position: relative;
+  border-color: color-mix(in srgb, var(--color-accent) 30%, transparent);
+  overflow: hidden;
+}
+
+.consensusBolt {
+  position: absolute;
+  top: -6px;
+  right: var(--space-3);
+  color: color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
+
+/* ---------------------------------------------------------------- responsive */
+
+@media (max-width: 1279px) {
+  .nodes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .lower,
+  .synthesisBody {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .lower,
+  .synthesisBody {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .nodes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .attention {
+    padding: var(--space-4);
+  }
+
+  .attentionActions {
+    width: 100%;
+  }
+
+  .synthesisBody {
+    padding: var(--space-4);
+    gap: var(--space-4);
+  }
+}
+
+/* ---------------------------------------------------------------- audit corrections */
+
+/*
+ * The wind value wrapped to two lines in all four cards — "14" then "km/h" — where the artifact
+ * keeps it on one and clips it. Clipping is the artifact's own answer to a value that does not fit
+ * a third of a card, and it keeps every card the same height.
+ */
+.nodeStats dd {
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/*
+ * The node-health meters rendered green with green values. The artifact draws the bars in the
+ * accent and the values in ordinary light text — green read as a status judgement the panel is not
+ * making.
+ */
+.healthMeters span[class*="meterFill"] {
+  background: var(--color-accent);
+}
+
+.healthMeters span[class*="meterValue"] {
+  color: var(--color-text-primary);
+}
+
+/* The artifact's DISMISS is borderless text beside the filled action, not a second box. */
+.attentionActions button:first-child {
+  border: none;
+  background: none;
+  padding: 10px var(--space-2);
+  color: var(--color-text-secondary);
+}
+
+/*
+ * The Node Comparison rail ran about 80px more compact than the artifact's — its two node rows and
+ * the delta pill between them measured 94px against the artifact's 121. The rows are the artifact's
+ * height now and the stack has its spacing.
+ */
+.comparisonNodes {
+  gap: var(--space-3);
+}
+
+.comparisonNode {
+  padding: var(--space-4);
+}
+
+.comparisonDelta {
+  padding: 4px var(--space-3);
+}
+
+/*
+ * The remaining 54px, which the section comparison put in the lower row rather than in the node
+ * cards — those measured 303 against the artifact's 309 and are left alone.
+ */
+.synthesisBody {
+  padding: var(--space-5) var(--space-5) var(--space-6);
+}
+
+.lower {
+  gap: var(--space-5);
+}
+
+.rail {
+  gap: var(--space-5);
+}
+
+/* The last 46px: the attention strip and the metadata panel, both shallower than the artifact's. */
+.attention {
+  padding: var(--space-5);
+}
+
+.comparisonNodes {
+  gap: var(--space-4);
+}
+
+/* ---------------------------------------------------------------- attention strip
+ *
+ * Measured against `06-saved-locations.png` at 1:1. The artifact's strip occupies y204-277 — 74px
+ * tall — and this rendered 94, so it loses 20. The earlier note above raised its padding to
+ * `--space-5` chasing a page total; that was the wrong lever on the wrong evidence, and this is
+ * the strip's own measured height.
+ */
+.attention {
+  /* 12px gave 67 against the artifact's 74; 16 lands on it. */
+  padding: var(--space-4) var(--space-5);
+  align-items: center;
+}
+
+.attentionMark {
+  width: 36px;
+  height: 36px;
+}
+
+.attentionText {
+  gap: 1px;
+}
+
+/*
+ * The action's fill.
+ *
+ * Sampled from the artifact, the button is rgb(212, 9, 36) — a saturated crimson. This rendered
+ * rgb(248, 113, 113), which is `status-error` used as a fill: that token is a *text* colour, light
+ * enough to read as words on the dark page, and filling a button with it gives the soft coral the
+ * audit saw. `status-error-solid` is the artifact's value as its own role, with
+ * `status-error-on-solid` as the label it is guaranteed to carry — the pair is measured at 5.5:1 in
+ * the dark appearance and 6.3:1 in the light one by `lib/design/tokens.test.ts`.
+ */
+.attentionActions button:last-child {
+  background: var(--color-status-error-solid);
+  border-color: var(--color-status-error-solid);
+  color: var(--color-status-error-on-solid);
+  padding: 9px var(--space-4);
+}
+
+/* ---------------------------------------------------------------- the lower row
+ *
+ * Re-measured at 1:1 against `06-saved-locations.png`, by column rather than by merged band. The
+ * previous report's "lower row 117px too shallow" was measuring the merged content column; taken
+ * per column the picture is different and more specific:
+ *
+ *                      artifact              current
+ *   synthesis panel   y684-1322  638        y602-1062  460
+ *   rail              y684-1321  637        y602-1262  660
+ *
+ * So the row is not short — the rail is if anything a little tall. What is wrong is that the
+ * artifact's synthesis panel is *the same height as the rail beside it* and this one is not: the
+ * row was `align-items: start`, so the panel stopped at its content and left the rail hanging
+ * alongside it. Stretching it is the whole composition fix, and it adds no blank spacer anywhere —
+ * the panel's own surface grows to the row's height, which is what the artifact draws.
+ */
+.lower {
+  align-items: stretch;
+}
+
+/*
+ * With the panel at full height the artifact keeps its action directly under the meters and lets
+ * the space fall below, rather than pushing the action to the panel's foot. `margin-top: auto` was
+ * doing the opposite.
+ */
+.synthesisAside > :last-child {
+  margin-top: 0;
+}
+
+/*
+ * The rule above the row.
+ *
+ * `06-saved-locations.png` draws a 2px horizontal rule the full width of the content column at
+ * y651, between the node grid (ending y619) and this row (starting y684) — 32px of air, the rule,
+ * then 31. There was no rule here at all and a flat 16px gap, which is most of why everything below
+ * the node cards sat high. `--color-border-subtle` is the divider role; the artifact's ink measures
+ * rgb(18,25,42) against the token's #1b2634, within a shade.
+ */
+.lower {
+  margin-top: var(--space-4);
+  padding-top: 31px;
+  border-top: 2px solid var(--color-border-subtle);
+}

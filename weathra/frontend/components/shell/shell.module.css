@@ -10,7 +10,8 @@
 .shell {
   display: grid;
   grid-template-columns: var(--layout-navigation-collapsed-width) 1fr;
-  grid-template-rows: 1fr;
+  /* `auto` for the fixture banner when it is present; it collapses to nothing when it is not. */
+  grid-template-rows: auto 1fr;
   min-height: 100vh;
   min-height: 100dvh;
 }
@@ -39,6 +40,7 @@
 /* ---------------------------------------------------------------- navigation */
 
 .navigation {
+  grid-row: 2;
   grid-column: 1;
   display: flex;
   flex-direction: column;
@@ -253,8 +255,18 @@
 
 .main {
   grid-column: 2;
+  grid-row: 2;
   min-width: 0;
-  padding: var(--space-5) var(--space-4);
+  /*
+   * The space above the top bar is 9px, not 24.
+   *
+   * Measured on `01-dashboard.png` at 1:1: the artifact's top-bar controls occupy y13-48 and its
+   * divider sits at y63, with content starting at y88. This rendered the controls at y28-65, the
+   * divider at y86 and content at y111 -- the whole bar 23px too tall, which pushed every screen's
+   * content down by the same 23 and is why all seven showed the same +25 offset on their first
+   * section. One primitive, one correction; there are no per-screen offsets anywhere.
+   */
+  padding: 9px var(--space-4) var(--space-5);
 }
 
 .mainInner {
@@ -434,4 +446,559 @@
   font-size: var(--type-body-size);
   line-height: var(--type-body-line);
   color: var(--color-text-secondary);
+}
+
+/* ---------------------------------------------------------------- the top bar
+ *
+ * The header strip all seven product artifacts carry above the content: breadcrumb, search, and the
+ * signed-in person. It sits inside `.main` rather than beside the navigation, so it spans exactly
+ * the content column the artifacts show it spanning and the rail keeps its own full height.
+ */
+
+.topBar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 22rem) auto;
+  align-items: center;
+  gap: var(--space-4);
+  /* 15px from the controls to the divider in the artifact, against the 21 this was giving. */
+  padding-bottom: 8px;
+  margin-bottom: var(--space-5);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.breadcrumb {
+  min-width: 0;
+}
+
+.breadcrumbList {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  color: var(--color-text-secondary);
+}
+
+.breadcrumbList li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.breadcrumbList a {
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+}
+
+.breadcrumbList a:hover {
+  color: var(--color-text-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.breadcrumbSeparator {
+  color: var(--color-text-muted);
+}
+
+.breadcrumbCurrent {
+  color: var(--color-text-primary);
+  font-weight: var(--type-ui-weight);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The label and hint name the field for assistive technology; the artifact shows neither. */
+.searchLabel,
+.searchHint {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.search {
+  position: relative;
+  min-width: 0;
+}
+
+.searchField {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.searchField:focus-within {
+  border-color: var(--color-accent);
+}
+
+.searchIcon {
+  display: inline-flex;
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+.searchInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--space-2) 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: var(--family-body);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+}
+
+.searchInput::placeholder {
+  color: var(--color-text-muted);
+}
+
+.topIdentity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  color: inherit;
+}
+
+.topIdentity:hover {
+  background: var(--color-surface-inset);
+}
+
+.topMonogram {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-muted);
+  color: var(--color-accent-contrast);
+  font-family: var(--family-display);
+  font-size: var(--type-ui-size);
+  font-weight: var(--type-card-weight);
+}
+
+.topIdentityText {
+  display: none;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.topIdentityName {
+  font-size: var(--type-ui-size);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topIdentityMeta {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+@media (min-width: 1280px) {
+  .topIdentityText {
+    display: flex;
+  }
+}
+
+/*
+ * Below the compact breakpoint the strip becomes two rows: the breadcrumb and the person on one,
+ * the search beneath. Stacking preserves the hierarchy the artifacts set — where you are first,
+ * then what you can do — rather than dropping the search, which is the screen's one global control.
+ */
+@media (max-width: 767px) {
+  .topBar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: var(--space-3);
+  }
+
+  .search {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+/* ---------------------------------------------------------------- saved locations
+ *
+ * The section every product artifact carries under the primary navigation: a small uppercase
+ * heading with an add control beside it, then the person's places. It keeps this shape in every
+ * state — loading, empty and failed included — because an absent section would give a new account,
+ * which is the most common case of all, a differently shaped rail.
+ */
+
+.saved {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-3) var(--space-2);
+  margin-top: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.savedHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+}
+
+.savedHeading {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.savedAdd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+}
+
+.savedAdd:hover {
+  color: var(--color-accent);
+  background: var(--color-surface-inset);
+}
+
+.savedNote {
+  padding: 0 var(--space-2);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.savedNote a {
+  color: var(--color-accent);
+}
+
+.savedList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.savedEntry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+}
+
+.savedEntry:hover {
+  background: var(--color-surface-inset);
+  color: var(--color-text-primary);
+}
+
+/* The place the Dashboard is currently briefing on. */
+.savedEntry[data-active="true"] {
+  background: var(--color-surface-inset);
+  color: var(--color-accent);
+}
+
+.savedPin {
+  display: inline-flex;
+  flex: none;
+  color: currentcolor;
+}
+
+.savedName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- planned group
+ *
+ * The six not-yet-built destinations, under their own heading and in a quieter treatment. They are
+ * still links, still marked in words, still reachable — the product artifacts simply show a short
+ * primary navigation, and twelve equal-weight entries did not read as one.
+ */
+
+.plannedGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.plannedHeading {
+  padding: 0 var(--space-2);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.list[data-planned="true"] .item {
+  padding-top: var(--space-1);
+  padding-bottom: var(--space-1);
+}
+
+/* ---------------------------------------------------------------- fidelity fixtures
+ *
+ * The two shell elements the product artifacts draw and production deliberately does not: the
+ * notification bell, and the photographic avatar with its presence dot. Both are applied only under
+ * the fixture flag — the bell is not rendered at all without it, and `.topRight` is a plain flex row
+ * that changes nothing about the production strip.
+ */
+
+.topRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  justify-self: end;
+}
+
+.topBell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  color: var(--color-text-secondary);
+}
+
+.topBellDot {
+  position: absolute;
+  top: 6px;
+  right: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--color-surface-base);
+  background: var(--color-status-error);
+}
+
+/*
+ * The artifacts show a photographic portrait here. No photograph is used: the tile becomes a soft
+ * tonal disc of the same size with the artifact's presence dot on it, which reads correctly at this
+ * scale and asserts nothing about who anybody is.
+ */
+.topIdentity[data-fidelity="true"] .topMonogram {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-subtle);
+  background:
+    radial-gradient(circle at 42% 34%, #6b7a8b 0%, #46525f 46%, #2b343d 100%);
+  color: transparent;
+}
+
+.topPresence {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 11px;
+  height: 11px;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--color-surface-base);
+  background: var(--color-status-ok);
+}
+
+/* The artifact shows the portrait alone — the name is beside it only below the wide tier. */
+@media (min-width: 1280px) {
+  .topIdentity[data-fidelity="true"] .topIdentityText {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* The artifact's rail foot: a bare glyph rather than the accent monogram tile. */
+.identity[data-fidelity="true"] .monogram {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  width: auto;
+  height: auto;
+}
+
+/* ---------------------------------------------------------------- the Visily rail treatment
+ *
+ * The artifacts' rail is *compact*: a short row, a small icon, a single line of label. Twelve
+ * destinations at the previous density — with `overflow-wrap` letting "Weather Intelligence Report"
+ * and "Weather Scenario Lab" take two lines each — made the rail read as a different, looser
+ * product than the one the artifacts draw. The entries are all still here; only the density
+ * changed. Below the wide tier nothing here applies, because the rail is icons or a drawer.
+ */
+
+@media (min-width: 1280px) {
+  .list {
+    gap: 1px;
+  }
+
+  .item {
+    padding: 7px var(--space-2);
+    gap: var(--space-3);
+  }
+
+  /*
+   * One line, truncated rather than wrapped. The full title stays the link's accessible name, so
+   * nothing is lost to a screen reader or to a test that queries by name — only to the eye, and
+   * only at this width.
+   */
+  .itemLabel {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /*
+   * The artifacts' planned marks are quiet: no border, and set small.
+   *
+   * **No `opacity`.** The first version dimmed `--color-text-muted` to 0.72, which composites to
+   * #6d7a88 on the rail and measures 4.28:1 — under the 4.5:1 this product holds itself to, and
+   * `tests/e2e/axe.spec.ts` caught it on all seven product screens in both appearances. The token
+   * at full strength is 6.7:1 and is already quiet enough; the restraint comes from the size and
+   * the missing border, not from fading text below the threshold.
+   */
+  .plannedMark {
+    border: none;
+    padding: 0;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+  }
+
+  /*
+   * The planned group's labels wrap; the built list's do not.
+   *
+   * Three of the roadmap titles — Weather Intelligence Report, Weather Scenario Lab, Travel
+   * Intelligence — do not fit a 248 rail beside an icon *and* a PLANNED mark, and were being
+   * ellipsised to "Weather Intelli…". Truncating the built list is a fair trade for the artifacts'
+   * compact rhythm, because those rows are the ones a person uses constantly and their names are
+   * short. Truncating the roadmap is not: it is five rows in their own section below a rule, read
+   * once, and a name is the only thing they carry. So they wrap, and the rows above stay tight.
+   */
+  .list[data-planned="true"] .itemLabel {
+    white-space: normal;
+    overflow: visible;
+    overflow-wrap: break-word;
+  }
+
+  .list[data-planned="true"] .item {
+    align-items: flex-start;
+  }
+
+  /* Keeps the mark on the first line of a wrapped label rather than centred against two. */
+  .list[data-planned="true"] .plannedMark {
+    margin-top: 3px;
+  }
+
+  .plannedGroup {
+    gap: 1px;
+    margin-top: var(--space-2);
+    padding-top: var(--space-2);
+  }
+
+  .plannedHeading {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    padding-bottom: 2px;
+  }
+}
+
+/*
+ * The artifacts' workspace label. Beside the breadcrumb, not inside it: the trail says where you
+ * are, and this says which workspace you are in. Fidelity mode only.
+ */
+.workspaceTag {
+  margin-left: var(--space-3);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* ---------------------------------------------------------------- audit corrections
+ *
+ * The artifacts draw the rail's sign-out as a borderless red link with a leading glyph. The shared
+ * `Button` component renders it as a bordered secondary button, which is a box where the artifact
+ * has none, and it was the most conspicuous difference at the foot of every product screen.
+ *
+ * Restyled here rather than by swapping the component: it is a real `<button type="submit">` inside
+ * the server action's form, and that is what makes signing out work without JavaScript. Only its
+ * appearance changes, and only inside the rail — the same component keeps its button treatment
+ * everywhere else it is used, including Settings.
+ */
+.identity form button {
+  width: auto;
+  padding: var(--space-2) 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  color: var(--color-status-error);
+  font-weight: 600;
+  text-align: left;
+}
+
+.identity form button:hover {
+  background: none;
+  text-decoration: underline;
+}
+
+/* The focus ring still has to be visible, since the border is gone. */
+.identity form button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }

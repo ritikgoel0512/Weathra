@@ -58,7 +58,7 @@ async function signIn(page: Page): Promise<void> {
   await page.getByLabel("Email").fill(CREDENTIALS.email);
   await page.getByLabel("Password", { exact: true }).fill(CREDENTIALS.password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByText("Your Weathra Intelligence briefing")).toBeVisible();
+  await expect(page.getByText("Current conditions")).toBeVisible();
 }
 
 /* ============================================================ flow 1 */
@@ -101,7 +101,7 @@ test.describe("flow 1 — sign up through verification into the product", () => 
 
     // --- inside the product, on a screen only a session can render ---
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByText("Your Weathra Intelligence briefing")).toBeVisible();
+    await expect(page.getByText("Current conditions")).toBeVisible();
     // And the shell is the authenticated one: its navigation exists only for a signed-in person.
     await expect(page.getByRole("navigation", { name: "Weathra" })).toBeVisible();
   });
@@ -154,7 +154,11 @@ test.describe("flow 2 — ask a question then open its evidence", () => {
     await expect(page.getByText(/could not be matched to the evidence/i)).toHaveCount(0);
 
     // --- the evidence affordance came from the run, and is followed through the UI ---
-    const evidenceLink = page.getByRole("link", { name: "View full agent evidence" });
+    // The rail offers the same action, as `02-ai-weather-analyst.png` does. This flow is about
+    // following it from the answer, so it asks the answer's own region.
+    const evidenceLink = page
+      .getByRole("article")
+      .getByRole("link", { name: "View full agent evidence" });
     await expect(evidenceLink).toBeVisible();
     // The identifier is the backend's, carried by the stream's terminal event — this flow never
     // constructs one. Read it off the link to prove that, then follow the link itself.
@@ -190,6 +194,9 @@ test.describe("flow 3 — save a location then see the unit preference applied",
     await page.goto("/locations");
     await expect(page.getByRole("region", { name: "Your saved locations" })).toBeVisible();
 
+    // The add form is a disclosure now — `06-saved-locations.png` shows one "Add New Node"
+    // control in the header, not a form owning the page. Opening it is the real first step.
+    await page.locator("summary", { hasText: "Add a location" }).click();
     await page.getByLabel("Place").fill("Hamburg");
     await page.getByRole("button", { name: "Save location" }).click();
 
@@ -203,7 +210,7 @@ test.describe("flow 3 — save a location then see the unit preference applied",
 
     // --- the briefing is in Celsius to begin with ---
     await page.goto("/");
-    await expect(page.getByText("Your Weathra Intelligence briefing")).toBeVisible();
+    await expect(page.getByText("Current conditions")).toBeVisible();
     await expect(page.getByText("°C").first()).toBeVisible();
 
     // --- choose imperial in Settings, which is where the preference lives ---
@@ -216,7 +223,7 @@ test.describe("flow 3 — save a location then see the unit preference applied",
 
     // --- and the preference is applied to the figures, not merely stored ---
     await page.goto("/");
-    await expect(page.getByText("Your Weathra Intelligence briefing")).toBeVisible();
+    await expect(page.getByText("Current conditions")).toBeVisible();
 
     // Scoped to the region the figure is actually read in. The whole screen is not asserted free of
     // "°C" because this stub converts the endpoints the briefing's readout uses and not every

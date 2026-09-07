@@ -18,10 +18,18 @@
  * figure, and no sample datum carried over from the design artifact.
  */
 
+import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { RecordedAgainstBaselineChart } from "@/components/historical/charts";
 import {
   Badge,
+  Card,
+  CardBody,
+  CardHeader,
+  EmptyChart,
+  LocationImage,
+  Meter,
   EmptyState,
   MethodNote,
   ProvenanceSection,
@@ -34,8 +42,11 @@ import type {
   CurrentResponse,
   ForecastResponse,
   Location,
+  SavedLocationsResponse,
   StatisticResult,
 } from "@/lib/api/schema";
+import { hasValues, missingCount, pointsFrom } from "@/lib/historical/analysis";
+import type { ViewState } from "@/lib/query/state";
 import { confidenceLevelFor } from "@/lib/design/data-class";
 import {
   formatReading,
@@ -102,18 +113,48 @@ export interface CurrentConditionsProps {
 }
 
 /**
- * The band across the top: what the provider measured, badged OBSERVED.
+ * The canonical four the Dashboard artifact's hero reads out beside the temperature.
  *
- * The temperature leads because the artifact leads with it; everything else the provider reported
- * follows in the strip beside it. Neither is a fixed set — what is shown is what came back.
+ * The artifact prints HUMIDITY, UV INDEX, WIND and PRESSURE. Weathra's provider reports whichever
+ * of them it reports, and the stub reports one. The slots are kept anyway and an absent one says
+ * "Not reported" — which is the difference between a composition and a claim. Dropping a slot
+ * because a value is missing loses the artifact's hero; inventing the value loses the point of the
+ * product. Naming the measure and saying it was not reported does neither, and it is the same
+ * sentence the attribution footer already uses for a period nobody supplied.
+ *
+ * `key` is the provider's own measure name, so a provider that *does* report wind fills the slot
+ * with no change here.
+ */
+const HERO_MEASURES: readonly { key: string; label: string }[] = [
+  { key: "relative_humidity", label: "Humidity" },
+  { key: "uv_index", label: "UV index" },
+  { key: "wind_speed", label: "Wind" },
+  { key: "surface_pressure", label: "Pressure" },
+];
+
+/**
+ * The leading band: what the provider measured, badged OBSERVED.
+ *
+ * `01-dashboard.png` opens with a wide hero — the place and its status on the left, a dominant
+ * temperature on the right, and a row of secondary measures beside it. That geometry is reproduced
+ * here. What is *not* reproduced is the artifact's photograph of a city at dusk, its invented
+ * station identifier, and its "Agent Ready" telemetry: `docs/design/screens.md` §5 refuses
+ * generated decorative imagery set-wide, and the other two are figures no endpoint produces. The
+ * band keeps its height and its atmospheric ground through the surface tokens instead, which is the
+ * treatment the correction pass agreed for a hero with no approved asset behind it.
  */
 export function CurrentConditions({ current, location }: CurrentConditionsProps): ReactNode {
-  const readings = readingsFrom(current.values, current.units);
   const temperature = readingFor("temperature", current.values, current.units);
-  const rest = readings.filter((reading) => reading.key !== "temperature");
+  // Anything the provider reported that the hero's four slots do not already name. The slots are
+  // the artifact's composition; this is the guarantee that the composition never hides a reading.
+  const named = new Set<string>(["temperature", ...HERO_MEASURES.map((measure) => measure.key)]);
+  const extras = readingsFrom(current.values, current.units).filter(
+    (reading) => !named.has(reading.key),
+  );
 
   return (
     <ProvenanceSection
+      variant="hero"
       dataClass="observed"
       title="Current conditions"
       attribution={attributionOf({
@@ -124,28 +165,129 @@ export function CurrentConditions({ current, location }: CurrentConditionsProps)
         fromCache: current.attribution?.from_cache,
       })}
     >
-      <div className={styles.conditions}>
-        <div className={styles.conditionsPrimary}>
-          <p className={styles.place}>{location.display_name}</p>
-          <p className={styles.placeMeta}>
-            <span>{location.timezone}</span>
-            <span>Observed {current.observed_at_local}</span>
-          </p>
+      {/*
+        The artifact's photographic band. `LocationImage` carries the frame whether a photograph is
+        present or not, so the readout sits in the same place either way — see
+        `public/locations/README.md` for what turns the field into a photograph.
+      */}
+      <LocationImage
+        displayName={location.display_name}
+        latitude={location.latitude}
+        longitude={location.longitude}
+        variant="hero"
+      >
+        <div className={styles.hero}>
+          <div className={styles.heroPlace}>
+            <p className={styles.place}>{location.display_name}</p>
+            <p className={styles.placeMeta}>
+              <span>{location.timezone}</span>
+              <span>Observed {current.observed_at_local}</span>
+            </p>
+          </div>
+
+          <div className={styles.heroReadout}>
+            {temperature ? (
+              <p className={styles.readout}>{formatReading(temperature)}</p>
+            ) : (
+              <p className={styles.note}>No temperature reported</p>
+            )}
+          </div>
+
+          <dl className={styles.heroMeasures}>
+            {HERO_MEASURES.map(({ key, label }) => {
+              const reading = readingFor(key, current.values, current.units);
+              return (
+                <div className={styles.heroMeasure} key={key}>
+                  <dt className={styles.heroMeasureTerm}>{label}</dt>
+                  <dd
+                    className={styles.heroMeasureValue}
+                    data-reported={reading ? "true" : "false"}
+                  >
+                    {reading ? formatReading(reading) : "Unavailable"}
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
         </div>
+      </LocationImage>
 
-        {temperature ? (
-          <p className={styles.readout}>{formatReading(temperature)}</p>
-        ) : (
-          <p className={styles.note}>No temperature reported for this location just now.</p>
-        )}
-      </div>
-
-      {rest.length > 0 ? (
-        <Measures readings={rest} />
-      ) : (
-        <p className={styles.note}>The provider reported no other measures for this instant.</p>
-      )}
+      {extras.length > 0 ? <Measures readings={extras} /> : null}
     </ProvenanceSection>
+  );
+}
+
+/* ------------------------------------------------------------- forecast strip */
+
+export interface ForecastStripProps {
+  readonly forecast: ForecastResponse;
+}
+
+/**
+ * The day-by-day strip `01-dashboard.png` calls "Forecast Explorer".
+ *
+ * Three things about it are deliberate.
+ *
+ * **The name is not the artifact's.** *Forecast Explorer* is a post-MVP screen
+ * (`docs/design/roadmap.md`), and `screens.md` §5 records that a Dashboard section may not carry it
+ * or the navigation would advertise as built something that is not.
+ *
+ * **The number of cards is the number of days the backend returned**, not the artifact's seven. The
+ * horizon is the person's saved preference and the provider answers with what it has; rendering
+ * seven would mean drawing days nobody forecast. Fewer cards in the same card language is the
+ * honest form of the same strip.
+ *
+ * **No condition glyph and no condition word.** The artifact labels each day "LIGHT RAIN", "SUNNY",
+ * and so on. Weathra's forecast carries a high and a low; there is no condition field to render, so
+ * there is no icon and no caption rather than a guessed one.
+ */
+export function ForecastStrip({ forecast }: ForecastStripProps): ReactNode {
+  const days = forecastDaysFrom(forecast.daily);
+
+  /*
+   * Seven cards, because `01-dashboard.png` is a seven-card strip and the strip is the composition.
+   * The backend answers with the days it has — the horizon is the person's preference and the
+   * provider supplies what it supplies — so the cards beyond that carry an unavailable state rather
+   * than a guessed forecast. A strip that shrank to two cards read as a different component; a
+   * strip that invented five days would be the fabrication this product exists to avoid.
+   */
+  const slots = Array.from({ length: 7 }, (_, index) => days[index] ?? null);
+
+  return (
+    <div className={styles.strip}>
+      {slots.map((day, index) => (
+        <article
+          className={styles.stripDay}
+          key={day?.timeLocal ?? `empty-${index}`}
+          data-reported={day ? "true" : "false"}
+        >
+          {day ? (
+            <>
+              <p className={styles.stripDayName}>{day.date}</p>
+              <dl className={styles.stripFigures}>
+                <div className={styles.stripFigure}>
+                  <dt className={styles.stripFigureTerm}>High</dt>
+                  <dd className={styles.stripFigureValue}>
+                    {day.high ? formatReading(day.high) : "—"}
+                  </dd>
+                </div>
+                <div className={styles.stripFigure}>
+                  <dt className={styles.stripFigureTerm}>Low</dt>
+                  <dd className={styles.stripFigureValue}>
+                    {day.low ? formatReading(day.low) : "—"}
+                  </dd>
+                </div>
+              </dl>
+            </>
+          ) : (
+            <>
+              <p className={styles.stripDayName}>Day {index + 1}</p>
+              <p className={styles.stripEmpty}>Not forecast</p>
+            </>
+          )}
+        </article>
+      ))}
+    </div>
   );
 }
 
@@ -484,5 +626,268 @@ export function WhatChanged({ report }: WhatChangedProps): ReactNode {
         <p className={styles.note}>Previous snapshot retrieved {report.previous_retrieved_at}.</p>
       ) : null}
     </ProvenanceSection>
+  );
+}
+
+/* ------------------------------------------------------- the right-hand rail panels */
+
+/**
+ * "Saved Snapshots" — the panel `01-dashboard.png` puts under the anomaly panel.
+ *
+ * The artifact lists four places with a temperature and a trend arrow beside each. The places are
+ * real here; the temperatures are not rendered, and that is a deliberate refusal rather than an
+ * omission. There is no endpoint that returns conditions for a *set* of locations: a temperature
+ * per row means one weather request per saved place, on every load of the Dashboard, each with its
+ * own loading and failure state — for figures the briefing already presents properly for the place
+ * the person actually chose. `docs/design/screens.md` §8 records the same decision for the Saved
+ * Locations cards, and this is the same trade in a smaller frame.
+ *
+ * What the rows do carry is what the artifact's arrow implies: following one briefs the Dashboard
+ * on that place, through `?place=` and the backend's resolver.
+ */
+export function SavedSnapshots({
+  state,
+}: {
+  readonly state: ViewState<SavedLocationsResponse>;
+}): ReactNode {
+  const records = state.kind === "ready" ? state.data.locations : [];
+
+  return (
+    <Card aria-labelledby="dashboard-snapshots">
+      <CardHeader headingLevel={2}
+        title="Saved snapshots"
+        titleId="dashboard-snapshots"
+        actions={
+          <Link className={styles.panelLink} href="/locations">
+            View all
+          </Link>
+        }
+      />
+      <CardBody>
+        {state.kind === "loading" ? (
+          <p className={styles.note}>Loading your saved places…</p>
+        ) : state.kind === "error" ? (
+          <p className={styles.note}>Your saved places could not be loaded.</p>
+        ) : records.length === 0 ? (
+          <p className={styles.note}>
+            No places saved yet. <Link href="/locations">Save one</Link> and it appears here.
+          </p>
+        ) : (
+          <ul className={styles.snapshots}>
+            {records.map((record) => {
+              const name = record.label?.trim() || record.location.display_name;
+              return (
+                <li key={record.id}>
+                  <Link
+                    className={styles.snapshot}
+                    href={`/?place=${encodeURIComponent(name)}`}
+                  >
+                    <span className={styles.snapshotName}>{name}</span>
+                    <span className={styles.snapshotMeta}>{record.location.timezone}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+/**
+ * "Climate Pulse Analytics" — the artifact's wide intra-day chart.
+ *
+ * It is drawn from the forecast's **hourly** series, which is the only intra-day data Weathra has;
+ * the artifact's own version pairs a temperature curve with precipitation bars on a second axis,
+ * and this draws the curve alone for the reason `screens.md` §8 already records for Historical
+ * Analytics: a second y-axis makes any relationship between two series an artifact of where the
+ * axes were put.
+ *
+ * **When the provider supplies no hourly series the panel stays and says so.** That is the state
+ * the stub is in, and it is a real state — not every provider returns hourly data for every place.
+ * A panel that vanished would make the Dashboard a different shape depending on the provider.
+ */
+export function ClimatePulse({ forecast }: { readonly forecast: ForecastResponse }): ReactNode {
+  const points = pointsFrom(forecast.hourly);
+  const measure = "temperature";
+  const drawable = hasValues(points, measure);
+
+  return (
+    <ProvenanceSection
+      dataClass="forecast"
+      title="Climate pulse"
+      attribution={attributionOf({
+        provider: forecast.attribution?.provider,
+        location: forecast.attribution?.location,
+        retrievedAt: forecast.attribution?.retrieved_at,
+        period: forecast.period,
+        units: forecast.attribution?.units,
+        fromCache: forecast.attribution?.from_cache,
+      })}
+    >
+      {drawable ? (
+        <RecordedAgainstBaselineChart
+          points={points}
+          measure={measure}
+          unit={forecast.hourly?.units?.[measure] ?? null}
+          seriesLabel="Temperature"
+          title="Temperature through the forecast window"
+          missing={missingCount(points, measure)}
+          baselineValue={null}
+          baselineLabel={null}
+        />
+      ) : (
+        <EmptyChart
+          title="Temperature through the forecast window"
+          reason="No hourly series reported for this window."
+        />
+      )}
+    </ProvenanceSection>
+  );
+}
+
+/**
+ * "Precipitation Logic" — the artifact's narrow risk panel beside the pulse chart.
+ *
+ * The artifact states "42% Integrated Risk", a convective type and a millimetre-per-hour load. None
+ * of the three is a figure Weathra's backend produces, and an "integrated risk" percentage in
+ * particular is precisely the kind of invented confidence `screens.md` §5 refuses across the set.
+ *
+ * So the panel keeps its position and its shape and carries the two things that *are* true about
+ * precipitation in this window: whatever the forecast reported for it, and the uncertainty
+ * statement the backend supplies with every forecast — its basis, its provider, and whether that
+ * provider gave a spread at all. Where the provider reported no precipitation, the panel says that
+ * rather than showing a zero, because no reading and a reading of zero are different facts.
+ */
+export function PrecipitationOutlook({
+  forecast,
+}: {
+  readonly forecast: ForecastResponse;
+}): ReactNode {
+  const days = forecastDaysFrom(forecast.daily);
+  const wet = days
+    .map((day) => ({
+      date: day.date,
+      reading: day.other.find((entry) => entry.key.startsWith("precipitation")) ?? null,
+    }))
+    .filter((entry): entry is { date: string; reading: Reading } => entry.reading !== null);
+
+  const uncertainty = forecast.uncertainty;
+
+  return (
+    <ProvenanceSection
+      dataClass="forecast"
+      title="Precipitation outlook"
+      attribution={attributionOf({
+        provider: forecast.attribution?.provider,
+        location: forecast.attribution?.location,
+        retrievedAt: forecast.attribution?.retrieved_at,
+        period: forecast.period,
+        units: forecast.attribution?.units,
+        fromCache: forecast.attribution?.from_cache,
+      })}
+    >
+      {wet.length > 0 ? (
+        <dl className={styles.measures}>
+          {wet.map((entry) => (
+            <div className={styles.measure} key={entry.date}>
+              <dt className={styles.measureTerm}>{entry.date}</dt>
+              <dd className={styles.measureValue}>{formatReading(entry.reading)}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className={styles.note}>
+          This provider reported no precipitation for the days in this window. That is an absent
+          reading, not a reading of zero.
+        </p>
+      )}
+
+      {uncertainty ? (
+        <div className={styles.outlookBasis}>
+          <p className={styles.note}>{uncertainty.basis}</p>
+          <p className={styles.note}>
+            {uncertainty.spread_available
+              ? `${uncertainty.provider} supplied a spread for this forecast.`
+              : `${uncertainty.provider} supplied no forecast spread, so none is shown.`}
+          </p>
+        </div>
+      ) : null}
+    </ProvenanceSection>
+  );
+}
+
+/* ------------------------------------------------------------ confidence matrix */
+
+export interface ConfidenceMatrixProps {
+  readonly forecast: ForecastResponse | null;
+  readonly analysis: AnalysisResponse | null;
+}
+
+/**
+ * "Confidence Matrix" — the bars beside Weathra Intelligence in `01-dashboard.png`.
+ *
+ * The artifact fills them with MODEL CONVERGENCE 94% and DATA RELIABILITY 82%. Weathra computes
+ * neither: there is one provider, so there is nothing to converge, and no endpoint scores a
+ * provider's reliability. Both bars are therefore drawn unfilled with the reason stated.
+ *
+ * The two rows that *can* carry something do. Forecast confidence comes from the backend's own
+ * `UncertaintyStatement` — a level per horizon distance, which is a real graded figure — and
+ * coverage is the share of points the deterministic analytics actually used, which the statistics
+ * report themselves.
+ */
+export function ConfidenceMatrix({ forecast, analysis }: ConfidenceMatrixProps): ReactNode {
+  const horizon = forecast?.uncertainty?.horizon?.[0] ?? null;
+  /*
+   * The backend grades a horizon point as high/moderate/low. The bar shows that grade at a fixed
+   * position rather than inventing a percentage between them — the figure being drawn is the
+   * backend's own three-step grade, not a continuous score somebody computed.
+   */
+  const level = confidenceLevelFor(horizon?.confidence);
+  const confidence =
+    level === "high" ? 0.9 : level === "moderate" ? 0.6 : level === "low" ? 0.3 : null;
+
+  const results: readonly StatisticResult[] = analysis?.findings ?? [];
+  const used = results.reduce((total, result) => total + (result.points_used ?? 0), 0);
+  const excluded = results.reduce((total, result) => total + (result.points_excluded ?? 0), 0);
+  const coverage = used + excluded > 0 ? used / (used + excluded) : null;
+
+  return (
+    <section className={styles.matrix} aria-label="Confidence matrix">
+      <h3 className={styles.matrixTitle}>Confidence matrix</h3>
+      <Meter
+        label="Forecast confidence"
+        value={confidence}
+        unavailable="No horizon reported"
+        note={
+          horizon
+            ? `Graded from horizon distance — ${horizon.hours_ahead} h ahead.`
+            : "The provider reported no horizon points."
+        }
+      />
+      <Meter
+        label="Analytics coverage"
+        value={coverage}
+        unavailable="No statistics yet"
+        note={
+          coverage === null
+            ? "Nothing computed for this window."
+            : `${used} of ${used + excluded} points usable.`
+        }
+      />
+      <Meter
+        label="Model convergence"
+        value={null}
+        unavailable="Single provider"
+        note="Weathra reads one provider, so there is nothing to converge."
+      />
+      <Meter
+        label="Provider reliability"
+        value={null}
+        unavailable="Not scored"
+        note="No endpoint scores a provider's reliability."
+      />
+    </section>
   );
 }

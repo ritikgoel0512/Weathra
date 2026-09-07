@@ -192,3 +192,81 @@ export function MenuIcon({ open }: { readonly open: boolean }): ReactNode {
     </svg>
   );
 }
+
+/**
+ * The password field's visibility glyph — `08-authentication.png` shows an eye inside the field's
+ * trailing edge, where the implementation drew the words "Show"/"Hide".
+ *
+ * The words were there for a reason: an icon-only control needs an accessible name supplied
+ * separately, and a name nobody can see is a name nobody checks. That reason is met without keeping
+ * the words — the button carries an explicit `aria-label` ("Show password" / "Hide password") which
+ * every test queries it by, so the name is asserted on every run rather than merely present. The
+ * glyph is `aria-hidden`, as every other icon here is.
+ */
+export function EyeIcon({ off }: { readonly off: boolean }): ReactNode {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
+      <circle cx="12" cy="12" r="3" />
+      {off ? <path d="M4 20 20 4" /> : null}
+    </svg>
+  );
+}
+
+/** The top bar's search glyph, inside the field's leading edge as every product artifact shows it. */
+export function SearchIcon(): ReactNode {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m15.5 15.5 4 4" />
+    </svg>
+  );
+}
+
+/**
+ * The notification bell the product artifacts draw in the top bar.
+ *
+ * Rendered only in fidelity-fixture mode, and only as a decoration: Weathra has no notifications
+ * (see `top-bar.tsx`), so there is no control behind it and nothing announces it. It exists here so
+ * a screenshot of the strip has the artifact's width and rhythm.
+ */
+export function BellIcon(): ReactNode {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M18 15.5V11a6 6 0 1 0-12 0v4.5L4.5 18h15L18 15.5z" />
+      <path d="M9.5 18a2.5 2.5 0 0 0 5 0" />
+    </svg>
+  );
+}

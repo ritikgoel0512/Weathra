@@ -86,6 +86,18 @@ export interface SessionBoundaryProps {
   readonly accessToken?: AccessTokenSource;
   /** What the pending state announces. */
   readonly pendingLabel?: string;
+  /**
+   * The chrome the gated content renders inside — the application shell.
+   *
+   * It is a render prop rather than a wrapper around `SessionBoundary` because the shell needs the
+   * query layer and the API client this boundary provides: `01-dashboard.png` puts the person's
+   * saved locations in the navigation rail, and painting them means asking the backend for them.
+   * Rendering the shell *outside* the boundary would leave the rail with no way to ask; rendering
+   * it *inside* the gate would replace the whole frame with the expired-session state, so a person
+   * whose session lapsed would lose the navigation along with the screen. Between the two is
+   * exactly where it belongs.
+   */
+  readonly frame?: (content: ReactNode) => ReactNode;
 }
 
 export function SessionBoundary(props: SessionBoundaryProps): ReactNode {
@@ -104,6 +116,7 @@ function SessionGate({
   fetch: injectedFetch,
   accessToken,
   pendingLabel = "Checking your session",
+  frame,
 }: SessionBoundaryProps): ReactNode {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<SessionStatus>(initialStatus);
@@ -171,17 +184,18 @@ function SessionGate({
 
   const value = useMemo<SessionValue>(() => ({ status, markExpired }), [status, markExpired]);
 
+  const gated =
+    status === "expired" ? (
+      <SessionExpiredState />
+    ) : mayRenderProtectedContent(status) ? (
+      children
+    ) : (
+      <LoadingState label={pendingLabel} />
+    );
+
   return (
     <SessionContext.Provider value={value}>
-      <ApiProvider client={client}>
-        {status === "expired" ? (
-          <SessionExpiredState />
-        ) : mayRenderProtectedContent(status) ? (
-          children
-        ) : (
-          <LoadingState label={pendingLabel} />
-        )}
-      </ApiProvider>
+      <ApiProvider client={client}>{frame ? frame(gated) : gated}</ApiProvider>
     </SessionContext.Provider>
   );
 }

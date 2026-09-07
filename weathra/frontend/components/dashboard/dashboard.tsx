@@ -27,7 +27,8 @@
  */
 
 import Link from "next/link";
-import { useCallback, useState, type FormEvent, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import { CandidateChoice } from "@/components/locations/candidate-choice";
 import {
@@ -39,17 +40,31 @@ import {
   LoadingState,
 } from "@/components/ui";
 import { AGENT_NOT_CONFIGURED_CODE } from "@/lib/api/errors";
-import type { AskResponse, Location, PreferenceView, UnitSystem } from "@/lib/api/schema";
+import type {
+  AskResponse,
+  Location,
+  PreferenceView,
+  SavedLocationsResponse,
+  UnitSystem,
+} from "@/lib/api/schema";
+import { FixtureDashboard } from "@/components/dashboard/fixture-dashboard";
+import { PLACE_PARAM } from "@/components/shell/top-bar";
 import { briefingLocationFrom, calendarWindowFrom } from "@/lib/dashboard/briefing";
 import { qualifiedName } from "@/lib/locations/place";
 import { useLocationResolution } from "@/hooks/use-location-resolution";
+import { usingVisilyFixtures } from "@/lib/fixtures/visily";
 import { useApiQuery } from "@/lib/query/hooks";
-import { PREFERENCES_KEY } from "@/lib/query/keys";
+import { PREFERENCES_KEY, SAVED_LOCATIONS_KEY } from "@/lib/query/keys";
 import { describeFailure } from "@/lib/query/state";
 import { useApiClient } from "@/lib/api/context";
 
 import {
+  ClimatePulse,
+  ConfidenceMatrix,
   CurrentConditions,
+  ForecastStrip,
+  PrecipitationOutlook,
+  SavedSnapshots,
   DeterministicAnalytics,
   ForecastMovement,
   HistoricalContext,
@@ -198,6 +213,18 @@ function Briefing({
     enabled: window !== null,
   });
 
+  /*
+   * The saved places, for the "Saved Snapshots" panel. Deliberately *not* joined to the gate below:
+   * whether somebody has saved a place has nothing to do with whether the briefing can be shown, so
+   * a slow or failed list must not hold up or take down the conditions. The panel carries its own
+   * state.
+   */
+  const snapshots = useApiQuery<SavedLocationsResponse>({
+    key: SAVED_LOCATIONS_KEY,
+    request: (client) => client.savedLocations(),
+    isEmpty: (data) => data.locations.length === 0,
+  });
+
   // The two retrieved surfaces are what the briefing rests on: while either is in flight there is
   // nothing honest to show, and if either fails the screen says so and offers a retry.
   if (current.state.kind === "loading" || forecast.state.kind === "loading") {
@@ -211,6 +238,20 @@ function Briefing({
     return <ErrorState failure={forecast.state.failure} onRetry={forecast.retry} />;
   }
 
+  /*
+   * The Dashboard's composition, in the order `01-dashboard.png` sets it out:
+   *
+   *   1. the hero band — the place, the temperature, the secondary measures;
+   *   2. the intelligence row — Weathra's reading on the left, the computed figures on the right;
+   *   3. the forecast strip — a card per day the backend returned;
+   *   4. the movement row — how the forecast has moved, and what it is against;
+   *   5. the status rule.
+   *
+   * The previous arrangement stacked every card in two long columns, which is why the screen and
+   * its artifact did not read as the same page even once the palette matched: the artifact is a
+   * sequence of full-width bands with two-column rows between them, and the hierarchy is carried by
+   * the band widths rather than by the order alone.
+   */
   return (
     <div className={styles.dashboard}>
       {current.state.kind === "ready" ? (
@@ -219,9 +260,13 @@ function Briefing({
 
       <div className={styles.columns}>
         <div className={styles.column}>
-          {forecast.state.kind === "ready" ? (
-            <ForecastMovement forecast={forecast.state.data} location={location} />
-          ) : null}
+          <div className={styles.intelligenceRow}>
+            <WeathraIntelligence units={units} />
+            <ConfidenceMatrix
+              forecast={forecast.state.kind === "ready" ? forecast.state.data : null}
+              analysis={analysis.state.kind === "ready" ? analysis.state.data : null}
+            />
+          </div>
 
           {changes.state.kind === "loading" ? (
             <LoadingState label="Comparing against the last snapshot" lines={2} />
@@ -233,8 +278,6 @@ function Briefing({
               report={changes.state.kind === "ready" ? changes.state.data : null}
             />
           )}
-
-          <WeathraIntelligence units={units} />
         </div>
 
         <div className={styles.column}>
@@ -246,8 +289,62 @@ function Briefing({
             <DeterministicAnalytics analysis={analysis.state.data} location={location} />
           ) : null}
 
+          {/* The artifact's panel beneath the anomaly panel, in the same column. */}
+          <SavedSnapshots state={snapshots.state} />
+        </div>
+      </div>
+
+      {forecast.state.kind === "ready" ? (
+        <section aria-label="The days ahead">
+          <div className={styles.bandHeading}>
+            <h2 className={styles.bandTitle}>The days ahead</h2>
+            <p className={styles.bandMeta}>
+              {forecast.state.data.horizon_days}-day horizon from your preferences, in{" "}
+              {location.timezone}.
+            </p>
+          </div>
+          <ForecastStrip forecast={forecast.state.data} />
+        </section>
+      ) : null}
+
+      {/*
+        The artifact's analytics row: the wide intra-day chart on the left, the precipitation panel
+        beside it. Both are drawn from the forecast the screen already holds.
+      */}
+      {forecast.state.kind === "ready" ? (
+        <div className={styles.columns}>
+          <div className={styles.column}>
+            <ClimatePulse forecast={forecast.state.data} />
+          </div>
+          <div className={styles.column}>
+            <PrecipitationOutlook forecast={forecast.state.data} />
+          </div>
+        </div>
+      ) : null}
+
+      <div className={styles.columns}>
+        <div className={styles.column}>
+          {forecast.state.kind === "ready" ? (
+            <ForecastMovement forecast={forecast.state.data} location={location} />
+          ) : null}
+        </div>
+
+      </div>
+
+      {/*
+        The wide baseline band `01-dashboard.png` closes on: the account on the left, the figures
+        beside it. It used to be a card in the right rail, which is a different composition.
+      */}
+      <div className={styles.baselineRow}>
+        <div className={styles.column}>
+          <div className={styles.bandHeading}>
+            <h2 className={styles.bandTitle}>Climate baseline</h2>
+            <p className={styles.bandMeta}>This window against the years behind it.</p>
+          </div>
+        </div>
+        <div className={styles.column}>
           {baseline.state.kind === "loading" ? (
-            <LoadingState label="Loading historical context" lines={3} />
+            <LoadingState label="Loading the baseline" lines={3} />
           ) : baseline.state.kind === "error" ? (
             <ErrorState failure={baseline.state.failure} onRetry={baseline.retry} />
           ) : baseline.state.kind === "ready" ? (
@@ -255,6 +352,22 @@ function Briefing({
           ) : null}
         </div>
       </div>
+
+      {/*
+        The rule the artifact closes on. Its own version reads "DATA FLOW: ACTIVE · SYSTEM HASH:
+        B882-X90A-BERL · v4.8.2-STABLE" — a status word, an invented hash and an invented version.
+        What is put in its place is the same rule carrying facts this screen already holds: who
+        provided the figures, the place they are for, and the units they are in.
+      */}
+      {current.state.kind === "ready" ? (
+        <p className={styles.statusStrip}>
+          <span className={styles.statusStripItem}>
+            Provider: {current.state.data.attribution?.provider ?? "not reported"}
+          </span>
+          <span className={styles.statusStripItem}>{location.display_name}</span>
+          <span className={styles.statusStripItem}>Units: {units}</span>
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -279,7 +392,14 @@ function Briefing({
 function LocationChoice({ preferences }: { readonly preferences: PreferenceView }): ReactNode {
   const saved = briefingLocationFrom(preferences);
   const entry = useLocationResolution(null);
-  const [query, setQuery] = useState("");
+  /**
+   * The shell's search field hands a name over as `?place=`, and it lands here — the one place that
+   * turns a name into a location, through the backend's resolver. The field in the header does no
+   * resolving of its own, so an ambiguous name asked for up there gets the same candidate chooser
+   * as one typed below, rather than a second, weaker answer.
+   */
+  const asked = useSearchParams().get(PLACE_PARAM)?.trim() ?? "";
+  const [query, setQuery] = useState(asked);
   /** The resolved place being briefed on, when it is not the person's default. */
   const [chosen, setChosen] = useState<Location | null>(null);
 
@@ -310,6 +430,22 @@ function LocationChoice({ preferences }: { readonly preferences: PreferenceView 
     setQuery("");
   }, [entry]);
 
+  /**
+   * Resolve a name that arrived in the URL, once per name. The ref is what makes it once: without
+   * it, resolving would set state, re-render, and ask again. Clearing the entry is deliberately not
+   * done here — a person who then presses "use my default" should not be pulled back to the URL's
+   * place on the next render.
+   */
+  const resolvedParam = useRef<string | null>(null);
+  useEffect(() => {
+    if (asked === "" || resolvedParam.current === asked) return;
+    resolvedParam.current = asked;
+    setQuery(asked);
+    void entry.resolve(asked).then((settled) => {
+      if (settled.kind === "resolved") setChosen(settled.location);
+    });
+  }, [asked, entry]);
+
   const settling = entry.resolution.kind !== "unresolved" && entry.resolution.kind !== "resolved";
   const location = chosen ?? saved;
 
@@ -323,8 +459,7 @@ function LocationChoice({ preferences }: { readonly preferences: PreferenceView 
       <header className={styles.heading}>
         <h1 className={styles.title}>Dashboard</h1>
         <p className={styles.subtitle}>
-          Your Weathra Intelligence briefing: what the conditions are now, how the forecast has
-          moved, what stands out, and how it sits against the years before it.
+          Conditions now, the days ahead, and how they sit against the record.
         </p>
       </header>
 
@@ -393,6 +528,14 @@ function LocationChoice({ preferences }: { readonly preferences: PreferenceView 
 }
 
 export function Dashboard(): ReactNode {
+  /*
+   * Visual-fidelity review only. `usingVisilyFixtures()` reads a `NEXT_PUBLIC_` flag whose value
+   * is fixed when the bundle is built, so in a deployed build this is always false and nothing
+   * below it is reachable. It is not folded away, so the branch and `FixtureDashboard` do ship —
+   * see `lib/fixtures/visily.ts`. Nothing below it changes.
+   */
+  if (usingVisilyFixtures()) return <FixtureDashboard />;
+
   const preferences = useApiQuery({
     key: PREFERENCES_KEY,
     request: (client) => client.preferences(),

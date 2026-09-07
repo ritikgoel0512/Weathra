@@ -28,9 +28,10 @@
  * `docs/design/screens.md` §5 and §8.
  */
 
+import Link from "next/link";
 import { useCallback, useState, type FormEvent, type ReactNode } from "react";
 
-import { Badge, Button, EmptyState, ErrorState, Input, LoadingState } from "@/components/ui";
+import { Badge, Button, EmptyState, ErrorState, Input, LoadingState, Meter } from "@/components/ui";
 import { ViewStateSwitch } from "@/components/view-state";
 import type { Location, SavedLocationRecord, SavedLocationsResponse } from "@/lib/api/schema";
 import {
@@ -45,6 +46,9 @@ import { useLocationResolution } from "@/hooks/use-location-resolution";
 
 import { CandidateChoice } from "./candidate-choice";
 import styles from "./locations.module.css";
+
+import { FixtureLocations } from "./fixture-locations";
+import { usingVisilyFixtures } from "@/lib/fixtures/visily";
 
 /** One saved place: what it is called, where it is, and how to remove it. */
 function LocationCard({
@@ -153,13 +157,25 @@ function AddLocation({ atLimit, limit }: { readonly atLimit: boolean; readonly l
   const savedPlaceName = saved?.location ? qualifiedName(saved.location) : null;
 
   return (
+    /*
+      A disclosure rather than a permanent form. `06-saved-locations.png` puts a single "Add New
+      Node" control in the header and gives the page to the saved places; a full form open at the
+      top made adding — the rarer action — the subject of the screen.
+    */
     <form className={styles.panel} onSubmit={onSubmit} aria-label="Add a saved location">
-      <h2 className={styles.panelTitle}>Add a location</h2>
-      <p className={styles.note}>
-        Weathra resolves the name and saves the place it resolves to — its coordinates and time zone
-        — so a saved location never changes meaning later. Add a region or country if a name could
-        mean more than one place.
-      </p>
+      <details>
+      {/*
+        The heading lives inside the summary rather than being replaced by it. The disclosure moved
+        the form out of the page's flow, and for a moment took the panel's `h2` with it — which left
+        the candidate chooser's `h3` following the screen's `h1` directly, a heading-order break that
+        `tests/accessibility.test.tsx` caught. The control is the summary; the heading is still a
+        heading.
+      */}
+      <summary className={styles.addSummary}>
+        <h2 className={styles.panelTitle}>Add a location</h2>
+      </summary>
+      <div className={styles.addBody}>
+      <p className={styles.note}>Resolved before saving. Add a region if a name is ambiguous.</p>
 
       <div className={styles.toolbar}>
         <div className={styles.toolbarField}>
@@ -207,6 +223,8 @@ function AddLocation({ atLimit, limit }: { readonly atLimit: boolean; readonly l
         headingLevel={3}
       />
 
+      </div>
+      </details>
       {atLimit ? (
         <p className={styles.noteStrong}>
           You have reached Weathra&rsquo;s limit of {limit} saved locations. Remove one to save
@@ -311,7 +329,149 @@ function SavedList({ response }: { readonly response: SavedLocationsResponse }):
   );
 }
 
+
+/* ------------------------------------------------------- the workspace panels */
+
+/**
+ * The lower panels of `06-saved-locations.png`: a synthesis panel, a comparison panel, and a live
+ * metadata block, over a status rule.
+ *
+ * The artifact fills them with "Global Vector Analysis", grounding-health percentages and a node
+ * count. None of those is a figure any endpoint produces, and inventing a health score for a list
+ * of place names would be a claim about nothing. What the panels carry instead is arithmetic over
+ * the records themselves — how many places, how many distinct time zones, how many countries —
+ * which is deterministic, checkable, and genuinely what a "workspace synthesis" of a saved list is.
+ *
+ * The comparison panel is a real route rather than a summary: Compare Cities is the screen that
+ * weighs saved places against each other, and it already seeds itself from this list.
+ */
+function WorkspacePanels({ response }: { readonly response: SavedLocationsResponse }): ReactNode {
+  const records = response.locations;
+  const resolved = records.filter(
+    (record) => record.location.timezone && Number.isFinite(record.location.latitude),
+  ).length;
+  const zones = new Set(records.map((record) => record.location.timezone).filter(Boolean));
+  const countries = new Set(
+    records.map((record) => record.location.country).filter((value): value is string => !!value),
+  );
+  const remaining = Math.max(0, response.limit - response.count);
+
+  return (
+    <>
+      <section className={styles.panel} aria-label="Node health index">
+        <h2 className={styles.panelTitle}>Node health index</h2>
+        <p className={styles.note}>Counted from the records above, not measured.</p>
+        <div className={styles.summary}>
+          <Meter
+            label="Nodes resolved"
+            value={records.length > 0 ? resolved / records.length : null}
+            unavailable="Nothing saved"
+            note={`${resolved} of ${records.length} carry coordinates and a time zone.`}
+          />
+          <Meter
+            label="Allowance used"
+            value={response.limit > 0 ? response.count / response.limit : null}
+            unavailable="No limit reported"
+            note={`${response.count} of ${response.limit} places.`}
+          />
+          <Meter
+            label="Telemetry sync"
+            value={null}
+            unavailable="Not measured"
+            note="Weathra reports no per-node telemetry."
+          />
+        </div>
+      </section>
+
+      <div className={styles.panelRow}>
+        <section className={styles.panel} aria-label="Workspace summary">
+          <h2 className={styles.panelTitle}>Workspace summary</h2>
+          <p className={styles.note}>
+            Counted from the places above, not from any measurement.
+          </p>
+          <dl className={styles.summary}>
+            <div className={styles.summaryFact}>
+              <dt>Places saved</dt>
+              <dd>{response.count}</dd>
+            </div>
+            <div className={styles.summaryFact}>
+              <dt>Time zones</dt>
+              <dd>{zones.size}</dd>
+            </div>
+            <div className={styles.summaryFact}>
+              <dt>Countries</dt>
+              <dd>{countries.size > 0 ? countries.size : "Not reported"}</dd>
+            </div>
+            <div className={styles.summaryFact}>
+              <dt>Remaining</dt>
+              <dd>{remaining}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section className={styles.panel} aria-label="Compare these cities">
+          <h2 className={styles.panelTitle}>Compare these cities</h2>
+          <p className={styles.note}>
+            Compare Cities weighs saved places against one criterion over the same window, in each
+            place&rsquo;s own local time, and seeds itself from this list.
+          </p>
+          <p className={styles.note}>
+            {records.length >= 2
+              ? "You have enough places saved to compare."
+              : "Save at least two places to compare them."}
+          </p>
+          <div className={styles.actions}>
+            <Link className={styles.panelAction} href="/compare">
+              Open Compare Cities
+            </Link>
+          </div>
+        </section>
+      </div>
+
+      <section className={styles.panel} aria-label="Live metadata">
+        <h2 className={styles.panelTitle}>Live metadata</h2>
+        <dl className={styles.summary}>
+          <div className={styles.summaryFact}>
+            <dt>Places</dt>
+            <dd>{response.count}</dd>
+          </div>
+          <div className={styles.summaryFact}>
+            <dt>Allowance</dt>
+            <dd>{response.limit}</dd>
+          </div>
+          <div className={styles.summaryFact}>
+            <dt>Source</dt>
+            <dd>Your account</dd>
+          </div>
+          <div className={styles.summaryFact}>
+            <dt>Latency</dt>
+            {/* No endpoint reports one, and the artifact's "42ms" is mockup content. */}
+            <dd>Not reported</dd>
+          </div>
+        </dl>
+      </section>
+
+      <p className={styles.statusStrip}>
+        <span>Saved list from your account</span>
+        <span>
+          {response.count} of {response.limit} places
+        </span>
+        <span>Follows you across sessions and devices</span>
+      </p>
+    </>
+  );
+}
+
 export function SavedLocations(): ReactNode {
+  /*
+   * Visual-fidelity review only.
+   *
+   * The flag's value is baked into the bundle at build time, so in a deployed build this comparison
+   * is always false and nothing below it is reachable — but it is a *runtime* comparison against a
+   * baked object rather than a folded constant, so the branch and the fixture screen do ship. See
+   * `lib/fixtures/visily.ts` for what that does and does not guarantee. Nothing below changes.
+   */
+  if (usingVisilyFixtures()) return <FixtureLocations />;
   const { state, retry } = useApiQuery<SavedLocationsResponse>({
     key: SAVED_LOCATIONS_KEY,
     request: (client) => client.savedLocations(),
@@ -327,8 +487,7 @@ export function SavedLocations(): ReactNode {
       <header className={styles.heading}>
         <h1 className={styles.title}>Saved Locations</h1>
         <p className={styles.subtitle}>
-          The places you have saved. They follow you across sessions and devices, and every screen
-          that asks for a location offers them.
+          Offered by every screen that asks for a location. Follows you across devices.
         </p>
       </header>
 
@@ -338,6 +497,28 @@ export function SavedLocations(): ReactNode {
         atLimit={response !== null && response.count >= response.limit}
         limit={response?.limit ?? 0}
       />
+
+      {/*
+        The artifact's attention strip. It carries a real condition when there is one — the saved
+        allowance running out is the only one this screen can know about — and says so plainly when
+        there is not, rather than inventing an atmospheric alert to fill the row.
+      */}
+      {response ? (
+        <p
+          className={styles.attention}
+          data-tone={response.count >= response.limit ? "warning" : "ok"}
+          role="status"
+        >
+          <span className={styles.attentionTitle}>
+            {response.count >= response.limit ? "Allowance reached" : "All nodes nominal"}
+          </span>
+          <span>
+            {response.count >= response.limit
+              ? `You have ${response.count} of ${response.limit} places saved. Remove one to save another.`
+              : `${response.count} of ${response.limit} places saved. No attention required.`}
+          </span>
+        </p>
+      ) : null}
 
       <ViewStateSwitch
         state={state}
@@ -356,7 +537,12 @@ export function SavedLocations(): ReactNode {
             onRetry={again}
           />
         )}
-        ready={(data) => <SavedList response={data} />}
+        ready={(data) => (
+          <>
+            <SavedList response={data} />
+            <WorkspacePanels response={data} />
+          </>
+        )}
       />
     </section>
   );

@@ -38,7 +38,14 @@ import { useCallback, useMemo, useState, type FormEvent, type ReactNode } from "
 import { CandidateChoice } from "@/components/locations/candidate-choice";
 import { Button, EmptyState, ErrorState, Input, LoadingState, Select } from "@/components/ui";
 import { useApiClient } from "@/lib/api/context";
-import type { ComparisonRequest, Criterion, Location } from "@/lib/api/schema";
+import type {
+  ComparisonCandidate,
+  ComparisonRequest,
+  ComparisonResult,
+  Criterion,
+  Location,
+  UnitSystem,
+} from "@/lib/api/schema";
 import { blockingReason, CRITERIA, criterionLabel } from "@/lib/comparison/ranking";
 import { qualifiedName } from "@/lib/locations/place";
 import {
@@ -49,12 +56,22 @@ import {
   UNRESOLVED,
   type LocationResolution,
 } from "@/lib/locations/resolution";
+import { formatReading, forecastDaysFrom } from "@/lib/dashboard/briefing";
 import { useApiQuery } from "@/lib/query/hooks";
 import { PREFERENCES_KEY, SAVED_LOCATIONS_KEY } from "@/lib/query/keys";
 
 import { ComparisonChart } from "./chart";
-import { Excluded, Ranking, SharedBasis } from "./sections";
+import {
+  ComparisonCharts,
+  ComparisonSummary,
+  DifferentialMatrix,
+  ForecastDeltaExplorer,
+  Excluded, Ranking, SharedBasis,
+} from "./sections";
 import styles from "./compare.module.css";
+
+import { FixtureCompare } from "./fixture-compare";
+import { usingVisilyFixtures } from "@/lib/fixtures/visily";
 
 /** The per-request bound the backend enforces. Shown here so the limit is not learnt by rejection. */
 const MAXIMUM_LOCATIONS = 8;
@@ -93,6 +110,74 @@ function seedRows(places: readonly Location[]): Row[] {
   return rows;
 }
 
+/**
+ * One place's forecast over the shared horizon, for the delta matrix.
+ *
+ * A hook per place rather than one call: `POST /weather/comparison` answers with statistics over
+ * the window, not a per-day series per place, so the day-by-day grid the artifact draws needs the
+ * forecast endpoint the Dashboard already uses. Every cell is therefore a figure that place's own
+ * provider returned.
+ */
+function useForecastRow(place: Location | null, days: number, units: string) {
+  const query = useApiQuery({
+    key: ["compare", "forecast", place?.latitude, place?.longitude, days, units],
+    request: (client) =>
+      client.forecast({
+        latitude: place!.latitude,
+        longitude: place!.longitude,
+        units: units as UnitSystem,
+        days,
+      }),
+    enabled: place !== null,
+  });
+  return query.state.kind === "ready" ? query.state.data : null;
+}
+
+/**
+ * The matrix rows, built from each candidate's own forecast.
+ *
+ * Capped at the first four places so the grid stays a grid; the ranking above always lists them
+ * all, and the artifact's matrix is two columns wide.
+ */
+function ForecastDeltaGrid({
+  result,
+  days,
+}: {
+  readonly result: ComparisonResult;
+  readonly days: number;
+}): ReactNode {
+  const candidates: readonly ComparisonCandidate[] = (result.candidates ?? []).slice(0, 4);
+  const units = result.unit_system ?? "metric";
+
+  // Fixed number of hooks: React requires the same calls on every render, so four slots are asked
+  // for and the unused ones are disabled rather than conditionally skipped.
+  const a = useForecastRow(candidates[0]?.location ?? null, days, units);
+  const b = useForecastRow(candidates[1]?.location ?? null, days, units);
+  const c = useForecastRow(candidates[2]?.location ?? null, days, units);
+  const d = useForecastRow(candidates[3]?.location ?? null, days, units);
+
+  const rows: { label: string; days: { date: string; high: string | null }[] }[] = candidates.map(
+    (candidate: ComparisonCandidate, index: number) => {
+      const forecast = [a, b, c, d][index] ?? null;
+      const daily = forecastDaysFrom(forecast?.daily);
+      return {
+        label: candidate.label,
+        days: daily.map((day) => ({
+          date: day.date,
+          high: day.high ? formatReading(day.high) : null,
+        })),
+      };
+    },
+  );
+
+  // Seven rows, as the artifact draws them, labelled by the dates any place actually reported.
+  const dates: string[] = [
+    ...new Set<string>(rows.flatMap((row) => row.days.map((day) => day.date))),
+  ].sort();
+
+  return <ForecastDeltaExplorer rows={rows} dates={dates} />;
+}
+
 function Results({ enquiry }: { readonly enquiry: Enquiry }): ReactNode {
   const request: ComparisonRequest = useMemo(
     () => ({
@@ -127,11 +212,28 @@ function Results({ enquiry }: { readonly enquiry: Enquiry }): ReactNode {
         <SharedBasis result={result} />
         <ComparisonChart result={result} />
       </Ranking>
+
+      {/* The artifact's day-by-day matrix, from each place's own retrieved forecast. */}
+      <ForecastDeltaGrid result={result} days={enquiry.days} />
+
+      {/* Its two lower charts, and the account of how the ranking was made. */}
+      <ComparisonCharts />
+      <DifferentialMatrix result={result} />
+      <ComparisonSummary result={result} />
     </div>
   );
 }
 
 export function CompareCities(): ReactNode {
+  /*
+   * Visual-fidelity review only.
+   *
+   * The flag's value is baked into the bundle at build time, so in a deployed build this comparison
+   * is always false and nothing below it is reachable — but it is a *runtime* comparison against a
+   * baked object rather than a folded constant, so the branch and the fixture screen do ship. See
+   * `lib/fixtures/visily.ts` for what that does and does not guarantee. Nothing below changes.
+   */
+  if (usingVisilyFixtures()) return <FixtureCompare />;
   const preferences = useApiQuery({
     key: PREFERENCES_KEY,
     request: (client) => client.preferences(),
@@ -269,9 +371,7 @@ export function CompareCities(): ReactNode {
       <header className={styles.heading}>
         <h1 className={styles.title}>Compare Cities</h1>
         <p className={styles.subtitle}>
-          Name two or more places and Weathra ranks them against one criterion over the same window,
-          in each place&rsquo;s own local time. Every score is built from figures it retrieved and
-          computed — none is estimated, and any place it could not score is named.
+          Ranked against one criterion, over one window, in each place&rsquo;s own local time.
         </p>
       </header>
 

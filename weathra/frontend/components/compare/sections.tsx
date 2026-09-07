@@ -31,7 +31,10 @@ import {
   Badge,
   DataClassBadge,
   MethodNote,
+  EmptyChart,
+  LocationImage,
   ProvenanceSection,
+  ScrollRegion,
 } from "@/components/ui";
 import type {
   ComparisonCandidate,
@@ -48,6 +51,7 @@ import {
   weightPercentage,
 } from "@/lib/comparison/ranking";
 import { measureLabel } from "@/lib/dashboard/briefing";
+import { unavailableReason } from "@/lib/historical/analysis";
 import { periodLabel } from "@/lib/historical/analysis";
 
 import styles from "./compare.module.css";
@@ -99,13 +103,25 @@ export function CandidateCard({ candidate, criterion, sharesRank }: CandidateCar
 
   return (
     <article className={styles.candidate} data-candidate="true" data-rank={candidate.rank}>
-      <header className={styles.candidateHead}>
-        <span className={styles.rank} aria-label={`Rank ${candidate.rank}`}>
-          #{candidate.rank}
-        </span>
-        <h3 className={styles.candidateName}>{candidate.label}</h3>
-        {sharesRank || candidate.tied ? <Badge tone="neutral">Tied</Badge> : null}
-      </header>
+      {/*
+        `04-compare-cities.png` gives each compared city a photographic banner with its name and
+        status on it. `LocationImage` holds that frame whether a photograph is present or not — see
+        `public/locations/README.md`.
+      */}
+      <LocationImage
+        displayName={candidate.location.display_name}
+        latitude={candidate.location.latitude}
+        longitude={candidate.location.longitude}
+        variant="banner"
+      >
+        <header className={styles.candidateHead}>
+          <span className={styles.rank} aria-label={`Rank ${candidate.rank}`}>
+            #{candidate.rank}
+          </span>
+          <h3 className={styles.candidateName}>{candidate.label}</h3>
+          {sharesRank || candidate.tied ? <Badge tone="neutral">Tied</Badge> : null}
+        </header>
+      </LocationImage>
 
       {figure === null ? (
         <p className={styles.note}>
@@ -307,5 +323,278 @@ export function Excluded({ result }: { readonly result: ComparisonResult }): Rea
         </p>
       </AttributionFooter>
     </section>
+  );
+}
+
+/* ---------------------------------------------------- the differential matrix */
+
+/**
+ * "Forecast Delta Explorer" — the place × figure matrix `04-compare-cities.png` puts under the
+ * ranking.
+ *
+ * The artifact's version is a **per-day** matrix: seven columns of daily deltas per place. That is
+ * not a shape `ComparisonResult` has. The endpoint answers with each candidate's statistics *over
+ * the shared window*, not a per-day series per place, and building the artifact's grid would mean
+ * a separate forecast retrieval per place per day for a question this screen does not ask — the
+ * reason `docs/design/screens.md` §8 recorded the matrix as not implemented.
+ *
+ * What is implemented is the same idea over the axis the data actually has: every statistic the
+ * comparison applied, down the side, and every place across the top, so the figures behind the
+ * ranking can be read against each other rather than only within a card. A place that reported no
+ * value for a statistic shows why, in the backend's own words, and never a dash that could be read
+ * as a zero.
+ *
+ * It scrolls inside its own container, because a matrix is exactly the wide content
+ * `specs/web-ui` requires to stay reachable at 360 pixels without the page scrolling sideways.
+ */
+export function DifferentialMatrix({ result }: { readonly result: ComparisonResult }): ReactNode {
+  const candidates = result.candidates ?? [];
+
+  /*
+   * The rows come from the figures the candidates actually carry, not from `statistics_applied`.
+   * That field is what the request asked for and a backend may answer without it; the supporting
+   * results are what the ranking was built from, so a matrix keyed on them cannot have a row no
+   * candidate has a value for, nor miss one they do. `statistics_applied` is the fallback for a
+   * result that reports the plan but no supporting detail.
+   */
+  const fromCandidates = new Set<string>();
+  for (const candidate of candidates) {
+    for (const entry of candidate.supporting ?? []) fromCandidates.add(entry.statistic);
+  }
+  const statistics =
+    fromCandidates.size > 0 ? [...fromCandidates] : (result.statistics_applied ?? []);
+
+  return (
+    <ProvenanceSection
+      dataClass="analytics"
+      title="Every figure behind the ranking"
+      attribution={{
+        provider: result.provider ?? null,
+        location: null,
+        retrievedAt: null,
+        period: result.period
+          ? {
+              start: result.period.start_local,
+              end: result.period.end_local,
+              timezone: result.period.timezone ?? null,
+            }
+          : null,
+        units: result.unit_system ?? null,
+      }}
+    >
+      {statistics.length === 0 || candidates.length === 0 ? (
+        <p className={styles.note}>
+          This comparison reported no supporting figures to lay out, so there is nothing to tabulate
+          beneath the ranking.
+        </p>
+      ) : (
+      <ScrollRegion label="Figures behind the ranking">
+        <table className={styles.matrix}>
+          <caption className={styles.matrixCaption}>
+            Each statistic the comparison applied, for each place, over the shared window.
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Statistic</th>
+              {candidates.map((candidate) => (
+                <th scope="col" key={candidate.label}>
+                  {candidate.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {statistics.map((statistic) => (
+              <tr key={statistic}>
+                <th scope="row">{statistic}</th>
+                {candidates.map((candidate) => {
+                  const found = candidate.supporting?.find(
+                    (entry) => entry.statistic === statistic,
+                  );
+                  const value = formatStatistic(found);
+                  return (
+                    <td key={`${candidate.label}-${statistic}`}>
+                      {value === null ? (
+                        <span className={styles.matrixAbsent}>{unavailableReason(found)}</span>
+                      ) : (
+                        // `formatStatistic` already carries the unit; appending it printed "°C °C".
+                        value
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </ScrollRegion>
+      )}
+    </ProvenanceSection>
+  );
+}
+
+/**
+ * "Comparison Synthesis Summary" — the panel the artifact closes on.
+ *
+ * The artifact's version is model prose about the comparison, over a synthesis-confidence bar.
+ * `POST /weather/comparison` is deterministic and returns no model prose at all, so there is
+ * nothing for a model to have written and no confidence anybody computed — `screens.md` §8 records
+ * that this screen carries no interpretation region for exactly that reason.
+ *
+ * The panel is kept and says what the comparison *is*: which criterion decided it, over which
+ * window, in whose local time, with which statistics, and how ties were handled. Every one of those
+ * is a field of the result. It is the honest form of a synthesis: an account of how the answer was
+ * produced rather than a paragraph asserting what it means.
+ */
+export function ComparisonSummary({ result }: { readonly result: ComparisonResult }): ReactNode {
+  return (
+    <ProvenanceSection
+      dataClass="analytics"
+      title="How this comparison was made"
+      attribution={null}
+    >
+      <p className={styles.note}>
+        Deterministic. No model interpretation, no confidence score.
+      </p>
+      <dl className={styles.summaryFacts}>
+        <div className={styles.summaryFact}>
+          <dt>Criterion</dt>
+          <dd>{result.criterion}</dd>
+        </div>
+        <div className={styles.summaryFact}>
+          <dt>Mode</dt>
+          <dd>{result.mode}</dd>
+        </div>
+        <div className={styles.summaryFact}>
+          <dt>Statistics applied</dt>
+          <dd>
+            {(result.statistics_applied ?? []).join(", ") ||
+              [
+                ...new Set(
+                  (result.candidates ?? []).flatMap((candidate) =>
+                    (candidate.supporting ?? []).map((entry) => entry.statistic),
+                  ),
+                ),
+              ].join(", ") ||
+              "Not reported"}
+          </dd>
+        </div>
+        <div className={styles.summaryFact}>
+          <dt>Local time basis</dt>
+          <dd>
+            {result.local_time_basis
+              ? "Each place measured in its own local time"
+              : "Not reported"}
+          </dd>
+        </div>
+        <div className={styles.summaryFact}>
+          <dt>Tie tolerance</dt>
+          <dd>{result.tie_tolerance}</dd>
+        </div>
+        <div className={styles.summaryFact}>
+          <dt>Places compared</dt>
+          <dd>{(result.candidates ?? []).length}</dd>
+        </div>
+      </dl>
+      {result.weighting_disclosure ? (
+        <p className={styles.note}>{result.weighting_disclosure}</p>
+      ) : null}
+    </ProvenanceSection>
+  );
+}
+
+/* ------------------------------------------------- forecast delta explorer */
+
+export interface ForecastDeltaProps {
+  /** One entry per compared place, in rank order, with whatever forecast was retrieved for it. */
+  readonly rows: readonly {
+    readonly label: string;
+    readonly days: readonly { readonly date: string; readonly high: string | null }[];
+  }[];
+  readonly dates: readonly string[];
+}
+
+/**
+ * "Forecast Delta Explorer" — the artifact's day-by-day matrix, one column per compared place.
+ *
+ * This is the shape `04-compare-cities.png` actually draws, and it is now buildable: the screen
+ * asks the backend for each compared place's forecast over the same horizon, so every cell is a
+ * figure that place's provider returned. A day a provider did not forecast is a dash with a
+ * heading, never an interpolation between the days on either side of it.
+ *
+ * Seven rows because the artifact has seven; the horizon is what the person asked for, so a shorter
+ * answer leaves the later rows unreported rather than inventing them.
+ */
+export function ForecastDeltaExplorer({ rows, dates }: ForecastDeltaProps): ReactNode {
+  return (
+    <ProvenanceSection dataClass="forecast" title="Forecast delta explorer" attribution={null}>
+      {rows.length === 0 || dates.length === 0 ? (
+        <p className={styles.note}>No forecast was retrieved for the compared places.</p>
+      ) : (
+        <ScrollRegion label="Forecast by day and place">
+          <table className={styles.matrix}>
+            <caption className={styles.matrixCaption}>
+              Each place&rsquo;s forecast high, by day, over the shared horizon.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Day</th>
+                {rows.map((row) => (
+                  <th scope="col" key={row.label}>
+                    {row.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {dates.map((date) => (
+                <tr key={date}>
+                  <th scope="row">{date}</th>
+                  {rows.map((row) => {
+                    const cell = row.days.find((day) => day.date === date);
+                    return (
+                      <td key={`${row.label}-${date}`}>
+                        {cell?.high ?? <span className={styles.matrixAbsent}>Not forecast</span>}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </ScrollRegion>
+      )}
+    </ProvenanceSection>
+  );
+}
+
+/* ------------------------------------------------------- the remaining panels */
+
+/**
+ * "Climate Pulse Differential" and "Decadal Climate Baseline" — the artifact's two lower charts.
+ *
+ * Both are drawn as complete chart frames. The differential needs an intra-day series per place,
+ * which is the hourly forecast; the decadal baseline needs a multi-decade archive series. Neither
+ * is retrieved by this screen's endpoints, so each frame carries its reason rather than a curve
+ * built from something else. The geometry is the artifact's; the emptiness is the truth.
+ */
+export function ComparisonCharts(): ReactNode {
+  return (
+    <div className={styles.chartRow}>
+      <ProvenanceSection dataClass="forecast" title="Climate pulse differential" attribution={null}>
+        <EmptyChart
+          title="Intra-day temperature by place"
+          reason="No hourly series is retrieved for a comparison."
+          height={200}
+        />
+      </ProvenanceSection>
+      <ProvenanceSection dataClass="historical" title="Decadal climate baseline" attribution={null}>
+        <EmptyChart
+          title="Decade-over-decade baseline"
+          reason="No multi-decade archive series is retrieved for a comparison."
+          height={200}
+        />
+      </ProvenanceSection>
+    </div>
   );
 }

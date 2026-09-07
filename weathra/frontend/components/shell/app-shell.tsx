@@ -20,14 +20,18 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import type { Identity } from "@/lib/auth/identity";
 import { DEFAULT_PROTECTED_PATH } from "@/lib/routes";
 
+import { FixtureBanner } from "@/components/ui";
+
 import { BrandMark, MenuIcon } from "./icons";
 import { IdentityPanel } from "./identity";
 import { Navigation } from "./navigation";
+import { SavedRail } from "./saved-rail";
+import { TopBar } from "./top-bar";
 import styles from "./shell.module.css";
 
 const NAVIGATION_ID = "weathra-navigation";
@@ -42,8 +46,29 @@ export interface AppShellProps {
 export function AppShell({ identity, signOutControl, children }: AppShellProps): ReactNode {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const navigation = useRef<HTMLElement>(null);
 
   const close = useCallback(() => setDrawerOpen(false), []);
+
+  /**
+   * Dismissing the drawer — Escape, or the scrim — puts focus back on the control that opened it.
+   *
+   * Closing it hides the navigation with `visibility`, and a focused element inside something
+   * hidden loses focus to the document: a keyboard user who opened the menu, moved into it and
+   * changed their mind was returned to the top of the page with nothing focused, and had to tab
+   * back through everything. Guarded on focus actually being inside the drawer, so dismissing it
+   * while focus is elsewhere does not snatch it.
+   *
+   * Deliberately not called from the route-change close below: following an entry hands focus to
+   * the screen that was opened, and pulling it back to the menu control would undo that.
+   */
+  const dismiss = useCallback(() => {
+    const active = document.activeElement;
+    const inDrawer = active instanceof Node && navigation.current?.contains(active);
+    close();
+    if (inDrawer) menuButton.current?.focus();
+  }, [close]);
 
   // A route change closes the drawer. Without this, following an entry leaves the drawer over the
   // screen it just opened.
@@ -53,10 +78,10 @@ export function AppShell({ identity, signOutControl, children }: AppShellProps):
     (event: KeyboardEvent<HTMLDivElement>) => {
       if (event.key === "Escape" && drawerOpen) {
         event.stopPropagation();
-        close();
+        dismiss();
       }
     },
-    [close, drawerOpen],
+    [dismiss, drawerOpen],
   );
 
   return (
@@ -66,6 +91,9 @@ export function AppShell({ identity, signOutControl, children }: AppShellProps):
         top of the page and its content, and a keyboard user should not have to pass them all to
         reach what they came for.
       */}
+      {/* Says on screen that the figures are sample content, whenever fixture mode is on. */}
+      <FixtureBanner />
+
       <a className={styles.skipLink} href={`#${MAIN_ID}`}>
         Skip to content
       </a>
@@ -73,6 +101,7 @@ export function AppShell({ identity, signOutControl, children }: AppShellProps):
       <header className={styles.header}>
         <button
           type="button"
+          ref={menuButton}
           className={styles.menuButton}
           aria-expanded={drawerOpen}
           aria-controls={NAVIGATION_ID}
@@ -94,11 +123,12 @@ export function AppShell({ identity, signOutControl, children }: AppShellProps):
           type="button"
           className={styles.scrim}
           aria-label="Close menu"
-          onClick={close}
+          onClick={dismiss}
         />
       ) : null}
 
       <nav
+        ref={navigation}
         className={styles.navigation}
         id={NAVIGATION_ID}
         aria-label="Weathra"
@@ -118,6 +148,8 @@ export function AppShell({ identity, signOutControl, children }: AppShellProps):
         */}
         <div className={styles.navScroll}>
           <Navigation onNavigate={close} />
+          {/* The artifacts' SAVED LOCATIONS section, under the primary navigation. */}
+          <SavedRail onNavigate={close} />
         </div>
 
         <IdentityPanel identity={identity} signOutControl={signOutControl} />
@@ -129,7 +161,16 @@ export function AppShell({ identity, signOutControl, children }: AppShellProps):
         useless.
       */}
       <main className={styles.main} id={MAIN_ID} tabIndex={-1}>
-        <div className={styles.mainInner}>{children}</div>
+        <div className={styles.mainInner}>
+          {/*
+            The header strip every product artifact carries above the content. It is inside `main`
+            and above the skip link's target on purpose: it holds the breadcrumb that says where you
+            are and the one global control the product has, both of which belong to the page rather
+            than to the rail.
+          */}
+          <TopBar identity={identity} />
+          {children}
+        </div>
       </main>
     </div>
   );

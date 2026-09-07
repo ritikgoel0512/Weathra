@@ -304,3 +304,82 @@ to fill one.
   dark, and the light appearance of the seven product screens is derived from the same tokens rather
   than separately approved — so this review checks it against the token set, not against an artifact.
 - **One unresolved item**, in §4: the mark's letterform-versus-glyph question.
+
+---
+
+## 6. The all-eight fidelity-fixture pass
+
+Task 21.9's review above compared each screen against its artifact and recorded the divergences it
+found. This section records a second, different exercise, asked for after it: reproducing all eight
+artifacts *as pictures*, with their own content, so that geometry could be compared independently
+of what the product does or does not retrieve.
+
+The mechanism, and what keeps it out of production, is
+[`screens.md` §9](screens.md#9-the-fidelity-fixture-review-mode). What follows is the result.
+
+### Method
+
+Four capture-and-correct passes. Each built the fixture mode, signed in against the local identity
+stub, rendered all eight routes, and wrote a full-page PNG; each PNG was then scaled to the
+artifact's width and placed beside it with 200-pixel rules across both halves, so the same `y` could
+be found in each. Two of the four passes made corrections; the fourth also swept 1440, 1024, 768 and
+360 and measured `scrollWidth - clientWidth` on every screen at every width.
+
+### What the passes found and corrected
+
+**Pass 1 → 2.** The rail carried seven entries against the artifacts' four, on all seven product
+screens at once — the single largest difference in the set. The AI INTERPRETATION and ANALYTICS
+badges were the data-class palette's magenta and violet against the artifacts' teal. The city
+artwork sat in a narrow dark blue-teal band where the artifacts are a dusk — a mauve sky over a warm
+horizon — so the hero read as a night shot of somewhere else. The Dashboard's baseline band drew
+three faint polylines where the artifact has a dense long-run panel, and had none of its overlay
+readings. The Analyst's Observed Data rows were forced to capitals; the artifact sets them in
+sentence case. Several capitalised actions were sentence case. The historical chart was 100px
+shorter than the artifact's. The Compare matrix was zebra-striped, which the artifact is not.
+
+**Pass 2 → 3.** Adding the artifact's pin to each Saved Snapshot pushed the trend arrow onto a
+second implicit grid row, doubling each row's height. The timezone chip was dark text on dark teal.
+The city banners' scrim was heavy enough that the skyline was invisible, which made the imagery
+impossible to compare at all — `LocationImage` gained an opt-in lighter scrim for this, with
+production's unchanged. The authentication ground's first two attempts both produced structure the
+artifact does not have: a golden-angle spiral read as a galaxy, and clumps on a periodic angle
+sequence read as starbursts. Both were the same mistake — a polar placement whose angle stream is
+not independent of its index shows spokes — and it is now placed from an integer hash instead.
+
+**Pass 3 → 4.** `nowrap` on the intelligence header, which was the right fix for the 460 rail, broke
+"Workspace Intelligence Synthesis" to one word at 360. It now holds its line only where there is
+room. Three chart and table `min-width` values above the 360 floor were caught not by the eye but by
+`tests/design-rules.test.ts`, which is the rule working as intended; they are now 320, matching what
+production's wide charts already do.
+
+### Per-screen result
+
+Assessed at 1440 against the approved PNG. "Close match" means the same screen design — same
+regions in the same order at the same proportions, same visible copy, same imagery role, same chart
+composition — not a bitmap match, which [`README.md`](README.md) does not ask for.
+
+| Screen | Result | What still differs |
+| --- | --- | --- |
+| 01 Dashboard | Close match | Hero is drawn artwork, not a photograph; band ~10% shorter |
+| 02 AI Weather Analyst | Close match | Avatars are glyphs, not portraits; rail runs longer than the thread |
+| 03 Historical Analytics | Close match | Precipitation bars slightly wider than the artifact's |
+| 04 Compare Cities | Close match | City banners are drawn artwork; ~5% shorter overall |
+| 05 Agent Evidence | Close match | Two timeline names wrap where the artifact fits one line |
+| 06 Saved Locations | Close match | Node-health meter values are green where the artifact's are light |
+| 07 Settings | Close match | Row rhythm slightly tighter than the artifact's |
+| 08 Authentication | Close match | Mark is the product glyph, not the artifact's "W"; mass more diffuse; action label dark, not white |
+
+No screen has a missing panel, a differing section order, a missing chart, a differing card count,
+or a large empty region where the artifact has content. None is claimed as pixel-close.
+
+### Responsiveness
+
+1440, 1024, 768 and 360, all eight screens, 32 captures: **zero horizontal overflow** and no console
+errors at any width. The reflow is one-track below 1024 and single-column below 768, and the panels
+keep their internal geometry, so the design language survives rather than being replaced.
+
+### What this pass is not
+
+It is **not** evidence about the product. Every figure in it is transcribed from a picture; the
+fixture banner says so on screen for exactly that reason. It is not an approval either — the owner's
+visual sign-off against the eight PNGs is a separate act, and nothing here records one.

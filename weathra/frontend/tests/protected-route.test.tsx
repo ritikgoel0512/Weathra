@@ -75,9 +75,10 @@ vi.mock("@/lib/supabase/browser", () => ({
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ replace, refresh }),
+  useRouter: () => ({ replace, refresh, push: () => {} }),
   redirect: (destination: string) => redirect(destination),
   usePathname: () => window.location.pathname,
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 const { default: ProtectedLayout } = await import("@/app/(app)/layout");

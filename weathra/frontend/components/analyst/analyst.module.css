@@ -417,3 +417,349 @@
     max-width: none;
   }
 }
+
+/* ---------------------------------------------------------------- the workspace
+ *
+ * `02-ai-weather-analyst.png` is a two-column workspace: the conversation and its composer on the
+ * left, a rail of run detail on the right. Below the wide tier the rail moves under the
+ * conversation rather than beside it — a run's detail is worth reading, but not before the answer
+ * it describes.
+ */
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+@media (min-width: 1280px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 20rem);
+  }
+}
+
+/* The header row: what the screen is, and the one action it has. */
+.headingRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.headingText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.headingActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+
+/* ---------------------------------------------------------------- rail contents */
+
+.railList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.railRow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-inset);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.railName {
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.railMeta {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.railFacts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.railFact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.railFact dt {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.railFact dd {
+  margin: 0;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.railAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  color: var(--color-accent);
+  font-size: var(--type-ui-size);
+  font-weight: var(--type-ui-weight);
+  text-decoration: none;
+}
+
+.railAction:hover {
+  background: var(--color-surface-inset);
+}
+
+/* The question, as a bubble on the right — `02-ai-weather-analyst.png` places it there. */
+.questionRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.questionRow .question {
+  max-width: 42rem;
+  border-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-sm);
+}
+
+/* The collapsed run log: a summary row that opens, not a timeline above every answer. */
+.progress summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.progress summary::-webkit-details-marker {
+  display: none;
+}
+
+.progressCount {
+  margin-left: auto;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+/* The agent response header — who is answering. */
+.agentHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.agentMark {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-muted);
+  border: 2px solid var(--color-accent);
+}
+
+.agentName {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+/* OBSERVED DATA / FORECAST VECTOR, side by side. */
+.subcards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: var(--space-3);
+  align-items: start;
+}
+
+/* The composer's context row: what the next question will be answered about. */
+.composerContext {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border-subtle);
+  margin-bottom: var(--space-3);
+}
+
+.composerContextItem {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.composerContextTerm {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.composerContextValue {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* The OBSERVED DATA / FORECAST VECTOR pair, inside the response rather than beside it. */
+.subcard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.subcardHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.subcardTitle {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.subcardNote {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.factRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.factTerm {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+  flex: none;
+}
+
+.factValue {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-primary);
+  text-align: right;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.factValue[data-reported="false"] {
+  color: var(--color-text-muted);
+}
+
+/* The run, in one line beside the agent's name — the trace lives on Agent Evidence. */
+.runSummary {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  margin-left: auto;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.runSummaryItem {
+  white-space: nowrap;
+}
+
+.runSummaryLink {
+  color: var(--color-accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.runSummaryLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* The agent response as one surface: the sections inside it are not standalone cards. */
+.answer {
+  padding: var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.agentHead {
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle);
+  margin-bottom: var(--space-3);
+}

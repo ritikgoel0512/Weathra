@@ -71,6 +71,14 @@ export interface CardHeaderProps {
   readonly badge?: ReactNode;
   /** Controls belonging to this card only. A screen's primary action does not live here. */
   readonly actions?: ReactNode;
+  /**
+   * The heading level the title renders at. Three by default, which is right for a card nested
+   * inside a screen's own `h2` panel — and wrong for one sitting directly under the screen's `h1`,
+   * where it skips a level. Same parameter, and same reason, as `ProvenanceSection`'s: a heading
+   * level is a fact about where a region sits rather than about what it is
+   * (`docs/design/accessibility.md` §9).
+   */
+  readonly headingLevel?: 2 | 3;
 }
 
 export function CardHeader({
@@ -79,13 +87,15 @@ export function CardHeader({
   subtitle,
   badge,
   actions,
+  headingLevel = 3,
 }: CardHeaderProps): ReactNode {
+  const Heading = headingLevel === 2 ? "h2" : "h3";
   return (
     <div className={styles.cardHeader}>
       <div className={styles.cardHeadings}>
-        <h3 className={styles.cardTitle} id={titleId}>
+        <Heading className={styles.cardTitle} id={titleId}>
           {title}
-        </h3>
+        </Heading>
         {subtitle ? <p className={styles.cardSubtitle}>{subtitle}</p> : null}
       </div>
       {badge || actions ? (

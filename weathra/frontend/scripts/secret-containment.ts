@@ -50,6 +50,22 @@ export const SECRET_NAMES: readonly string[] = [
   "POSTGRES_PASSWORD",
   "DB_PASSWORD",
   "PRIVATE_KEY",
+  /*
+   * The city-image provider's credentials.
+   *
+   * These are read only by `lib/images/provider.server.ts`, which runs on the server and refuses
+   * to load in a browser. Naming them here does two things the rest of that file's defences do
+   * not: it makes `NEXT_PUBLIC_PEXELS_API_KEY` a *failure* rather than the warning an unfamiliar
+   * name would otherwise get, and it keeps either key out of a `frontend/.env*` file, where it
+   * would sit one prefix away from the bundle and one `git add -f` away from a public repository.
+   *
+   * The supported home for them is the deployment's injected server environment — which is not a
+   * file, so it is never scanned — or a shell export for local work. `docs/city-imagery.md` says
+   * so. The generic substring `API_KEY` is deliberately *not* used: it would swallow
+   * `NEXT_PUBLIC_`-safe names that do not exist yet and turn this list into a guess.
+   */
+  "PEXELS_API_KEY",
+  "UNSPLASH_ACCESS_KEY",
 ];
 
 /**
@@ -66,6 +82,22 @@ export const PERMITTED_FRONTEND_NAMES: readonly string[] = [
   "NEXT_PUBLIC_APP_URL",
   "NODE_ENV",
   "NEXT_TELEMETRY_DISABLED",
+  /*
+   * The Visily fidelity-review flags. Public by nature and secret by nothing: neither carries a
+   * credential, an endpoint or an identifier — each is a build-time boolean that selects sample
+   * content for a screenshot comparison.
+   *
+   * `..._FIXTURES` is the gate (`lib/fixtures/visily.ts`), off unless it reads exactly `"true"`.
+   * `..._BANNER` only suppresses the on-screen fixture marker, and only the automated capture run
+   * sets it, because the banner is a fixed strip that changes the geometry being measured.
+   *
+   * They are named here rather than left to the warning path so the check keeps saying something
+   * when it sees them: an unexplained name in a frontend `.env*` file is still worth a warning,
+   * and these two are explained. Neither belongs in `.env.example` or in CI — the review harness
+   * sets them on its own build and nothing else does, so in every ordinary build the gate is off.
+   */
+  "NEXT_PUBLIC_VISILY_FIDELITY_FIXTURES",
+  "NEXT_PUBLIC_VISILY_FIDELITY_BANNER",
 ];
 
 /**
