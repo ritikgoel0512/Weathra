@@ -291,10 +291,10 @@ gcp-*.json
 .supabase/
 .gcloud/
 
-# Vercel CLI working state. `vercel pull` writes `.vercel/project.json` (the account-specific
-# project link) and `.vercel/.env.production.local` (the pulled environment) into whatever
-# directory it runs in. On the release runner that is throwaway; locally it is account state that
-# has no business in the tree, and the pulled environment file is a downloaded configuration
-# snapshot rather than something this repository defines. `frontend-release.yml` never needs a
-# committed one — it resolves the project from VERCEL_ORG_ID and VERCEL_PROJECT_ID.
+# Vercel CLI working state: `.vercel/project.json` (the project link and its settings) and
+# `.vercel/.env.production.local` (the Production environment). On the release runner
+# `.github/scripts/vercel_release_env.py` writes both on every run and they are throwaway;
+# locally the first is account state that has no business in the tree, and the second is a
+# downloaded snapshot of production configuration rather than something this repository defines.
+# `frontend-release.yml` never needs a committed one — it writes them from VERCEL_PROJECT_ID.
 .vercel/

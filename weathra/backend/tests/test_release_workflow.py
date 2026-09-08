@@ -25,6 +25,7 @@ nothing else, and no job can print a credential.
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -50,12 +51,17 @@ FRONTEND_RELEASE = ".github/workflows/frontend-release.yml"
 VERCEL_PROJECT = "weathra/frontend/vercel.json"
 
 # The names the identifiers reach the CLI under, and deliberately not VERCEL_ORG_ID and
-# VERCEL_PROJECT_ID. The CLI auto-detects that pair and, finding both, resolves the project through
-# requests a team-scoped token is refused on — see
-# `test_the_frontend_release_hides_the_identifiers_from_the_cli`. The repository secrets keep their
-# own names; only what the CLI process sees is renamed.
+# VERCEL_PROJECT_ID: under those names the CLI auto-detects the pair and re-resolves the project
+# through the API on every command, instead of reading the link the release wrote and checked. The
+# repository secrets keep their own names; only what the CLI process sees is renamed.
 ORG_ID_VAR = "WEATHRA_VERCEL_ORG_ID"
 PROJECT_ID_VAR = "WEATHRA_VERCEL_PROJECT_ID"
+
+# The script that stands in for `vercel pull`. Its own behaviour — failing closed on every partial
+# answer, and keeping backend secrets and the release token out of the build environment — is
+# asserted in `test_frontend_release_environment.py`. What is asserted here is that the workflow
+# uses it, and that nothing puts `vercel pull` back.
+RELEASE_ENV_SCRIPT = ".github/scripts/vercel_release_env.py"
 RELEASE_PIPELINES = ("release.yml", "frontend-release.yml")
 
 # Neither ordinary CI nor the release pipeline, and recorded here because
@@ -499,21 +505,91 @@ def _vercel_invocations(frontend_release: dict[str, Any]) -> dict[str, str]:
 def test_the_frontend_release_targets_the_existing_vercel_project(
     frontend_release: dict[str, Any],
 ) -> None:
-    """The linking assertion, and the one that regressed twice.
+    """The promotion names the project it is promoting to, by id.
 
-    `vercel pull` cannot bring anything down until it has resolved *which* project it is talking
-    about, and for a team-scoped token `--project` is the only mechanism that resolves one without
-    a request that token is refused. Asserted per command rather than by searching the file,
-    because a flag on the pull that is missing from the deploy is the shape this would come back
-    in.
+    The deploy is the step that would do the damage if the link were ever wrong, so it resolves the
+    project explicitly rather than inheriting whatever the runner happens to have on disk. It is
+    also what sets the CLI's `failIfNotFound` — see
+    `test_the_frontend_release_cannot_create_a_vercel_project`.
+
+    The build deliberately names nothing: it consumes the link the release wrote and the ownership
+    check vouched for, and re-resolving the project there would be a second chance to disagree
+    with it.
     """
     invocations = _vercel_invocations(frontend_release)
-    for subcommand in ("pull", "deploy"):
-        assert subcommand in invocations, f"{FRONTEND_RELEASE} never runs `vercel {subcommand}`"
-        command = invocations[subcommand]
-        assert f'--project "${PROJECT_ID_VAR}"' in command, (
-            f"`vercel {subcommand}` does not name the existing project"
+    assert "deploy" in invocations, f"{FRONTEND_RELEASE} never runs `vercel deploy`"
+    assert f'--project "${PROJECT_ID_VAR}"' in invocations["deploy"], (
+        "`vercel deploy` does not name the existing project"
+    )
+    assert "--project" not in invocations.get("build", ""), (
+        "`vercel build` names the project, which sends it back to the API to re-resolve what the "
+        "ownership check just vouched for"
+    )
+
+
+def test_the_frontend_release_does_not_run_vercel_pull(
+    frontend_release: dict[str, Any], frontend_release_text: str
+) -> None:
+    """`vercel pull` cannot work under this pipeline's credential, and this is why.
+
+    Reading Vercel CLI 59.11.7: `getLinkedProject` resolves `--project <id>` *before* printing its
+    `Retrieving project…` spinner, and then — once it holds a link — calls `getOrgById(orgId)`,
+    which is `GET /v2/teams/<team_id>`. A token scoped to a team rather than to the whole account
+    is refused there with 403 `team_unauthorized`, and the CLI reports that refusal as *"Could not
+    retrieve Project Settings. To link your Project, remove the `.vercel` directory and deploy
+    again"* — a message about a directory a fresh runner does not have, for a request that never
+    touched the project.
+
+    `vercel deploy` survives it: it is the only command that passes `allowOwnerLookupFallback`,
+    which lets it fall back to the project's own `accountId`. `pull` passes neither that nor
+    `skipRemoteLookup`, and then reads `org.type`/`org.id`, so the refusal is fatal.
+
+    **No flag changes this.** Three runs were spent on flags — `--scope`, then renaming the
+    auto-detected identifiers, then `--project` — and all three failed at the same step, because
+    the failing request is one `pull` makes regardless. Restoring it puts the release back on a
+    path that cannot succeed, so its absence is asserted rather than assumed.
+    """
+    assert "pull" not in _vercel_invocations(frontend_release), (
+        f"{FRONTEND_RELEASE} runs `vercel pull`, which is refused on a team lookup no flag "
+        "removes; the release resolves the project through the project-scoped API instead"
+    )
+    assert "vercel env" not in frontend_release_text, (
+        f"{FRONTEND_RELEASE} runs `vercel env`, which resolves the project the same way "
+        "`vercel pull` does and is refused the same way"
+    )
+
+
+def test_the_frontend_release_writes_the_project_link_itself(
+    repo_root: Path, frontend_release: dict[str, Any]
+) -> None:
+    """The two files `vercel pull` would have written, written from the project-scoped API instead.
+
+    `.vercel/project.json` carries the project's settings — above all `rootDirectory`, which is
+    what makes a build invoked from the repository root build `weathra/frontend` — and
+    `.vercel/.env.production.local` carries the Production environment Next.js inlines at build
+    time. Both come from `/v9/projects/<id>` and `/v9/projects/<id>/env`, which a team-scoped token
+    can read.
+
+    Asserted here: the script exists, the release runs it, and it is handed both identifiers
+    through the neutral variables rather than either being written into the file.
+    """
+    assert (repo_root / RELEASE_ENV_SCRIPT).is_file(), (
+        f"{RELEASE_ENV_SCRIPT} is missing: the release has no way to resolve its project"
+    )
+    steps = _frontend_steps(frontend_release)
+    matching = [step for step in steps if RELEASE_ENV_SCRIPT in str(step.get("run", ""))]
+    assert matching, f"{FRONTEND_RELEASE} never runs {RELEASE_ENV_SCRIPT}"
+    body = " ".join(str(matching[0]["run"]).replace("\\\n", " ").split())
+    for variable in (PROJECT_ID_VAR, ORG_ID_VAR):
+        assert f'"${variable}"' in body, f"{RELEASE_ENV_SCRIPT} is not given {variable}: {body!r}"
+    index = steps.index(matching[0])
+    for name in ("vercel build", "vercel deploy"):
+        at = next(
+            position
+            for position, candidate in enumerate(steps)
+            if name in str(candidate.get("run", ""))
         )
+        assert at > index, f"`{name}` runs before the project and its environment are resolved"
 
 
 def test_the_frontend_release_never_names_the_scope(frontend_release: dict[str, Any]) -> None:
@@ -545,16 +621,15 @@ def test_the_frontend_release_hides_the_identifiers_from_the_cli(
 ) -> None:
     """The identifiers must not reach the CLI process under the names it auto-detects.
 
-    This is the fix, and it is the kind that looks like a typo. The CLI detects `VERCEL_ORG_ID` and
-    `VERCEL_PROJECT_ID` on its own, and when it finds *both* it takes its implicit env-link path:
-    the project lookup goes out with `?teamId=` appended and an unscoped team lookup goes out
-    beside it. Vercel documents that a team- or project-scoped token needs neither — it infers both
-    from the token — and those are the requests our team-scoped token is refused on, reported as
-    the misleading "Could not retrieve Project Settings … remove the `.vercel` directory".
+    This was once believed to be the fix for the pull failure, and it was not — the team lookup
+    that breaks `vercel pull` happens whatever these are called. It is kept for a different and
+    smaller reason, which is worth stating precisely so it is not mistaken for the old one again.
 
-    Under neutral names the CLI cannot find them, so it resolves the project from `--project` and
-    takes the team from the project's own `accountId`. Restoring either name silently puts the
-    release back on the broken path, so both absences are asserted, not just the presences.
+    With `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` both set, the CLI takes its implicit env-link path
+    and re-resolves the project through the API on every command. Under neutral names it cannot
+    find them, so `.vercel/project.json` — the file the release wrote and the ownership check
+    vouched for — stays the authority, and `vercel build` and `vercel deploy --prebuilt` resolve
+    the project from disk without a lookup that could disagree with it or be refused.
     """
     env = frontend_release["jobs"]["deploy"]["env"]
     for name in ("VERCEL_ORG_ID", "VERCEL_PROJECT_ID"):
@@ -563,7 +638,7 @@ def test_the_frontend_release_hides_the_identifiers_from_the_cli(
             "env-link path a team-scoped token is refused on"
         )
     for step in _frontend_steps(frontend_release):
-        for name in (step.get("env") or {}):
+        for name in step.get("env") or {}:
             assert name not in ("VERCEL_ORG_ID", "VERCEL_PROJECT_ID"), (
                 f"step {step.get('name')!r} exports {name} to the CLI"
             )
@@ -591,13 +666,17 @@ def test_the_frontend_release_proves_the_project_belongs_to_the_team(
 ) -> None:
     """The org id stops being a lookup input and becomes the check on the answer.
 
-    An identifier handed to a lookup is an assumption. `vercel pull` writes the link it actually
-    resolved to `.vercel/project.json`, so reading that file's `orgId` back and holding it to the
-    team we expect proves the project the CLI found is the one the Weathra team owns — which is
-    strictly more than passing the id in ever proved, and it costs no request the token is refused.
+    An identifier handed to a lookup is an assumption. The answer is the `accountId` the project
+    API returns — the project the id actually named saying who owns it — and the release script
+    holds that to `WEATHRA_VERCEL_ORG_ID` before it writes anything, which
+    `test_a_project_owned_by_another_team_is_never_built` covers.
 
-    The check has to be fatal and it has to come before the build: a project resolved under the
-    wrong team must not be built for, let alone promoted.
+    This asserts the second gate: the same claim restated against the artifact the build consumes.
+    The script writes the API's `accountId` into `.vercel/project.json`, so holding that file's
+    `orgId` to the expected team checks the link `vercel build` and `vercel deploy --prebuilt`
+    will resolve the project from, rather than restating the value we passed in. Both have to be
+    fatal and both have to come before the build: a project owned by another team must not be
+    built for, let alone promoted.
     """
     steps = _frontend_steps(frontend_release)
     matching = [
@@ -611,9 +690,7 @@ def test_the_frontend_release_proves_the_project_belongs_to_the_team(
     )
     index, step = matching[0]
     body = str(step["run"])
-    assert f"${ORG_ID_VAR}" in body, (
-        f"the check does not compare against {ORG_ID_VAR}: {body!r}"
-    )
+    assert f"${ORG_ID_VAR}" in body, f"the check does not compare against {ORG_ID_VAR}: {body!r}"
     assert "orgId" in body, "the check does not read the resolved project's orgId"
     assert "exit 1" in body, "the check does not fail when the team does not match"
     assert not step.get("continue-on-error"), "the team check continues on error"
@@ -646,12 +723,8 @@ def test_the_frontend_release_holds_the_token_in_the_environment_only(
     )
     for step in _frontend_steps(frontend_release):
         command = str(step.get("run", ""))
-        assert "--token" not in command, (
-            f"a step passes the token on a command line: {command!r}"
-        )
-        assert "VERCEL_TOKEN" not in command, (
-            f"a step names the token in a command: {command!r}"
-        )
+        assert "--token" not in command, f"a step passes the token on a command line: {command!r}"
+        assert "VERCEL_TOKEN" not in command, f"a step names the token in a command: {command!r}"
 
 
 def test_the_frontend_release_cannot_create_a_vercel_project(
@@ -685,27 +758,26 @@ def test_the_frontend_release_cannot_create_a_vercel_project(
 def test_the_frontend_release_sequence_is_deterministic(
     frontend_release: dict[str, Any],
 ) -> None:
-    """Pull, then build, then deploy, then verify — in one job, in that order.
+    """Resolve, then build, then deploy, then verify — in one job, in that order.
 
     The order is the correctness condition, not a preference. Next.js inlines NEXT_PUBLIC_ values
-    at build time, so a build before the pull bakes in nothing; `--prebuilt` promotes whatever is
-    in `.vercel/output`, so a deploy before the build promotes the previous run's bundle or fails.
+    at build time, so a build before the environment is written bakes in nothing; `--prebuilt`
+    promotes whatever is in `.vercel/output`, so a deploy before the build promotes the previous
+    run's bundle or fails.
     """
-    order = [
-        index
-        for index, step in enumerate(_frontend_steps(frontend_release))
-        if "vercel pull" in str(step.get("run", ""))
-        or "vercel build" in str(step.get("run", ""))
-        or "vercel deploy" in str(step.get("run", ""))
-    ]
+    markers = (RELEASE_ENV_SCRIPT, "vercel build", "vercel deploy")
     commands = [
-        str(_frontend_steps(frontend_release)[index].get("run", "")) for index in order
+        str(step.get("run", ""))
+        for step in _frontend_steps(frontend_release)
+        if any(marker in str(step.get("run", "")) for marker in markers)
     ]
     assert len(commands) == 3, (
-        f"{FRONTEND_RELEASE} does not run pull, build and deploy as three steps"
+        f"{FRONTEND_RELEASE} does not resolve, build and deploy as three steps"
     )
-    assert "vercel pull" in commands[0], "the pull is not first"
-    assert "vercel build" in commands[1], "the build does not follow the pull"
+    assert RELEASE_ENV_SCRIPT in commands[0], (
+        "the project and its environment are not resolved first"
+    )
+    assert "vercel build" in commands[1], "the build does not follow the environment"
     assert "vercel deploy" in commands[2], "the deploy does not follow the build"
     for step in _frontend_steps(frontend_release):
         assert not step.get("continue-on-error"), (
@@ -730,9 +802,7 @@ def test_the_frontend_verification_runs_only_after_a_successful_deploy(
     verify_index = next(
         index for index, step in enumerate(steps) if "/sign-in" in str(step.get("run", ""))
     )
-    assert verify_index > deploy_index, (
-        f"{FRONTEND_RELEASE} verifies before it deploys"
-    )
+    assert verify_index > deploy_index, f"{FRONTEND_RELEASE} verifies before it deploys"
     verify = steps[verify_index]
     assert "if" not in verify, (
         "the verification carries an `if:`, which can let it run after a failed deploy: "
@@ -774,6 +844,56 @@ def test_the_frontend_release_runs_only_on_frontend_changes(
     assert frontend_release[True]["push"]["branches"] == ["main"], (
         f"{FRONTEND_RELEASE} releases from a branch other than main"
     )
+
+
+def test_the_frontend_release_builds_on_the_runner_and_promotes_that_build(
+    frontend_release: dict[str, Any],
+) -> None:
+    """What is promoted is what this commit built, and the two halves of that are separate.
+
+    `vercel build --prod` runs here rather than on Vercel, so the bundle exists on the runner and
+    was produced from this checkout. `vercel deploy --prebuilt` then promotes *that* output rather
+    than asking Vercel to build again from the connected repository — which would be a second build
+    of a possibly different commit, and would put the three `NEXT_PUBLIC_` values back in the hands
+    of whatever the remote build happened to resolve.
+
+    Losing either half would still deploy something, which is why both are asserted.
+    """
+    invocations = _vercel_invocations(frontend_release)
+    assert "build" in invocations, f"{FRONTEND_RELEASE} never builds on the runner"
+    assert "--prod" in invocations["build"], (
+        "`vercel build` does not build for production, so the bundle would carry the preview "
+        "environment"
+    )
+    deploy = invocations["deploy"]
+    assert "--prebuilt" in deploy, (
+        "`vercel deploy` does not promote the runner's build, so Vercel would build again from a "
+        "commit this workflow did not verify"
+    )
+    assert "--prod" in deploy, "`vercel deploy` does not promote to production"
+
+
+def test_no_vercel_runtime_state_is_committed(repo_root: Path) -> None:
+    """`.vercel/` is runner state, and one of the two files in it is a downloaded environment.
+
+    The release writes `project.json` and `.env.production.local` on every run, so a committed copy
+    would be a stale project link and a snapshot of the Production configuration sitting in the
+    tree — the second of which is the reason this is asserted rather than left to habit. Locally it
+    is account state that has no business in the repository either.
+    """
+    ignored = (repo_root / ".gitignore").read_text().splitlines()
+    assert any(line.strip() == ".vercel/" for line in ignored), (
+        ".gitignore no longer ignores `.vercel/`, so a pulled environment can be committed"
+    )
+    listed = subprocess.run(
+        ["git", "ls-files", "-z", "--", "*.vercel/*", ".vercel/*"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    tracked = [name for name in listed.stdout.split("\0") if name]
+    assert not tracked, f"Vercel runtime state is committed: {tracked}"
 
 
 def test_vercel_does_not_deploy_on_its_own(repo_root: Path) -> None:

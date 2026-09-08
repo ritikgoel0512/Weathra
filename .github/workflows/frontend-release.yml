@@ -25,6 +25,7 @@ on:
     paths:
       - "weathra/frontend/**"
       - ".github/workflows/frontend-release.yml"
+      - ".github/scripts/vercel_release_env.py"
   workflow_dispatch:
 
 concurrency:
@@ -43,30 +44,22 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      # Deliberately *not* named VERCEL_ORG_ID and VERCEL_PROJECT_ID, and that is the whole point
-      # of this mapping. The repository secrets keep those names; only what the CLI process sees
-      # is renamed.
+      # Deliberately *not* named VERCEL_ORG_ID and VERCEL_PROJECT_ID. Under those names the CLI
+      # auto-detects the pair and resolves the project through the API on every command; under
+      # neutral names the `.vercel/project.json` written below stays the authority, and
+      # `vercel build` and `vercel deploy --prebuilt` resolve the project from disk without a
+      # single lookup. Fewer requests is not the point — the point is that the file the ownership
+      # check vouched for is the file the build and the promotion use.
       #
-      # The CLI auto-detects that pair (`getPlatformEnv("ORG_ID")` / `("PROJECT_ID")`) and, when it
-      # finds both, takes its implicit env-link path: it appends `?teamId=` to the project lookup
-      # and issues an unscoped team lookup alongside it. Vercel's own documentation says a
-      # team-scoped token needs neither — "Vercel infers the team and project from the token's
-      # scope, so you can omit those parameters"; full-account tokens are the ones that still need
-      # `?teamId=`. Our token is scoped to the `weathra` team, and that path is what it is refused
-      # on, reported as the misleading "Could not retrieve Project Settings. To link your Project,
-      # remove the `.vercel` directory and deploy again" (vercel/vercel#10874 — a permission 403
-      # dressed up as a stale link; there is no `.vercel` directory on a fresh runner).
-      #
-      # Under neutral names the CLI cannot find them, so it resolves the project from `--project`
-      # and takes the team from the project's own `accountId`. Neither request carries `teamId`,
-      # and neither needs the user-level `/v2/user` lookup that a team-scoped token is blocked from
-      # — which is also why there is no `--scope` here: `--scope` resolves the team *through* the
-      # user identity, so it fails before it ever reaches the project.
+      # There is also no `--scope` anywhere here. The CLI resolves `--scope` through the user
+      # identity: `getUser` runs first, and a team-scoped token is refused on the user endpoint, so
+      # `--scope` fails with "User not found. (404)" before reaching the project at all.
       WEATHRA_VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       WEATHRA_VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
       # Read from the environment rather than passed as `--token` on each command. A token on a
-      # command line is visible in the runner's process list and survives in any shell trace; the
-      # CLI reads this variable on its own, so no step names the credential at all.
+      # command line is visible in the runner's process list and survives in any shell trace; both
+      # the CLI and the script below read this variable on their own, so no step names the
+      # credential at all.
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
     steps:
@@ -78,72 +71,89 @@ jobs:
           cache: npm
           cache-dependency-path: weathra/frontend/package-lock.json
 
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
       # Pinned, like every other tool in this repository: a CLI that silently changed its build
       # output would change what production serves without a commit saying so.
       - name: Install the Vercel CLI
         run: npm install --global vercel@59.11.7
 
-      # Run from the repository root, not from `weathra/frontend`. The Vercel project's Root
-      # Directory is `weathra/frontend`, and that setting is resolved relative to wherever the CLI
-      # considers the project to start. Running from the repository root is what makes the two
-      # agree; running from inside the frontend would look for `weathra/frontend/weathra/frontend`.
+      # This replaces `vercel pull`, which cannot work under this pipeline's credential.
       #
-      # `vercel pull` brings down the project's environment variables for the Production
-      # environment, which is where the three NEXT_PUBLIC_ values live. They are set per
-      # environment in the Vercel project rather than here, so a preview and production can point
-      # at different backends without a commit — which is what task 23.5 asks for. It also means
-      # this file names no configuration value at all.
+      # Reading CLI 59.11.7: once `getLinkedProject` holds a link it calls `getOrgById` —
+      # `GET /v2/teams/<team_id>` — unconditionally, and a token scoped to a team rather than to
+      # the whole account is refused there with 403 `team_unauthorized`. The CLI reports that as
+      # "Could not retrieve Project Settings. To link your Project, remove the `.vercel` directory
+      # and deploy again", which is a message about a directory a fresh runner does not have, on a
+      # request that had nothing to do with the project. `vercel deploy` survives the refusal
+      # because it alone passes `allowOwnerLookupFallback`; `pull` passes neither that nor
+      # `skipRemoteLookup` and then reads `org.id`, so for `pull` it is fatal. No flag changes
+      # that, which is why three runs spent on flags all failed at the same step.
       #
-      # `--project` names the existing project by id, which is the whole of the linking mechanism
-      # here — see the `env:` block for why nothing else may be. It also changes what happens when
-      # the project cannot be resolved: `--yes` alone permits the CLI to read an unresolved project
-      # as licence to *create* one, named after the directory it ran in, and to deploy that instead
-      # of the real one. `--project` sets `failIfNotFound`, so the same situation exits non-zero.
-      # It is what keeps this workflow incapable of quietly standing up a second Vercel project
-      # alongside the real one; `test_the_frontend_release_cannot_create_a_vercel_project` holds it.
+      # So the two files `vercel pull` would have written are written from the project-scoped REST
+      # API the token *can* reach — `/v9/projects/<id>` and `/v9/projects/<id>/env?decrypt=true` —
+      # in the formats the CLI reads back: `.vercel/project.json` exactly as
+      # `writeProjectSettings` writes it, and `.vercel/.env.production.local` exactly as
+      # `vercel env pull` serialises it. The script fails closed on every partial answer; see its
+      # docstring. Both files are runner state and `.gitignore` keeps them out of the tree.
       #
-      # The value reads from the job environment, so no step names a secret in a command line.
-      - name: Pull the production environment
+      # Run from the repository root, like the two CLI commands below. The Vercel project's Root
+      # Directory is `weathra/frontend`, and `vercel build` reads that setting *out of the file
+      # written here* to find the application; the CLI resolves `.vercel/` and `.vercel/output`
+      # against the directory it was invoked from, so all three steps agree only if all three run
+      # from the root.
+      - name: Resolve the project and its production environment
         run: |
           set -euo pipefail
-          vercel pull --yes --environment=production \
-            --project "$WEATHRA_VERCEL_PROJECT_ID"
+          python3 .github/scripts/vercel_release_env.py \
+            --project-id "$WEATHRA_VERCEL_PROJECT_ID" \
+            --expect-org-id "$WEATHRA_VERCEL_ORG_ID" \
+            --directory .
 
-      # The org id is not used to *find* anything — that is what broke, and what the `env:` block
-      # explains. It is used to check the answer. `vercel pull` writes the link it resolved to
-      # `.vercel/project.json`, so comparing that file's `orgId` against the team we expect proves
-      # the project the CLI found is the one the Weathra team owns, without sending the CLI back
-      # down the lookup path a team-scoped token is refused on.
+      # The ownership assertion, restated against the artifact the build actually consumes.
       #
-      # This is strictly stronger than passing the id in: an identifier handed to a lookup is an
-      # assumption, whereas this is the resolved answer being held to it. It runs before the build
-      # so a mismatch costs nothing and promotes nothing. Neither value is printed — a mismatch
-      # says that it happened, not what the two ids were.
-      - name: Verify the pulled project belongs to the Weathra team
+      # The real check happens in the script, against the `accountId` the project API returned —
+      # the resolved answer to "who owns this project", not the assumption we started from. That
+      # is also the value it writes into `.vercel/project.json`, which is what keeps this step from
+      # being a restatement of its own input: it holds the file `vercel build` and
+      # `vercel deploy --prebuilt` will resolve the project from to the team we expect, after the
+      # file exists and before anything is built.
+      #
+      # Neither value is printed — a mismatch says that it happened, not what the two ids were.
+      - name: Verify the project the build will use belongs to the Weathra team
         run: |
           set -euo pipefail
           resolved="$(jq -r '.orgId' .vercel/project.json)"
           if [ "$resolved" != "$WEATHRA_VERCEL_ORG_ID" ]; then
-            echo "the pulled project does not belong to the expected team; refusing to build" >&2
+            echo "the resolved project does not belong to the expected team; refusing to build" >&2
             exit 1
           fi
-          echo "the pulled project belongs to the expected team"
+          echo "the project the build will use belongs to the expected team"
 
       # Next.js inlines NEXT_PUBLIC_ values at build time, so the build has to happen after the
-      # pull and with those values in scope. Building here rather than on Vercel means the bundle
-      # that gets promoted is the one this commit produced.
+      # environment is written and with those values in scope. Building here rather than on Vercel
+      # means the bundle that gets promoted is the one this commit produced.
       #
-      # No `--project` here, deliberately: the pull wrote `.vercel/project.json` and
-      # `.vercel/.env.production.local`, and the build's job is to consume exactly what the pull
-      # resolved — and what the step above just held to the expected team. Naming the project
-      # again would send the build back to the API to re-resolve it, which is a second chance for
-      # the build to disagree with the thing that was pulled and verified.
+      # No `--project` here, deliberately: the step above wrote `.vercel/project.json` and
+      # `.vercel/.env.production.local`, and the build's job is to consume exactly what was
+      # resolved — and what the check above just held to the expected team. Naming the project
+      # again would send the build to the API to re-resolve it, which is a second chance for the
+      # build to disagree with the thing that was verified.
       - name: Build
         run: vercel build --prod
 
-      # Named for the same reason as the pull. The promotion is the step that would do the damage
-      # if the link were ever wrong, so it resolves the project explicitly rather than inheriting
-      # whatever the runner happens to have on disk.
+      # `--project` is named here and nowhere else. The promotion is the step that would do the
+      # damage if the link were ever wrong, so it resolves the project explicitly rather than
+      # inheriting whatever the runner happens to have on disk — and because the id matches the
+      # local link, the CLI takes its local path and promotes without a lookup.
+      #
+      # It is also what keeps this workflow incapable of standing up a *second* Vercel project:
+      # `--project` sets the CLI's `failIfNotFound`, so an unresolvable project exits non-zero,
+      # where `--yes` alone would let the CLI read one as licence to create a project named after
+      # the directory it ran in and promote that instead.
+      # `test_the_frontend_release_cannot_create_a_vercel_project` holds it.
       - name: Deploy
         id: deploy
         run: |
