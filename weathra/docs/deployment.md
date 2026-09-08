@@ -551,6 +551,46 @@ and is why the workflow file names no configuration value at all. The token reac
 `VERCEL_TOKEN` in the job environment rather than as `--token` on each command, so no step names
 the credential; `test_no_frontend_release_step_names_the_token` holds that.
 
+### By hand, to change configuration
+
+**`backend-allowed-origin.yml`** — adds one browser origin to the backend's
+`CORS_ALLOWED_ORIGINS`. It exists because that variable is declared `sync: false` in `render.yaml`,
+so its value lives in Render and no commit can reach it — and the frontend cannot call the backend
+from an origin the list does not name. A preflight from a missing origin answers 400 with no
+`Access-Control-Allow-Origin` header at all, which is a failure no bearer token can get past and
+one that looks nothing like a CORS problem from inside the browser console.
+
+It is *additive*: it reads what is configured, appends the origin if absent, and never rewrites or
+removes an existing entry. A reconciler holding the whole list here would be easier to review and
+would also delete, on its first run, every origin someone added in Render that this repository did
+not know about. Two consequences follow from that choice: an origin already present produces no
+write at all — so a second run cannot restart production for a value that is already correct — and
+comparison is normalised for surrounding whitespace and a trailing slash only. Not case: the CORS
+middleware compares the browser's `Origin` header against the list as exact strings, and a browser
+sends the scheme and host lower-cased, so `https://WEATHRA-BICE.vercel.app` is not an equivalent
+spelling but an entry that will never match.
+
+Render's per-key endpoint (`PUT /v1/services/<id>/env-vars/<key>`) is what makes this safe:
+`PUT /v1/services/<id>/env-vars` replaces a service's *entire* environment, and a partial body
+there deletes every variable omitted from it. The script reads the environment back afterwards and
+holds every other variable to being byte-identical, because "the endpoint cannot do that" is a
+claim and this is a check. It fails closed if the current configuration cannot be read, and refuses
+to *create* the variable when the service does not hold one directly — the value may resolve from a
+linked environment group, and setting it here would replace whatever the service resolves today
+with a single origin.
+
+It ends by asking production, with a real preflight from the real origin, because the backend reads
+its configuration at start-up: a saved value the running container has not picked up is
+indistinguishable from a value that was never saved. If the change is not in force it restarts the
+service once, which re-reads the environment and keeps serving the release that is already there.
+It never asks Render for a *deploy* — `release.yml` remains the only route to a new release, and
+`test_the_maintenance_workflow_changes_configuration_and_nothing_else` fails if that changes.
+
+Hand-dispatched only, and classified as `MAINTENANCE` in `test_release_workflow.py` rather than as
+ordinary CI: `RENDER_API_KEY` is account-scoped, so a workflow holding it must not be reachable by
+pushing a commit. It prints the origin it added and nothing else — not the credential, not the
+origin list, and not the values of the variables it read in order to prove it had not changed them.
+
 ### On a schedule *(pending)*
 
 `weathra-retention`, under the privileged connection, against `THREAD_RETENTION_DAYS` and

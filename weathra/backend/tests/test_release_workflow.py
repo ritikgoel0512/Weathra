@@ -83,6 +83,17 @@ RELEASE_PIPELINES = ("release.yml", "frontend-release.yml")
 # and this entry once that is known.
 DIAGNOSTIC = ("db-identity.yml",)
 
+# Neither ordinary CI, nor a release, nor a diagnostic: it changes the *configuration* of a service
+# that is already released, and never what is running on it.
+#
+# `backend-allowed-origin.yml` adds one browser origin to the backend's CORS_ALLOWED_ORIGINS.
+# `render.yaml` declares that variable with `sync: false`, so its value lives in Render and no
+# commit can reach it — and task 23.5 needs the production frontend's origin in it, or a browser
+# refuses every call the frontend makes before the bearer token is looked at. It holds a Render
+# credential, so the compensating controls are the same as the diagnostic's: hand-dispatched only,
+# and every capability it does not need is absent rather than merely unused.
+MAINTENANCE = ("backend-allowed-origin.yml",)
+
 
 @pytest.fixture(scope="module")
 def release(repo_root: Path) -> dict[str, Any]:
@@ -339,7 +350,9 @@ def test_only_the_release_pipeline_reads_a_repository_secret(repo_root: Path) ->
     release pipeline has appeared without anyone deciding which side of the boundary it is on.
     """
     workflows = {path.name for path in (repo_root / ".github" / "workflows").glob("*.yml")}
-    unclassified = workflows - set(ORDINARY_CI) - set(DIAGNOSTIC) - set(RELEASE_PIPELINES)
+    unclassified = (
+        workflows - set(ORDINARY_CI) - set(DIAGNOSTIC) - set(RELEASE_PIPELINES) - set(MAINTENANCE)
+    )
     assert not unclassified, (
         f"a workflow exists that is neither ordinary CI nor a release pipeline: {unclassified}. "
         "Decide whether it may hold a production credential and record it here."
@@ -413,6 +426,88 @@ def test_the_diagnostic_workflow_cannot_deploy_or_migrate(repo_root: Path) -> No
             f"{name} has DATABASE_URL in scope; the diagnostic needs only the privileged URL"
         )
         assert "hide_password=False)}" not in rendered, f"{name} interpolates a rendered DSN"
+
+
+def test_the_maintenance_workflow_can_only_be_dispatched_by_hand(repo_root: Path) -> None:
+    """A workflow holding an account-scoped Render key must not be reachable by pushing a commit.
+
+    `RENDER_API_KEY` is the most powerful credential in this repository's store — it reaches every
+    service on the account, not just this one — so the control is that only a person can start
+    this, and only deliberately. A `push` trigger here would put that key on the ordinary
+    contribution path.
+    """
+    for name in MAINTENANCE:
+        path = repo_root / ".github" / "workflows" / name
+        assert path.is_file(), f"{name} is classified as maintenance but does not exist"
+
+        # PyYAML reads a bare `on` key as the boolean `True` — YAML 1.1 spells true that way.
+        parsed: dict[Any, Any] = yaml.safe_load(path.read_text())
+        triggers = set(parsed[True])
+        assert triggers == {"workflow_dispatch"}, (
+            f"{name} has triggers beyond workflow_dispatch: "
+            f"{sorted(triggers - {'workflow_dispatch'})}"
+        )
+        assert parsed["concurrency"]["cancel-in-progress"] is False, (
+            f"{name} cancels a running change; two runs racing would each read the origin list "
+            "before the other wrote it, and the second write would drop the first one's origin"
+        )
+
+
+def test_the_maintenance_workflow_changes_configuration_and_nothing_else(
+    repo_root: Path,
+) -> None:
+    """It edits one environment variable. Releasing, migrating and reading the database are absent.
+
+    `release.yml` stays the only route to a new release: this workflow may restart the service to
+    make configuration take effect — which re-reads the environment and keeps serving the release
+    that is already there — but it must never ask Render for a *deploy*, which would build and
+    promote whatever `main` happens to be.
+    """
+    for name in MAINTENANCE:
+        rendered = (repo_root / ".github" / "workflows" / name).read_text()
+
+        for forbidden in (
+            "DATABASE_URL",
+            "SUPABASE_SERVICE_ROLE_KEY",
+            "WEATHRA_PRIVILEGED_SERVICE_ROLE_KEY",
+            "OPENROUTER_API_KEY",
+        ):
+            assert forbidden not in rendered, f"{name} has {forbidden} in scope"
+
+        for forbidden in ("alembic upgrade", "alembic downgrade", "alembic stamp"):
+            assert forbidden not in rendered, f"{name} runs `{forbidden}`"
+
+        assert "/deploys" not in rendered, (
+            f"{name} can ask Render for a deploy; releasing belongs to release.yml alone"
+        )
+        assert "RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}" in rendered, (
+            f"{name} does not take the Render key from the repository secret"
+        )
+        for step in yaml.safe_load(rendered)["jobs"]["allow"]["steps"]:
+            command = str(step.get("run", ""))
+            assert "RENDER_API_KEY" not in command, (
+                f"{name} names the Render key in a command, where it would be visible in the "
+                f"runner's process list: {command!r}"
+            )
+            assert "secrets." not in command, f"{name} names a secret in a command: {command!r}"
+
+
+def test_the_maintenance_workflow_cannot_replace_the_whole_environment(repo_root: Path) -> None:
+    """The one Render endpoint that could delete the database credentials, and its absence.
+
+    `PUT /v1/services/<id>/env-vars` replaces a service's entire environment; a partial body there
+    deletes everything omitted. The per-key endpoint used instead — `.../env-vars/<key>` — updates
+    only the variable named in the path, so unrelated variables survive by construction rather than
+    by care. `test_render_allowed_origin.py` holds the behaviour; this holds the shape.
+    """
+    source = (repo_root / ".github" / "scripts" / "render_allowed_origin.py").read_text()
+    assert '"/services/{quoted}/env-vars/{ENV_KEY}"' in source, (
+        "the script no longer writes through Render's per-key endpoint"
+    )
+    assert 'api("PUT", f"/services/{quoted}/env-vars",' not in source, (
+        "the script writes through Render's whole-environment endpoint, which deletes every "
+        "variable omitted from the body"
+    )
 
 
 # ------------------------------------------------------------------ 6. the frontend release (23.5)

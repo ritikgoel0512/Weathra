@@ -1,0 +1,75 @@
+name: backend-allowed-origin
+
+# Weathra — allow one browser origin to call the deployed backend. Task 23.5.
+#
+# Task 23.5 requires the deployed frontend to reach the deployed backend with a bearer token, and it
+# cannot: the production frontend is served from a Vercel domain that the backend's
+# CORS_ALLOWED_ORIGINS does not list, so a browser refuses every call before the token is looked at.
+# A preflight from that origin answers 400 with no Access-Control-Allow-Origin, while
+# `http://localhost:3000` answers 200 with it.
+#
+# `render.yaml` declares CORS_ALLOWED_ORIGINS with `sync: false`, so the value lives in Render and no
+# commit can change it. This workflow is the smallest thing that can: it runs where RENDER_API_KEY
+# and RENDER_SERVICE_ID already are, and it *adds* one origin to whatever is configured. The origin
+# is an input with the production domain as its default, so what was changed is visible in the run
+# and reviewable here rather than typed into a dashboard.
+#
+# It holds a Render credential, so it is not ordinary CI. It is classified as `MAINTENANCE` in
+# `backend/tests/test_release_workflow.py`, which asserts what it may not do: hand-dispatched only,
+# no database connection of either kind, no service-role key, no Alembic command, and no deploy —
+# `release.yml` remains the only route to a new release. Its blast radius is one environment
+# variable on one service.
+
+on:
+  workflow_dispatch:
+    inputs:
+      origin:
+        description: "The browser origin to allow (added to CORS_ALLOWED_ORIGINS, nothing removed)"
+        required: true
+        default: "https://weathra-bice.vercel.app"
+
+concurrency:
+  # Two runs racing would each read the origin list before the other wrote it, and the second write
+  # would drop the first one's origin.
+  group: backend-allowed-origin
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # The same literal `release.yml` verifies its releases against.
+  PRODUCTION_BASE_URL: https://weathra-backend.onrender.com
+
+jobs:
+  allow:
+    name: allow an origin to call the backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # The whole operation, and it is deliberately one step: reading the current configuration,
+      # adding the origin, holding every other variable to being unchanged, and proving from
+      # outside that production now accepts the origin are one transaction's worth of work, and a
+      # step boundary in the middle would leave the interesting failure — saved but not in force —
+      # looking like a success followed by an unrelated red step.
+      #
+      # Render's per-key endpoint is what makes this safe: `PUT .../env-vars/<key>` updates only
+      # the named variable, where `PUT .../env-vars` would replace the service's entire
+      # environment. The script fails closed if the current configuration cannot be read, refuses
+      # to create the variable if the service does not hold one, makes no write at all when the
+      # origin is already allowed, and prints neither the credential nor the origin list.
+      - name: Allow the origin and verify production accepts it
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/render_allowed_origin.py \
+            --origin "${{ inputs.origin }}" \
+            --base-url "$PRODUCTION_BASE_URL"
