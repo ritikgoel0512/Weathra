@@ -231,19 +231,18 @@ def test_a_baseline_comparison_labels_both_sides(reader: httpx.Client, target: T
     observed baseline looking like the same kind of number, which is the confusion
     `specs/historical-weather` exists to prevent.
 
-    **This check fails against production as of 2026-09-08, and is left failing on purpose.**
-    `/weather/history/baseline` answers `no_data_for_range` — "no temperature observations for this
-    calendar period in any of the 10 year(s) requested" — for every window and year count tried,
-    while `/weather/history` returns observations for the same location, measure and window. The
-    offline suite passes against recorded payloads, so whatever differs is in the live archive
-    request the baseline path makes. Skipping this would convert a finding into silence; it is a
-    real 25.4 criterion and the failure is the report.
+    `temperature_mean` is the measure the product itself asks for — it is the route's default and
+    what the Dashboard sends — because a baseline is computed from the daily series, which carries
+    daily aggregates and not instantaneous measures. An earlier version of this check asked for
+    `temperature` and read the resulting refusal as a production data gap; the next test is what
+    that mistake became.
     """
     response = fetch(
         reader,
         "GET",
         target.api(
-            "/weather/history/baseline/comparison?location=Berlin&measure=temperature&start=2025-07-01&end=2025-07-07"
+            "/weather/history/baseline/comparison"
+            "?location=Berlin&measure=temperature_mean&start=2025-07-01&end=2025-07-07"
         ),
     )
     assert_not_server_error(response)
@@ -252,6 +251,34 @@ def test_a_baseline_comparison_labels_both_sides(reader: httpx.Client, target: T
     assert body.get("baseline", {}).get("labelling"), "the baseline side carries no labelling"
     assert body.get("observed_data_class"), "the observed side carries no data class"
     assert body.get("characterization"), "the comparison states no characterisation"
+
+
+def test_a_baseline_of_an_instantaneous_measure_is_refused_clearly(
+    reader: httpx.Client, target: Target
+) -> None:
+    """The unsupported case, and that production says *why* rather than blaming the archive.
+
+    Asking to baseline `temperature` cannot be satisfied for any location in any year: the daily
+    series carries `temperature_mean`, `temperature_max` and `temperature_min`. Production used to
+    answer 404 `no_data_for_range` — "the archive holds no temperature observations for this
+    calendar period in any of the 10 year(s) requested" — which reads as a coverage gap and sends
+    the reader hunting for missing data. It now refuses up front and names what to ask for.
+    """
+    response = fetch(
+        reader,
+        "GET",
+        target.api(
+            "/weather/history/baseline"
+            "?location=Berlin&measure=temperature&start=2025-07-01&end=2025-07-07"
+        ),
+    )
+    assert_not_server_error(response)
+    assert_status(response, 400)
+    error = json_body(response).get("error", {})
+    assert error.get("code") == "validation_failed", f"refused as {error.get('code')!r}"
+    assert "temperature_mean" in error.get("message", ""), (
+        "the refusal does not say what to ask for instead"
+    )
 
 
 @pytest.mark.parametrize("path", sorted(PUBLIC_PATHS))

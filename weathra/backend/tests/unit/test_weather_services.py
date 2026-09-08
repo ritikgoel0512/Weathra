@@ -21,6 +21,7 @@ from weathra.domain.errors import (
     NoDataForRange,
     RangeOutsideCoverage,
     UnsupportedMeasure,
+    ValidationFailed,
 )
 from weathra.domain.location import Location
 from weathra.domain.weather import ConfidenceBand, DataClass, Granularity, Measure, UnitSystem
@@ -628,6 +629,46 @@ async def test_a_baseline_reports_the_years_it_actually_used() -> None:
     assert baseline.standard_deviation.computed is True
     assert baseline.minimum.computed is True
     assert baseline.maximum.computed is True
+
+
+async def test_a_baseline_of_an_instantaneous_measure_is_refused_by_name() -> None:
+    """The refusal that used to arrive as a coverage problem, and cost an afternoon.
+
+    A baseline is computed from the *daily* series, which carries only daily aggregates. Asking for
+    `temperature` — an instantaneous measure — cannot be satisfied for any location in any year, but
+    the routine used to discover that one archive request at a time and then report "the archive
+    holds no temperature observations for this calendar period in any of the 10 year(s) requested".
+    That blames the archive for a measure it was never asked for, and it reads exactly like a
+    coverage gap: the deployed-acceptance suite hit it against production and it took tracing the
+    daily series' own keys to see that nothing was wrong with the data at all.
+
+    So it is refused up front, by name, and the refusal says what to ask for instead.
+    """
+    with pytest.raises(ValidationFailed) as caught:
+        await shifting_archive_service().baseline(
+            f.BERLIN,
+            start=date(2025, 2, 1),
+            end=date(2025, 2, 28),
+            years=3,
+            measure=Measure.TEMPERATURE,
+        )
+
+    message = str(caught.value)
+    assert "instantaneous" in message
+    assert "temperature_mean" in message, "the refusal does not say what to ask for instead"
+    assert "archive" not in message.lower(), "the refusal still blames the archive"
+
+
+@pytest.mark.parametrize(
+    "measure", [Measure.TEMPERATURE_MEAN, Measure.TEMPERATURE_MAX, Measure.PRECIPITATION_SUM]
+)
+async def test_a_baseline_of_a_daily_aggregate_is_computed(measure: Measure) -> None:
+    """The other side of the guard: every daily aggregate the archive supplies still works."""
+    baseline = await shifting_archive_service().baseline(
+        f.BERLIN, start=date(2025, 2, 1), end=date(2025, 2, 28), years=2, measure=measure
+    )
+    assert baseline.measure is measure
+    assert baseline.years_count >= 1
 
 
 async def test_a_baseline_is_labelled_a_weathra_computed_statistic() -> None:

@@ -29,9 +29,10 @@ from weathra.analytics.rolling import delta, percentage_change
 from weathra.analytics.support import require_usable
 from weathra.config import Settings
 from weathra.domain.analytics import Provenance, StatisticResult
-from weathra.domain.errors import NoDataForRange, RangeOutsideCoverage
+from weathra.domain.errors import NoDataForRange, RangeOutsideCoverage, ValidationFailed
 from weathra.domain.location import Location
 from weathra.domain.weather import (
+    DAILY_AGGREGATES,
     DataClass,
     HistoricalObservations,
     Measure,
@@ -361,6 +362,24 @@ class HistoryService:
         ``start.year`` instead, because a period compared against a baseline containing it would be
         partly compared against itself.
         """
+        # A baseline is built from the *daily* series, which carries only daily aggregates. Asking
+        # for an instantaneous measure — `temperature` rather than `temperature_mean` — is not a
+        # coverage problem to be discovered a dozen archive requests later; it cannot be satisfied
+        # for any location in any year. Refused here, by name, because the alternative is the
+        # message this used to produce: "the archive holds no temperature observations for this
+        # calendar period in any of the 10 year(s) requested", which blames the archive for a
+        # measure it was never asked for and sends the reader looking for missing data.
+        if measure not in DAILY_AGGREGATES:
+            raise ValidationFailed(
+                f"{measure.value} is an instantaneous measure, and a baseline is computed from "
+                "daily aggregates. Ask for one of those instead — for temperature that is "
+                "temperature_mean, temperature_max or temperature_min.",
+                details={
+                    "measure": measure.value,
+                    "usable_measures": [aggregate.value for aggregate in DAILY_AGGREGATES],
+                },
+            )
+
         candidates = baseline_periods(
             location,
             start=start,
