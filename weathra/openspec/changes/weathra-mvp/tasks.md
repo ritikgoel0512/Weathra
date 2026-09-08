@@ -280,7 +280,7 @@ Completes before substantial frontend implementation in groups 20 and 21. Visily
 ## 25. Acceptance verification
 
 - [x] 25.1 Run the full backend verification pass — ruff, type-check, `pytest`, and `pytest -m db` — and record any failure rather than working around it; verify all commands pass.
-- [ ] 25.2 Run the full frontend verification pass — lint, type-check, unit tests, build, and the Playwright flows; verify all pass.
+- [x] 25.2 Run the full frontend verification pass — lint, type-check, unit tests, build, and the Playwright flows; verify all pass.
 - [ ] 25.3 Run the authentication and authorization suite of group 18 against the deployed backend and record the results; verify every case passes, including cross-user isolation and the RLS gate.
 - [ ] 25.4 Run the live smoke check against the deployed pair — create an account and verify it by code, sign in, readiness all-reachable, an attributed public forecast without a session, a baseline comparison with both sides labelled, a question through `/ask` whose every figure appears in its evidence, an authenticated SSE stream completing, and a second account seeing none of the first's data; verify each and record the results.
 - [ ] 25.5 Trace every capability spec to its implementing tasks and tests, and record the traceability table in `docs/architecture.md`; verify every requirement in all twenty specs maps to at least one test.
