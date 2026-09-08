@@ -714,7 +714,14 @@ A dry run is deliberately *not* the routine. `main()` calls `_dry_run()` **inste
 and the two do not share their predicates — a dry run that called the real routine and rolled back
 would have to hold a transaction open across the checkpoint deletions, which are not transactional
 because the checkpointer has its own connection. So the deletion path — the privileged checkpointer,
-the two `DELETE`s and the commit — is proven only by a run with `dry_run` unselected.
+the two `DELETE`s and the commit — is proven only by a run in `remove` mode.
+
+**Which is why the mode is a named choice.** Runs 34252635695 and 34256787050 were dispatched a
+checkbox apart, and both counted: each rendered `if [ "true" = "true" ]`, and the only way to tell
+what a run had done was to find the `--dry-run` in its echoed script. The second was intended as the
+real pass, so a run that had not done what it was dispatched to do reported success. The input is
+now `mode`, defaulting to `remove` — the operation the schedule performs, since a scheduled run
+supplies no inputs at all — and the chosen word is printed before anything runs.
 
 ## The production image
 

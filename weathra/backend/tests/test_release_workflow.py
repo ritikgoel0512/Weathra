@@ -577,6 +577,48 @@ def test_the_retention_job_runs_unattended_and_by_hand(repo_root: Path) -> None:
         )
 
 
+def test_the_unattended_pass_removes_rather_than_counts(repo_root: Path) -> None:
+    """The scheduled run must do the thing the task requires, and a dispatch must be readable.
+
+    This exists because it went wrong. The first two dispatches were a checkbox apart, both
+    rendered `[ "true" = "true" ]`, and both counted — the second was meant to be the real pass,
+    and the only way to tell was to read the `--dry-run` in the step's echoed script. A run that
+    did not do what it was dispatched to do reported success.
+
+    So: the mode is a named choice whose default is the real pass, the schedule (which supplies no
+    inputs at all) falls back to that same default, and the chosen word is printed before anything
+    runs. "Which mode was that run?" is then answerable from the top of the log rather than by
+    decoding a shell condition.
+    """
+    for name in SCHEDULED:
+        rendered = (repo_root / ".github" / "workflows" / name).read_text()
+        parsed: dict[Any, Any] = yaml.safe_load(rendered)
+
+        mode = parsed[True]["workflow_dispatch"]["inputs"]["mode"]
+        assert mode["type"] == "choice", (
+            f"{name} takes its mode as something other than a named choice; a checkbox was misread "
+            "once already"
+        )
+        assert mode["default"] == "remove", (
+            f"{name} defaults to something other than the real pass, so an untouched dispatch "
+            "would not do what the schedule does"
+        )
+        assert set(mode["options"]) == {"remove", "count-only"}
+
+        step = next(
+            step
+            for step in parsed["jobs"]["retain"]["steps"]
+            if "weathra-retention" in str(step.get("run", ""))
+        )
+        assert "inputs.mode || 'remove'" in str(step.get("env", {}).get("MODE", "")), (
+            f"{name} does not fall back to the real pass when no input is supplied, which is every "
+            "scheduled run"
+        )
+        assert 'echo "mode: ' in str(step["run"]), (
+            f"{name} does not say which mode it is running in, so a log cannot be read back"
+        )
+
+
 def test_the_retention_job_verifies_before_it_deletes(repo_root: Path) -> None:
     """The order is a safety property, not a tidiness one.
 

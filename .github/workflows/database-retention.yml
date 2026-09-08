@@ -28,11 +28,20 @@ on:
     - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
-      dry_run:
-        description: "Count what would be removed without removing it"
-        required: false
-        default: false
-        type: boolean
+      # A named mode rather than a checkbox, because a checkbox was misread once and the run looked
+      # like a success either way. The first two dispatches both rendered `[ "true" = "true" ]` —
+      # the second was meant to be the real pass, and only the log's `--dry-run` said otherwise.
+      # A dropdown that says `remove` cannot be left in the wrong state without saying so, the
+      # chosen word is echoed before anything runs, and the default is the operation the schedule
+      # performs, so dispatching without touching it does what the schedule does.
+      mode:
+        description: "remove — the real pass. count-only — report what would go, and remove nothing."
+        required: true
+        default: remove
+        type: choice
+        options:
+          - remove
+          - count-only
 
 concurrency:
   # Its own group, never the release's: retention must neither queue behind a deployment nor delay
@@ -100,10 +109,16 @@ jobs:
       #
       # The report is counts, the two windows, and a timestamp — never a deleted row's contents.
       - name: Remove what has expired
+        env:
+          # `inputs` is empty on a schedule, so the fallback is what the unattended pass runs.
+          MODE: ${{ inputs.mode || 'remove' }}
         run: |
           set -euo pipefail
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
+          echo "mode: ${MODE}"
+          if [ "${MODE}" = "count-only" ]; then
+            echo "counting only — nothing will be removed"
             weathra-retention --dry-run
           else
+            echo "removing what has expired"
             weathra-retention
           fi
