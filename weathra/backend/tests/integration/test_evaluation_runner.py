@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import AbstractAsyncContextManager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -21,6 +22,7 @@ from weathra.db.session import privileged_session
 from weathra.domain.errors import ProviderUnavailable
 from weathra.evaluation.cases import DATASET_VERSION, Category, load_dataset
 from weathra.evaluation.fixtures import MissingFixture, build_offline_transport, recorded_places
+from weathra.evaluation.harness import PreparedApp
 from weathra.evaluation.integrity import RunOutcome
 from weathra.evaluation.metrics import MetricName
 from weathra.evaluation.offline_llm import OFFLINE_PROVIDER_ID
@@ -599,8 +601,14 @@ async def test_the_preflight_aborts_before_spending_the_dataset(
 
     assert result.cases == (), "no case may execute once the pinned model has failed its probe"
     assert result.outcome is RunOutcome.PROVIDER_FAILURE
-    assert "Pre-flight" in (result.integrity.reason or "")
-    assert result.integrity.attempts_by_status == {"model_unavailable": 1}
+
+    # A provider failure is exactly the case that must carry an integrity verdict, so its absence is
+    # asserted rather than assumed — and asserting it is also what tells the type checker that the
+    # two reads below are reads of a verdict and not of `None`.
+    integrity = result.integrity
+    assert integrity is not None, "a provider failure must record why the run is not model quality"
+    assert "Pre-flight" in (integrity.reason or "")
+    assert integrity.attempts_by_status == {"model_unavailable": 1}
 
 
 async def _run_with_failing_gateway(
@@ -624,7 +632,9 @@ async def _run_with_failing_gateway(
 
     real_build = harness_module.build_evaluation_app
 
-    def _offline_but_live(app_settings: Settings, *, mode: EvaluationMode):
+    def _offline_but_live(
+        app_settings: Settings, *, mode: EvaluationMode
+    ) -> AbstractAsyncContextManager[PreparedApp]:
         # Provision and transport as offline; classify as live. The seam that lets a provider
         # outage be exercised without a credential or a network.
         return real_build(app_settings, mode=EvaluationMode.OFFLINE)

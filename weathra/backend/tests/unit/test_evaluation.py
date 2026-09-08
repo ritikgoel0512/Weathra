@@ -9,6 +9,7 @@ the pipeline and would pass for a metric that always returned 1.0.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -24,11 +25,12 @@ from weathra.evaluation.cases import (
     composition,
     load_dataset,
 )
-from weathra.evaluation.integrity import RunOutcome, assess_integrity
+from weathra.evaluation.integrity import InferenceIntegrity, RunOutcome, assess_integrity
 from weathra.evaluation.metrics import (
     METRIC_NAMES,
     CaseOutcome,
     MetricName,
+    MetricsReport,
     compute_metrics,
     figures_in,
 )
@@ -870,7 +872,12 @@ def test_every_threshold_in_the_specification_is_evaluated() -> None:
 # quality failure of a model that never answered. These assert that cannot happen again.
 
 
-def _attempt(status: InferenceStatus, *, stage: InferenceStage = InferenceStage.ROUTING, **kw):
+def _attempt(
+    status: InferenceStatus,
+    *,
+    stage: InferenceStage = InferenceStage.ROUTING,
+    **kw: object,
+) -> InferenceAttempt:
     return InferenceAttempt(stage=stage, status=status, **kw)
 
 
@@ -902,7 +909,14 @@ def _fell_back(case_id: str, category: Category, **overrides: object) -> CaseOut
     )
 
 
-def _assess(outcomes, metrics, *, mode=EvaluationMode.LIVE, floor: float = 1.0, cases=None):
+def _assess(
+    outcomes: list[CaseOutcome] | tuple[CaseOutcome, ...],
+    metrics: MetricsReport,
+    *,
+    mode: EvaluationMode = EvaluationMode.LIVE,
+    floor: float = 1.0,
+    cases: Sequence[EvaluationCase] | None = None,
+) -> InferenceIntegrity:
     return assess_integrity(
         outcomes,
         metrics,
