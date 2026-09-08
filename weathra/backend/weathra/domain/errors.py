@@ -21,6 +21,7 @@ from __future__ import annotations
 from typing import Any, ClassVar
 
 __all__ = [
+    "AGENT_UNAVAILABLE_MESSAGE",
     "AgentBudgetExceeded",
     "AgentNotConfigured",
     "AnalyticsNotPossible",
@@ -327,6 +328,20 @@ class VectorIndexMismatch(WeathraError):
     """
 
     code: ClassVar[str] = "vector_index_mismatch"
+
+
+# What a person is told when inference cannot answer, wherever that is discovered — at
+# construction, at a request, or mid-stream. It says what is unavailable and what still works, and
+# names nothing about how the service is configured: no environment variable, no credential, no
+# provider setting. An operator's checklist read out to a visitor is useless to them and a small
+# disclosure of how the service is wired. The diagnosis belongs in the log and in `details`.
+#
+# It lives beside `AgentNotConfigured` because every site that raises it needs the same words, and
+# a message duplicated across three modules is a message that drifts.
+AGENT_UNAVAILABLE_MESSAGE = (
+    "Weather intelligence is temporarily unavailable. Forecasts, history, analytics, comparison "
+    "and your saved locations are all unaffected."
+)
 
 
 class AgentNotConfigured(WeathraError):

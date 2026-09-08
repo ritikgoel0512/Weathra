@@ -38,7 +38,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import { Button, ErrorState, Field } from "@/components/ui";
-import { AGENT_NOT_CONFIGURED_CODE } from "@/lib/api/errors";
+import { AGENT_NOT_CONFIGURED_CODE, presentableMessage } from "@/lib/api/errors";
 import type { AskRequest } from "@/lib/api/schema";
 import { runStepsFrom } from "@/lib/analyst/run";
 import { useSession } from "@/lib/session/provider";
@@ -87,8 +87,9 @@ function TerminalState({
     return (
       <div className={styles.unavailable} role="alert">
         <p className={styles.unavailableTitle}>The AI Weather Analyst is unavailable</p>
-        {/* The backend's own message names the missing configuration. */}
-        <p>{terminal.message}</p>
+        {/* Through `presentableMessage`: this screen does not compose the sentence, so the one
+            guarantee it can make is about what it will refuse to render. See its docstring. */}
+        <p>{presentableMessage(terminal.message)}</p>
         <p className={styles.note}>
           Every other screen is unaffected: the Dashboard, Historical Analytics, Compare Cities and
           Saved Locations retrieve and compute without an inference provider.

@@ -33,6 +33,7 @@ from weathra.agents.llm.openrouter import OPENROUTER_PROVIDER_ID, OpenRouterClie
 from weathra.agents.llm.registry import LLMProvider, available_providers, build_client
 from weathra.config import Settings
 from weathra.domain.errors import (
+    AGENT_UNAVAILABLE_MESSAGE,
     AgentNotConfigured,
     ProviderNotFound,
     ProviderRateLimited,
@@ -328,8 +329,14 @@ async def test_a_401_surfaces_as_a_configuration_error_not_an_outage() -> None:
         await _client().complete(system="", messages=[])
 
     assert raised.value.code == "agent_not_configured"
-    assert "OPENROUTER_API_KEY" in str(raised.value)
-    assert "invalid api key" not in str(raised.value)
+    # What a person is shown, and what an operator gets, are deliberately different. The message
+    # reaches a weather screen, so it names nothing about how the service is configured; the status
+    # goes to `details` and the cause to the log. This assertion was inverted on 2026-09-08 — it
+    # used to require the message to name OPENROUTER_API_KEY, and production duly told a signed-in
+    # visitor to "Check OPENROUTER_API_KEY".
+    assert "OPENROUTER_API_KEY" not in str(raised.value)
+    assert "invalid api key" not in str(raised.value), "the gateway's own words are not ours"
+    assert raised.value.details["status"] == 401, "the operator's half is missing"
     assert route.call_count == 1, "a rejected credential must not be retried"
 
 
@@ -489,17 +496,25 @@ def test_no_credential_means_construction_raises_and_names_what_is_missing() -> 
     with pytest.raises(AgentNotConfigured) as raised:
         build_client(httpx.AsyncClient(), settings)
 
-    assert "OPENROUTER_API_KEY" in str(raised.value)
-    assert raised.value.details["missing"] == "OPENROUTER_API_KEY"
+    # `details` is the operator's channel; the message is the visitor's. Neither names the
+    # variable, because the error travels to a screen and the repository is public.
+    assert "OPENROUTER_API_KEY" not in str(raised.value)
+    assert raised.value.details["missing"] == "inference_credential"
 
 
 def test_the_error_says_the_other_capabilities_still_work() -> None:
-    """Because they do, and an operator reading only this message should know it."""
+    """Because they do, and somebody reading only this message should know it.
+
+    The point survives the rewording: an outage of one capability must not read as an outage of the
+    product. What changed is the audience — the sentence is now written for a person looking at a
+    weather screen rather than for an operator reading a log.
+    """
     with pytest.raises(AgentNotConfigured) as raised:
         build_client(httpx.AsyncClient(), Settings(supabase_url="https://test.supabase.co"))
-    message = str(raised.value)
-    for capability in ("forecast", "history", "analytics", "comparison", "locations"):
+    message = str(raised.value).lower()
+    for capability in ("forecast", "history", "analytics", "comparison", "saved locations"):
         assert capability in message
+    assert "temporarily unavailable" in message, "the message does not say the outage may pass"
 
 
 def test_the_provider_does_not_construct_a_client_until_it_is_asked() -> None:
@@ -687,3 +702,72 @@ async def test_a_retry_after_beyond_the_ceiling_stops_rather_than_waiting() -> N
     assert route.call_count == 1, "a delay beyond the ceiling must not be retried"
     assert caught.value.details["retry_after_seconds"] == 600.0
     assert classify_inference_failure(caught.value)[0] is InferenceStatus.RATE_LIMITED
+
+
+# ------------------------------------------------------------------ what a person may be shown
+
+
+# Names that describe how Weathra is wired rather than what a person asked for. None of them may
+# reach a screen: an operator's checklist is useless to a visitor, and reading one out discloses a
+# little of the service's shape for no benefit to anyone.
+CONFIGURATION_IDENTIFIERS = (
+    "OPENROUTER_API_KEY",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "DATABASE_URL",
+    "DATABASE_URL_PRIVILEGED",
+    "WEATHRA_RUNTIME_MODE",
+    "LLM_MODEL",
+    "env var",
+    "environment variable",
+)
+
+
+def test_the_unavailable_message_names_no_configuration() -> None:
+    """The message itself, held to the boundary.
+
+    Production once told a signed-in visitor "The inference provider rejected the configured
+    credential. Check OPENROUTER_API_KEY." — an instruction they could not act on, about a variable
+    they should not have to know exists. This is the assertion that keeps the replacement honest.
+    """
+    for identifier in CONFIGURATION_IDENTIFIERS:
+        assert identifier.lower() not in AGENT_UNAVAILABLE_MESSAGE.lower(), (
+            f"the unavailable message names {identifier}"
+        )
+
+
+@respx.mock
+@pytest.mark.parametrize("status", [401, 403])
+async def test_no_rejection_reaches_a_caller_naming_configuration(status: int) -> None:
+    """Both credential statuses, and every part of what a caller can see.
+
+    A gateway's own body is not forwarded either: its wording is not ours, and a provider that
+    echoed a key fragment into its error would otherwise echo it into ours.
+    """
+    respx.post(COMPLETIONS).mock(
+        return_value=httpx.Response(
+            status,
+            json={"error": {"message": "No auth credentials found: sk-or-v1-secret-fragment"}},
+        )
+    )
+    with pytest.raises(AgentNotConfigured) as raised:
+        await _client().complete(system="", messages=[])
+
+    visible = str(raised.value) + json.dumps(raised.value.details)
+    for identifier in CONFIGURATION_IDENTIFIERS:
+        assert identifier.lower() not in visible.lower(), f"a rejection exposes {identifier}"
+    assert "sk-or-v1" not in visible, "a credential fragment reached the caller"
+    assert "No auth credentials found" not in visible, "the gateway's own words were forwarded"
+
+
+def test_the_operator_still_gets_the_diagnosis() -> None:
+    """Redaction that removed the diagnosis would trade one failure for another.
+
+    `details` is where an operator looks, and the two statuses mean different things: 401 is the
+    credential, 403 is an otherwise-valid credential the account or model declined — most often a
+    `:free` model's data policy. Telling them apart is what stops "check the key" being the answer
+    to both.
+    """
+    with pytest.raises(AgentNotConfigured) as raised:
+        build_client(httpx.AsyncClient(), Settings(supabase_url="https://test.supabase.co"))
+    assert raised.value.details["missing"] == "inference_credential"
+    assert raised.value.details["provider"], "the failure does not say which provider"

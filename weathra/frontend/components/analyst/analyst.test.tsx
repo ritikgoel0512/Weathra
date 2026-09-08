@@ -564,12 +564,17 @@ describe("when a run does not complete", () => {
 });
 
 describe("when the agent surface is not configured", () => {
-  it("says so, names the missing configuration, and keeps every other screen usable", async () => {
+  it("says what is unavailable and what still works, without naming any configuration", async () => {
+    // The backend's own words, as of 2026-09-08. This screen renders the message it is given, so
+    // the assertion below is really about the pair: a backend that leaked a variable name would
+    // leak it here, which is exactly what production did — a signed-in visitor was told to "Check
+    // OPENROUTER_API_KEY", an instruction they could not act on about a thing they should not have
+    // to know exists. The earlier version of this test *required* that string to be displayed.
     fetchMock = vi.fn(async () =>
       refusal(
         503,
         "agent_not_configured",
-        "The agent surface needs an inference credential. Set OPENROUTER_API_KEY. Every other capability works without it.",
+        "Weather intelligence is temporarily unavailable. Forecasts, history, analytics, comparison and your saved locations are all unaffected.",
       ),
     ) as unknown as Mock;
 
@@ -578,10 +583,37 @@ describe("when the agent surface is not configured", () => {
 
     const notice = await screen.findByRole("alert");
     expect(notice).toHaveTextContent("The AI Weather Analyst is unavailable");
-    expect(notice).toHaveTextContent("OPENROUTER_API_KEY");
+    expect(notice).toHaveTextContent(/temporarily unavailable/);
     expect(notice).toHaveTextContent(/Dashboard, Historical Analytics, Compare Cities and Saved Locations/);
     // Not offered as a retry: the configuration has to change first.
     expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+  });
+
+  it("renders no configuration identifier even when the backend sends one", async () => {
+    // Defence in depth rather than duplication. The screen does not compose this sentence, so the
+    // only way it can show a variable name is by being handed one — and a future backend, an older
+    // deployment mid-rollout, or a provider echoing its own error can all hand it one.
+    fetchMock = vi.fn(async () =>
+      refusal(
+        503,
+        "agent_not_configured",
+        "The inference provider rejected the configured credential. Check OPENROUTER_API_KEY.",
+      ),
+    ) as unknown as Mock;
+
+    renderAnalyst();
+    await ask("What should I expect?");
+
+    await screen.findByRole("alert");
+    const rendered = document.body.textContent ?? "";
+    for (const identifier of [
+      "OPENROUTER_API_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "DATABASE_URL",
+      "environment variable",
+    ]) {
+      expect(rendered).not.toContain(identifier);
+    }
   });
 });
 

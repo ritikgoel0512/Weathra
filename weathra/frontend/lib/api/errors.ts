@@ -55,3 +55,33 @@ export const EVIDENCE_NOT_FOUND_CODE = "evidence_not_found";
 export function isAuthenticationCode(code: string | null | undefined): boolean {
   return code !== null && code !== undefined && AUTHENTICATION_ERROR_CODES.includes(code);
 }
+
+/**
+ * A message safe to show a person, or the product's own sentence instead.
+ *
+ * The backend composes these, and it is careful — but this screen renders whatever it is handed,
+ * and on 2026-09-08 what it was handed was "The inference provider rejected the configured
+ * credential. Check OPENROUTER_API_KEY." A signed-in visitor was given an instruction they could
+ * not act on, about a variable they should not have to know exists.
+ *
+ * The backend no longer sends that. This exists for the cases where being careful once is not
+ * enough: an older deployment still serving mid-rollout, a provider whose own error text is
+ * forwarded somewhere, a message composed by code written later. The test for it deliberately
+ * feeds in the old string.
+ *
+ * A configuration identifier is recognised by shape — `SCREAMING_SNAKE_CASE` of two or more parts
+ * — rather than by a list of names, because a list only covers the variables that exist today.
+ * When one is found the whole sentence is replaced rather than edited: a partially redacted
+ * sentence reads as a bug, and the product has something better to say.
+ */
+const CONFIGURATION_SHAPED = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/;
+
+export const AGENT_UNAVAILABLE_FALLBACK =
+  "Weather intelligence is temporarily unavailable. Forecasts, history, analytics, comparison and your saved locations are all unaffected.";
+
+export function presentableMessage(message: string, fallback = AGENT_UNAVAILABLE_FALLBACK): string {
+  const trimmed = message.trim();
+  if (trimmed === "" || CONFIGURATION_SHAPED.test(trimmed)) return fallback;
+  if (/environment variable|env var/i.test(trimmed)) return fallback;
+  return trimmed;
+}

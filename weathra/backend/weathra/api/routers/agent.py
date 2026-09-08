@@ -50,7 +50,7 @@ from weathra.api.streaming import StreamEmitter, sse_headers
 from weathra.auth.deps import RequiredPrincipal
 from weathra.auth.profiles import ensure_profile
 from weathra.config import Settings
-from weathra.domain.errors import AgentNotConfigured, WeathraError
+from weathra.domain.errors import AGENT_UNAVAILABLE_MESSAGE, AgentNotConfigured, WeathraError
 from weathra.domain.evidence import AnswerEnvelope
 from weathra.domain.identity import Principal
 from weathra.domain.weather import UnitSystem
@@ -337,10 +337,11 @@ async def stream(
     # with a message, not a stream that opens and immediately reports one.
     if not inference.configured:
         raise AgentNotConfigured(
-            "The agent surface needs an inference credential. Set OPENROUTER_API_KEY. Every other "
-            "capability — forecast, history, analysis, comparison, locations, preferences, saved "
-            "locations — works without it.",
-            details={"missing": "OPENROUTER_API_KEY", "provider": inference.provider_id},
+            # Reaches a person on the Analyst screen, so it says what is unavailable and what
+            # still works, and names nothing about how the service is configured. The operator's
+            # half is in `details` and in the log.
+            AGENT_UNAVAILABLE_MESSAGE,
+            details={"missing": "inference_credential", "provider": inference.provider_id},
         )
 
     emitter = StreamEmitter(request_id=current_request_id())

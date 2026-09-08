@@ -29,7 +29,7 @@ import httpx
 from weathra.agents.llm.base import LLMClient
 from weathra.agents.llm.openrouter import OPENROUTER_PROVIDER_ID, OpenRouterClient
 from weathra.config import Settings
-from weathra.domain.errors import AgentNotConfigured, ProviderNotFound
+from weathra.domain.errors import AGENT_UNAVAILABLE_MESSAGE, AgentNotConfigured, ProviderNotFound
 
 __all__ = ["LLMProvider", "available_providers", "build_client"]
 
@@ -64,10 +64,10 @@ def build_client(client: httpx.AsyncClient, settings: Settings) -> LLMClient:
         )
     if not settings.inference_configured:
         raise AgentNotConfigured(
-            "The agent surface needs an inference credential. Set OPENROUTER_API_KEY. Every other "
-            "capability — forecast, history, analytics, comparison, locations, preferences, saved "
-            "locations — works without it.",
-            details={"missing": "OPENROUTER_API_KEY", "provider": settings.llm_provider},
+            # The same words a runtime rejection produces, for the same reason: this message
+            # reaches a weather screen. What an operator needs is in `details` and in the log.
+            AGENT_UNAVAILABLE_MESSAGE,
+            details={"missing": "inference_credential", "provider": settings.llm_provider},
         )
     return factory(client, settings)
 

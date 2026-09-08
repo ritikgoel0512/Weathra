@@ -61,6 +61,7 @@ from weathra.agents.llm.base import (
 )
 from weathra.config import Settings
 from weathra.domain.errors import (
+    AGENT_UNAVAILABLE_MESSAGE,
     AgentNotConfigured,
     ProviderUnavailable,
     ValidationFailed,
@@ -89,10 +90,10 @@ class OpenRouterClient:
             # Constructed only where inference is genuinely required, and this is the guard that
             # makes that true rather than conventional (``specs/agent-orchestration``).
             raise AgentNotConfigured(
-                "The agent surface needs an inference credential. Set OPENROUTER_API_KEY. Every "
-                "other capability — forecast, history, analytics, comparison, locations, "
-                "preferences, saved locations — works without it.",
-                details={"missing": "OPENROUTER_API_KEY", "provider": OPENROUTER_PROVIDER_ID},
+                AGENT_UNAVAILABLE_MESSAGE,
+                # `missing` is the operator's half: it reaches the log and the evidence record,
+                # never the screen.
+                details={"missing": "inference_credential", "provider": OPENROUTER_PROVIDER_ID},
             )
 
         self.model_id = settings.llm_model
@@ -199,13 +200,37 @@ class OpenRouterClient:
         )
 
     def _status_error(self, status: int) -> WeathraError | None:
-        """Give the credential statuses their own error before the retry loop sees them."""
+        """Give the credential statuses their own error before the retry loop sees them.
+
+        **What the caller is told, and why it is not what the log says.** The message reaches a
+        person reading a weather screen, so it says what is unavailable and what still works. It
+        names no environment variable, no credential and no provider setting: an operator's
+        checklist read out to a visitor is both useless to them and a small disclosure of how the
+        service is wired. The diagnosis goes to the log and to `details`, where an operator can
+        reach it.
+
+        **401 and 403 are not the same problem**, and reading alike cost this project a wrong first
+        guess. A 401 is the credential: absent, malformed, or no longer valid. A 403 is the gateway
+        refusing an otherwise-valid credential — most often the account's data policy for a `:free`
+        model, or a model this key may not use — so "check the key" would send an operator to
+        rotate something that was never wrong. The log line now names which, so the next occurrence
+        is diagnosable from the log alone.
+        """
         if status not in _CREDENTIAL_STATUSES:
             return None
-        logger.warning("the inference gateway rejected the configured credential (%s)", status)
+        if status == 401:
+            logger.warning(
+                "the inference gateway rejected the configured credential as unauthorized (401): "
+                "the key is absent, malformed, or no longer valid"
+            )
+        else:
+            logger.warning(
+                "the inference gateway refused the request (403): the credential was accepted but "
+                "the account or the model declined it — check the account's data policy for the "
+                "configured model before rotating anything"
+            )
         return AgentNotConfigured(
-            "The inference provider rejected the configured credential. Check "
-            "OPENROUTER_API_KEY. Every other capability is unaffected.",
+            AGENT_UNAVAILABLE_MESSAGE,
             # The status, not the body: a gateway's rejection message is not ours to forward, and
             # the credential itself must never appear in an error a caller can see.
             details={"provider": self.provider_id, "status": status},
