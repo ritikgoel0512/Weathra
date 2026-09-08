@@ -24,12 +24,30 @@ variable key", and that is what runs here: unrelated variables are untouched by 
 rather than by care. The read-back afterwards holds that to be true anyway, because a claim in a
 comment is not a check.
 
-**Why it verifies rather than reports success.** The backend reads its configuration at process
-start, so a saved value that the running container has not picked up is indistinguishable from a
-value that was never saved — from the API's answer, and from the frontend's point of view. So the
-run ends by asking production itself, with a real preflight from the real origin, and restarts the
-service once if the change has not taken effect. A restart re-reads configuration; it does not
-deploy code, and what is running stays the release that was already there.
+**Why saving is not enough, and why a restart is not either.** The backend reads its configuration
+once, when ``build_app`` constructs the application at process start, so a new value reaches it
+only in a new process. Render says the same of its own "Save only" option — "your service will not
+use the new variables until its next deploy" — and documents its restart as deliberately not doing
+that: "the new instance always uses the exact same Git commit **and configuration** as the running
+instance at the time of the restart. This means that if you've recently updated your service's
+environment variables but haven't redeployed since then, restarting does not incorporate those
+changes."
+
+That is exactly how the first run of this operation failed. It saved the origin, restarted, and
+then waited for a change a restart is defined never to apply.
+
+So a saved-but-inactive value is activated by a **redeploy of the commit that is already live**,
+with ``deployMode: "deploy_only"`` — the API equivalent of the dashboard's "Save and deploy:
+redeploys the existing build with the new variables". The commit is read from the service's current
+live deploy and pinned, which is what stops this from becoming a release: an unpinned deploy takes
+the branch tip, and that may be a commit whose migrations have not run — the ordering
+``release.yml`` exists to guarantee. ``release.yml`` stays the authority on *what* is deployed;
+this asks only for the commit already running to be started again with the configuration it has.
+
+**Why it verifies rather than reports success.** A saved value the running container has not picked
+up is indistinguishable from a correctly applied one in the API's answer — and in the frontend's
+experience, which is the one that matters. So the run ends by asking production itself, with a real
+preflight from the real origin.
 
 Nothing here prints the API key, the origin list, or any other variable's value.
 """
@@ -60,22 +78,35 @@ Probe = Callable[..., tuple[int, dict[str, str]]]
 
 
 class RenderError(Exception):
-    """A condition that must stop the operation rather than be worked around."""
+    """A condition that must stop the operation rather than be worked around.
+
+    Carries the HTTP status when one is known, so a caller can tell a rejected request field —
+    which it may be able to do without — from a refusal it must not work around.
+    """
+
+    def __init__(self, message: str, *, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
 
 
 def normalize_origin(origin: str) -> str:
     """An origin reduced to what the *consumer* treats as the same origin, and no further.
 
-    Only surrounding whitespace and a trailing slash: the backend's CORS middleware compares the
-    browser's `Origin` header against this list as exact strings, and a browser sends the scheme
-    and host already lower-cased. So a configured `https://WEATHRA-BICE.vercel.app` is not an
-    equivalent spelling — it is an entry that will never match, and folding case here would skip
-    adding the one that does, leaving production refusing the origin while reporting success.
+    Surrounding whitespace only, because that is the only difference anything downstream forgives:
+    `weathra/backend/weathra/config.py` strips each comma-separated part, and Starlette's CORS
+    middleware then compares the browser's `Origin` header against the result as exact strings.
+
+    So neither case nor a trailing slash may be folded in here. A browser sends the scheme and host
+    lower-cased and sends no trailing slash, which makes `https://WEATHRA-BICE.vercel.app` and
+    `https://weathra-bice.vercel.app/` entries that never match anything — not equivalent
+    spellings. Treating either as "already allowed" would skip adding the spelling that works and
+    leave production refusing the origin, while every check short of a real preflight reported
+    success. Both were caught by tests, in that order.
 
     Nothing already configured is ever rewritten into this form either. Normalising an existing
     entry would be a change to an origin this operation was asked to preserve.
     """
-    return origin.strip().rstrip("/")
+    return origin.strip()
 
 
 def parse_origins(value: str) -> list[str]:
@@ -139,7 +170,9 @@ def make_api(token: str, *, attempts: int = 3, pause: float = 3.0) -> Api:
                 if error.code in (408, 429) or error.code >= 500:
                     last = RenderError(f"Render answered {error.code} for {method} {path}")
                 else:
-                    raise RenderError(f"Render answered {error.code} for {method} {path}") from None
+                    raise RenderError(
+                        f"Render answered {error.code} for {method} {path}", status=error.code
+                    ) from None
             except urllib.error.URLError as error:
                 last = RenderError(f"Render could not be reached for {path}: {error.reason}")
             else:
@@ -247,6 +280,124 @@ def ensure_origin_allowed(api: Api, service_id: str, origin: str) -> bool:
     return True
 
 
+# What a deploy's status can be. `live` is the only success; `deactivated` means another deploy
+# superseded ours, which is a failure to wait on rather than a state that resolves.
+DEPLOY_LIVE = "live"
+DEPLOY_FAILED = frozenset(
+    {"build_failed", "update_failed", "canceled", "pre_deploy_failed", "deactivated"}
+)
+
+
+def read_deploys(api: Api, service_id: str, *, limit: int = 20) -> list[dict[str, Any]]:
+    """The service's most recent deploys, newest first, unwrapped from the API's envelope.
+
+    Only the list endpoint is used, deliberately: it is the one whose response shape is documented,
+    and polling it by id costs the same as polling a single deploy would.
+    """
+    quoted = urllib.parse.quote(service_id, safe="")
+    page = api("GET", f"/services/{quoted}/deploys?limit={limit}")
+    if not isinstance(page, list):
+        raise RenderError("Render did not return a list of deploys")
+    deploys: list[dict[str, Any]] = []
+    for entry in page:
+        if not isinstance(entry, dict):
+            raise RenderError("Render returned a deploy entry that is not an object")
+        deploy = entry.get("deploy")
+        if not isinstance(deploy, dict) or not isinstance(deploy.get("id"), str):
+            raise RenderError("Render returned a deploy entry with no deploy object")
+        deploys.append(deploy)
+    return deploys
+
+
+def live_commit(deploys: list[dict[str, Any]]) -> str:
+    """The commit the service is serving right now.
+
+    Pinning to it is what keeps this operation from becoming a release. An unpinned deploy takes
+    the branch tip, which may be a commit whose migrations have not run — the ordering `release.yml`
+    exists to guarantee — so a service with no identifiable live commit is a refusal, not a
+    fall-back to "latest".
+    """
+    for deploy in deploys:
+        if deploy.get("status") != DEPLOY_LIVE:
+            continue
+        commit = deploy.get("commit")
+        if isinstance(commit, dict) and isinstance(commit.get("id"), str) and commit["id"]:
+            pinned: str = commit["id"]
+            return pinned
+        raise RenderError(
+            "the live deploy names no commit, so a redeploy could not be pinned to it; refusing "
+            "to deploy an unpinned commit"
+        )
+    raise RenderError("the service has no live deploy to redeploy")
+
+
+def unfinished_deploy(deploys: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """A deploy that is already on its way, if there is one.
+
+    Asking for a second deploy while one is in flight would queue a duplicate — and the one in
+    flight may already carry the new configuration, in which case no deploy of ours is needed at
+    all.
+    """
+    for deploy in deploys:
+        status = deploy.get("status")
+        if status != DEPLOY_LIVE and status not in DEPLOY_FAILED:
+            return deploy
+    return None
+
+
+def start_redeploy(api: Api, service_id: str, commit_id: str) -> str:
+    """Redeploy the live commit so the new configuration is read by a new process.
+
+    `deployMode: "deploy_only"` skips the rebuild — the same code, started again with the current
+    environment. It is a documented field, but a field this operation does not need to insist on:
+    if the API rejects it the deploy is retried without it, which rebuilds the same commit and ends
+    in the same place more slowly.
+    """
+    quoted = urllib.parse.quote(service_id, safe="")
+    body: dict[str, Any] = {
+        "commitId": commit_id,
+        "clearCache": "do_not_clear",
+        "deployMode": "deploy_only",
+    }
+    try:
+        created = api("POST", f"/services/{quoted}/deploys", body)
+    except RenderError as rejected:
+        if rejected.status != 400:
+            raise
+        print("Render rejected `deployMode`; redeploying the same commit with a rebuild instead")
+        del body["deployMode"]
+        created = api("POST", f"/services/{quoted}/deploys", body)
+    if not isinstance(created, dict) or not isinstance(created.get("id"), str):
+        raise RenderError("Render did not return the deploy it created")
+    started: str = created["id"]
+    return started
+
+
+def await_deploy(api: Api, service_id: str, deploy_id: str, *, attempts: int, pause: float) -> None:
+    """Wait for one specific deploy to be live, and fail closed on anything else.
+
+    Waiting on *this* deploy rather than on a sleep is the difference between knowing the new
+    configuration is running and hoping enough time has passed.
+    """
+    for attempt in range(1, attempts + 1):
+        for deploy in read_deploys(api, service_id):
+            if deploy.get("id") != deploy_id:
+                continue
+            status = deploy.get("status")
+            if status == DEPLOY_LIVE:
+                print("the redeploy is live")
+                return
+            if status in DEPLOY_FAILED:
+                raise RenderError(f"the redeploy ended as {status}")
+            print(f"attempt {attempt}: the redeploy is {status}; waiting")
+            break
+        else:
+            raise RenderError("the deploy that was started is no longer listed")
+        if attempt < attempts:
+            time.sleep(pause)
+    raise RenderError("the redeploy did not become live in time")
+
+
 def health(probe: Probe, base_url: str) -> int:
     status, _ = probe("GET", f"{base_url}/api/v1/health", {})
     return status
@@ -288,35 +439,49 @@ def apply(
     base_url: str,
     origin: str,
     *,
-    attempts: int = 10,
+    attempts: int = 8,
     pause: float = 15.0,
+    deploy_attempts: int = 60,
 ) -> int:
-    changed = ensure_origin_allowed(api, service_id, origin)
+    """Make the origin allowed, activate it if it is not, and prove production accepts it.
 
-    if not wait_for(
-        lambda: preflight_allows(probe, base_url, origin),
-        attempts=attempts if changed else 1,
-        pause=pause,
-        what="the new origin",
-    ):
-        # Saved but not in force. The service reads its configuration at start-up, so the running
-        # container is still answering with the list it booted with. A restart re-reads it and
-        # keeps serving the same release; it is not a deploy and builds nothing.
-        print("the running service has not picked up the change; restarting it once")
-        quoted = urllib.parse.quote(service_id, safe="")
-        api("POST", f"/services/{quoted}/restart")
+    The order matters and the shortcuts matter. Production is asked *first* whether it already
+    accepts the origin, because when it does there is nothing to do and a run that deployed anyway
+    would restart production for no reason. When it does not, the configuration is activated with a
+    redeploy of the running commit — whether or not this run was the one that saved it, since the
+    first run of this operation left the value saved and inactive, which is a state a later run has
+    to be able to finish rather than re-save.
+    """
+    ensure_origin_allowed(api, service_id, origin)
+
+    if preflight_allows(probe, base_url, origin):
+        print("production already accepts the origin; no deploy needed")
+    else:
+        # Saved but not in force. Render's own documentation is explicit that this is the only way
+        # out: a service "will not use the new variables until its next deploy", and a restart is
+        # defined to reuse "the exact same Git commit and configuration as the running instance".
+        deploys = read_deploys(api, service_id)
+        pending = unfinished_deploy(deploys)
+        if pending is not None:
+            print(f"a deploy is already in flight ({pending.get('status')}); waiting for it")
+            await_deploy(api, service_id, str(pending["id"]), attempts=deploy_attempts, pause=pause)
+        else:
+            print("the configuration is saved but not in force; redeploying the running commit")
+            deploy_id = start_redeploy(api, service_id, live_commit(deploys))
+            await_deploy(api, service_id, deploy_id, attempts=deploy_attempts, pause=pause)
+
         if not wait_for(
             lambda: health(probe, base_url) == 200,
             attempts=attempts,
             pause=pause,
-            what="the restarted service",
+            what="the redeployed service",
         ):
-            raise RenderError("the service did not come back healthy after the restart")
+            raise RenderError("the service did not come back healthy after the redeploy")
         if not wait_for(
             lambda: preflight_allows(probe, base_url, origin),
             attempts=attempts,
             pause=pause,
-            what="the new origin after the restart",
+            what="the new origin",
         ):
             raise RenderError(f"{origin} is configured but production still refuses it")
 

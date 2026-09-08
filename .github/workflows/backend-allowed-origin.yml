@@ -45,6 +45,9 @@ jobs:
   allow:
     name: allow an origin to call the backend
     runs-on: ubuntu-latest
+    # Bounded because it waits for a Render deploy: a saved environment variable is not used until
+    # the service's next deploy, so activating one means waiting for that deploy to be live.
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v7

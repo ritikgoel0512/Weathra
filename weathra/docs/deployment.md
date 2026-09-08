@@ -579,12 +579,32 @@ to *create* the variable when the service does not hold one directly — the val
 linked environment group, and setting it here would replace whatever the service resolves today
 with a single origin.
 
-It ends by asking production, with a real preflight from the real origin, because the backend reads
-its configuration at start-up: a saved value the running container has not picked up is
-indistinguishable from a value that was never saved. If the change is not in force it restarts the
-service once, which re-reads the environment and keeps serving the release that is already there.
-It never asks Render for a *deploy* — `release.yml` remains the only route to a new release, and
-`test_the_maintenance_workflow_changes_configuration_and_nothing_else` fails if that changes.
+**Saving is not applying, and a restart does not apply it either.** The backend reads
+`CORS_ALLOWED_ORIGINS` once, when `build_app` constructs the application, so a new value reaches it
+only in a new process — `tests/unit/test_api_cors.py` holds that, along with the exactness of the
+match. Render agrees about its own side: its dashboard's "Save only" option says the service "will
+not use the new variables until its next deploy", and its restart is documented as deliberately
+*not* being that deploy — "the new instance always uses the exact same Git commit **and
+configuration** as the running instance at the time of the restart … if you've recently updated
+your service's environment variables but haven't redeployed since then, restarting does not
+incorporate those changes". The first run of this operation failed on precisely that: it saved the
+origin, restarted, and waited nine times for a change a restart is defined never to apply.
+
+So a saved-but-inactive value is activated with a **redeploy of the commit that is already live** —
+`deployMode: "deploy_only"`, the API equivalent of the dashboard's "Save and deploy: redeploys the
+existing build with the new variables". The commit is read from the service's current live deploy
+and pinned, and that pin is what keeps this a configuration change rather than a second release
+path: an unpinned deploy takes the branch tip, which may be a commit whose migrations have not run
+— the ordering `release.yml`'s `needs:` edge exists to guarantee. A service with no identifiable
+live commit is refused rather than deployed from "latest". `release.yml` therefore remains the
+authority on *what* is deployed, and `test_the_maintenance_workflow_never_promotes_a_commit` fails
+if the pin is ever dropped.
+
+The run waits on *that deploy's* status rather than on a sleep — `live` is the only success, and
+`build_failed`, `update_failed`, `canceled`, `pre_deploy_failed` and `deactivated` each end it —
+then checks health, then asks production for a real preflight from the real origin. A deploy
+already in flight is waited for instead of duplicated, since it may already carry the new value.
+And when production already accepts the origin, nothing is written and nothing is deployed at all.
 
 Hand-dispatched only, and classified as `MAINTENANCE` in `test_release_workflow.py` rather than as
 ordinary CI: `RENDER_API_KEY` is account-scoped, so a workflow holding it must not be reachable by

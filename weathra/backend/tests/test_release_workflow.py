@@ -456,12 +456,13 @@ def test_the_maintenance_workflow_can_only_be_dispatched_by_hand(repo_root: Path
 def test_the_maintenance_workflow_changes_configuration_and_nothing_else(
     repo_root: Path,
 ) -> None:
-    """It edits one environment variable. Releasing, migrating and reading the database are absent.
+    """It edits one environment variable. Migrating and reading the database are absent.
 
-    `release.yml` stays the only route to a new release: this workflow may restart the service to
-    make configuration take effect — which re-reads the environment and keeps serving the release
-    that is already there — but it must never ask Render for a *deploy*, which would build and
-    promote whatever `main` happens to be.
+    It does deploy, and it has to: Render does not apply a saved environment variable until the
+    service's next deploy, and its restart is documented to reuse "the exact same Git commit and
+    configuration as the running instance". What must stay absent is everything else — and the
+    deploy it asks for is pinned to the commit already running, which
+    `test_the_maintenance_workflow_never_promotes_a_commit` holds.
     """
     for name in MAINTENANCE:
         rendered = (repo_root / ".github" / "workflows" / name).read_text()
@@ -477,9 +478,6 @@ def test_the_maintenance_workflow_changes_configuration_and_nothing_else(
         for forbidden in ("alembic upgrade", "alembic downgrade", "alembic stamp"):
             assert forbidden not in rendered, f"{name} runs `{forbidden}`"
 
-        assert "/deploys" not in rendered, (
-            f"{name} can ask Render for a deploy; releasing belongs to release.yml alone"
-        )
         assert "RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}" in rendered, (
             f"{name} does not take the Render key from the repository secret"
         )
@@ -490,6 +488,28 @@ def test_the_maintenance_workflow_changes_configuration_and_nothing_else(
                 f"runner's process list: {command!r}"
             )
             assert "secrets." not in command, f"{name} names a secret in a command: {command!r}"
+
+
+def test_the_maintenance_workflow_never_promotes_a_commit(repo_root: Path) -> None:
+    """It may restart the running commit. It may never choose a different one.
+
+    An unpinned `POST /v1/services/<id>/deploys` deploys the branch tip, and the tip may be a
+    commit whose Alembic migrations have not run — the ordering `release.yml`'s `needs:` edge
+    exists to guarantee. Pinning the deploy to the commit the service is already serving is what
+    keeps this workflow a configuration change rather than a second, quieter release path.
+
+    `test_render_allowed_origin.py` proves the behaviour — that the body carries the live commit,
+    and that a service with no identifiable live commit is refused rather than deployed. This
+    holds the shape, so the pin cannot be dropped without a test failing.
+    """
+    source = (repo_root / ".github" / "scripts" / "render_allowed_origin.py").read_text()
+    assert '"commitId": commit_id' in source, (
+        "the redeploy no longer pins a commit, so it would promote whatever the branch tip is"
+    )
+    assert "live_commit(deploys)" in source, (
+        "the pinned commit no longer comes from the service's live deploy"
+    )
+    assert "/rollback" not in source, "the operation can roll production back to another deploy"
 
 
 def test_the_maintenance_workflow_cannot_replace_the_whole_environment(repo_root: Path) -> None:
