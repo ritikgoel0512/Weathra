@@ -32,7 +32,7 @@ PRODUCTION_ORIGIN = "https://weathra-bice.vercel.app"
 
 
 def _client(origins: str) -> TestClient:
-    settings = Settings(supabase_url="https://project.supabase.co", cors_allowed_origins=origins)  # type: ignore[arg-type]
+    settings = Settings(supabase_url="https://project.supabase.co", cors_allowed_origins=origins)
     return TestClient(build_app(settings))
 
 

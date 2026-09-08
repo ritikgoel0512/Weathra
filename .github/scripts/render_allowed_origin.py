@@ -247,9 +247,24 @@ def ensure_origin_allowed(api: Api, service_id: str, origin: str) -> bool:
     if not isinstance(current, str):
         raise RenderError(f"the service's {ENV_KEY} has no readable value")
 
+    # Counts, never values: enough to see that nothing was lost and that the list is the length it
+    # should be, without putting anyone's configuration in a public log.
+    configured = parse_origins(current)
+    print(
+        f"the service holds {len(before)} environment variables; "
+        f"{ENV_KEY} lists {len(configured)} origins"
+    )
+    wanted = normalize_origin(origin)
+    already = [entry for entry in configured if normalize_origin(entry) == wanted]
+    if len(already) > 1:
+        raise RenderError(
+            f"the origin is configured {len(already)} times; a duplicate means an earlier write "
+            "went wrong and this operation will not add to it"
+        )
+
     updated = value_with_origin(current, origin)
     if updated is None:
-        print(f"{ENV_KEY} already allows {origin}; no change made")
+        print(f"{ENV_KEY} already allows the origin exactly once; no change made")
         return False
 
     quoted = urllib.parse.quote(service_id, safe="")
@@ -467,7 +482,12 @@ def apply(
             await_deploy(api, service_id, str(pending["id"]), attempts=deploy_attempts, pause=pause)
         else:
             print("the configuration is saved but not in force; redeploying the running commit")
-            deploy_id = start_redeploy(api, service_id, live_commit(deploys))
+            commit_id = live_commit(deploys)
+            # A commit SHA and a deploy id are public facts about a public repository, and they are
+            # what makes a run auditable: which revision was restarted, and which deploy did it.
+            print(f"the live commit is {commit_id[:12]}; asking for a deploy of it")
+            deploy_id = start_redeploy(api, service_id, commit_id)
+            print(f"started deploy {deploy_id}")
             await_deploy(api, service_id, deploy_id, attempts=deploy_attempts, pause=pause)
 
         if not wait_for(

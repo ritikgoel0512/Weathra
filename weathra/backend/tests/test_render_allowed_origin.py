@@ -653,3 +653,53 @@ def test_a_missing_credential_stops_before_any_request(
     monkeypatch.delenv("RENDER_API_KEY", raising=False)
     monkeypatch.delenv("RENDER_SERVICE_ID", raising=False)
     assert script.main(["--origin", ORIGIN, "--base-url", BASE_URL]) == 1
+
+
+def test_the_log_reports_counts_that_prove_nothing_was_lost(
+    script: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Counts, never values — and enough of them to audit the run from the log alone.
+
+    A public Actions log may not carry anyone's configuration, but "the service holds 5
+    environment variables and the list has 2 origins" carries none of it and answers the two
+    questions worth asking after a change: did anything disappear, and is the list the length it
+    should be.
+    """
+    service = FakeService()
+    assert _apply(script, service) == 0
+    printed = "".join(capsys.readouterr())
+    assert f"the service holds {len(EXISTING)} environment variables" in printed
+    assert "lists 1 origins" in printed, "the log does not say how many origins were configured"
+    assert "1 origins before, 2 after" in printed
+    for value in EXISTING.values():
+        assert str(value) not in printed
+
+
+def test_an_already_configured_origin_is_reported_as_being_present_once(
+    script: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    service = FakeService({**EXISTING, "CORS_ALLOWED_ORIGINS": f"http://localhost:3000,{ORIGIN}"})
+    assert _apply(script, service) == 0
+    printed = "".join(capsys.readouterr())
+    assert "already allows the origin exactly once" in printed
+    assert "lists 2 origins" in printed
+    assert not service.created, "production was deployed although the origin was already active"
+
+
+def test_a_duplicated_origin_is_refused_rather_than_added_to(script: Any) -> None:
+    """A duplicate means an earlier write went wrong, and appending again would compound it."""
+    service = FakeService({**EXISTING, "CORS_ALLOWED_ORIGINS": f"{ORIGIN},{ORIGIN}"})
+    with pytest.raises(script.RenderError, match="configured 2 times"):
+        _apply(script, service)
+    assert not _writes(service)
+
+
+def test_the_deploy_it_started_is_named_in_the_log(
+    script: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Which revision was restarted, and which deploy did it: both public, both auditable."""
+    service = FakeService()
+    assert _apply(script, service) == 0
+    printed = "".join(capsys.readouterr())
+    assert f"the live commit is {LIVE_COMMIT[:12]}" in printed
+    assert "started deploy dep-1" in printed
