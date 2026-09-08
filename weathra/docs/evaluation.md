@@ -282,6 +282,63 @@ delay beyond the ceiling stops the retry and reports the limit. There is no unbo
 provider limit is never resolved by adjusting a threshold, omitting a recorded failure, or
 substituting another model.
 
+### The task 22.10 run — 2026-09-08
+
+The third live run, and the third with **no threshold verdict**. Executed against the configured
+model with nothing adjusted: 40 cases, no `--category` or `--case` filter, `EVALUATION_MIN_SERVED_RATE`
+at 1.0, 5s spacing, real Open-Meteo, real `fastembed` embeddings, and the derived evaluation user
+(`provisioned_now: false` — the account from the 22.8 runs was reused rather than a new one created).
+
+| | |
+|---|---|
+| Commit | `734d885` |
+| Dataset | `1.0.0`, 40 cases selected |
+| Provider and model | `openrouter` / `nvidia/nemotron-3-super-120b-a12b:free` |
+| Embeddings | `BAAI/bge-small-en-v1.5` |
+| Outcome | **`provider_failure`** — exit code 3 |
+| Model served | **23 of 40 cases (57.5%)**, against a 100% floor |
+| Attempts | 60 served, **22 timed out** |
+| Quarantined | 17 cases |
+
+**Why there is no verdict.** The served-rate gate withheld one, and that is the gate working. The
+seventeen quarantined cases are the ones the model did not answer; scoring the run would have
+computed every metric over the twenty-three it happened to answer, and a rate over a
+self-selected subset measures neither the model nor the product. `docs/evaluation.md`'s own history
+above is why this gate exists.
+
+**What the twenty-three served cases looked like**, recorded because the per-case observations are
+real even though the rates are not generalisable:
+
+| Metric (over the served subset only) | |
+|---|---|
+| Tool-selection accuracy | 20/20 |
+| Numerical calculation accuracy | 2/2 |
+| Groundedness | 13/13 |
+| Source attribution coverage | 13/13 |
+| RAG retrieval quality | 5/5 |
+| Memory correctness | 2/2 |
+| Multi-turn contextual correctness | 1/2 — `me-unresolvable-reference` failed |
+| Hallucination rate | 0/23 |
+| Unsupported weather claim rate | 1/23 — `cf-munich-wind` |
+| Backend successful-response rate | 23/23 |
+
+**These are not the recorded results of Weathra's evaluation.** The offline run above is, and it
+passes all seven thresholds. These ten figures describe twenty-three cases a slow free-tier model
+managed to answer.
+
+**How this run differs from the two before it.** The first 22.8 run's model had been withdrawn and
+every call returned 404. The second served 24 of 40 with no single dominant cause. This one's
+failure is almost entirely **timeout** — 22 of 82 attempts — which is a statement about the free
+tier's latency under load rather than about availability or about the model's judgement. Two of the
+served cases' tool calls also hit `range_outside_coverage` against the live archive, a boundary the
+recorded fixtures never exercise; no case failed because of it.
+
+**What would produce a verdict.** A model that can serve forty cases. That is a decision about
+which model to configure, not a threshold to lower: the floor stays at 1.0, the model stays as
+configured, and the run stays whole rather than split across days. Until then Weathra has an
+offline acceptance result that passes and no live model-quality result at all — stated plainly here
+rather than left to be inferred from a green tick.
+
 ### What is unchanged
 
 The product's graceful fallback is untouched. `/agent/ask` still returns 200 with a correct,

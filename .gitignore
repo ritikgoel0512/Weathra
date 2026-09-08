@@ -291,6 +291,13 @@ gcp-*.json
 .supabase/
 .gcloud/
 
+# Evaluation run records. `weathra-evaluate --output` writes one per run — 3 MB of per-case
+# evidence, and it carries the derived test user's identity. CI keeps it as a build artifact
+# (`backend.yml`, "Keep the evaluation run") precisely so that a failing run stays diagnosable
+# without a machine-generated file entering the history; a run's *findings* belong in
+# `docs/evaluation.md`, transcribed, where they can be read and reviewed.
+evaluation-run.json
+
 # Vercel CLI working state: `.vercel/project.json` (the project link and its settings) and
 # `.vercel/.env.production.local` (the Production environment). On the release runner
 # `.github/scripts/vercel_release_env.py` writes both on every run and they are throwaway;
