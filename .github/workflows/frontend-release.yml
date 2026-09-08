@@ -26,6 +26,7 @@ on:
       - "weathra/frontend/**"
       - ".github/workflows/frontend-release.yml"
       - ".github/scripts/vercel_release_env.py"
+      - ".github/scripts/vercel_release_alias.py"
   workflow_dispatch:
 
 concurrency:
@@ -162,21 +163,56 @@ jobs:
             --project "$WEATHRA_VERCEL_PROJECT_ID")"
           printf 'url=%s\n' "$url" >> "$GITHUB_OUTPUT"
 
+      # The URL `vercel deploy` prints is the deployment's own, and production is not served on it.
+      # Vercel's Standard Deployment Protection answers every generated deployment URL with a 302 to
+      # `vercel.com/sso-api`, so verifying that URL could never see a 200 — and, worse, could not
+      # distinguish a healthy deployment from one returning 500 on every route, which is exactly
+      # what it failed to notice once already.
+      #
+      # So the public production domain is read from the deployment itself — the `alias` field, the
+      # same one the CLI prints as `▲ Aliased`. Resolved rather than written down here: a hard-coded
+      # hostname stays green while pointing at whatever was promoted last, possibly from another
+      # commit, and would outlive a domain change in silence. The script refuses to print a
+      # hostname until the deployment it was given is this project's, targets production, is READY
+      # and has its aliases assigned — so what is verified below cannot be a different deployment
+      # answering for this one.
+      - name: Resolve the public production domain
+        id: alias
+        run: |
+          set -euo pipefail
+          host="$(python3 .github/scripts/vercel_release_alias.py \
+            --project-id "$WEATHRA_VERCEL_PROJECT_ID" \
+            --deployment-url "${{ steps.deploy.outputs.url }}")"
+          printf 'host=%s\n' "$host" >> "$GITHUB_OUTPUT"
+
       # The deployment answering for itself, in the same way the backend release ends by asking the
       # deployed service whether it is ready. `/sign-in` is public and server-rendered, so a 200
       # here means Next.js started and rendered on Vercel — not merely that an upload succeeded.
-      - name: Verify the deployment serves
+      #
+      # A 302 to `vercel.com/sso-api` is called out rather than retried: it means the domain being
+      # verified is behind Deployment Protection, which no amount of waiting fixes and which would
+      # otherwise read as "the app is slow to start".
+      - name: Verify the production domain serves
         run: |
           set -euo pipefail
-          url="${{ steps.deploy.outputs.url }}"
+          url="https://${{ steps.alias.outputs.host }}"
           for attempt in 1 2 3 4 5 6; do
             status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$url/sign-in" || echo 000)"
             if [ "$status" = "200" ]; then
-              echo "the deployment serves /sign-in"
+              echo "production serves /sign-in"
               exit 0
+            fi
+            if [ "$status" = "302" ]; then
+              location="$(curl -sS -o /dev/null -w '%{redirect_url}' --max-time 20 "$url/sign-in" || echo)"
+              case "$location" in
+                *vercel.com/sso-api*)
+                  echo "production is behind Vercel Deployment Protection, so it is not publicly reachable" >&2
+                  exit 1
+                  ;;
+              esac
             fi
             echo "attempt $attempt: /sign-in answered $status; retrying"
             sleep 10
           done
-          echo "the deployment never served /sign-in" >&2
+          echo "production never served /sign-in" >&2
           exit 1

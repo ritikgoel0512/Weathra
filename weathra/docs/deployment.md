@@ -425,9 +425,10 @@ radius of a leaked Vercel token stays one Vercel project.
 **`frontend-release.yml`** — the frontend's release, triggered by a push to `main` touching
 `weathra/frontend/**`. One job: `.github/scripts/vercel_release_env.py` resolves the project and
 writes its Production environment, `vercel build --prod` produces the bundle *on the runner* — so
-what is promoted is what this commit built — and `vercel deploy --prebuilt --prod` promotes it. It
-then asks the deployment it just promoted for `/sign-in` and fails unless it answers 200, because an
-upload that succeeded is not a frontend that renders.
+what is promoted is what this commit built — and `vercel deploy --prebuilt --prod` promotes it.
+`.github/scripts/vercel_release_alias.py` then resolves the public production domain from the
+deployment it just promoted, and the job asks *that* for `/sign-in` and fails unless it answers 200,
+because an upload that succeeded is not a frontend that renders.
 
 **Why the release does not run `vercel pull`.** `VERCEL_TOKEN` is an access token scoped to the
 `weathra` team, which is the recommended shape for CI — a leaked token reaches that team and
@@ -458,6 +459,18 @@ have done, from the project-scoped API the token *can* read:
   promotes, and then cannot reach Supabase from a browser. A refused token, a malformed body, a
   truncated listing, a Production value that cannot be read, a missing public value, a name that
   reads as a backend secret, or a value a dotenv file cannot carry faithfully each end the run.
+- **Every URL-valued variable is held to being a URL** before the build, and this is not
+  defensive tidiness: `frontend/lib/env.ts` reads each `NEXT_PUBLIC_` value as
+  `process.env.NEXT_PUBLIC_…`, which Next.js **inlines at build time** — the generated Edge
+  middleware bundle carries the literal and keeps no runtime lookup, so no runtime configuration
+  can repair a bad one. On 2026-09-08 the Production `NEXT_PUBLIC_SUPABASE_URL` was present and
+  non-empty but carried no `https://`, the build compiled it in, and
+  `@supabase/supabase-js` threw *"Invalid supabaseUrl: Must be a valid HTTP or HTTPS URL."* on
+  every request — `MIDDLEWARE_INVOCATION_FAILED`, 500 on every route, from a release that reported
+  success. The script now requires no whitespace, a scheme of exactly `http` or `https`, and a
+  host; `http` stays valid because `.env.example` documents `http://localhost:8000`. Whitespace
+  fails rather than being trimmed, so the value gets fixed where it is stored rather than papered
+  over on the way past.
 - The org id is used **only as an assertion**, twice. The script holds the project's own
   `accountId` — the resolved answer to who owns it — to `WEATHRA_VERCEL_ORG_ID` and writes nothing
   if they differ; the workflow's next step then holds the `orgId` in the file it wrote to the same
@@ -478,7 +491,24 @@ have done, from the project-scoped API the token *can* read:
 - `vercel build` names nothing, deliberately: it consumes the two files the script wrote and the
   assertion vouched for, rather than re-resolving the project and risking disagreement with them.
 
-`test_frontend_release_environment.py` holds the script's behaviour — the ownership refusal, every
+**What gets verified, and why not the URL the deploy printed.** `vercel deploy` prints the
+deployment's *own* URL, and production is not served on it: Vercel's Standard Deployment Protection
+answers every generated deployment URL — and the generated `<project>-<team>.vercel.app` alias —
+with a `302` to `vercel.com/sso-api`. A check pointed there can never see a 200, and it cannot see
+a 500 either, which is how the run that promoted a frontend answering 500 on every route reported
+the same 302 it would have reported for a healthy one. So `vercel_release_alias.py` reads the
+public production domain from the deployment's own `alias` field — the entry the CLI prints as
+`▲ Aliased` — and refuses to name one until that deployment is this project's, targets
+`production`, is `READY`, and has had its aliases assigned. Those four are what stop a green
+verification from meaning "the previous build answered". Resolving the domain rather than writing
+it down matters for the same reason: a hard-coded hostname stays green while pointing at whatever
+was promoted last, possibly from another commit, and would outlive a domain change in silence. The
+verification also names Vercel's SSO redirect explicitly, so a protected domain says so instead of
+looking like a frontend that is slow to start.
+
+`test_frontend_release_alias.py` holds the resolver's behaviour — the nine refusals above, the
+preference for a custom domain, and that the SSO-protected deployment URL is never what gets
+verified. `test_frontend_release_environment.py` holds the environment script's — the ownership refusal, every
 fail-closed path, the round trip through dotenv's own rules, and that no value is ever printed and
 no backend secret or release token can reach the build environment.
 `test_the_frontend_release_does_not_run_vercel_pull`,
@@ -487,7 +517,8 @@ no backend secret or release token can reach the build environment.
 `test_the_frontend_release_never_names_the_scope`,
 `test_the_frontend_release_targets_the_existing_vercel_project`,
 `test_the_frontend_release_proves_the_project_belongs_to_the_team`,
-`test_the_frontend_release_builds_on_the_runner_and_promotes_that_build` and
+`test_the_frontend_release_builds_on_the_runner_and_promotes_that_build`,
+`test_the_frontend_release_verifies_the_public_production_domain` and
 `test_the_frontend_release_cannot_create_a_vercel_project` hold the workflow's. The absences are
 asserted as well as the presences: restoring `vercel pull`, either auto-detected variable name, or
 `--scope` puts the release back on a path that cannot work.

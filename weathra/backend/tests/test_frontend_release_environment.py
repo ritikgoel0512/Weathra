@@ -523,7 +523,7 @@ def test_the_env_file_matches_the_cli_s_own_format(script: Any) -> None:
         "line one\nline two",
         "carriage\rreturn",
         "unicode — ✅ 天気",
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload-with.dots_and-dashes",
+        "opaque.token-like_value-with.dots_and-dashes",
         "",
     ],
 )
@@ -591,3 +591,117 @@ def test_a_padded_token_is_still_usable(script: Any, monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(script.urllib.request, "urlopen", urlopen)
     script.make_fetch_json(script.os.environ["VERCEL_TOKEN"].strip())("/v9/projects/x")
     assert sent == ["Bearer token"]
+
+
+# ------------------------------------------------------------------ the URL shape
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "https://aydhqrzzlqrzdycngfbe.supabase.co",
+        "https://project.supabase.co/",
+        "HTTPS://project.supabase.co",
+        "http://localhost:8000",
+        "http://backend.internal:8000/api",
+    ],
+)
+def test_a_usable_url_passes(script: Any, value: str) -> None:
+    """https and http both, because both are legitimate here.
+
+    `frontend/.env.example` documents `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000`, and a
+    self-hosted Supabase or a staging backend on a private network is http by design. The property
+    being defended is that the value is a URL, not that it is encrypted in transit.
+    """
+    environment = dict(PUBLIC_ENVIRONMENT) | {"NEXT_PUBLIC_SUPABASE_URL": value}
+    assert script.production_environment(_records(environment))["NEXT_PUBLIC_SUPABASE_URL"] == value
+
+
+@pytest.mark.parametrize(
+    ("value", "shape"),
+    [
+        ("aydhqrzzlqrzdycngfbe.supabase.co", "a bare Supabase hostname"),
+        ("aydhqrzzlqrzdycngfbe", "a project ref on its own"),
+        ("//project.supabase.co", "a scheme-relative URL"),
+        ("https//project.supabase.co", "a missing colon"),
+        ("https:/project.supabase.co", "a single slash"),
+        ("https://", "a scheme with no host"),
+        ("postgres://project.supabase.co", "the wrong scheme"),
+        ("sb-publishable-key-in-the-wrong-field", "a client key in the URL field"),
+        ("https://project.supabase.co ", "a trailing space"),
+        (" https://project.supabase.co", "a leading space"),
+        ("https://project supabase.co", "an internal space"),
+        ("https://project.supabase.co\n", "a trailing newline"),
+    ],
+)
+def test_a_value_that_is_not_a_usable_url_ends_the_release(
+    script: Any, value: str, shape: str
+) -> None:
+    """The failure that reached production on 2026-09-08, in every shape it could arrive in.
+
+    Each of these is a non-empty string, which is why requiring the variable to be *present* did
+    not help: the value was there the whole time. Next.js inlines it at build time, so the build
+    compiled it into the Edge middleware bundle and `@supabase/supabase-js` threw
+    "Invalid supabaseUrl: Must be a valid HTTP or HTTPS URL." on every request —
+    MIDDLEWARE_INVOCATION_FAILED, 500 on every route, a promotion that looked like a success.
+
+    The whitespace cases fail rather than being trimmed on purpose. Trimming would let the release
+    paper over a value that is wrong in the dashboard, where the next person to read it would still
+    see it wrong, and `NEXT_PUBLIC_API_BASE_URL` with a trailing space breaks every request the
+    frontend makes without Supabase's trim to save it.
+    """
+    environment = dict(PUBLIC_ENVIRONMENT) | {"NEXT_PUBLIC_SUPABASE_URL": value}
+    with pytest.raises(script.ReleaseError, match="NEXT_PUBLIC_SUPABASE_URL"):
+        script.production_environment(_records(environment))
+
+
+def test_the_backend_base_url_is_held_to_the_same_shape(script: Any) -> None:
+    """The other URL the frontend is compiled with, and the same failure one step later.
+
+    A scheme-less `NEXT_PUBLIC_API_BASE_URL` renders a frontend that signs a user in and then
+    cannot reach the backend at all — which is a Task 23.5 acceptance criterion, so it may not be
+    left to be discovered by hand.
+    """
+    environment = dict(PUBLIC_ENVIRONMENT) | {"NEXT_PUBLIC_API_BASE_URL": "weathra.onrender.com"}
+    with pytest.raises(script.ReleaseError, match="NEXT_PUBLIC_API_BASE_URL"):
+        script.production_environment(_records(environment))
+
+
+def test_an_empty_url_is_reported_as_missing(script: Any) -> None:
+    """Empty is the one shape the required-name check already catches, and it says so plainly."""
+    environment = dict(PUBLIC_ENVIRONMENT) | {"NEXT_PUBLIC_SUPABASE_URL": ""}
+    with pytest.raises(script.ReleaseError, match="missing NEXT_PUBLIC_SUPABASE_URL"):
+        script.production_environment(_records(environment))
+
+
+def test_a_rejected_url_is_never_printed(
+    script: Any, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A value that turns out to be a credential in the wrong field must not reach a public log.
+
+    Actions logs on a public repository are readable by anyone, and the most likely way this check
+    ever fires is someone pasting the anon key — or worse — into the URL field.
+    """
+    secret_looking = "sb-publishable-key-that-is-not-a-url"
+    environment = dict(PUBLIC_ENVIRONMENT) | {"NEXT_PUBLIC_SUPABASE_URL": secret_looking}
+    with pytest.raises(script.ReleaseError) as caught:
+        script.run(PROJECT_ID, ORG_ID, tmp_path, _fetcher(records=_records(environment)))
+    captured = capsys.readouterr()
+    assert secret_looking not in captured.out + captured.err + str(caught.value)
+    assert "NEXT_PUBLIC_SUPABASE_URL" in str(caught.value)
+
+
+def test_an_unusable_url_stops_the_release_before_the_build_has_anything_to_build(
+    script: Any, tmp_path: Path
+) -> None:
+    """Nothing is written, so there is no environment and no link for a build to pick up.
+
+    Ordering is the whole value of this check: the same misconfiguration caught after the build is
+    a promoted production frontend that answers 500, and catching it before means the previous
+    deployment stays up.
+    """
+    environment = dict(PUBLIC_ENVIRONMENT) | {"NEXT_PUBLIC_SUPABASE_URL": "project.supabase.co"}
+    with pytest.raises(script.ReleaseError):
+        script.run(PROJECT_ID, ORG_ID, tmp_path, _fetcher(records=_records(environment)))
+    assert not (tmp_path / ".vercel" / ".env.production.local").exists()
+    assert not (tmp_path / ".vercel" / "project.json").exists()

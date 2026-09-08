@@ -94,6 +94,21 @@ SECRET_NAME_FRAGMENTS: tuple[str, ...] = (
     "VERCEL_TOKEN",
 )
 
+# The variables whose value has to be a URL a browser can fetch, and the reason this check exists
+# at all. `frontend/lib/env.ts` reads each of these as `process.env.NEXT_PUBLIC_…`, which Next.js
+# *inlines at build time* — the generated Edge middleware bundle contains the literal and no runtime
+# lookup survives in it. So a value that is not a URL is not a misconfiguration the deployment can
+# recover from: it is compiled into the bundle, and `@supabase/supabase-js` throws
+# "Invalid supabaseUrl: Must be a valid HTTP or HTTPS URL." on every request before any of the
+# application's own code runs, which arrives as MIDDLEWARE_INVOCATION_FAILED and a 500 on every
+# route. That is exactly how the 2026-09-08 release failed, and the value was present and non-empty
+# the whole time — so presence is not the property worth checking. Checking the shape here costs one
+# comparison and turns a promoted-and-broken production frontend into a release that never builds.
+URL_VALUED_NAMES: tuple[str, ...] = (
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_API_BASE_URL",
+)
+
 # Dropped rather than written, matching the CLI's own `VARIABLES_TO_IGNORE`: Vercel injects these
 # itself, and a stale copy in the env file would override the live one.
 VARIABLES_TO_IGNORE: frozenset[str] = frozenset(
@@ -355,7 +370,48 @@ def production_environment(records: list[Any]) -> dict[str, str]:
             "the Vercel project's Production environment is missing "
             f"{', '.join(missing)}; the bundle would be built without it"
         )
+    validate_url_values(found)
     return found
+
+
+def validate_url_values(records: dict[str, str]) -> None:
+    """Every URL-valued variable must be a fetchable http(s) URL, or the release stops.
+
+    Deliberately the same three questions `@supabase/supabase-js` asks, asked before the build
+    instead of on every request in production: no whitespace, a scheme of exactly `http` or `https`,
+    and a host. A bare `<ref>.supabase.co`, a project ref on its own, a `https//` typo, or an anon
+    key pasted into the URL field each fail here — all of them are non-empty strings, which is why
+    the required-name check above cannot catch them.
+
+    `http` is accepted, not merely tolerated: `frontend/.env.example` documents
+    `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000`, and a self-hosted Supabase or a staging
+    backend on a private network is legitimately http. The property being defended is that the
+    value is a URL, not that it is encrypted in transit.
+
+    The variable is named and the reason is given; the value never is. A value that turns out to be
+    a credential someone pasted into the wrong field must not be echoed into a public build log.
+    """
+    for name in URL_VALUED_NAMES:
+        value = records.get(name)
+        if value is None:
+            continue
+        if any(character.isspace() for character in value):
+            raise ReleaseError(
+                f"the Production value of {name} contains whitespace, so it is not a usable URL. "
+                "Set it to the bare origin with no spaces, tabs or newlines around or inside it"
+            )
+        parsed = urllib.parse.urlsplit(value)
+        if parsed.scheme not in ("http", "https"):
+            raise ReleaseError(
+                f"the Production value of {name} does not begin with `http://` or `https://`, so "
+                "it is not a usable URL. Next.js inlines this value at build time, so a build "
+                "would compile it into the bundle and every request would fail in production. Set "
+                "it to the full origin — for Supabase that is `https://<project-ref>.supabase.co`"
+            )
+        if not parsed.hostname:
+            raise ReleaseError(
+                f"the Production value of {name} names no host, so it is not a usable URL"
+            )
 
 
 def serialize_env(records: dict[str, str]) -> str:

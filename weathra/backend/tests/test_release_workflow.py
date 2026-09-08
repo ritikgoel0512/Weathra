@@ -62,6 +62,13 @@ PROJECT_ID_VAR = "WEATHRA_VERCEL_PROJECT_ID"
 # asserted in `test_frontend_release_environment.py`. What is asserted here is that the workflow
 # uses it, and that nothing puts `vercel pull` back.
 RELEASE_ENV_SCRIPT = ".github/scripts/vercel_release_env.py"
+
+# The other half, and the reason it exists: `vercel deploy` prints the deployment's own URL, which
+# Vercel's Standard Deployment Protection answers with a 302 to `vercel.com/sso-api`. Production is
+# served on the project's production domain, which the script reads from the deployment's `alias`
+# field — and only after proving the deployment is this project's, targets production, is READY and
+# has its aliases assigned. `test_frontend_release_alias.py` holds that behaviour.
+RELEASE_ALIAS_SCRIPT = ".github/scripts/vercel_release_alias.py"
 RELEASE_PIPELINES = ("release.yml", "frontend-release.yml")
 
 # Neither ordinary CI nor the release pipeline, and recorded here because
@@ -412,10 +419,16 @@ def test_the_diagnostic_workflow_cannot_deploy_or_migrate(repo_root: Path) -> No
 
 
 @pytest.fixture(scope="module")
-def frontend_release(repo_root: Path) -> dict[str, Any]:
+def frontend_release(repo_root: Path) -> dict[Any, Any]:
+    """The parsed workflow.
+
+    Keyed by `Any`, not `str`, and that is YAML rather than sloppiness: `on:` parses as the boolean
+    `True`, so `frontend_release[True]` is how the triggers are reached — see
+    `test_the_frontend_release_runs_only_on_frontend_changes`.
+    """
     path = repo_root / FRONTEND_RELEASE
     assert path.is_file(), f"{FRONTEND_RELEASE} is missing: the frontend has no release pipeline"
-    loaded: dict[str, Any] = yaml.safe_load(path.read_text())
+    loaded: dict[Any, Any] = yaml.safe_load(path.read_text())
     return loaded
 
 
@@ -793,7 +806,8 @@ def test_the_frontend_verification_runs_only_after_a_successful_deploy(
 
     Steps in a job stop at the first failure unless a step says otherwise, so the ordering is
     enough — as long as no `if:` reintroduces the step after a failed deploy, and as long as the
-    verification reads the URL the deploy produced rather than one written into the file.
+    verification reads a domain resolved from *this* run's deployment rather than one written into
+    the file.
     """
     steps = _frontend_steps(frontend_release)
     deploy_index = next(
@@ -808,9 +822,56 @@ def test_the_frontend_verification_runs_only_after_a_successful_deploy(
         "the verification carries an `if:`, which can let it run after a failed deploy: "
         f"{verify.get('if')!r}"
     )
-    assert "steps.deploy.outputs.url" in str(verify.get("run", "")), (
-        "the verification does not read the URL the deploy produced, so it may be checking "
-        "something other than what this run promoted"
+    assert "steps.alias.outputs.host" in str(verify.get("run", "")), (
+        "the verification does not read the domain resolved from this run's deployment, so it may "
+        "be checking something other than what this run promoted"
+    )
+
+
+def test_the_frontend_release_verifies_the_public_production_domain(
+    repo_root: Path, frontend_release: dict[str, Any]
+) -> None:
+    """The verification target, and the defect that made a 500 in production look like a 302.
+
+    `vercel deploy` prints the deployment's own URL. Vercel's Standard Deployment Protection
+    answers it — and the generated `<project>-<team>.vercel.app` alias — with a 302 to
+    `vercel.com/sso-api`, so a check pointed there can never see a 200. It could not see a 500
+    either: the 2026-09-08 release promoted a frontend that answered 500 on every route, and the
+    verification reported the same 302 it would have reported for a healthy one.
+
+    So the public production domain is resolved from the deployment's own `alias` field and
+    verified instead. Resolved, not written down: a hard-coded hostname stays green while pointing
+    at whatever was promoted last — possibly another commit — and outlives a domain change in
+    silence. Both halves are asserted, because either alone would let the defect back.
+    """
+    assert (repo_root / RELEASE_ALIAS_SCRIPT).is_file(), (
+        f"{RELEASE_ALIAS_SCRIPT} is missing: the release has no way to find the public production "
+        "domain"
+    )
+    steps = _frontend_steps(frontend_release)
+    resolving = [step for step in steps if RELEASE_ALIAS_SCRIPT in str(step.get("run", ""))]
+    assert resolving, f"{FRONTEND_RELEASE} never resolves the public production domain"
+    body = " ".join(str(resolving[0]["run"]).replace("\\\n", " ").split())
+    assert f'"${PROJECT_ID_VAR}"' in body, (
+        f"the resolver is not told which project to check: {body!r}"
+    )
+    assert "steps.deploy.outputs.url" in body, (
+        "the resolver is not given the deployment this run promoted, so it could resolve the "
+        "domain of an earlier one"
+    )
+
+    verify = next(step for step in steps if "/sign-in" in str(step.get("run", "")))
+    assert "steps.deploy.outputs.url" not in str(verify.get("run", "")), (
+        "the verification reads the deployment URL `vercel deploy` printed, which Vercel's "
+        "Deployment Protection answers with a 302 to vercel.com/sso-api; it can never pass and it "
+        "cannot see a broken frontend either"
+    )
+    assert steps.index(resolving[0]) < steps.index(verify), (
+        "the domain is resolved after the verification that uses it"
+    )
+    assert "sso-api" in str(verify.get("run", "")), (
+        "the verification does not recognise Vercel's SSO redirect, so a protected domain would "
+        "read as a frontend that is slow to start"
     )
 
 
@@ -836,7 +897,7 @@ def test_the_frontend_release_is_not_cancelled_half_way(frontend_release: dict[s
 
 
 def test_the_frontend_release_runs_only_on_frontend_changes(
-    frontend_release: dict[str, Any],
+    frontend_release: dict[Any, Any],
 ) -> None:
     """Path-filtered, which is the reason it is a separate workflow rather than a job in `release.yml`."""
     paths = frontend_release[True]["push"]["paths"]
