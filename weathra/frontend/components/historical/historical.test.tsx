@@ -387,7 +387,19 @@ describe("a period comparison", () => {
     expect(within(panel).getByText(/\+2\.7/)).toBeInTheDocument();
     expect(within(panel).getByText(/\+20\.9%/)).toBeInTheDocument();
     expect(within(panel).getByText(/later minus earlier/)).toBeInTheDocument();
-    expect(within(panel).getByText(/temperature_mean: mean, minimum, maximum/)).toBeInTheDocument();
+    /*
+     * The measure is relabelled, and the statistics the backend named are kept verbatim.
+     *
+     * `statistics_applied` states `measure: statistic` because that pair is what the engine
+     * applied, and the measure key is the stable identifier the rest of the contract uses. The
+     * runtime audit of 2026-09-08 photographed `temperature_mean: mean` in a sentence addressed to
+     * a person; the key now goes through the same label map every other figure's label comes from,
+     * and nothing else about the entry changes.
+     */
+    expect(
+      within(panel).getByText(/Mean temperature \(mean, minimum, maximum\)/),
+    ).toBeInTheDocument();
+    expect(within(panel).queryByText(/temperature_mean/)).not.toBeInTheDocument();
   });
 
   it("asks the documented comparison endpoint for both windows", async () => {

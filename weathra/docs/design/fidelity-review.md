@@ -8,6 +8,14 @@ Visily artifact, every deliberate divergence recorded with its reason, and the r
 each of the eight approved PNG artifacts under [`screens/`](screens/) was opened and read, then
 compared against the implemented markup and stylesheets for that screen. No artifact was modified.
 
+> **Superseded in part.** A second audit on 2026-09-08 photographed the running application in the
+> states this review could not see — populated, empty, loading, error, unauthenticated — and is
+> recorded in [`runtime-fidelity-audit.md`](runtime-fidelity-audit.md). It corrects two findings
+> that turn out to belong to the test harness rather than the product, records twelve drifts this
+> review's source-reading could not have found, and lists what it fixed and what it left. Read that
+> one for the current state of the eight screens; this one remains the record of the structural
+> comparison and of the deliberate divergences.
+
 **What this review is, and is not.** It is a comparison of implemented structure against approved
 artifacts, carried out by reading both. It is **not** a human visual walkthrough of the running
 application: no person has sat in front of these twelve screens and compared them to the artifacts

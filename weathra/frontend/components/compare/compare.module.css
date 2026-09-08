@@ -331,13 +331,6 @@
   line-height: var(--type-body-line);
 }
 
-.excludedCode {
-  font-size: var(--type-meta-size);
-  line-height: var(--type-meta-line);
-  color: var(--color-text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
 /* ---------------------------------------------------------------------- chart */
 
 .chart {

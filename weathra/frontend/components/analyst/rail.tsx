@@ -22,8 +22,14 @@
  * confidence slot carries the backend's `UncertaintyStatement` when it supplied one and says it
  * supplied none when it did not, rather than printing a number nobody computed.
  *
- * Before the first question every panel says it is waiting for a run. That is a real state — the
- * artifact simply never draws it — and it keeps the screen the same shape either side of an answer.
+ * **Before the first question the rail is one line, not four panels.** The artifact never draws
+ * that state, and the first attempt at it gave each of the four panels a paragraph explaining what
+ * it would eventually contain. The runtime audit of 2026-09-08 photographed the result: beside an
+ * empty conversation, and beside a failed one, the tallest thing on the screen was four paragraphs
+ * of the interface describing itself. A person who has not asked anything does not need the rail
+ * explained; they need the question box. So the rail says once that it fills in after a run, and
+ * the four panels — in the artifact's order, with the artifact's geometry — appear as soon as there
+ * is a run to describe.
  */
 
 import Link from "next/link";
@@ -79,6 +85,30 @@ export function AnalystRail({ live, answer, evidenceId, memory }: AnalystRailPro
   const uncertainty = answer?.uncertainty ?? null;
   const grounding = answer?.grounding ?? null;
 
+  /*
+   * Whether there is a run to describe at all.
+   *
+   * `live` is a run in flight or the last one that settled, `answer` the last completed one. With
+   * neither, every panel below would be a placeholder, and four placeholders are not a rail.
+   */
+  const described = live !== null || answer !== null;
+
+  if (!described) {
+    return (
+      <aside className={styles.rail} aria-label="Run detail">
+        <Card aria-labelledby="analyst-rail-waiting">
+          <CardHeader headingLevel={2} title="Run detail" titleId="analyst-rail-waiting" />
+          <CardBody>
+            <p className={styles.note}>
+              Ask a question and this fills in with the agents that ran, the providers they read,
+              what the answer resolved to, and the evidence record behind it.
+            </p>
+          </CardBody>
+        </Card>
+      </aside>
+    );
+  }
+
   return (
     <aside className={styles.rail} aria-label="Run detail">
       <Card aria-labelledby="analyst-status">
@@ -97,9 +127,7 @@ export function AnalystRail({ live, answer, evidenceId, memory }: AnalystRailPro
               ))}
             </ul>
           ) : (
-            <p className={styles.note}>
-              No agents have run yet. Ask a question and the agents the model routes to appear here.
-            </p>
+            <p className={styles.note}>This run named no agents.</p>
           )}
         </CardBody>
       </Card>
@@ -118,10 +146,7 @@ export function AnalystRail({ live, answer, evidenceId, memory }: AnalystRailPro
               ))}
             </ul>
           ) : (
-            <p className={styles.note}>
-              No source has been retrieved from yet. Every provider a run reads is listed here with
-              what it supplied.
-            </p>
+            <p className={styles.note}>This run retrieved from no provider.</p>
           )}
         </CardBody>
       </Card>
@@ -155,11 +180,7 @@ export function AnalystRail({ live, answer, evidenceId, memory }: AnalystRailPro
               ) : null}
             </dl>
           ) : (
-            <p className={styles.note}>
-              Nothing resolved yet. After a run this says which place, window and unit system the
-              answer used, and whether each came from your question, this conversation, or your
-              saved preferences.
-            </p>
+            <p className={styles.note}>This run resolved no place, window or unit system.</p>
           )}
 
           {memory ? (
@@ -192,8 +213,8 @@ export function AnalystRail({ live, answer, evidenceId, memory }: AnalystRailPro
             </>
           ) : (
             <p className={styles.note}>
-              No confidence figure is available. Weathra states uncertainty about a forecast figure,
-              with its basis, and does not score a run as a whole.
+              This run stated no uncertainty. Weathra states it about a forecast figure, with its
+              basis, and does not score a run as a whole.
             </p>
           )}
 
@@ -209,9 +230,7 @@ export function AnalystRail({ live, answer, evidenceId, memory }: AnalystRailPro
               View full agent evidence
             </Link>
           ) : (
-            <p className={styles.note}>
-              An evidence record is offered here once a run produces one.
-            </p>
+            <p className={styles.note}>This run stored no evidence record.</p>
           )}
         </CardBody>
       </Card>

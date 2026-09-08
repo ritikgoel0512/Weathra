@@ -407,7 +407,10 @@ describe("a three-city ranking", () => {
 
     // The values behind the score, with the method that produced them.
     expect(within(ranking).getAllByText(/arithmetic mean of usable points/).length).toBe(3);
-    expect(within(ranking).getAllByText(/Computed by Weathra/).length).toBe(3);
+    // The claim on the face of each provenance line; the full deterministic sentence and the point
+    // count sit inside its disclosure, which is why this matches the summary exactly rather than
+    // by substring.
+    expect(within(ranking).getAllByText("Computed by Weathra").length).toBe(3);
   });
 
   it("states the basis every candidate shares", async () => {
@@ -440,7 +443,7 @@ describe("a three-city ranking", () => {
 });
 
 describe("an excluded candidate", () => {
-  it("is named with its reason and its code, and is not in the ranking", async () => {
+  it("is named with its reason, carries its code as data, and is not in the ranking", async () => {
     fetchMock = backend(routes(WITH_EXCLUSION)) as unknown as Mock;
     renderScreen();
     await compare();
@@ -448,7 +451,17 @@ describe("an excluded candidate", () => {
     const excluded = await screen.findByRole("region", { name: "Locations left out of the ranking" });
     expect(within(excluded).getByText("Reykjavik, Iceland")).toBeInTheDocument();
     expect(within(excluded).getByText(/did not return a forecast for this location within the timeout/)).toBeInTheDocument();
-    expect(within(excluded).getByText("provider_timeout")).toBeInTheDocument();
+    /*
+     * The stable code is on the element, not in the sentence.
+     *
+     * `specs/location-comparison` requires the excluded candidate to carry its code; the code is
+     * for whoever debugs the run, and the reason beside it is what the person who typed the name
+     * needs. Reading `provider_timeout` out to that person as though it were the explanation is
+     * what the runtime audit of 2026-09-08 found, so the assertion checks both halves: the code is
+     * still attached, and it is no longer prose.
+     */
+    expect(excluded.querySelector('[data-failure-code="provider_timeout"]')).not.toBeNull();
+    expect(within(excluded).queryByText("provider_timeout")).not.toBeInTheDocument();
     expect(within(excluded).getByText(/Nothing has been estimated in their place/)).toBeInTheDocument();
 
     // The survivors are ranked, and the excluded place is not among them.

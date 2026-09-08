@@ -49,8 +49,16 @@ let serving = true;
 /** Every `/api/v1` call this boundary has seen, so a spec can assert one genuinely arrived. */
 let seen = [];
 
+/*
+ * `display_name` is the bare settlement name, as the geocoder returns it.
+ *
+ * It was "Berlin, Germany" until the runtime fidelity audit of 2026-09-08, where the already-qualified
+ * name made every card that composes display name + region + country read "Berlin, Germany, Berlin,
+ * DE" — a fixture artefact that looked exactly like a product defect. A stand-in that misreports the
+ * shape of the thing it stands in for costs more than it saves.
+ */
 const BERLIN = {
-  display_name: "Berlin, Germany",
+  display_name: "Berlin",
   latitude: 52.52,
   longitude: 13.405,
   timezone: "Europe/Berlin",
@@ -868,7 +876,7 @@ const server = createServer((request, response) => {
       const place =
         body.location && typeof body.location === "object"
           ? body.location
-          : { ...MUNICH, display_name: "Hamburg, Hamburg, DE", latitude: 53.55, longitude: 9.99 };
+          : { ...MUNICH, display_name: "Hamburg", region: "Hamburg", latitude: 53.55, longitude: 9.99 };
       const label = typeof body.label === "string" && body.label !== "" ? body.label : null;
 
       // A place already saved is updated rather than duplicated, and says so — which is what the
@@ -976,7 +984,7 @@ const server = createServer((request, response) => {
       query,
       location: {
         ...BERLIN,
-        display_name: `${query}, ${query}, DE`,
+        display_name: query,
         region: query,
       },
     });

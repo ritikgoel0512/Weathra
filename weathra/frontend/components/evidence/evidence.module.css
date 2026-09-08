@@ -556,3 +556,11 @@
   outline: none;
   box-shadow: var(--shadow-focus);
 }
+
+/* The line that names the empty workspace as a preview rather than an outage. */
+.previewLead {
+  margin-bottom: var(--space-4);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  color: var(--color-text-secondary);
+}

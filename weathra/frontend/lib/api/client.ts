@@ -265,6 +265,15 @@ export function bearerHeaders(token: string | null): Record<string, string> {
   return token === null ? {} : { Authorization: `Bearer ${token}` };
 }
 
+/**
+ * What a person is told when a failure did not come from Weathra's own handlers.
+ *
+ * Weathra's sentence rather than the gateway's. The status number is kept because it is the one
+ * part of an unrecognised failure worth repeating — it is what a person can quote when asking.
+ */
+export const UNEXPECTED_RESPONSE_MESSAGE = (status: number): string =>
+  `Weathra could not complete that request. The service answered ${status}.`;
+
 function errorBodyFrom(status: number, payload: unknown, statusText: string): ApiErrorBody {
   const envelope = payload as { error?: Partial<ApiErrorBody> } | null;
   const error = envelope?.error;
@@ -280,10 +289,15 @@ function errorBodyFrom(status: number, payload: unknown, statusText: string): Ap
 
   // A failure with no envelope did not come from Weathra's handlers — a proxy, a gateway, or a
   // crash before the middleware. Say so plainly rather than inventing a code that looks stable.
+  //
+  // The message is Weathra's own, not the upstream's. `statusText` is written for whoever operates
+  // the proxy: the runtime audit of 2026-09-08 photographed a signed-in visitor being told "Internal
+  // Server Error" under Weathra's own heading, which is an implementation detail wearing the
+  // product's voice. The status still reaches the reader, as a number they can quote.
   return {
     code: "unexpected_response",
-    message: statusText === "" ? `The backend answered ${status}.` : statusText,
-    details: null,
+    message: UNEXPECTED_RESPONSE_MESSAGE(status),
+    details: statusText === "" ? null : { status_text: statusText },
     request_id: null,
   };
 }

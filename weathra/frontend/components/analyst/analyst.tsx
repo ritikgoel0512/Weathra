@@ -166,17 +166,28 @@ function TurnView({
 
       {run === null ? null : (
         <div className={styles.response}>
-          <RunProgress
-            steps={runStepsFrom(run.events)}
-            streaming={run.status === "streaming"}
-            gap={run.gap}
-          />
+          {/*
+            The answer comes first, and the machinery follows it.
+            *
+            The runtime audit of 2026-09-08 photographed this screen with a "Run progress" strip
+            above every answer and above every failure — including a failed run, where it read "no
+            steps". `02-ai-weather-analyst.png` leads with the reply; the execution belongs after
+            it, or on `05-agent-evidence.png`. So the progress list renders above only while it is
+            the only thing there is to see, and moves below the answer once one exists.
+          */}
+          {run.status === "streaming" ? (
+            <RunProgress steps={runStepsFrom(run.events)} streaming gap={run.gap} />
+          ) : null}
 
           {run.terminal?.kind === "final" ? (
             <AnswerView answer={run.terminal.answer} evidenceId={run.terminal.evidenceId} />
           ) : null}
 
           <TerminalState run={run} onRetry={onRetry} />
+
+          {run.status === "streaming" ? null : (
+            <RunProgress steps={runStepsFrom(run.events)} streaming={false} gap={run.gap} />
+          )}
         </div>
       )}
     </article>
@@ -321,10 +332,21 @@ export function Analyst(): ReactNode {
             </Button>
           </div>
         </div>
+        {/*
+          Three states, because a failed first question is not the same as not having asked.
+          *
+          The thread id arrives with an answer, so a run that never produced one leaves it null \u2014
+          and the line read "No conversation open yet. The first question starts one." underneath a
+          question the person had just asked and watched fail, which the runtime audit of 2026-09-08
+          photographed. The middle state says what is true: the question is on screen, the backend
+          opened nothing to follow up against.
+        */}
         <p className={styles.thread} data-thread={threadId ? "true" : undefined}>
           {threadId
             ? "Active conversation \u2014 follow-up questions use its context."
-            : "No conversation open yet. The first question starts one."}
+            : turns.length === 0
+              ? "No conversation open yet. The first question starts one."
+              : "No conversation is open \u2014 the next question starts one."}
         </p>
       </header>
 

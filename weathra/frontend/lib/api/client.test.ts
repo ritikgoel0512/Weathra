@@ -25,6 +25,7 @@ import {
   createApiClient,
   normalizeBaseUrl,
   SessionExpired,
+  UNEXPECTED_RESPONSE_MESSAGE,
   type ApiClient,
 } from "./client";
 import { API_OPERATIONS, type ApiOperation } from "./schema";
@@ -43,13 +44,13 @@ afterEach(() => {
 });
 
 /** A fetch that records what it was asked for and answers with a fixed payload. */
-function recording(payload: unknown = {}, status = 200) {
+function recording(payload: unknown = {}, status = 200, statusText = "") {
   const calls: { url: string; init: RequestInit }[] = [];
   const fetcher = vi.fn(async (url: string, init: RequestInit = {}) => {
     calls.push({ url, init });
     return new Response(status === 204 ? null : JSON.stringify(payload), {
       status,
-      statusText: "",
+      statusText,
       headers: status === 204 ? {} : { "content-type": "application/json" },
     });
   });
@@ -208,7 +209,23 @@ describe("a failure the backend described", () => {
 
     expect(error).toBeInstanceOf(ApiError);
     expect(error.code).toBe("unexpected_response");
-    expect(error.message).toBe("The backend answered 502.");
+    expect(error.message).toBe(UNEXPECTED_RESPONSE_MESSAGE(502));
+  });
+
+  it("speaks in Weathra's words rather than the gateway's", async () => {
+    /*
+     * `statusText` is written for whoever operates the proxy. The runtime audit of 2026-09-08
+     * photographed a signed-in visitor being told "Internal Server Error" under Weathra's own
+     * heading — an implementation detail wearing the product's voice. The status number survives,
+     * because it is the part of an unrecognised failure worth quoting.
+     */
+    const { fetcher } = recording("<html>gateway</html>", 500, "Internal Server Error");
+
+    const error = await createApiClient({ fetch: fetcher }).health().catch((thrown) => thrown);
+
+    expect(error.message).not.toMatch(/internal server error/i);
+    expect(error.message).toContain("500");
+    expect(error.details).toEqual({ status_text: "Internal Server Error" });
   });
 });
 

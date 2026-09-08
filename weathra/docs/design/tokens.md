@@ -115,9 +115,17 @@ so both are self-hosted — a person opening Weathra makes no request to a font 
 | `section` | Plus Jakarta Sans | 1.125rem | 1.3 | 600 |
 | `card` | Plus Jakarta Sans | 0.9375rem | 1.35 | 600 |
 | `body` | Inter | 0.9375rem | 1.55 | 400 |
+| `lead` | Inter | 1.0625rem | 1.6 | 400 |
 | `ui` | Inter | 0.875rem | 1.4 | 500 |
 | `label` | Inter | 0.6875rem | 1.2 | 600, uppercase, 0.08em tracking |
 | `meta` | Inter | 0.75rem | 1.45 | 400 |
+
+`lead` was added in the runtime fidelity pass of 2026-09-08. The audit photographed the Analyst's
+answer set at `body` — the same size as the caveat above it and the provenance below it — so the
+sentence a person had asked for carried no more weight on the page than the machinery describing how
+it was produced. `02-ai-weather-analyst.png` sets its synthesis visibly larger than everything around
+it. It is the body face rather than a heading face, because prose at a heading weight reads as a
+headline; it is used for the prose a screen exists to deliver and nowhere else.
 
 The display and heading steps were tightened in the pixel-fidelity pass. The product artifacts are
 compact enterprise analytics — `01-dashboard.png`'s page title sits at roughly 1.75rem against a

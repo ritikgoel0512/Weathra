@@ -24,6 +24,7 @@
  */
 
 import type { Baseline, Measure, Series, Statistic, StatisticResult } from "@/lib/api/schema";
+import { measureLabel } from "@/lib/dashboard/briefing";
 
 /* --------------------------------------------------------------------- statistics */
 
@@ -144,4 +145,21 @@ export function yearsBefore(iso: string, years: number): string {
   const match = /^(\d{4})(-\d{2}-\d{2})$/.exec(iso);
   if (match === null) return iso;
   return `${Number(match[1]) - years}${match[2]}`;
+}
+
+/**
+ * One entry of a comparison's `statistics_applied`, in words.
+ *
+ * The backend states these as `measure: statistic` — `temperature_mean: mean` — because that pair
+ * is what it applied, and the measure key is the stable identifier the rest of the contract uses.
+ * On screen it is an API key: the runtime audit of 2026-09-08 photographed `temperature_mean: mean`
+ * in a sentence addressed to a person. The measure is relabelled through the same map every other
+ * figure's label comes from, and the statistic is de-underscored; an entry in any other shape is
+ * left exactly as the backend wrote it rather than guessed at.
+ */
+export function statisticAppliedLabel(entry: string): string {
+  const [measure, statistic, ...rest] = entry.split(":");
+  if (measure === undefined || statistic === undefined || rest.length > 0) return entry;
+  const named = measureLabel(measure.trim());
+  return `${named} (${statistic.trim().replace(/_/g, " ")})`;
 }

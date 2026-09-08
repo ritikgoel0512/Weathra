@@ -541,6 +541,31 @@ select.control {
   width: 100%;
 }
 
+/*
+ * The band-shaped placeholder: a wide hero, a two-column row, then a strip.
+ *
+ * The Dashboard's own composition, so the wait looks like the screen that is arriving rather than
+ * like a paragraph that never comes.
+ */
+.stateBand {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+}
+
+.stateBandColumns {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--space-4);
+}
+
+@media (max-width: 900px) {
+  .stateBandColumns {
+    grid-template-columns: 1fr;
+  }
+}
+
 .stateError {
   border-left: 3px solid var(--color-status-error);
   background: var(--color-status-error-surface);
@@ -712,16 +737,62 @@ select.control {
   border-color: var(--color-border-strong);
 }
 
-/* The analytics provenance line: what computed the figure, and how. */
+/*
+ * The analytics provenance line: what computed the figure, and how.
+ *
+ * One line on the face of it, the arithmetic inside. The marker is the only decoration — a
+ * provenance line should read as a footnote, not as a second paragraph competing with the figure it
+ * belongs to.
+ */
 .methodNote {
   font-size: var(--type-meta-size);
   line-height: var(--type-meta-line);
   color: var(--color-text-muted);
 }
 
+.methodSummary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  cursor: pointer;
+  list-style: none;
+}
+
+.methodSummary::-webkit-details-marker {
+  display: none;
+}
+
+.methodSummary::after {
+  content: "▸";
+  font-size: 0.85em;
+  color: var(--color-text-muted);
+  transition: transform 120ms ease;
+}
+
+.methodDetails[open] > .methodSummary::after {
+  transform: rotate(90deg);
+}
+
 .methodStatement {
   color: var(--color-class-analytics);
   font-weight: var(--type-ui-weight);
+}
+
+.methodMethod,
+.methodBody,
+.methodReason {
+  color: var(--color-text-muted);
+}
+
+.methodBody {
+  margin-top: var(--space-1);
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--color-border-subtle);
+}
+
+.methodReason {
+  margin-top: var(--space-1);
 }
 
 /*
@@ -771,6 +842,18 @@ select.control {
   font-size: var(--type-body-size);
   line-height: var(--type-body-line);
   color: var(--color-text-primary);
+}
+
+/*
+ * The prose a screen exists to deliver, at the `lead` step.
+ *
+ * On the Analyst the answer is the page. Set at `body` it matched the caveat above it and the
+ * provenance below it, and the runtime audit of 2026-09-08 photographed a reply where nothing in
+ * the composition said which line the person had asked for.
+ */
+.interpretationBody[data-prominence="lead"] {
+  font-size: var(--type-lead-size);
+  line-height: var(--type-lead-line);
 }
 
 .interpretationModel,

@@ -95,6 +95,11 @@
   --type-body-line: 1.55;
   --type-body-weight: 400;
 
+  /* One step above body, for the prose a screen exists to deliver. See `lib/design/tokens.ts`. */
+  --type-lead-size: 1.0625rem;
+  --type-lead-line: 1.6;
+  --type-lead-weight: 400;
+
   --type-ui-size: 0.875rem;
   --type-ui-line: 1.4;
   --type-ui-weight: 500;
@@ -290,6 +295,24 @@ a {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
+}
+
+/*
+ * A scrollable container says so at its edge.
+ *
+ * `ScrollRegion` already makes wide content reachable by keyboard, and marks itself
+ * `data-scrollable="true"` exactly when there is something to reach. What it had no way to say was
+ * anything to somebody looking at it: the runtime audit of 2026-09-08 photographed the Agent
+ * Evidence sources table with its last column sliced off mid-word and nothing on the page
+ * indicating that the rest of it was one swipe away. A fade at the trailing edge is that
+ * indication, and it costs no layout.
+ *
+ * An inset shadow rather than a `mask-image` fade, deliberately: the same element is a tab stop,
+ * and a mask clips whatever it covers — including the focus ring at the very edge it is drawn on.
+ * An inset shadow paints inside the padding box and leaves the outline alone.
+ */
+[data-scrollable="true"] {
+  box-shadow: inset -12px 0 12px -12px var(--color-border-strong);
 }
 
 /* Wide content scrolls inside its own container rather than scrolling the page. */

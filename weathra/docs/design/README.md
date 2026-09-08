@@ -9,6 +9,7 @@ to its artifact status and each post-MVP screen to its roadmap entry.
 | [`screens.md`](screens.md) | Every MVP screen with its design status and artifact reference, the approval record, what is still outstanding, and the divergence log |
 | [`roadmap.md`](roadmap.md) | The post-MVP screens as design-roadmap entries |
 | [`tokens.md`](tokens.md) | The literal implementation token values, and why each was chosen |
+| [`runtime-fidelity-audit.md`](runtime-fidelity-audit.md) | The eight screens photographed in the states people actually meet — populated, empty, loading, error, unauthenticated — every drift classified, what was fixed, and what was left |
 | [`fidelity-review.md`](fidelity-review.md) | Task 21.9's formal visual-fidelity review — the fifteen MVP screens/states against the eight approved artifacts, the divergences and their reasons, the one defect corrected, and the review's own limitations |
 | [`accessibility.md`](accessibility.md) | Task 21.8's accessibility and responsiveness record — the instruments, what each verified, the defects found and corrected, and the limitations |
 | [`accessibility-manual-pass.md`](accessibility-manual-pass.md) | The worksheet and findings for 21.8's manual pass, which remains incomplete |

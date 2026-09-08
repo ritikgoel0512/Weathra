@@ -48,6 +48,7 @@ import {
   formatStatistic,
   isComputed,
   periodLabel,
+  statisticAppliedLabel,
   statisticFor,
   unavailableReason,
 } from "@/lib/historical/analysis";
@@ -268,7 +269,8 @@ export function PeriodComparisonPanel({ comparison }: PeriodComparisonPanelProps
       </ul>
 
       <p className={styles.note}>
-        Statistics applied to both sides: {(comparison.statistics_applied ?? []).join("; ")}.
+        Statistics applied to both sides:{" "}
+        {(comparison.statistics_applied ?? []).map(statisticAppliedLabel).join("; ")}.
       </p>
     </ProvenanceSection>
   );

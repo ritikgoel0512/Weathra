@@ -844,18 +844,33 @@ function EmptyPanel({ title, note }: { readonly title: string; readonly note: st
  */
 export function EvidenceWorkspaceSkeleton(): ReactNode {
   return (
-    <div className={styles.columns}>
-      <div className={styles.column}>
-        <EmptyPanel title="Execution flow" note="The agents a run took, in order, with their timings." />
-        <EmptyPanel title="MCP evidence" note="Every tool call the run made, and what each returned." />
-        <EmptyPanel title="Context used" note="The location, period and units the run resolved to." />
+    <>
+      {/*
+        Named as a preview, because it does not look like one.
+
+        Seven headings each followed by one sentence and nothing else is the shape of the populated
+        screen, which is why it is drawn — but the runtime audit of 2026-09-08 photographed the
+        result, and it reads as seven sections that failed to load rather than as seven sections
+        waiting for a run. One line naming what follows is the difference between a preview and an
+        outage.
+      */}
+      <p className={styles.previewLead}>
+        These are the sections a run&rsquo;s record fills. They stay empty until you open one.
+      </p>
+
+      <div className={styles.columns}>
+        <div className={styles.column}>
+          <EmptyPanel title="Execution flow" note="The agents a run took, in order, with their timings." />
+          <EmptyPanel title="MCP evidence" note="Every tool call the run made, and what each returned." />
+          <EmptyPanel title="Context used" note="The location, period and units the run resolved to." />
+        </div>
+        <div className={styles.column}>
+          <EmptyPanel title="Grounded data sources" note="Each provider read, with the window it covered." />
+          <EmptyPanel title="Deterministic analytics" note="Figures Weathra computed, with their methods." />
+          <EmptyPanel title="Retrieved knowledge" note="Passages cited from the weather-knowledge corpus." />
+          <EmptyPanel title="Final grounded synthesis" note="The model's reading, checked against the figures above." />
+        </div>
       </div>
-      <div className={styles.column}>
-        <EmptyPanel title="Grounded data sources" note="Each provider read, with the window it covered." />
-        <EmptyPanel title="Deterministic analytics" note="Figures Weathra computed, with their methods." />
-        <EmptyPanel title="Retrieved knowledge" note="Passages cited from the weather-knowledge corpus." />
-        <EmptyPanel title="Final grounded synthesis" note="The model's reading, checked against the figures above." />
-      </div>
-    </div>
+    </>
   );
 }

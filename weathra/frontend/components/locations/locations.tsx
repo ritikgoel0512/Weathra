@@ -82,6 +82,16 @@ function LocationCard({
         </div>
       </dl>
 
+      {/*
+        A small control with a full accessible name.
+        *
+        It was a `Remove {place name}` button across the width of the card, which on a card titled
+        "Berlin, Germany" made the loudest thing about a saved place the way to delete it — the
+        runtime audit of 2026-09-08 photographed a red button wrapping onto two lines beneath every
+        entry. `06-saved-locations.png` keeps per-card actions in a quiet corner control. The label
+        a screen reader announces is unchanged, because "Remove" repeated down a list of places says
+        nothing about which place.
+      */}
       <div className={styles.cardActions}>
         <Button
           variant="danger"
@@ -89,8 +99,9 @@ function LocationCard({
           busy={removing}
           disabled={disabled && !removing}
           onClick={() => onRemove(record)}
+          aria-label={removing ? `Removing ${name}` : `Remove ${name}`}
         >
-          {removing ? "Removing…" : `Remove ${name}`}
+          {removing ? "Removing…" : "Remove"}
         </Button>
       </div>
     </li>
@@ -105,7 +116,16 @@ function LocationCard({
  * saved from an ambiguous or unknown name, and what is saved is the candidate's coordinates — the
  * canonical point the backend returned — rather than any string.
  */
-function AddLocation({ atLimit, limit }: { readonly atLimit: boolean; readonly limit: number }): ReactNode {
+function AddLocation({
+  atLimit,
+  limit,
+  startOpen = false,
+}: {
+  readonly atLimit: boolean;
+  readonly limit: number;
+  /** True when the list is empty, so adding is the only thing this screen offers. */
+  readonly startOpen?: boolean;
+}): ReactNode {
   const [place, setPlace] = useState("");
   const [label, setLabel] = useState("");
   const entry = useLocationResolution(null);
@@ -163,7 +183,16 @@ function AddLocation({ atLimit, limit }: { readonly atLimit: boolean; readonly l
       top made adding — the rarer action — the subject of the screen.
     */
     <form className={styles.panel} onSubmit={onSubmit} aria-label="Add a saved location">
-      <details>
+      {/*
+        Open when there is nothing else on the screen.
+        *
+        The disclosure is right for a list of saved places: adding is the rarer action, and
+        `06-saved-locations.png` gives the page to the places. It is wrong for an account with none,
+        where the runtime audit of 2026-09-08 photographed an empty state whose instruction — "save
+        a place above" — pointed at a collapsed control. The only thing to do on that screen should
+        not be folded shut.
+      */}
+      <details open={startOpen}>
       {/*
         The heading lives inside the summary rather than being replaced by it. The disclosure moved
         the form out of the page's flow, and for a moment took the panel's `h2` with it — which left
@@ -333,23 +362,32 @@ function SavedList({ response }: { readonly response: SavedLocationsResponse }):
 /* ------------------------------------------------------- the workspace panels */
 
 /**
- * The lower panels of `06-saved-locations.png`: a synthesis panel, a comparison panel, and a live
- * metadata block, over a status rule.
+ * The lower panels of `06-saved-locations.png`: what this list adds up to, and where to take it.
  *
- * The artifact fills them with "Global Vector Analysis", grounding-health percentages and a node
- * count. None of those is a figure any endpoint produces, and inventing a health score for a list
- * of place names would be a claim about nothing. What the panels carry instead is arithmetic over
- * the records themselves — how many places, how many distinct time zones, how many countries —
- * which is deterministic, checkable, and genuinely what a "workspace synthesis" of a saved list is.
+ * The artifact fills this area with "Global Vector Analysis", grounding-health percentages, a node
+ * count and a 42-millisecond latency. None of those is a figure any endpoint produces, and
+ * inventing a health score for a list of place names would be a claim about nothing. What the panel
+ * carries instead is arithmetic over the records themselves — how many places, how many distinct
+ * time zones, how many countries, how much of the allowance is used — which is deterministic,
+ * checkable, and genuinely what a summary of a saved list is.
+ *
+ * **Why it is one panel and not three.** It was three: a "Node health index" of meters, a
+ * "Workspace summary" of counts, and a "Live metadata" block — every one of them counting the same
+ * list, over a status strip that counted it a fourth time. The runtime audit of 2026-09-08
+ * photographed two saved places under three panels of statistics about those two places, and the
+ * whole lower half of the screen read as an operations console for a list of place names. The
+ * figures that mean something are here, once.
+ *
+ * Two rows are gone rather than moved: "Telemetry sync — not measured" and "Latency — not
+ * reported". Both existed to hold the artifact's shape where Weathra has no measurement, and a row
+ * that will say "not measured" on every account forever is not provenance about a figure — there is
+ * no figure. What Weathra does and does not know about a saved place is on the card itself.
  *
  * The comparison panel is a real route rather than a summary: Compare Cities is the screen that
  * weighs saved places against each other, and it already seeds itself from this list.
  */
 function WorkspacePanels({ response }: { readonly response: SavedLocationsResponse }): ReactNode {
   const records = response.locations;
-  const resolved = records.filter(
-    (record) => record.location.timezone && Number.isFinite(record.location.latitude),
-  ).length;
   const zones = new Set(records.map((record) => record.location.timezone).filter(Boolean));
   const countries = new Set(
     records.map((record) => record.location.country).filter((value): value is string => !!value),
@@ -357,108 +395,55 @@ function WorkspacePanels({ response }: { readonly response: SavedLocationsRespon
   const remaining = Math.max(0, response.limit - response.count);
 
   return (
-    <>
-      <section className={styles.panel} aria-label="Node health index">
-        <h2 className={styles.panelTitle}>Node health index</h2>
-        <p className={styles.note}>Counted from the records above, not measured.</p>
-        <div className={styles.summary}>
-          <Meter
-            label="Nodes resolved"
-            value={records.length > 0 ? resolved / records.length : null}
-            unavailable="Nothing saved"
-            note={`${resolved} of ${records.length} carry coordinates and a time zone.`}
-          />
-          <Meter
-            label="Allowance used"
-            value={response.limit > 0 ? response.count / response.limit : null}
-            unavailable="No limit reported"
-            note={`${response.count} of ${response.limit} places.`}
-          />
-          <Meter
-            label="Telemetry sync"
-            value={null}
-            unavailable="Not measured"
-            note="Weathra reports no per-node telemetry."
-          />
-        </div>
-      </section>
-
-      <div className={styles.panelRow}>
-        <section className={styles.panel} aria-label="Workspace summary">
-          <h2 className={styles.panelTitle}>Workspace summary</h2>
-          <p className={styles.note}>
-            Counted from the places above, not from any measurement.
-          </p>
-          <dl className={styles.summary}>
-            <div className={styles.summaryFact}>
-              <dt>Places saved</dt>
-              <dd>{response.count}</dd>
-            </div>
-            <div className={styles.summaryFact}>
-              <dt>Time zones</dt>
-              <dd>{zones.size}</dd>
-            </div>
-            <div className={styles.summaryFact}>
-              <dt>Countries</dt>
-              <dd>{countries.size > 0 ? countries.size : "Not reported"}</dd>
-            </div>
-            <div className={styles.summaryFact}>
-              <dt>Remaining</dt>
-              <dd>{remaining}</dd>
-            </div>
-          </dl>
-        </section>
-
-        <section className={styles.panel} aria-label="Compare these cities">
-          <h2 className={styles.panelTitle}>Compare these cities</h2>
-          <p className={styles.note}>
-            Compare Cities weighs saved places against one criterion over the same window, in each
-            place&rsquo;s own local time, and seeds itself from this list.
-          </p>
-          <p className={styles.note}>
-            {records.length >= 2
-              ? "You have enough places saved to compare."
-              : "Save at least two places to compare them."}
-          </p>
-          <div className={styles.actions}>
-            <Link className={styles.panelAction} href="/compare">
-              Open Compare Cities
-            </Link>
-          </div>
-        </section>
-      </div>
-
-      <section className={styles.panel} aria-label="Live metadata">
-        <h2 className={styles.panelTitle}>Live metadata</h2>
+    <div className={styles.panelRow}>
+      <section className={styles.panel} aria-label="What you have saved">
+        <h2 className={styles.panelTitle}>What you have saved</h2>
+        <p className={styles.note}>Counted from the places above, not from any measurement.</p>
         <dl className={styles.summary}>
           <div className={styles.summaryFact}>
-            <dt>Places</dt>
+            <dt>Places saved</dt>
             <dd>{response.count}</dd>
           </div>
           <div className={styles.summaryFact}>
-            <dt>Allowance</dt>
-            <dd>{response.limit}</dd>
+            <dt>Time zones</dt>
+            <dd>{zones.size}</dd>
           </div>
           <div className={styles.summaryFact}>
-            <dt>Source</dt>
-            <dd>Your account</dd>
+            <dt>Countries</dt>
+            <dd>{countries.size > 0 ? countries.size : "Not reported"}</dd>
           </div>
           <div className={styles.summaryFact}>
-            <dt>Latency</dt>
-            {/* No endpoint reports one, and the artifact's "42ms" is mockup content. */}
-            <dd>Not reported</dd>
+            <dt>Remaining</dt>
+            <dd>{remaining}</dd>
           </div>
         </dl>
+        {/* The one figure here a person can act on: how much of the allowance is gone. */}
+        <Meter
+          label="Allowance used"
+          value={response.limit > 0 ? response.count / response.limit : null}
+          unavailable="No limit reported"
+          note={`${response.count} of ${response.limit} places.`}
+        />
       </section>
 
-      <p className={styles.statusStrip}>
-        <span>Saved list from your account</span>
-        <span>
-          {response.count} of {response.limit} places
-        </span>
-        <span>Follows you across sessions and devices</span>
-      </p>
-    </>
+      <section className={styles.panel} aria-label="Compare these cities">
+        <h2 className={styles.panelTitle}>Compare these cities</h2>
+        <p className={styles.note}>
+          Compare Cities weighs saved places against one criterion over the same window, in each
+          place&rsquo;s own local time, and seeds itself from this list.
+        </p>
+        <p className={styles.note}>
+          {records.length >= 2
+            ? "You have enough places saved to compare."
+            : "Save at least two places to compare them."}
+        </p>
+        <div className={styles.actions}>
+          <Link className={styles.panelAction} href="/compare">
+            Open Compare Cities
+          </Link>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -496,6 +481,7 @@ export function SavedLocations(): ReactNode {
       <AddLocation
         atLimit={response !== null && response.count >= response.limit}
         limit={response?.limit ?? 0}
+        startOpen={state.kind === "empty"}
       />
 
       {/*
@@ -510,7 +496,7 @@ export function SavedLocations(): ReactNode {
           role="status"
         >
           <span className={styles.attentionTitle}>
-            {response.count >= response.limit ? "Allowance reached" : "All nodes nominal"}
+            {response.count >= response.limit ? "Allowance reached" : "Room to save more"}
           </span>
           <span>
             {response.count >= response.limit

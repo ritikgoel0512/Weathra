@@ -241,6 +241,7 @@ Completes before substantial frontend implementation in groups 20 and 21. Visily
 - [ ] 21.8 Verify accessibility and responsiveness across all MVP screens, authentication and product alike — keyboard-only operation of every action, labelled inputs, accessible control names, 4.5:1 body-text contrast in both appearances, usability at a 360-pixel viewport with no horizontal page scroll, and wide content scrolling in its own container; verify with automated accessibility assertions plus a recorded manual pass.
 - [x] 21.9 Verify every implemented screen against its approved Visily artifact and record any deliberate divergence with its reason; verify the review covers all fifteen MVP screens and is recorded in `docs/design/`.
 - [x] 21.10 Implement the Playwright flows — sign up through verification into the product; ask a question then open its evidence; save a location then see the unit preference applied; and an expired session routed to sign-in; verify all four pass against a backend running with a fake inference provider.
+- [x] 21.11 Audit all eight approved screens against the running application in the states people actually meet — populated, empty, loading, error and unauthenticated — classifying every difference, correcting the mechanical ones and redesigning the surfaces whose character had drifted without losing grounding, provenance, uncertainty or evidence; verify the audit, its fixes and what it deliberately left are recorded in `docs/design/runtime-fidelity-audit.md`.
 
 ## 22. Evaluation subsystem
 

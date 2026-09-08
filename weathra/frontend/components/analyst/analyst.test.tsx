@@ -349,7 +349,9 @@ describe("a streamed answer", () => {
     expect(within(computed).getByText("ANALYTICS")).toBeInTheDocument();
     expect(within(computed).getByRole("heading", { name: "Computed figures" })).toBeInTheDocument();
     expect(within(computed).getByText("17.9 °C")).toBeInTheDocument();
-    expect(within(computed).getByText(/Computed by Weathra/)).toBeInTheDocument();
+    // The claim on the face of the provenance line; the full deterministic sentence and the point
+    // count are inside its disclosure, so this matches the summary exactly.
+    expect(within(computed).getByText("Computed by Weathra")).toBeInTheDocument();
     expect(within(computed).getByText(/arithmetic mean of usable points/)).toBeInTheDocument();
 
     // Nothing numeric sits inside the model's region.
@@ -383,10 +385,23 @@ describe("a streamed answer", () => {
   });
 
   it("states what the answer resolved to, and where the default came from", async () => {
-    renderAnalyst();
+    const { container } = renderAnalyst();
     await ask("What should I expect?");
+    await screen.findByRole("region", { name: "AI interpretation" });
 
-    const resolved = await screen.findByRole("region", { name: "What this answer resolved to" });
+    /*
+     * A disclosure rather than a landmark region.
+     *
+     * The rail beside this column states the resolved place, window and unit system plainly, and
+     * the runtime audit of 2026-09-08 photographed the same three lines twice on one screen. The
+     * copy that travels with an individual answer opens on request; what it says is unchanged, and
+     * that is what this asserts.
+     */
+    const resolved = container.querySelector(
+      '[aria-label="What this answer resolved to"]',
+    ) as HTMLElement;
+    expect(resolved).not.toBeNull();
+    expect(resolved.tagName.toLowerCase()).toBe("details");
     expect(within(resolved).getByText(/from your saved default/)).toBeInTheDocument();
     expect(within(resolved).getByText(/Berlin, Germany \(from the preferences\)/)).toBeInTheDocument();
     expect(within(resolved).getByText(/metric \(from the preferences\)/)).toBeInTheDocument();

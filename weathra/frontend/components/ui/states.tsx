@@ -30,18 +30,43 @@ export interface LoadingStateProps {
   readonly label?: string;
   /** How many placeholder lines to show. Match it to the shape that is coming. */
   readonly lines?: number;
+  /**
+   * The shape of the thing being waited for.
+   *
+   * `lines` is the default and right for a panel's contents. `band` is for a screen that opens on
+   * a wide hero and then splits into two columns — the Dashboard's composition — and draws that
+   * instead of a paragraph. The runtime audit of 2026-09-08 photographed the Dashboard mid-load as
+   * six grey text lines: an accurate placeholder for a paragraph, and no indication at all of the
+   * screen that was coming.
+   */
+  readonly shape?: "lines" | "band";
 }
 
-export function LoadingState({ label = "Loading", lines = 3 }: LoadingStateProps): ReactNode {
+export function LoadingState({
+  label = "Loading",
+  lines = 3,
+  shape = "lines",
+}: LoadingStateProps): ReactNode {
   return (
     <div className={styles.state} role="status" aria-live="polite">
       {/* The global utility from app/globals.css: announced, not drawn. */}
       <span className="weathra-visually-hidden">{label}</span>
-      <div className={styles.stateLoading}>
-        {Array.from({ length: lines }, (_, index) => (
-          <Skeleton key={index} width={index === lines - 1 ? "60%" : "100%"} />
-        ))}
-      </div>
+      {shape === "band" ? (
+        <div className={styles.stateBand}>
+          <Skeleton height="var(--space-7)" radius="var(--radius-lg)" />
+          <div className={styles.stateBandColumns}>
+            <Skeleton height="var(--space-7)" radius="var(--radius-lg)" />
+            <Skeleton height="var(--space-7)" radius="var(--radius-lg)" />
+          </div>
+          <Skeleton height="var(--space-6)" radius="var(--radius-lg)" />
+        </div>
+      ) : (
+        <div className={styles.stateLoading}>
+          {Array.from({ length: lines }, (_, index) => (
+            <Skeleton key={index} width={index === lines - 1 ? "60%" : "100%"} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

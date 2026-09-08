@@ -259,6 +259,16 @@ export interface MethodNoteProps {
  * It names the method, because §9 requires the method that produced a computed figure to be named,
  * and it says plainly that Weathra computed it — which is the sentence that keeps a reader from
  * assuming the language model did.
+ *
+ * **Why it discloses rather than declaims.** The runtime audit of 2026-09-08 photographed the
+ * Historical Analytics baseline column with eight of these stacked in it, each three lines long and
+ * each opening with the same emphasised sentence. The words were all true and all required; the
+ * composition was a log file. So the load-bearing half — *Weathra computed this, and here is the
+ * method* — stays on the face of the line, and the arithmetic behind it (points used, points
+ * excluded, unit, and the full deterministic sentence) moves inside a `<details>` on the same line.
+ * Nothing is removed: every word that was on the screen is still on the screen, one disclosure
+ * away, and `reason` never moves, because a figure that could not be computed has to say so where
+ * the figure would have been.
  */
 export function MethodNote({
   method,
@@ -268,16 +278,25 @@ export function MethodNote({
   reason,
 }: MethodNoteProps): ReactNode {
   return (
-    <p className={styles.methodNote} data-method-note="true">
-      <span className={styles.methodStatement}>{COMPUTED_BY_WEATHRA}</span>{" "}
-      <span>Method: {method}.</span>
-      {typeof pointsUsed === "number" ? <span> {pointsUsed} points used.</span> : null}
-      {typeof pointsExcluded === "number" && pointsExcluded > 0 ? (
-        <span> {pointsExcluded} excluded as absent.</span>
-      ) : null}
-      {unit ? <span> Unit: {unit}.</span> : null}
-      {reason ? <span> Not computable: {reason}.</span> : null}
-    </p>
+    <div className={styles.methodNote} data-method-note="true">
+      <details className={styles.methodDetails}>
+        <summary className={styles.methodSummary}>
+          <span className={styles.methodStatement}>Computed by Weathra</span>
+          <span className={styles.methodMethod}>Method: {method}.</span>
+        </summary>
+
+        <p className={styles.methodBody}>
+          <span>{COMPUTED_BY_WEATHRA}</span>
+          {typeof pointsUsed === "number" ? <span> {pointsUsed} points used.</span> : null}
+          {typeof pointsExcluded === "number" && pointsExcluded > 0 ? (
+            <span> {pointsExcluded} excluded as absent.</span>
+          ) : null}
+          {unit ? <span> Unit: {unit}.</span> : null}
+        </p>
+      </details>
+
+      {reason ? <p className={styles.methodReason}>Not computable: {reason}.</p> : null}
+    </div>
   );
 }
 
@@ -311,6 +330,16 @@ export interface InterpretationPanelProps {
   /** The model identifier the backend actually reported. No default. */
   readonly model?: string | null;
   readonly footer?: ReactNode;
+  /**
+   * How much of the page the prose is entitled to.
+   *
+   * `lead` sets it one step above body, for the screen whose whole purpose is that paragraph — the
+   * Analyst's answer. `panel` is the default, for an interpretation that sits beside figures a
+   * person came for instead. It changes the prose size and nothing else: the badge, the boundary
+   * sentence, the model attribution and the region are identical, because those are what make this
+   * a distinguishable interpretation rather than a styled quote.
+   */
+  readonly prominence?: "panel" | "lead";
 }
 
 /**
@@ -329,6 +358,7 @@ export function InterpretationPanel({
   model,
   footer,
   headingLevel = 2,
+  prominence = "panel",
 }: InterpretationPanelProps): ReactNode {
   const attributed = [provider?.trim(), model?.trim()].filter(Boolean).join(" · ");
   const Heading = headingLevel === 2 ? "h2" : "h3";
@@ -348,7 +378,9 @@ export function InterpretationPanel({
 
       <p className={styles.interpretationBoundary}>{INTERPRETATION_BOUNDARY}</p>
 
-      <div className={styles.interpretationBody}>{children}</div>
+      <div className={styles.interpretationBody} data-prominence={prominence}>
+        {children}
+      </div>
 
       {/* Only what the backend reported. Nothing is filled in when it reported nothing. */}
       {attributed ? <p className={styles.interpretationModel}>Model: {attributed}</p> : null}

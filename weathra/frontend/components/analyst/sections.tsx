@@ -81,6 +81,16 @@ export interface RunProgressProps {
  */
 export function RunProgress({ steps, streaming, gap = false }: RunProgressProps): ReactNode {
   /*
+   * A settled run with nothing to report renders nothing at all.
+   *
+   * "Run progress — no steps" above a failure notice, which the runtime audit of 2026-09-08
+   * photographed, is a heading for an empty list: it tells a person whose question just failed that
+   * there is a log, and that the log is empty. While the stream is open the placeholder is
+   * meaningful — the run has started and has not reported yet — so it is kept for that case only.
+   */
+  if (steps.length === 0 && !streaming && !gap) return null;
+
+  /*
    * Collapsed once the run finishes.
    *
    * `02-ai-weather-analyst.png` leads with the answer; the step-by-step execution belongs to
@@ -230,6 +240,7 @@ export function AnswerView({ answer, evidenceId = null }: AnswerViewProps): Reac
       <InterpretationPanel
         provider={answer.llm_provider ?? null}
         model={answer.llm_model ?? null}
+        prominence="lead"
         footer={
           grounding.verified ? null : (
             <p className={styles.note}>
@@ -300,10 +311,18 @@ export function AnswerView({ answer, evidenceId = null }: AnswerViewProps): Reac
         </div>
       ) : null}
 
-      {/* What the run decided the question was about, and where a default came from. */}
+      {/*
+        What the run decided the question was about, and where a default came from.
+        *
+        Inside a disclosure, because the rail beside this column already states the resolved
+        location, window and unit system in full: the runtime audit of 2026-09-08 photographed the
+        same three lines twice on one screen, once here and once there. The rail is the copy a
+        reader meets without asking; this is the copy that travels with the answer, kept so a
+        transcript of several turns still says what each individual turn resolved to.
+      */}
       {resolved ? (
-        <section className={styles.resolved} aria-label="What this answer resolved to">
-          <h2 className={styles.resolvedTitle}>What this answer resolved to</h2>
+        <details className={styles.resolved} aria-label="What this answer resolved to">
+          <summary className={styles.resolvedTitle}>What this answer resolved to</summary>
           {resolved.statement ? <p>{resolved.statement}</p> : null}
           <dl className={styles.resolvedList}>
             {(resolved.locations ?? []).length > 0 ? (
@@ -335,7 +354,7 @@ export function AnswerView({ answer, evidenceId = null }: AnswerViewProps): Reac
               </div>
             ) : null}
           </dl>
-        </section>
+        </details>
       ) : null}
 
       <EvidenceSummary answer={answer} evidenceId={evidenceId} />
@@ -374,39 +393,56 @@ function EvidenceSummary({
       }}
     >
       <div className={styles.evidence} data-evidence="true">
-        {evidence.routing_reason ? (
-          <p className={styles.note}>Routing: {evidence.routing_reason}</p>
-        ) : null}
-
-        {agents.length > 0 ? (
-          <p className={styles.note}>
-            Agents: {agents.map((step) => `${agentLabel(step.agent)} (${step.status})`).join(", ")}
-          </p>
-        ) : null}
-
-        {toolCalls.length > 0 ? (
-          <p className={styles.note}>
-            Tools: {toolCalls.map((call) => call.tool).join(", ")}
-          </p>
-        ) : null}
-
-        {citations.length > 0 ? (
-          <p className={styles.note}>
-            Knowledge cited: {citations.map((citation) => citation.title).join("; ")}
-          </p>
-        ) : null}
-
+        {/*
+          Whether the answer is whole is not a detail, so it stays outside the disclosure. Everything
+          else below it describes how the answer was produced rather than what it says.
+        */}
         {evidence.partial ? (
           <p className={styles.noteStrong}>
             This answer is partial: {evidence.partial_reason ?? "a bound was reached."}
           </p>
         ) : null}
 
-        <p className={styles.note}>
-          Request {answer.request_id}
-          {evidenceId ? ` · evidence ${evidenceId}` : null}
-          {evidence.completed_at ? ` · completed ${formatInstant(evidence.completed_at)}` : null}
-        </p>
+        {/*
+          How the run happened, one disclosure deep.
+          *
+          The runtime audit of 2026-09-08 photographed six lines of this under every answer —
+          routing, the agents and their statuses, the tools, the knowledge cited, and two
+          identifiers — set in the same quiet grey and reading, together, as a console log with a
+          weather answer above it. Not one of those lines is removed: every word is still on this
+          screen, under a summary that says what it is, and the same facts are on
+          `05-agent-evidence.png` in full. What changes is that a person who asked about the weather
+          is no longer shown the orchestrator's paperwork before they can leave the page.
+        */}
+        <details className={styles.evidenceDetails}>
+          <summary className={styles.evidenceSummary}>How this answer was produced</summary>
+
+          {evidence.routing_reason ? (
+            <p className={styles.note}>Routing: {evidence.routing_reason}</p>
+          ) : null}
+
+          {agents.length > 0 ? (
+            <p className={styles.note}>
+              Agents: {agents.map((step) => `${agentLabel(step.agent)} (${step.status})`).join(", ")}
+            </p>
+          ) : null}
+
+          {toolCalls.length > 0 ? (
+            <p className={styles.note}>Tools: {toolCalls.map((call) => call.tool).join(", ")}</p>
+          ) : null}
+
+          {citations.length > 0 ? (
+            <p className={styles.note}>
+              Knowledge cited: {citations.map((citation) => citation.title).join("; ")}
+            </p>
+          ) : null}
+
+          <p className={styles.note}>
+            Request {answer.request_id}
+            {evidenceId ? ` · evidence ${evidenceId}` : null}
+            {evidence.completed_at ? ` · completed ${formatInstant(evidence.completed_at)}` : null}
+          </p>
+        </details>
 
         {/*
           The artifact's "View Full Agent Evidence" affordance, deferred in task 21.2 until the
@@ -499,6 +535,14 @@ export interface RunFactsProps {
  * data; a field the run did not report says so. That is the whole distinction this screen is built
  * on — missing data changes the content, never the layout.
  *
+ * **A card with nothing in it says so once.** The runtime audit of 2026-09-08 photographed the
+ * observed card as three rows of "Not reported" followed by a sentence explaining that the run
+ * retrieved no observation. The sentence is the honest form; the three empty rows underneath a
+ * heading are a table of nulls, and repeating "not reported" per field says nothing the one
+ * sentence has not. So the rows appear when at least one of them has a value — where the contrast
+ * between a reported field and an unreported one is the information — and give way to the sentence
+ * when none does.
+ *
  * Attribution is split by the data class the backend stamped on it, so an observed reading lands in
  * the observed card and a forecast in the forecast one. Nothing is re-classified here.
  */
@@ -511,6 +555,33 @@ export function RunFacts({ answer }: RunFactsProps): ReactNode {
   const uncertainty = answer.uncertainty ?? null;
   const horizon = uncertainty?.horizon?.[0] ?? null;
 
+  const observedFacts: readonly (readonly [string, string | null])[] = [
+    [
+      "Location",
+      observed?.location.display_name ?? resolved?.locations?.[0]?.display_name ?? null,
+    ],
+    ["Provider", observed?.provider ?? null],
+    ["Retrieved", observed?.retrieved_at ?? null],
+  ];
+
+  const forecastFacts: readonly (readonly [string, string | null])[] = [
+    [
+      "Window",
+      resolved?.period
+        ? `${formatLocalStamp(resolved.period.start_local)} to ${formatLocalStamp(resolved.period.end_local)}`
+        : null,
+    ],
+    ["Provider", forecast?.provider ?? null],
+    ["Confidence", horizon?.confidence ? `${horizon.confidence} at ${horizon.hours_ahead} h` : null],
+    [
+      "Spread",
+      uncertainty ? (uncertainty.spread_available ? "Supplied by the provider" : "Not supplied") : null,
+    ],
+  ];
+
+  const anyReported = (facts: readonly (readonly [string, string | null])[]) =>
+    facts.some(([, value]) => value !== null);
+
   return (
     <div className={styles.subcards}>
       <section className={styles.subcard} aria-label="Observed data">
@@ -518,11 +589,13 @@ export function RunFacts({ answer }: RunFactsProps): ReactNode {
           <DataClassBadge dataClass="observed" />
           <h3 className={styles.subcardTitle}>Observed data</h3>
         </header>
-        <dl className={styles.facts}>
-          <Fact term="Location" value={observed?.location.display_name ?? resolved?.locations?.[0]?.display_name ?? null} />
-          <Fact term="Provider" value={observed?.provider ?? null} />
-          <Fact term="Retrieved" value={observed?.retrieved_at ?? null} />
-        </dl>
+        {anyReported(observedFacts) ? (
+          <dl className={styles.facts}>
+            {observedFacts.map(([term, value]) => (
+              <Fact key={term} term={term} value={value} />
+            ))}
+          </dl>
+        ) : null}
         {observed ? null : (
           <p className={styles.subcardNote}>This run retrieved no observation.</p>
         )}
@@ -533,35 +606,15 @@ export function RunFacts({ answer }: RunFactsProps): ReactNode {
           <DataClassBadge dataClass="forecast" />
           <h3 className={styles.subcardTitle}>Forecast vector</h3>
         </header>
-        <dl className={styles.facts}>
-          <Fact
-            term="Window"
-            value={
-              resolved?.period
-                ? `${formatLocalStamp(resolved.period.start_local)} to ${formatLocalStamp(resolved.period.end_local)}`
-                : null
-            }
-          />
-          <Fact term="Provider" value={forecast?.provider ?? null} />
-          <Fact
-            term="Confidence"
-            value={
-              horizon?.confidence
-                ? `${horizon.confidence} at ${horizon.hours_ahead} h`
-                : null
-            }
-          />
-          <Fact
-            term="Spread"
-            value={
-              uncertainty
-                ? uncertainty.spread_available
-                  ? "Supplied by the provider"
-                  : "Not supplied"
-                : null
-            }
-          />
-        </dl>
+        {anyReported(forecastFacts) ? (
+          <dl className={styles.facts}>
+            {forecastFacts.map(([term, value]) => (
+              <Fact key={term} term={term} value={value} />
+            ))}
+          </dl>
+        ) : (
+          <p className={styles.subcardNote}>This run retrieved no forecast.</p>
+        )}
       </section>
     </div>
   );

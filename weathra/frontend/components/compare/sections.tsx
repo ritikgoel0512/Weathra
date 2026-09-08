@@ -308,12 +308,21 @@ export function Excluded({ result }: { readonly result: ComparisonResult }): Rea
         {excluded.length} {excluded.length === 1 ? "location was" : "locations were"} left out of
         this ranking
       </p>
+      {/*
+        The failure code is an attribute, not a sentence. `location_not_found` is the stable half of
+        the error contract and belongs to whoever debugs this; the reason beside it is the half
+        written for the person who typed the name. The runtime audit of 2026-09-08 caught the
+        identifier being read out to that person as though it were the explanation.
+      */}
       <ul className={styles.excludedList}>
         {excluded.map((candidate) => (
-          <li className={styles.excludedItem} key={`${candidate.label}-${candidate.code}`}>
+          <li
+            className={styles.excludedItem}
+            data-failure-code={candidate.code}
+            key={`${candidate.label}-${candidate.code}`}
+          >
             <span className={styles.excludedName}>{candidate.label}</span>
             <span className={styles.note}>{candidate.reason}</span>
-            <span className={styles.excludedCode}>{candidate.code}</span>
           </li>
         ))}
       </ul>

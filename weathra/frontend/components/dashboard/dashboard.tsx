@@ -450,19 +450,7 @@ function LocationChoice({ preferences }: { readonly preferences: PreferenceView 
   const location = chosen ?? saved;
 
   return (
-    <div className={styles.dashboard}>
-      {/*
-        The screen's own heading — task 21.8. Every other MVP screen carried one and this did not,
-        so a heading-list navigation of the Dashboard showed its sections with nothing naming the
-        page they belong to, and the screen had no accessible name at all in that structure.
-      */}
-      <header className={styles.heading}>
-        <h1 className={styles.title}>Dashboard</h1>
-        <p className={styles.subtitle}>
-          Conditions now, the days ahead, and how they sit against the record.
-        </p>
-      </header>
-
+    <DashboardFrame>
       <form className={styles.entry} onSubmit={submit} aria-label="Choose a place to brief on">
         <div className={styles.entryField}>
           <Input
@@ -523,6 +511,29 @@ function LocationChoice({ preferences }: { readonly preferences: PreferenceView 
           />
         </>
       )}
+    </DashboardFrame>
+  );
+}
+
+/**
+ * The screen's frame: its heading, and whatever state it is in.
+ *
+ * The heading is task 21.8's — every other MVP screen carried one and this did not, so a
+ * heading-list navigation of the Dashboard showed its sections with nothing naming the page they
+ * belong to. It lives here rather than inside the ready branch so a loading, failed or empty
+ * Dashboard is still recognisably the Dashboard.
+ */
+function DashboardFrame({ children }: { readonly children: ReactNode }): ReactNode {
+  return (
+    <div className={styles.dashboard}>
+      <header className={styles.heading}>
+        <h1 className={styles.title}>Dashboard</h1>
+        <p className={styles.subtitle}>
+          Conditions now, the days ahead, and how they sit against the record.
+        </p>
+      </header>
+
+      {children}
     </div>
   );
 }
@@ -541,14 +552,37 @@ export function Dashboard(): ReactNode {
     request: (client) => client.preferences(),
   });
 
+  /*
+   * The heading outlives the state.
+   *
+   * These three branches used to return a bare notice, so a Dashboard that was still loading — or
+   * whose preferences call failed — had no `h1`, no subtitle, and no indication of which screen the
+   * notice belonged to. The runtime audit of 2026-09-08 photographed both: an unnamed page with six
+   * grey lines on it, and an unnamed page with one red box on it. The heading is static text that
+   * needs no request, so it renders on every branch, and the state renders under it.
+   */
   if (preferences.state.kind === "loading") {
-    return <LoadingState label="Loading your briefing" lines={6} />;
+    return (
+      <DashboardFrame>
+        <LoadingState label="Loading your briefing" shape="band" />
+      </DashboardFrame>
+    );
   }
   if (preferences.state.kind === "error") {
-    return <ErrorState failure={preferences.state.failure} onRetry={preferences.retry} />;
+    return (
+      <DashboardFrame>
+        <ErrorState failure={preferences.state.failure} onRetry={preferences.retry} />
+      </DashboardFrame>
+    );
   }
   if (preferences.state.kind === "empty") {
-    return <EmptyState title="No preferences available">Weathra could not read your preferences.</EmptyState>;
+    return (
+      <DashboardFrame>
+        <EmptyState title="No preferences available">
+          Weathra could not read your preferences.
+        </EmptyState>
+      </DashboardFrame>
+    );
   }
 
   return <LocationChoice preferences={preferences.state.data} />;

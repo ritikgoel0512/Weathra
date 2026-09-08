@@ -125,7 +125,7 @@ describe("the tokens match the recorded design system", () => {
     const mapping: Readonly<Record<string, readonly (keyof typeof TYPE_ROLES)[]>> = {
       Display: ["display"],
       Heading: ["heading", "section", "card"],
-      Body: ["body"],
+      Body: ["body", "lead"],
       UI: ["ui"],
       Label: ["label"],
       Meta: ["meta"],
@@ -143,7 +143,7 @@ describe("the tokens match the recorded design system", () => {
     expect(TYPE_ROLES.heading.face).toBe("display");
     expect(TYPE_ROLES.section.face).toBe("display");
     expect(TYPE_ROLES.card.face).toBe("display");
-    for (const key of ["body", "ui", "label", "meta"] as const) {
+    for (const key of ["body", "lead", "ui", "label", "meta"] as const) {
       expect(TYPE_ROLES[key].face).toBe("body");
     }
     expect(TYPE_ROLES.label.transform).toBe("uppercase");

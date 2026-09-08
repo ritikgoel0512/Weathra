@@ -270,7 +270,40 @@
 }
 
 .clarificationTitle,
-.resolvedTitle,
+/*
+ * The resolved-context disclosure.
+ *
+ * A summary rather than a heading: the same three facts stand plainly in the rail beside this
+ * column, so the copy that travels with an individual answer opens on request.
+ */
+.resolvedTitle {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  cursor: pointer;
+  list-style: none;
+  font-family: var(--family-display);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-secondary);
+}
+
+.resolvedTitle::-webkit-details-marker {
+  display: none;
+}
+
+.resolvedTitle::after {
+  content: "▸";
+  font-size: 0.85em;
+  color: var(--color-text-muted);
+  transition: transform 120ms ease;
+}
+
+.resolved[open] > .resolvedTitle::after {
+  transform: rotate(90deg);
+}
+
 .unavailableTitle {
   font-family: var(--family-display);
   font-size: var(--type-section-size);
@@ -334,6 +367,45 @@
   flex-direction: column;
   gap: var(--space-1);
   min-width: 0;
+}
+
+/*
+ * How the answer was produced: one line, opened on request.
+ *
+ * Six grey lines of orchestration under every answer read as a log. The summary keeps the
+ * affordance obvious and the content one interaction away; nothing inside it was removed.
+ */
+.evidenceSummary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  cursor: pointer;
+  list-style: none;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-secondary);
+}
+
+.evidenceSummary::-webkit-details-marker {
+  display: none;
+}
+
+.evidenceSummary::after {
+  content: "▸";
+  font-size: 0.9em;
+  color: var(--color-text-muted);
+  transition: transform 120ms ease;
+}
+
+.evidenceDetails[open] > .evidenceSummary::after {
+  transform: rotate(90deg);
+}
+
+.evidenceDetails > *:not(.evidenceSummary) {
+  margin-top: var(--space-1);
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--color-border-subtle);
 }
 
 /* The artifact's "View Full Agent Evidence" affordance, completed in task 21.5. */

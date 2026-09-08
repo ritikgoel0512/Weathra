@@ -359,7 +359,7 @@ export const CONTRAST_REQUIREMENTS: readonly ContrastRequirement[] = [
 ];
 
 /**
- * Typography. Two faces, seven roles, and no role borrowing another's face.
+ * Typography. Two faces, eight roles, and no role borrowing another's face.
  *
  * The numeric role is not a size — it is `font-variant-numeric: tabular-nums` on the UI face, so a
  * column of figures in a comparison table or a period delta does not wobble as digits change.
@@ -384,6 +384,16 @@ export const TYPE_ROLES = {
   section: { face: "display", size: "1.125rem", lineHeight: "1.3", weight: 600 },
   card: { face: "display", size: "0.9375rem", lineHeight: "1.35", weight: 600 },
   body: { face: "body", size: "0.9375rem", lineHeight: "1.55", weight: 400 },
+  /*
+   * One step above body, for the prose a screen exists to deliver.
+   *
+   * Added in the runtime fidelity pass of 2026-09-08. The Analyst's answer was set at `body`, the
+   * same size as the caveat above it and the provenance below it, so the sentence a person asked
+   * for carried no more weight on the page than the machinery describing how it was produced.
+   * `02-ai-weather-analyst.png` sets the synthesis visibly larger than everything around it. It is
+   * the body face, not a heading face: prose at a heading weight reads as a headline.
+   */
+  lead: { face: "body", size: "1.0625rem", lineHeight: "1.6", weight: 400 },
   ui: { face: "body", size: "0.875rem", lineHeight: "1.4", weight: 500 },
   label: {
     face: "body",

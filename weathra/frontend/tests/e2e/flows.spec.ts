@@ -148,9 +148,18 @@ test.describe("flow 2 — ask a question then open its evidence", () => {
     // *succeeded* — it warns only on failure — so a positive "verified" string is asserted on the
     // record below, where it is rendered, rather than invented here.
     await expect(page.getByText("AI INTERPRETATION").first()).toBeVisible();
-    await expect(
-      page.getByRole("region", { name: "What this answer resolved to" }),
-    ).toBeVisible();
+    /*
+     * The resolved context is a disclosure on the answer, not a landmark region.
+     *
+     * The rail beside the conversation states the same place, window and unit system plainly, and
+     * the runtime audit of 2026-09-08 photographed both copies on one screen. The copy that travels
+     * with an individual answer opens on request — so this asserts the affordance is there and that
+     * opening it shows what the run resolved to, which is the behaviour the flow cares about.
+     */
+    const resolved = page.locator('details[aria-label="What this answer resolved to"]');
+    await expect(resolved).toBeVisible();
+    await resolved.getByText("What this answer resolved to").click();
+    await expect(resolved.getByText(/from your saved default/)).toBeVisible();
     await expect(page.getByText(/could not be matched to the evidence/i)).toHaveCount(0);
 
     // --- the evidence affordance came from the run, and is followed through the UI ---
@@ -176,7 +185,17 @@ test.describe("flow 2 — ask a question then open its evidence", () => {
     // is the distinction `specs/safety-grounding` exists to keep.
     await expect(page.getByRole("region", { name: "Grounded data sources" })).toBeVisible();
     await expect(page.getByText("AI INTERPRETATION").first()).toBeVisible();
-    await expect(page.getByText(/Computed by Weathra, deterministically/i).first()).toBeVisible();
+    /*
+     * The claim is on the face of the provenance line; the arithmetic behind it is one disclosure
+     * deep. Both halves are asserted, because the runtime fidelity pass moved the second half and
+     * the point of this line is that neither half was lost.
+     */
+    const method = page.locator("[data-method-note] details").first();
+    const summary = method.locator("summary");
+    await expect(summary).toBeVisible();
+    await expect(summary).toContainText("Computed by Weathra");
+    await summary.click();
+    await expect(method.getByText(/Computed by Weathra, deterministically/i)).toBeVisible();
     // The grounding verdict, stated on the record.
     await expect(page.getByText(/Grounding verified/i).first()).toBeVisible();
   });
