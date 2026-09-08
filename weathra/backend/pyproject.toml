@@ -140,9 +140,10 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 # `live` needs real upstream services; `db` needs a real Postgres. Neither runs by default.
-addopts = "-m 'not live and not db' --strict-markers --strict-config -q"
+addopts = "-m 'not live and not db and not deployed' --strict-markers --strict-config -q"
 markers = [
     "live: exercises a real external service (Open-Meteo, OpenRouter, Supabase). Deselected by default.",
     "db: requires a live PostgreSQL with pgvector. Deselected by default.",
+    "deployed: probes the deployed pair over the network (tasks 25.3, 25.4). Deselected by default.",
 ]
 filterwarnings = ["error::DeprecationWarning:weathra.*"]

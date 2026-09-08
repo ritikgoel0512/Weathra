@@ -104,6 +104,15 @@ MAINTENANCE = ("backend-allowed-origin.yml",)
 # before anything is removed.
 SCHEDULED = ("database-retention.yml",)
 
+# The workflow that checks the deployed pair rather than the code — tasks 25.3 and 25.4.
+#
+# `live-acceptance.yml` reads production, and in its authenticated tier signs in as two dedicated
+# test accounts and writes one saved location to one of them before deleting it again. That is the
+# only write, it reaches nobody's own account, and it never touches the database directly: it holds
+# no privileged connection, no service-role key, and no Render or Vercel credential. Its
+# credential-free tier runs through a client that refuses any method but GET, HEAD and OPTIONS.
+ACCEPTANCE = ("live-acceptance.yml",)
+
 
 @pytest.fixture(scope="module")
 def release(repo_root: Path) -> dict[str, Any]:
@@ -367,6 +376,7 @@ def test_only_the_release_pipeline_reads_a_repository_secret(repo_root: Path) ->
         - set(RELEASE_PIPELINES)
         - set(MAINTENANCE)
         - set(SCHEDULED)
+        - set(ACCEPTANCE)
     )
     assert not unclassified, (
         f"a workflow exists that is neither ordinary CI nor a release pipeline: {unclassified}. "
@@ -686,6 +696,77 @@ def test_the_retention_job_can_do_nothing_but_retain(repo_root: Path) -> None:
             command = str(step.get("run", ""))
             assert "secrets." not in command, f"{name} names a secret in a command: {command!r}"
             assert "hide_password=False" not in command, f"{name} could render a DSN"
+
+
+def test_the_acceptance_workflow_only_runs_by_hand(repo_root: Path) -> None:
+    """It reads production and signs in as real accounts, so nothing but a person may start it."""
+    for name in ACCEPTANCE:
+        path = repo_root / ".github" / "workflows" / name
+        assert path.is_file(), f"{name} is classified as acceptance but does not exist"
+
+        # PyYAML reads a bare `on` key as the boolean `True` — YAML 1.1 spells true that way.
+        parsed: dict[Any, Any] = yaml.safe_load(path.read_text())
+        assert set(parsed[True]) == {"workflow_dispatch"}, (
+            f"{name} has triggers beyond workflow_dispatch: {sorted(parsed[True])}"
+        )
+        assert parsed["jobs"]["verify"].get("timeout-minutes"), f"{name} is unbounded"
+
+
+def test_the_acceptance_workflow_holds_no_privileged_credential(repo_root: Path) -> None:
+    """It is the least privileged credential-holding workflow here, and stays that way.
+
+    Two dedicated account passwords and a public client key: that is all it needs to prove one
+    account cannot read another's data. A service-role key would let it provision accounts, a
+    database connection would let it check isolation by reading the tables directly, and either
+    would mean the suite was no longer testing what a caller can actually do.
+    """
+    for name in ACCEPTANCE:
+        rendered = (repo_root / ".github" / "workflows" / name).read_text()
+
+        for forbidden in (
+            "SUPABASE_SERVICE_ROLE_KEY",
+            "WEATHRA_PRIVILEGED_SERVICE_ROLE_KEY",
+            "DATABASE_URL_PRIVILEGED",
+            "OPENROUTER_API_KEY",
+            "RENDER_API_KEY",
+            "VERCEL_TOKEN",
+            "api.render.com",
+        ):
+            assert forbidden not in rendered, f"{name} has {forbidden} in scope"
+
+        for forbidden in ("alembic", "weathra-retention", "vercel "):
+            assert forbidden not in rendered, f"{name} can run `{forbidden}`"
+
+        assert re.search(r"\bDATABASE_URL\b(?!_)", rendered) is None, (
+            f"{name} has a database connection in scope; it must check the deployment through its API"
+        )
+        for step in yaml.safe_load(rendered)["jobs"]["verify"]["steps"]:
+            command = str(step.get("run", ""))
+            assert "secrets." not in command, f"{name} names a secret in a command: {command!r}"
+
+
+def test_the_acceptance_workflow_checks_the_canonical_deployment(repo_root: Path) -> None:
+    """The addresses are written down, so a run's log says which deployment it examined.
+
+    A suite that defaulted silently could check a stale URL and report a healthy deployment nobody
+    is using.
+    """
+    for name in ACCEPTANCE:
+        parsed: dict[Any, Any] = yaml.safe_load(
+            (repo_root / ".github" / "workflows" / name).read_text()
+        )
+        environment = parsed["jobs"]["verify"]["env"]
+        assert environment["WEATHRA_LIVE_FRONTEND_URL"] == "https://weathra-bice.vercel.app"
+        assert environment["WEATHRA_LIVE_BACKEND_URL"] == "https://weathra-backend.onrender.com"
+
+        commands = " ".join(str(step.get("run", "")) for step in parsed["jobs"]["verify"]["steps"])
+        assert "-m deployed" in commands, (
+            f"{name} does not select the deployed marker, so it would run the ordinary suite"
+        )
+        assert "-rs" in commands, (
+            f"{name} does not report skip reasons, so a run could not say whether the "
+            "authenticated tier ran"
+        )
 
 
 # ------------------------------------------------------------------ 6. the frontend release (23.5)

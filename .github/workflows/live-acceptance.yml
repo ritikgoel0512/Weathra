@@ -1,0 +1,87 @@
+name: live-acceptance
+
+# Weathra — the deployed pair, checked from outside. Tasks 25.3 and 25.4.
+#
+# Every other suite tests Weathra as source. This one asks whether the *deployed* frontend and
+# backend behave the way those suites say the code does, which nothing in-process can answer.
+#
+# **Two tiers.** The credential-free tier runs on every dispatch and needs nothing configured: the
+# pages production must render, the routes it must redirect, readiness, the public weather surfaces
+# with their attribution, the CORS answer a browser is actually given, and group 18's rejection
+# half — every protected endpoint refusing every shape of foreign token. It runs through a client
+# that cannot write: `read_only_client` refuses anything but GET, HEAD and OPTIONS before a request
+# is sent, so no check here can create a row in anybody's account.
+#
+# The authenticated tier needs two dedicated deployed accounts and *skips*, naming the exact
+# secrets, when they are absent — so a run without them still verifies everything that does not
+# need them rather than failing wholesale. It signs in the way the browser does, with Supabase's
+# password grant and the public client key. No service-role key, nothing minted, no account
+# provisioned: `test_the_deployed_pair` has no path that produces a token the backend would accept.
+#
+# Hand-dispatched only. It reads production and, in the authenticated tier, writes one saved
+# location to a dedicated test account and deletes it again — never to anybody's own account, and
+# never to the database directly. It holds no privileged connection, no service-role key and no
+# Render or Vercel credential; `backend/tests/test_release_workflow.py` classifies it as
+# `ACCEPTANCE` and asserts each absence.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  # Its own group. It must neither queue behind a release nor delay one, and two concurrent runs
+  # would have the two test accounts writing over each other's fixture.
+  group: live-acceptance
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: check the deployed pair
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: weathra/backend
+
+    env:
+      # The deployed pair. Written here rather than defaulted silently, so a run's log says which
+      # deployment it examined.
+      WEATHRA_LIVE_FRONTEND_URL: https://weathra-bice.vercel.app
+      WEATHRA_LIVE_BACKEND_URL: https://weathra-backend.onrender.com
+
+      # The authenticated tier's configuration. All six absent is a supported state: the tier
+      # skips and says which are missing. The two passwords are the only secrets here; the URL and
+      # the anon key are public by design — the browser bundle carries both.
+      WEATHRA_LIVE_SUPABASE_URL: ${{ secrets.WEATHRA_LIVE_SUPABASE_URL }}
+      WEATHRA_LIVE_SUPABASE_ANON_KEY: ${{ secrets.WEATHRA_LIVE_SUPABASE_ANON_KEY }}
+      WEATHRA_LIVE_USER_A_EMAIL: ${{ secrets.WEATHRA_LIVE_USER_A_EMAIL }}
+      WEATHRA_LIVE_USER_A_PASSWORD: ${{ secrets.WEATHRA_LIVE_USER_A_PASSWORD }}
+      WEATHRA_LIVE_USER_B_EMAIL: ${{ secrets.WEATHRA_LIVE_USER_B_EMAIL }}
+      WEATHRA_LIVE_USER_B_PASSWORD: ${{ secrets.WEATHRA_LIVE_USER_B_PASSWORD }}
+
+      # `Settings()` is constructed while collecting the suite. A placeholder is enough — nothing
+      # in these checks reads the local configuration, and pointing it at the real project would
+      # imply a relationship this job does not have.
+      SUPABASE_URL: https://placeholder.supabase.co
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: weathra/backend/constraints.txt
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install --constraint constraints.txt -e ".[dev]"
+
+      # `-m deployed` is the whole selection: the marker is deselected by default everywhere else,
+      # so this suite cannot run by accident in ordinary CI. `-rs` reports skips with their reason,
+      # which is how a run says whether the authenticated tier ran and, if not, what it needs.
+      - name: Check the deployed pair
+        run: pytest -m deployed -v -rs
