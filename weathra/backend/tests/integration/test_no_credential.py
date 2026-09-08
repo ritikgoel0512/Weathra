@@ -14,6 +14,7 @@ with the API in group 15, where those routes exist to be called.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, date, datetime
 
 import httpx
@@ -96,15 +97,35 @@ def _provider() -> StubProvider:
     return StubProvider(daily_values=[11.0, 12.5, 13.0, 10.5, 14.0, 12.0, 11.5])
 
 
+# A configuration identifier by shape rather than by name — see the note in `test_api.py`. The
+# property is that no such identifier reaches a person reading a weather screen, and a list of names
+# would only ever cover the variables that exist today.
+CONFIGURATION_SHAPED = re.compile(r"\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b")
+
 # =========================================================================== the agent surface
 
 
-def test_agent_construction_raises_and_names_the_missing_configuration(
+def test_agent_construction_refuses_without_naming_configuration_to_a_reader(
     uncredentialled: Settings,
 ) -> None:
+    """The refusal is diagnosable by whoever operates the service, and legible to everyone else.
+
+    It said "Check OPENROUTER_API_KEY" until 2026-09-08, and that string travels: this exception's
+    message is the message the agent surface returns, so a signed-in visitor asking about the
+    weather was handed an instruction they could not act on about a variable they should not have to
+    know exists. What an operator needs did not move out of reach — it moved into ``details``, which
+    is where the error envelope carries field-level specifics, and into the log line beside it.
+    """
     with pytest.raises(AgentNotConfigured) as raised:
         build_client(httpx.AsyncClient(), uncredentialled)
-    assert "OPENROUTER_API_KEY" in str(raised.value)
+
+    message = str(raised.value)
+    assert not CONFIGURATION_SHAPED.search(message), message
+    assert "unaffected" in message, "the refusal has to say what still works"
+    assert raised.value.details == {
+        "missing": "inference_credential",
+        "provider": uncredentialled.llm_provider,
+    }
 
 
 def test_the_provider_reports_itself_unconfigured_without_disclosing_anything(

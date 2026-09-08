@@ -13,6 +13,7 @@ Row Level Security than the one that ships.
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from contextlib import AbstractAsyncContextManager
 from typing import Any
@@ -31,6 +32,13 @@ from weathra.domain.errors import ProviderRateLimited, ProviderTimeout, Provider
 from weathra.domain.weather import Granularity, Measure
 
 pytestmark = pytest.mark.db
+
+# A configuration identifier, by shape rather than by name: `SCREAMING_SNAKE_CASE` of two or more
+# parts. By shape because a list of names only ever covers the variables that exist today, and the
+# property being asserted is that *no* such identifier reaches a person reading a weather screen.
+# The frontend carries the same pattern in `lib/api/errors.ts`, as the second line of the same
+# defence.
+CONFIGURATION_SHAPED = re.compile(r"\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b")
 
 PREFIX = "/api/v1"
 
@@ -1422,7 +1430,15 @@ async def test_with_no_credential_ask_is_503_and_a_public_endpoint_still_succeed
         )
         assert refused.status_code == 503
         assert refused.json()["error"]["code"] == "agent_not_configured"
-        assert "OPENROUTER_API_KEY" in refused.json()["error"]["message"]
+        # The message is for the person on the weather screen; the diagnosis is in `details` and in
+        # the log. It named the environment variable until 2026-09-08, when a signed-in visitor was
+        # shown an instruction they could not act on about a variable they should not have to know
+        # exists. What the surface owes them is that the rest of Weathra is unaffected.
+        message = refused.json()["error"]["message"]
+        assert "OPENROUTER_API_KEY" not in message
+        assert not CONFIGURATION_SHAPED.search(message), message
+        assert "unaffected" in message
+        assert refused.json()["error"]["details"]["missing"] == "inference_credential"
 
         public = await api.client.get(
             f"{PREFIX}/weather/forecast", params={"location": "Berlin", "days": 3}
@@ -1884,5 +1900,8 @@ async def test_every_public_capability_serves_with_no_credential_while_the_agent
         )
         assert refused.status_code == 503
         assert refused.json()["error"]["code"] == "agent_not_configured"
-        assert "OPENROUTER_API_KEY" in refused.json()["error"]["message"]
+        # Named for whoever operates the service, in `details`; never for the person reading it.
+        message = refused.json()["error"]["message"]
+        assert not CONFIGURATION_SHAPED.search(message), message
+        assert refused.json()["error"]["details"]["missing"] == "inference_credential"
         assert not api.app.state.inference.built, "no client was ever constructed"
