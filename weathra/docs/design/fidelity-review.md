@@ -383,3 +383,52 @@ keep their internal geometry, so the design language survives rather than being 
 It is **not** evidence about the product. Every figure in it is transcribed from a picture; the
 fixture banner says so on screen for exactly that reason. It is not an approval either — the owner's
 visual sign-off against the eight PNGs is a separate act, and nothing here records one.
+
+## 7. The production regression audit — 2026-09-08
+
+Production drew a report that parts of the UI had drifted from the approved fidelity work. This
+section records what was checked and what was found, because the answer turned out to be worth
+writing down: **nothing in the code had drifted at all.**
+
+### What was compared
+
+Everything under `frontend/app/`, `frontend/components/` and every stylesheet, between the fidelity
+checkpoint `5e4e71f` and `main`. Three commits touched `frontend/` in that range, and the diff is:
+
+| File | What changed |
+|---|---|
+| `components/settings/sections.tsx` | 11 lines of the default-location control's data flow — the saved-location fix. No styling. |
+| `components/settings/settings.test.tsx`, `lib/settings/preferences*.ts` | That fix and its tests. |
+| `lib/api/schema.ts` | Generated from `openapi.json`. |
+| `vercel.json` | `git.deploymentEnabled.main: false`. Not rendered. |
+
+**No CSS module, no design token, no layout, no typography, no card geometry, no rail proportion and
+no responsive rule changed.** Spacing, density and hierarchy on all eight approved screens are the
+files that were reviewed in §6, unmodified. There was no regression to restore.
+
+### Then why does production look different from the PNGs?
+
+Because §6 measured *geometry* in fixture mode, and production renders that geometry with real data.
+The gap is content, and three things account for all of it:
+
+1. **The Dashboard's briefing was replaced by an empty state.** Its largest panel read "No default
+   location saved" — because saving a default was impossible for any coordinate-named place
+   (`fix(locations): preserve saved location identity`). That is one bug wearing the costume of a
+   design regression, and it is fixed.
+2. **City imagery is drawn artwork, not photographs.** No provider credential is configured, so the
+   chain starts below tier 1 and lands on the committed SVGs — "a supported configuration, not a
+   broken one" ([`city-imagery.md`](../city-imagery.md)). §6 recorded the same thing about screens 01
+   and 04 when it compared them. The frame's aspect ratio is fixed before any tier answers, so the
+   layout does not shift; only the picture differs.
+3. **Real content is not sample content.** Fixture mode fills every panel; a real account has the
+   saved locations, threads and evidence records it happens to have, and empty and sparse states are
+   part of the design rather than a failure of it.
+
+### What was deliberately not done
+
+The fixtures were **not** enabled in production. `NEXT_PUBLIC_VISILY_FIDELITY_FIXTURES` stays off by
+default and unset in the Vercel project: the goal is the approved design rendering real data, and a
+build that served sample content would look like the artifacts while telling every visitor about
+weather nobody measured. Nothing was restyled to close a gap that measurement did not find, either —
+changing spacing to match a screenshot of different content would have moved the product *away* from
+the approved geometry.
