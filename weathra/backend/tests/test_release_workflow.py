@@ -48,6 +48,14 @@ ORDINARY_CI = ("backend.yml", "frontend.yml")
 # keeps that second statement true.
 FRONTEND_RELEASE = ".github/workflows/frontend-release.yml"
 VERCEL_PROJECT = "weathra/frontend/vercel.json"
+
+# The names the identifiers reach the CLI under, and deliberately not VERCEL_ORG_ID and
+# VERCEL_PROJECT_ID. The CLI auto-detects that pair and, finding both, resolves the project through
+# requests a team-scoped token is refused on — see
+# `test_the_frontend_release_hides_the_identifiers_from_the_cli`. The repository secrets keep their
+# own names; only what the CLI process sees is renamed.
+ORG_ID_VAR = "WEATHRA_VERCEL_ORG_ID"
+PROJECT_ID_VAR = "WEATHRA_VERCEL_PROJECT_ID"
 RELEASE_PIPELINES = ("release.yml", "frontend-release.yml")
 
 # Neither ordinary CI nor the release pipeline, and recorded here because
@@ -491,46 +499,134 @@ def _vercel_invocations(frontend_release: dict[str, Any]) -> dict[str, str]:
 def test_the_frontend_release_targets_the_existing_vercel_project(
     frontend_release: dict[str, Any],
 ) -> None:
-    """The linking assertion, and the one that regressed.
+    """The linking assertion, and the one that regressed twice.
 
     `vercel pull` cannot bring anything down until it has resolved *which* project it is talking
-    about, and the identifiers alone are not enough to resolve one that a team owns: the CLI's
-    owner lookup goes out with no team attached unless the scope is named, and a team-owned project
-    answers that with a 403 rendered as "Could not retrieve Project Settings. To link your Project,
-    remove the `.vercel` directory and deploy again" — misleading on a runner, which has no
-    `.vercel` directory to remove.
-
-    So both commands that reach the API name the team and the project explicitly. Asserted per
-    command rather than by searching the file, because a flag on the pull that is missing from the
-    deploy is the shape this would come back in.
+    about, and for a team-scoped token `--project` is the only mechanism that resolves one without
+    a request that token is refused. Asserted per command rather than by searching the file,
+    because a flag on the pull that is missing from the deploy is the shape this would come back
+    in.
     """
     invocations = _vercel_invocations(frontend_release)
     for subcommand in ("pull", "deploy"):
         assert subcommand in invocations, f"{FRONTEND_RELEASE} never runs `vercel {subcommand}`"
         command = invocations[subcommand]
-        assert '--scope "$VERCEL_ORG_ID"' in command, (
-            f"`vercel {subcommand}` does not name the team that owns the project; "
-            "without --scope the CLI resolves the project outside any team and is refused"
-        )
-        assert '--project "$VERCEL_PROJECT_ID"' in command, (
+        assert f'--project "${PROJECT_ID_VAR}"' in command, (
             f"`vercel {subcommand}` does not name the existing project"
         )
+
+
+def test_the_frontend_release_never_names_the_scope(frontend_release: dict[str, Any]) -> None:
+    """`--scope` cannot be used with this token, and its failure is not obvious from the message.
+
+    The CLI resolves `--scope` *through the user identity*: `getUser` runs first, and the scope
+    string is matched against the user and their team list before any direct team lookup is tried.
+    A Vercel access token scoped to a team is blocked from the user-level `/v2/user` endpoint —
+    Vercel's own support confirms this — so `--scope` exits with "Not able to load user because of
+    unexpected error: User not found. (404)" before it ever reaches the project.
+
+    A team-scoped token needs no scope flag: Vercel infers the team from the token. So this is not
+    a preference. Reinstating `--scope` breaks the release, and the message it breaks with does not
+    say why.
+    """
+    for subcommand, command in _vercel_invocations(frontend_release).items():
+        assert "--scope" not in command, (
+            f"`vercel {subcommand}` passes --scope, which resolves the team through a user-level "
+            f"lookup a team-scoped token is refused: {command!r}"
+        )
+        assert "--team" not in command, (
+            f"`vercel {subcommand}` passes --team, which is an alias for --scope and fails the "
+            f"same way: {command!r}"
+        )
+
+
+def test_the_frontend_release_hides_the_identifiers_from_the_cli(
+    frontend_release: dict[str, Any],
+) -> None:
+    """The identifiers must not reach the CLI process under the names it auto-detects.
+
+    This is the fix, and it is the kind that looks like a typo. The CLI detects `VERCEL_ORG_ID` and
+    `VERCEL_PROJECT_ID` on its own, and when it finds *both* it takes its implicit env-link path:
+    the project lookup goes out with `?teamId=` appended and an unscoped team lookup goes out
+    beside it. Vercel documents that a team- or project-scoped token needs neither — it infers both
+    from the token — and those are the requests our team-scoped token is refused on, reported as
+    the misleading "Could not retrieve Project Settings … remove the `.vercel` directory".
+
+    Under neutral names the CLI cannot find them, so it resolves the project from `--project` and
+    takes the team from the project's own `accountId`. Restoring either name silently puts the
+    release back on the broken path, so both absences are asserted, not just the presences.
+    """
+    env = frontend_release["jobs"]["deploy"]["env"]
+    for name in ("VERCEL_ORG_ID", "VERCEL_PROJECT_ID"):
+        assert name not in env, (
+            f"{FRONTEND_RELEASE} exports {name} to the CLI, which puts it back on the implicit "
+            "env-link path a team-scoped token is refused on"
+        )
+    for step in _frontend_steps(frontend_release):
+        for name in (step.get("env") or {}):
+            assert name not in ("VERCEL_ORG_ID", "VERCEL_PROJECT_ID"), (
+                f"step {step.get('name')!r} exports {name} to the CLI"
+            )
 
 
 def test_the_frontend_release_consumes_the_project_identifiers(
     frontend_release: dict[str, Any],
 ) -> None:
-    """The identifiers come from repository secrets, and the job passes both.
+    """The identifiers still come from the same repository secrets, under neutral names.
 
-    The CLI refuses a half-configured pair — one without the other is an error, not a fallback —
-    so this asserts the job environment carries both and that each is a secret reference rather
-    than a value written into the file.
+    Renaming what the CLI sees must not turn into renaming what GitHub holds: the secrets keep
+    their names, and this asserts each neutral variable is a reference to the original secret
+    rather than a value written into the file.
     """
     env = frontend_release["jobs"]["deploy"]["env"]
-    for name in ("VERCEL_ORG_ID", "VERCEL_PROJECT_ID"):
-        assert name in env, f"{FRONTEND_RELEASE} does not carry {name}"
-        assert f"secrets.{name}" in env[name], (
-            f"{name} is not read from a repository secret: {env[name]!r}"
+    for local, secret in ((ORG_ID_VAR, "VERCEL_ORG_ID"), (PROJECT_ID_VAR, "VERCEL_PROJECT_ID")):
+        assert local in env, f"{FRONTEND_RELEASE} does not carry {local}"
+        assert f"secrets.{secret}" in env[local], (
+            f"{local} is not read from the {secret} repository secret: {env[local]!r}"
+        )
+
+
+def test_the_frontend_release_proves_the_project_belongs_to_the_team(
+    frontend_release: dict[str, Any],
+) -> None:
+    """The org id stops being a lookup input and becomes the check on the answer.
+
+    An identifier handed to a lookup is an assumption. `vercel pull` writes the link it actually
+    resolved to `.vercel/project.json`, so reading that file's `orgId` back and holding it to the
+    team we expect proves the project the CLI found is the one the Weathra team owns — which is
+    strictly more than passing the id in ever proved, and it costs no request the token is refused.
+
+    The check has to be fatal and it has to come before the build: a project resolved under the
+    wrong team must not be built for, let alone promoted.
+    """
+    steps = _frontend_steps(frontend_release)
+    matching = [
+        (index, step)
+        for index, step in enumerate(steps)
+        if ".vercel/project.json" in str(step.get("run", ""))
+    ]
+    assert matching, (
+        f"{FRONTEND_RELEASE} never checks the project the pull resolved against "
+        f"{ORG_ID_VAR}; the release could deploy a project owned by another team"
+    )
+    index, step = matching[0]
+    body = str(step["run"])
+    assert f"${ORG_ID_VAR}" in body, (
+        f"the check does not compare against {ORG_ID_VAR}: {body!r}"
+    )
+    assert "orgId" in body, "the check does not read the resolved project's orgId"
+    assert "exit 1" in body, "the check does not fail when the team does not match"
+    assert not step.get("continue-on-error"), "the team check continues on error"
+
+    for name, position in (("vercel build", None), ("vercel deploy", None)):
+        at = next(
+            position
+            for position, candidate in enumerate(steps)
+            if name in str(candidate.get("run", ""))
+        )
+        assert at > index, (
+            f"`{name}` runs before the team check, so a project resolved under the wrong team "
+            "would be built or promoted"
         )
 
 
@@ -576,7 +672,7 @@ def test_the_frontend_release_cannot_create_a_vercel_project(
         if subcommand == "build":
             continue
         if "--yes" in command or "-y " in command:
-            assert '--project "$VERCEL_PROJECT_ID"' in command, (
+            assert f'--project "${PROJECT_ID_VAR}"' in command, (
                 f"`vercel {subcommand}` auto-confirms without naming the project, so an "
                 f"unresolved project would be created rather than reported: {command!r}"
             )

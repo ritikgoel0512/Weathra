@@ -429,21 +429,49 @@ built — and `vercel deploy --prebuilt --prod` promotes it. It then asks the de
 promoted for `/sign-in` and fails unless it answers 200, because an upload that succeeded is not a
 frontend that renders.
 
-`vercel pull` and `vercel deploy` both pass `--scope "$VERCEL_ORG_ID"` and
-`--project "$VERCEL_PROJECT_ID"`, and both flags earn their place. `--scope` establishes the team
-context for the run: without it the CLI reads the two identifiers but performs its owner lookup
-with no team attached, and a team-owned project answers 403 — surfaced as *"Could not retrieve
-Project Settings. To link your Project, remove the `.vercel` directory and deploy again"*, which is
-a red herring on a runner that has no `.vercel` directory to remove. `--project` names the existing
-project by id, which turns "cannot resolve it" into a hard failure; `--yes` on its own would let the
-CLI read an unresolved project as licence to create one named after the directory it ran in, and
-then deploy to that instead. `test_the_frontend_release_targets_the_existing_vercel_project` and
-`test_the_frontend_release_cannot_create_a_vercel_project` hold both halves. `vercel build` names
-neither, deliberately: it consumes the `.vercel/project.json` and `.vercel/.env.production.local`
-the pull wrote, rather than re-resolving the project and risking disagreement with what was pulled.
+**How the runner finds the project**, which took three failed runs to get right and is entirely
+determined by the token's scope. `VERCEL_TOKEN` is an access token scoped to the `weathra` team,
+which is the recommended shape for CI — a leaked token reaches that team and nothing else — but it
+constrains how the project may be resolved:
+
+- The identifiers reach the job as `WEATHRA_VERCEL_ORG_ID` and `WEATHRA_VERCEL_PROJECT_ID`, **not**
+  under their own names. The repository secrets are still called `VERCEL_ORG_ID` and
+  `VERCEL_PROJECT_ID`; only what the CLI process sees is renamed. The CLI auto-detects that pair
+  and, finding both, takes its implicit env-link path: the project lookup goes out with `?teamId=`
+  appended and an unscoped team lookup goes out beside it. Vercel documents that a team- or
+  project-scoped token needs neither — it infers both from the token, and only full-account tokens
+  still need `?teamId=` — and those are the requests this token is refused on. The refusal arrives
+  as *"Could not retrieve Project Settings. To link your Project, remove the `.vercel` directory and
+  deploy again"* ([vercel/vercel#10874](https://github.com/vercel/vercel/issues/10874), open since
+  2023): a permission 403 dressed up as a stale link, on a runner that has no `.vercel` directory.
+- **No `--scope`.** The CLI resolves `--scope` *through the user identity* — `getUser` runs first,
+  and the scope is matched against the user and their team list before any direct team lookup — and
+  a team-scoped token is blocked from the user-level `/v2/user` endpoint. So `--scope` fails with
+  *"Not able to load user because of unexpected error: User not found. (404)"* before it reaches the
+  project at all. A team-scoped token needs no scope flag.
+- **`--project "$WEATHRA_VERCEL_PROJECT_ID"`** on the pull and the deploy is therefore the whole of
+  the linking mechanism. It also sets the CLI's `failIfNotFound`, which is what makes an
+  unresolvable project a hard failure: `--yes` on its own would let the CLI read one as licence to
+  create a project named after the directory it ran in, and deploy to that instead.
+- The org id is then used **only as an assertion**. `vercel pull` writes the link it resolved to
+  `.vercel/project.json`, and the next step holds that file's `orgId` to
+  `WEATHRA_VERCEL_ORG_ID` and fails before the build if they differ. An identifier handed to a
+  lookup is an assumption; this is the resolved answer being checked, which is strictly stronger,
+  and it costs no request the token is refused.
+- `vercel build` names nothing, deliberately: it consumes the `.vercel/project.json` and
+  `.vercel/.env.production.local` the pull wrote and the assertion just vouched for, rather than
+  re-resolving the project and risking disagreement with what was pulled.
+
+`test_the_frontend_release_hides_the_identifiers_from_the_cli`,
+`test_the_frontend_release_never_names_the_scope`,
+`test_the_frontend_release_targets_the_existing_vercel_project`,
+`test_the_frontend_release_proves_the_project_belongs_to_the_team` and
+`test_the_frontend_release_cannot_create_a_vercel_project` hold those five properties. The absences
+are asserted as well as the presences: restoring either auto-detected variable name, or adding
+`--scope` back, silently puts the release on the path that cannot work.
 
 Nothing about this requires a developer's local `.vercel` directory — the runner derives it from the
-two identifiers on every run, and `.gitignore` keeps the local one out of the tree.
+project id on every run, and `.gitignore` keeps the local one out of the tree.
 
 `weathra/frontend/vercel.json` sets `git.deploymentEnabled.main` to `false`, which is the frontend's
 half of `autoDeployTrigger: "off"` and exists for the same reason. Vercel's default, once a project
