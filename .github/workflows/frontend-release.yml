@@ -41,7 +41,6 @@ jobs:
   deploy:
     name: build and deploy to Vercel
     runs-on: ubuntu-latest
-    environment: production
 
     env:
       # `vercel pull` needs both to know which project it is talking about. They are identifiers,
