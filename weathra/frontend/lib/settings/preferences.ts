@@ -25,7 +25,7 @@
  */
 
 import type { Location, PreferenceSource, PreferenceUpdate, PreferenceView, UnitSystem } from "@/lib/api/schema";
-import { qualifiedName } from "@/lib/locations/place";
+import { isSamePlace, placeKey, qualifiedName } from "@/lib/locations/place";
 
 /* ---------------------------------------------------------------------- units */
 
@@ -81,12 +81,25 @@ export function horizonLabel(days: number): string {
 
 /* ---------------------------------------------------------------------- draft */
 
-/** The form's working copy of the preferences. */
+/**
+ * The form's working copy of the preferences.
+ *
+ * `defaultLocation` holds the *location*, not its name, and that is the fix for a bug that made
+ * every coordinate-saved place unusable as a default. A location resolved from coordinates is
+ * called `"48.1374, 11.5755"` — the backend's own coordinate label, because Open-Meteo has no
+ * reverse geocoding and `resolve_coordinates` always labels a place with its coordinates. Sending
+ * that display name back as `default_location` asked the geocoder for a *city* of that name, and
+ * it answered, correctly, "No location matches '48.1374, 11.5755'."
+ *
+ * Holding the location means the identity never has to survive a round trip through prose:
+ * coordinates go back, and the backend re-resolves the same place — with its timezone and its
+ * identifier — without consulting a name at all.
+ */
 export interface PreferenceDraft {
   readonly unitSystem: UnitSystem;
   readonly horizonDays: number;
-  /** The default location's canonical name, or `""` for no default. */
-  readonly defaultLocation: string;
+  /** The chosen default location, or `null` for no default. */
+  readonly defaultLocation: Location | null;
 }
 
 /** The draft a form opens with: exactly what the backend reports, with nothing filled in. */
@@ -94,7 +107,7 @@ export function draftFrom(view: PreferenceView): PreferenceDraft {
   return {
     unitSystem: view.unit_system,
     horizonDays: view.forecast_horizon_days,
-    defaultLocation: view.default_location ? qualifiedName(view.default_location) : "",
+    defaultLocation: view.default_location ?? null,
   };
 }
 
@@ -104,8 +117,14 @@ export function isDirty(draft: PreferenceDraft, view: PreferenceView): boolean {
   return (
     draft.unitSystem !== stored.unitSystem ||
     draft.horizonDays !== stored.horizonDays ||
-    draft.defaultLocation.trim() !== stored.defaultLocation
+    !samePlaceOrBothUnset(draft.defaultLocation, stored.defaultLocation)
   );
+}
+
+/** Two default-location choices being the same decision, including "no default" twice over. */
+function samePlaceOrBothUnset(left: Location | null, right: Location | null): boolean {
+  if (left === null || right === null) return left === right;
+  return isSamePlace(left, right);
 }
 
 /**
@@ -119,17 +138,22 @@ export function updateFrom(draft: PreferenceDraft, view: PreferenceView): Prefer
   const update: {
     unit_system?: UnitSystem;
     forecast_horizon_days?: number;
-    default_location?: string;
+    latitude?: number;
+    longitude?: number;
     clear_default_location?: boolean;
   } = {};
 
   if (draft.unitSystem !== stored.unitSystem) update.unit_system = draft.unitSystem;
   if (draft.horizonDays !== stored.horizonDays) update.forecast_horizon_days = draft.horizonDays;
 
-  const wanted = draft.defaultLocation.trim();
-  if (wanted !== stored.defaultLocation) {
-    if (wanted === "") update.clear_default_location = true;
-    else update.default_location = wanted;
+  if (!samePlaceOrBothUnset(draft.defaultLocation, stored.defaultLocation)) {
+    if (draft.defaultLocation === null) update.clear_default_location = true;
+    else {
+      // By coordinates, never by name. Every choice here is a location the backend already
+      // resolved, so its name is a label to read rather than a query to re-run.
+      update.latitude = draft.defaultLocation.latitude;
+      update.longitude = draft.defaultLocation.longitude;
+    }
   }
 
   return Object.keys(update).length === 0 ? null : update;
@@ -168,15 +192,26 @@ export function sourceNote(source: PreferenceSource | null): string {
 export function defaultLocationChoices(
   saved: readonly Location[],
   current: Location | null | undefined,
-): { value: string; label: string }[] {
+): { value: string; label: string; location: Location }[] {
   const seen = new Set<string>();
-  const choices: { value: string; label: string }[] = [];
+  const choices: { value: string; label: string; location: Location }[] = [];
 
   for (const place of [...(current ? [current] : []), ...saved]) {
-    const value = qualifiedName(place);
+    // Keyed by where the place is, not by what it is called: two saved places can share a
+    // display name, and a place whose only name is its coordinates has no other key. This is the
+    // same identity the backend derives `Location.identifier` from.
+    const value = placeKey(place);
     if (seen.has(value)) continue;
     seen.add(value);
-    choices.push({ value, label: value });
+    choices.push({ value, label: qualifiedName(place), location: place });
   }
   return choices;
+}
+
+/** The choice a select's value names, or null for "no default". */
+export function choiceFor(
+  choices: readonly { value: string; location: Location }[],
+  value: string,
+): Location | null {
+  return choices.find((choice) => choice.value === value)?.location ?? null;
 }

@@ -42,8 +42,10 @@ import type {
 } from "@/lib/api/schema";
 import { useApiMutation, useApiQuery } from "@/lib/query/hooks";
 import { PREFERENCES_KEY, SAVED_LOCATIONS_KEY, THREADS_KEY } from "@/lib/query/keys";
+import { placeKey } from "@/lib/locations/place";
 import {
   UNIT_OPTIONS,
+  choiceFor,
   defaultLocationChoices,
   draftFrom,
   horizonChoicesFor,
@@ -232,10 +234,15 @@ export function PreferenceForm({ view, saved }: PreferenceFormProps): ReactNode 
               label="Default location"
               description="Chosen from the places you have saved, so it is never ambiguous."
               name="default_location"
-              value={draft.defaultLocation}
+              value={draft.defaultLocation ? placeKey(draft.defaultLocation) : ""}
               disabled={busy}
               onChange={(event) =>
-                setDraft((current) => ({ ...current, defaultLocation: event.target.value }))
+                setDraft((current) => ({
+                  ...current,
+                  // The option's value is a place key, so the location itself comes back out of
+                  // the choices rather than being reconstructed from the label a person read.
+                  defaultLocation: choiceFor(locationChoices, event.target.value),
+                }))
               }
             >
               <option value="">No default location</option>

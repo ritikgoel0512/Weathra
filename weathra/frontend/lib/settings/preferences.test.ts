@@ -16,6 +16,7 @@ import {
   HORIZON_DAY_CHOICES,
   MAXIMUM_HORIZON_DAYS,
   UNIT_OPTIONS,
+  choiceFor,
   defaultLocationChoices,
   draftFrom,
   horizonChoicesFor,
@@ -36,6 +37,16 @@ const BERLIN = {
   region: "Berlin",
   country: "Germany",
   country_code: "DE",
+} as Location;
+
+// A place whose only name is where it is. Production makes these routinely: Open-Meteo has no
+// reverse geocoding, so the backend labels every coordinate-resolved location this way — which is
+// why sending a default location back *by name* could not work for any of them.
+const UNNAMED = {
+  display_name: "48.1374, 11.5755",
+  latitude: 48.1374,
+  longitude: 11.5755,
+  timezone: "Europe/Berlin",
 } as Location;
 
 const TOKYO = {
@@ -59,16 +70,16 @@ function view(overrides: Partial<PreferenceView> = {}): PreferenceView {
 }
 
 describe("draftFrom", () => {
-  it("opens on exactly what the backend reports, with the default location canonically named", () => {
+  it("opens on exactly what the backend reports, holding the location itself", () => {
     expect(draftFrom(view())).toEqual({
       unitSystem: "metric",
       horizonDays: 7,
-      defaultLocation: "Berlin, Berlin, DE",
+      defaultLocation: BERLIN,
     });
   });
 
   it("shows no default location as no default location, never as a placeholder", () => {
-    expect(draftFrom(view({ default_location: null })).defaultLocation).toBe("");
+    expect(draftFrom(view({ default_location: null })).defaultLocation).toBeNull();
   });
 });
 
@@ -87,28 +98,39 @@ describe("updateFrom", () => {
     expect(updateFrom(draft, view())).toEqual({ forecast_horizon_days: 10 });
   });
 
-  it("sends the canonical name when the default location changed", () => {
-    const draft = { ...draftFrom(view()), defaultLocation: "Tokyo, Tokyo, JP" };
-    expect(updateFrom(draft, view())).toEqual({ default_location: "Tokyo, Tokyo, JP" });
+  it("sends coordinates when the default location changed, never a name", () => {
+    const draft = { ...draftFrom(view()), defaultLocation: TOKYO };
+    expect(updateFrom(draft, view())).toEqual({ latitude: 35.6895, longitude: 139.6917 });
+  });
+
+  it("saves a place whose only name is its coordinates", () => {
+    // The production bug. Sending `display_name` here asked the backend to geocode a city called
+    // "48.1374, 11.5755", which failed with "No location matches '48.1374, 11.5755'." — so a
+    // place Weathra had resolved and saved could not become the default it was offered as.
+    const draft = { ...draftFrom(view()), defaultLocation: UNNAMED };
+    const update = updateFrom(draft, view());
+    expect(update).toEqual({ latitude: 48.1374, longitude: 11.5755 });
+    expect(update).not.toHaveProperty("default_location");
   });
 
   it("expresses removing the default as the clear flag, not as an empty name", () => {
-    const draft = { ...draftFrom(view()), defaultLocation: "" };
+    const draft = { ...draftFrom(view()), defaultLocation: null };
     expect(updateFrom(draft, view())).toEqual({ clear_default_location: true });
   });
 
   it("carries every field that changed, and none that did not", () => {
-    const draft = { unitSystem: "imperial" as const, horizonDays: 3, defaultLocation: "Tokyo, Tokyo, JP" };
+    const draft = { unitSystem: "imperial" as const, horizonDays: 3, defaultLocation: TOKYO };
     expect(updateFrom(draft, view())).toEqual({
       unit_system: "imperial",
       forecast_horizon_days: 3,
-      default_location: "Tokyo, Tokyo, JP",
+      latitude: 35.6895,
+      longitude: 139.6917,
     });
   });
 
-  it("ignores surrounding whitespace rather than treating it as a change", () => {
-    const draft = { ...draftFrom(view()), defaultLocation: "  Berlin, Berlin, DE  " };
-    expect(updateFrom(draft, view())).toBeNull();
+  it("treats the same place as no change, however the object arrived", () => {
+    const sameAgain = { ...BERLIN, display_name: "Berlin " } as Location;
+    expect(updateFrom({ ...draftFrom(view()), defaultLocation: sameAgain }, view())).toBeNull();
   });
 });
 
@@ -148,20 +170,27 @@ describe("horizonChoicesFor", () => {
 });
 
 describe("defaultLocationChoices", () => {
-  it("offers the saved locations by their canonical names", () => {
+  it("labels the saved locations canonically and keys them by place", () => {
     expect(defaultLocationChoices([BERLIN, TOKYO], null)).toEqual([
-      { value: "Berlin, Berlin, DE", label: "Berlin, Berlin, DE" },
-      { value: "Tokyo, Tokyo, JP", label: "Tokyo, Tokyo, JP" },
+      { value: "52.5200,13.4050", label: "Berlin, Berlin, DE", location: BERLIN },
+      { value: "35.6895,139.6917", label: "Tokyo, Tokyo, JP", location: TOKYO },
     ]);
   });
 
   it("keeps a stored default that is not among the saved places", () => {
     const choices = defaultLocationChoices([TOKYO], BERLIN);
-    expect(choices.map((choice) => choice.value)).toEqual(["Berlin, Berlin, DE", "Tokyo, Tokyo, JP"]);
+    expect(choices.map((choice) => choice.label)).toEqual(["Berlin, Berlin, DE", "Tokyo, Tokyo, JP"]);
   });
 
   it("lists a place once when it is both saved and the default", () => {
     expect(defaultLocationChoices([BERLIN], BERLIN)).toHaveLength(1);
+  });
+
+  it("offers a coordinate-named place like any other, and reads back as that place", () => {
+    const choices = defaultLocationChoices([UNNAMED], null);
+    expect(choices[0]?.label).toBe("48.1374, 11.5755");
+    expect(choiceFor(choices, choices[0]!.value)).toEqual(UNNAMED);
+    expect(choiceFor(choices, "")).toBeNull();
   });
 });
 

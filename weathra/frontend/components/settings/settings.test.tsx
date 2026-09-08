@@ -245,7 +245,11 @@ function settingsRoutes(overrides: Record<string, Handler> = {}): Record<string,
         ...(typeof body.forecast_horizon_days === "number"
           ? { forecast_horizon_days: body.forecast_horizon_days }
           : {}),
-        ...(body.default_location === "Tokyo, Tokyo, JP" ? { default_location: TOKYO } : {}),
+        // Coordinates resolve to the place, exactly as the backend resolves them — which is the
+        // whole point of sending them instead of a name.
+        ...(body.latitude === TOKYO.latitude && body.longitude === TOKYO.longitude
+          ? { default_location: TOKYO }
+          : {}),
         ...(body.clear_default_location === true ? { default_location: null } : {}),
       } as PreferenceView;
       return jsonResponse(200, stored);
@@ -326,7 +330,11 @@ describe("the preference form", () => {
     const form = await screen.findByRole("form", { name: "Your Weathra preferences" });
     expect(within(form).getByRole("radio", { name: /Metric/ })).toBeChecked();
     expect(within(form).getByLabelText("Default forecast horizon")).toHaveValue("7");
-    expect(within(form).getByLabelText("Default location")).toHaveValue("Berlin, Berlin, DE");
+    // The control's *value* is the place key, its *label* is the canonical name: a person reads
+    // the name, and a save sends coordinates. See the note on `PreferenceDraft`.
+    const location = within(form).getByLabelText("Default location") as HTMLSelectElement;
+    expect(location).toHaveValue("52.5200,13.4050");
+    expect(location.selectedOptions[0]?.textContent).toBe("Berlin, Berlin, DE");
 
     // A default is never shown as though it were a decision the person made.
     expect(within(form).getAllByText("Your choice.").length).toBeGreaterThan(0);
@@ -342,9 +350,17 @@ describe("the preference form", () => {
     renderSettings();
     const select = await screen.findByLabelText("Default location");
 
-    expect(
-      [...(select as HTMLSelectElement).options].map((option) => option.value),
-    ).toEqual(["", "Berlin, Berlin, DE", "Tokyo, Tokyo, JP"]);
+    const options = [...(select as HTMLSelectElement).options];
+    expect(options.map((option) => option.textContent)).toEqual([
+      "No default location",
+      "Berlin, Berlin, DE",
+      "Tokyo, Tokyo, JP",
+    ]);
+    expect(options.map((option) => option.value)).toEqual([
+      "",
+      "52.5200,13.4050",
+      "35.6895,139.6917",
+    ]);
   });
 });
 
@@ -425,19 +441,25 @@ describe("the other preferences", () => {
     expect(stored.forecast_horizon_days).toBe(10);
   });
 
-  it("persists the default location by its canonical name", async () => {
+  it("persists the default location by its coordinates, not by its name", async () => {
+    // The regression this guards: a name round trip made every coordinate-labelled place — which
+    // in production is every place saved by coordinates — impossible to set as the default, because
+    // the backend geocoded the label as a city name and found no such city.
     const person = userEvent.setup();
     renderSettings();
     await screen.findByRole("form", { name: "Your Weathra preferences" });
 
-    await person.selectOptions(screen.getByLabelText("Default location"), "Tokyo, Tokyo, JP");
+    await person.selectOptions(screen.getByLabelText("Default location"), "35.6895,139.6917");
     await person.click(screen.getByRole("button", { name: "Save preferences" }));
 
     await waitFor(() => {
       const put = (fetchMock.mock.calls as [string, RequestInit][]).find(
         ([, init]) => init?.method === "PUT",
       );
-      expect(JSON.parse(String(put?.[1]?.body))).toEqual({ default_location: "Tokyo, Tokyo, JP" });
+      expect(JSON.parse(String(put?.[1]?.body))).toEqual({
+        latitude: TOKYO.latitude,
+        longitude: TOKYO.longitude,
+      });
     });
     expect(stored.default_location).toEqual(TOKYO);
   });

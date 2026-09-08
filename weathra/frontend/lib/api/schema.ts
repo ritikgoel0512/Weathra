@@ -603,6 +603,8 @@ export interface PreferenceUpdate {
   /** A place name. Resolved and stored canonically. */
   readonly default_location?: string | null;
   readonly forecast_horizon_days?: number | null;
+  readonly latitude?: number | null;
+  readonly longitude?: number | null;
   readonly unit_system?: UnitSystem | null;
 }
 

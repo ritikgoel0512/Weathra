@@ -992,6 +992,112 @@ async def test_a_default_location_preference_is_stored_canonically(api_factory: 
         assert stored["timezone"] == "Europe/Berlin", "the resolved place, not the query text"
 
 
+async def test_a_default_location_can_be_named_by_coordinates(api_factory: ApiFactory) -> None:
+    """A caller holding a resolved place addresses it by where it is, not by what it is called.
+
+    The stored value is still the canonical location — resolution is what gives it its timezone and
+    its identifier — but nothing is asked of the *name* geocoder, so nothing depends on a name
+    existing or on a ranking staying put.
+    """
+    async with api_factory() as api:
+        headers = api.authorize(subject=USER_A)
+        response = await api.client.put(
+            f"{PREFIX}/me/preferences",
+            json={"latitude": 52.52, "longitude": 13.405},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        stored = response.json()["default_location"]
+        # Resolution still happens — that is where the timezone comes from, and it is what makes
+        # the stored value canonical rather than whatever the caller typed. What does not happen is
+        # a *name* lookup.
+        assert stored["timezone"] == "Europe/Berlin"
+        assert stored["display_name"] == "Berlin", "coordinates resolved to the canonical place"
+        assert api.geocoder.resolve_calls == [], "a name lookup was made for a place already known"
+
+
+async def test_a_place_with_only_a_coordinate_label_can_become_the_default(
+    api_factory: ApiFactory,
+) -> None:
+    """The production bug, in one test.
+
+    A place resolved from coordinates that reverse geocoding cannot name is called
+    ``"48.14, 11.58"`` — the geocoder's own coordinate label, which is a perfectly good *display*
+    name and no kind of place name. Settings then offered it as the default and sent it back as
+    text, and the geocoder was asked for a city called "48.14, 11.58". It answered, correctly, that
+    no location matches it: a location Weathra had already resolved, stored, and put on screen was
+    one whose preference could not be saved.
+
+    Both halves are asserted. The name path still refuses that string, because it should — it is
+    not a place name and pretending otherwise would mean guessing. Sending the coordinates stores
+    the same place, identified identically, with no name involved.
+    """
+    async with api_factory() as api:
+        headers = api.authorize(subject=USER_A)
+
+        # Coordinates no gazetteer names — which in production is *every* coordinate: Open-Meteo
+        # has no reverse geocoding, so `resolve_coordinates` always labels a place with its
+        # coordinates. Every location saved by coordinates therefore had this bug, not a few of them.
+        unnamed = {"latitude": 12.3456, "longitude": -45.6789}
+        saved = await api.client.post(f"{PREFIX}/me/locations", json=unnamed, headers=headers)
+        assert saved.status_code in (200, 201)
+        place = saved.json()["location"]
+        assert place["display_name"] == "12.35, -45.68", "the geocoder's coordinate label"
+
+        refused = await api.client.put(
+            f"{PREFIX}/me/preferences",
+            json={"default_location": place["display_name"]},
+            headers=headers,
+        )
+        assert refused.status_code == 404
+        assert refused.json()["error"]["code"] == "location_not_found"
+
+        accepted = await api.client.put(
+            f"{PREFIX}/me/preferences",
+            json={"latitude": place["latitude"], "longitude": place["longitude"]},
+            headers=headers,
+        )
+        assert accepted.status_code == 200
+        stored = accepted.json()["default_location"]
+        assert (stored["latitude"], stored["longitude"]) == (
+            place["latitude"],
+            place["longitude"],
+        ), "a different place was stored"
+        assert accepted.json()["sources"]["default_location"] == "chosen"
+
+        # And it is still there on the next read, which is what the Dashboard asks for: the
+        # contradiction of a saved location beside "No default location saved" was this save
+        # failing, not the Dashboard reading the wrong thing.
+        reread = await api.client.get(f"{PREFIX}/me/preferences", headers=headers)
+        assert reread.json()["default_location"]["display_name"] == place["display_name"]
+
+
+async def test_a_default_location_refuses_two_ways_of_naming_one_place(
+    api_factory: ApiFactory,
+) -> None:
+    """A name and a coordinate pair in one request is a question, not an instruction."""
+    async with api_factory() as api:
+        headers = api.authorize(subject=USER_A)
+        response = await api.client.put(
+            f"{PREFIX}/me/preferences",
+            json={"default_location": "Berlin", "latitude": 48.14, "longitude": 11.58},
+            headers=headers,
+        )
+        assert response.status_code == 400
+        assert "not both" in response.json()["error"]["message"]
+
+
+async def test_a_default_location_refuses_half_a_coordinate_pair(api_factory: ApiFactory) -> None:
+    """One coordinate is not a place, and must not be read as "leave it alone" either."""
+    async with api_factory() as api:
+        headers = api.authorize(subject=USER_A)
+        response = await api.client.put(
+            f"{PREFIX}/me/preferences", json={"latitude": 48.14}, headers=headers
+        )
+        assert response.status_code == 400
+        assert "both latitude and longitude" in response.json()["error"]["message"]
+
+
 async def test_clearing_a_preference_restores_the_default(api_factory: ApiFactory) -> None:
     async with api_factory() as api:
         headers = api.authorize(subject=USER_A)

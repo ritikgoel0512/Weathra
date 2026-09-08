@@ -92,6 +92,23 @@ class PreferenceUpdate(BaseModel):
     default_location: str | None = Field(
         default=None, description="A place name. Resolved and stored canonically."
     )
+    # A default can also be named by coordinates, exactly as a saved location can
+    # (``SavedLocationRequest``), and for a reason that is not symmetry.
+    #
+    # A place resolved from coordinates that reverse-geocoding could not name is called
+    # ``"48.1374, 11.5755"`` — the geocoder's own coordinate label. Sending *that* back as a place
+    # name asks the geocoder to search for a city of that name, which fails with "No location
+    # matches '48.1374, 11.5755'". So a location Weathra had already resolved, stored, and shown
+    # became one whose preference could not be saved, and the only clue was an error naming a
+    # place nobody had typed.
+    #
+    # The fix is not to make the name path cleverer. A caller who already holds a resolved location
+    # should not be re-deriving it from prose at all: coordinates carry the identity the name was
+    # standing in for, and ``Location.identifier`` is derived from them, so this addresses the same
+    # place with nothing left to guess. The name is kept for callers that genuinely have only a
+    # name — a person typing one, or the evaluation runner's fixtures.
+    latitude: float | None = Field(default=None, ge=-90.0, le=90.0)
+    longitude: float | None = Field(default=None, ge=-180.0, le=180.0)
     clear_unit_system: bool = Field(
         default=False, description="Clear the unit preference back to the documented default."
     )
@@ -210,13 +227,20 @@ async def update_preferences(
         horizon = body.forecast_horizon_days
 
     default_location: Location | Unset | None = UNSET
+    named_location = body.default_location is not None
+    given_coordinates = body.latitude is not None or body.longitude is not None
     if body.clear_default_location:
         default_location = None
-    elif body.default_location is not None:
+    elif named_location or given_coordinates:
         # Resolved before storing, so what is kept is the canonical location rather than the text
-        # — a saved default must not change meaning when a geocoder's ranking does.
+        # — a saved default must not change meaning when a geocoder's ranking does. Coordinates go
+        # through the same resolution, which is what gives the stored value its timezone and its
+        # identifier; `resolve_one` refuses both-at-once and half a coordinate pair.
         default_location = await resolve_one(
-            geocoder, location=body.default_location, latitude=None, longitude=None
+            geocoder,
+            location=body.default_location,
+            latitude=body.latitude,
+            longitude=body.longitude,
         )
 
     return await store.update(
