@@ -738,6 +738,65 @@ disposable `pgvector` database on every push instead, and the schema properties 
 asserted are asserted directly against production by the verification step above. The deviation is
 deliberate; the wording is what should change if this is ever revisited.
 
+## Deployed acceptance
+
+Tasks 25.3 and 25.4 ask for the deployed pair to be exercised and the results recorded. This is the
+record. `backend/tests/deployed/` is the suite; it runs from a Codespace or from
+`live-acceptance.yml` with `pytest -m deployed`, and its last run reported **49 passed, 5 skipped,
+0 failed**.
+
+### What automation proved (task 25.4)
+
+| Criterion | Evidence |
+|---|---|
+| Readiness all-reachable | `/api/v1/ready` → `ready: true`, `environment: production`, no required dependency unreachable, and database, authentication_provider and weather_provider each named |
+| An attributed public forecast without a session | `/weather/forecast` → 200 carrying an `attribution` block with the provider, the resolved location and the fetch time |
+| A baseline comparison with both sides labelled | `/weather/history/baseline/comparison` → 200 with the baseline's `labelling`, the observed side's data class, and a characterisation |
+| The frontend serves | `/sign-in` → 200, titled *Sign in · Weathra* |
+| The route gate holds | `/`, `/dashboard`, `/settings`, `/locations`, `/historical` → 307 to `/sign-in`, destination preserved |
+| No 5xx on any public surface | every path in `PUBLIC_PATHS`, swept |
+| The frontend carries no private credential | the served page mentions no `SERVICE_ROLE`, `DATABASE_URL` or `OPENROUTER` |
+
+### What automation proved (task 25.3)
+
+Group 18's suite splits into cases that need a session and cases that do not. The second half runs
+against production in full:
+
+| Group 18 case | Evidence |
+|---|---|
+| 18.3 missing token, every protected endpoint | all thirteen refuse with 401 — GET, POST, PUT and DELETE alike |
+| 18.4 expired and invalid tokens | `/me` refuses nine shapes — expired, wrong issuer, wrong audience, bad signature, unknown key id, malformed, truncated, unsigned, and a structurally *valid* token signed by a key production has never seen — with no token material echoed back |
+| 18.8 unauthenticated stream | `/agent/stream` refuses with 401 rather than opening a stream |
+| 18.10 frontend protected routes | the redirects above, with the destination kept |
+| 18.11 secret containment | the served bundle, plus the repository check on every push |
+| The RLS gate | verified against the deployed database itself: Row Level Security **enabled and forced** with a policy on all five user-owned tables, `weathra_request` unable to log in or bypass it, `weathra_api` not inheriting and holding no privileged attribute — `database-retention` run 34262284576 |
+
+### What the product owner verified by hand
+
+The owner signed into production with their own account and reported: sign-up confirmed by emailed
+code, sign-in succeeded, the authenticated Dashboard rendered live Berlin weather from Open-Meteo,
+and `/dashboard` and `/settings` were protected before signing in. Live weather on an authenticated
+screen is the whole chain answering — Supabase session, bearer token, deployed backend, provider —
+and the saved-location preference was exercised through the same session afterwards. That is 25.4's
+*create an account and verify it by code* and *sign in*, and group 18.2's valid-request case for the
+endpoints the product uses.
+
+### What is not verified, and why
+
+Three criteria remain, and none of them is a gap in the deployment:
+
+* **A question through `/ask` whose every figure appears in its evidence**, and **an authenticated
+  SSE stream completing** (25.4). Both need a signed-in session. The suite implements them and skips
+  until credentials are configured; the product owner has declined to store an account password in
+  GitHub Actions, which is a reasonable position — an Actions secret is readable by every workflow
+  that names it. Either can be confirmed in a browser in a minute by asking the Analyst a question.
+* **A second account seeing none of the first's data** (25.4), and **cross-user isolation against
+  the deployed backend** (25.3). These need two live production accounts, and the owner has declined
+  to create a second one. What *is* established: the isolation logic passes in-process against two
+  principals (18.5, 18.6, 18.7), the RLS gate is verified on the deployed database as above, and the
+  request role is verified as unable to bypass it. **That is not a live two-user production test and
+  is not recorded as one.** It is the strongest evidence available without a second account.
+
 ## No local machine
 
 Task 23.7. Every step of this project — setup, sign-up, test, and deploy — has been carried out from
