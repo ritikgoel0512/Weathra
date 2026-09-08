@@ -323,3 +323,55 @@ def test_no_decode_is_scoped_to_exactly_the_two_documented_list_fields() -> None
         if any(meta is NoDecode for meta in field.metadata)
     }
     assert annotated == {"cors_allowed_origins", "mcp_enabled_tools"}
+
+
+# ---------------------------------------------------------------- the inference credential
+
+
+@pytest.mark.parametrize(
+    ("stored", "reason"),
+    [
+        ("  sk-or-v1-abc  ", "surrounding spaces"),
+        ("sk-or-v1-abc\n", "a trailing newline from a pasted line"),
+        ("\tsk-or-v1-abc", "a leading tab"),
+        ("Bearer sk-or-v1-abc", "the scheme copied along with the key"),
+        ("bearer  sk-or-v1-abc", "the scheme in lower case, with extra spacing"),
+        ("Bearer sk-or-v1-abc\n", "both at once"),
+    ],
+)
+def test_a_pasted_credential_is_normalized(stored: str, reason: str) -> None:
+    """A correct key must not be rejected for its packaging.
+
+    Every one of these produces an `Authorization` header the gateway refuses with 401, which from
+    the outside is indistinguishable from a key that is actually wrong — so Weathra reported "the
+    credential was rejected" about a credential that was correct, and the only remedy anyone could
+    see was replacing a key that never needed replacing. A dashboard cannot show you a trailing
+    newline.
+    """
+    built = settings(openrouter_api_key=stored)
+    assert built.openrouter_api_key is not None
+    assert built.openrouter_api_key.get_secret_value() == "sk-or-v1-abc", reason
+
+
+def test_normalization_does_not_reach_inside_the_credential() -> None:
+    """Packaging only. A key that is wrong stays wrong and is still reported as rejected.
+
+    Case is not folded, internal characters are untouched, and nothing is truncated — a validator
+    that "cleaned up" the key itself would turn one silent failure into another.
+    """
+    built = settings(openrouter_api_key="SK-Or-V1-AbC_dEf-123")
+    assert built.openrouter_api_key is not None
+    assert built.openrouter_api_key.get_secret_value() == "SK-Or-V1-AbC_dEf-123"
+
+
+def test_an_absent_credential_stays_absent() -> None:
+    """False is a supported state: every non-agent capability serves without one."""
+    assert settings().openrouter_api_key is None
+    assert settings().inference_configured is False
+
+
+def test_a_credential_of_only_whitespace_is_not_a_credential() -> None:
+    """Otherwise `inference_configured` is true and the agent surface fails at the gateway."""
+    built = settings(openrouter_api_key="   ")
+    assert built.openrouter_api_key is not None
+    assert built.openrouter_api_key.get_secret_value() == ""

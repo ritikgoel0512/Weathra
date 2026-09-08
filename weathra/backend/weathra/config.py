@@ -325,6 +325,34 @@ class Settings(BaseSettings):
             raise ValueError("CORS_ALLOWED_ORIGINS must name at least one origin.")
         return value
 
+    @field_validator("openrouter_api_key", mode="before")
+    @classmethod
+    def _normalize_inference_credential(cls, value: object) -> object:
+        """Strip what a paste leaves behind, so a correct key is not rejected for its packaging.
+
+        A credential arrives from a dashboard field, a `.env` line or a CI secret, and all three
+        routinely carry artefacts the owner cannot see: a trailing newline, a leading space, or the
+        word `Bearer` copied along with the key from a documentation example. Every one of those
+        produces an `Authorization` header the gateway refuses with 401 — indistinguishable, from
+        the outside, from a key that is actually wrong. Weathra then reported "the credential was
+        rejected" about a credential that was correct, and the only remedy anyone could think of
+        was to replace a key that never needed replacing.
+
+        So the packaging is normalised here, at the boundary, rather than defended against at each
+        use: `Settings` is the one place every consumer — the agent surface, the evaluation runner,
+        the diagnostic — reads it from. What is *not* normalised is anything inside the key: no
+        case folding, no internal whitespace removal, no truncation. A key that is wrong stays
+        wrong and is still reported as rejected.
+        """
+        if not isinstance(value, str):
+            return value
+        trimmed = value.strip()
+        # `Bearer sk-...` copied whole from an example. Removed case-insensitively and only from
+        # the front, because the scheme is not part of the credential.
+        if trimmed[:7].lower() == "bearer ":
+            trimmed = trimmed[7:].strip()
+        return trimmed
+
     @field_validator("api_version_prefix")
     @classmethod
     def _normalize_prefix(cls, value: str) -> str:

@@ -40,6 +40,7 @@ from weathra.domain.errors import (
     ProviderTimeout,
     ProviderUnavailable,
     ValidationFailed,
+    WeathraError,
 )
 from weathra.domain.evidence import InferenceStatus
 
@@ -341,8 +342,34 @@ async def test_a_401_surfaces_as_a_configuration_error_not_an_outage() -> None:
 
 
 @respx.mock
-async def test_a_403_is_treated_the_same_way() -> None:
+async def test_a_403_is_not_a_credential_problem() -> None:
+    """The distinction that cost a wrong first guess in production.
+
+    A 401 is the credential. A 403 is the gateway refusing a request whose credential it
+    *accepted* — the account's data policy for a `:free` model, a model this key may not route to,
+    or a moderation refusal. Reported as a credential failure, the only apparent remedy is to
+    replace a key that was never wrong.
+
+    So it raises `ProviderUnavailable`, which records `provider_error` in the evidence rather than
+    `not_configured`. What a person is shown is the same sentence either way.
+    """
     respx.post(COMPLETIONS).mock(return_value=httpx.Response(403))
+
+    with pytest.raises(ProviderUnavailable) as raised:
+        await _client().complete(system="", messages=[])
+
+    assert raised.value.details["status"] == 403
+    status, _ = classify_inference_failure(raised.value)
+    assert status is InferenceStatus.PROVIDER_ERROR, (
+        "a 403 recorded as not_configured says nobody configured a deployment whose key the "
+        "gateway just accepted"
+    )
+    assert "OPENROUTER_API_KEY" not in str(raised.value)
+
+
+@respx.mock
+async def test_a_401_is_a_credential_problem() -> None:
+    respx.post(COMPLETIONS).mock(return_value=httpx.Response(401))
     with pytest.raises(AgentNotConfigured):
         await _client().complete(system="", messages=[])
 
@@ -749,7 +776,9 @@ async def test_no_rejection_reaches_a_caller_naming_configuration(status: int) -
             json={"error": {"message": "No auth credentials found: sk-or-v1-secret-fragment"}},
         )
     )
-    with pytest.raises(AgentNotConfigured) as raised:
+    # 401 raises `AgentNotConfigured`, 403 raises `ProviderUnavailable`; both must be silent about
+    # configuration, which is the property under test rather than which class arrives.
+    with pytest.raises((AgentNotConfigured, ProviderUnavailable)) as raised:
         await _client().complete(system="", messages=[])
 
     visible = str(raised.value) + json.dumps(raised.value.details)
@@ -771,3 +800,91 @@ def test_the_operator_still_gets_the_diagnosis() -> None:
         build_client(httpx.AsyncClient(), Settings(supabase_url="https://test.supabase.co"))
     assert raised.value.details["missing"] == "inference_credential"
     assert raised.value.details["provider"], "the failure does not say which provider"
+
+
+# ------------------------------------------------------------------ one failure, one class
+
+
+@respx.mock
+@pytest.mark.parametrize(
+    ("response", "expected", "why"),
+    [
+        (httpx.Response(401), InferenceStatus.NOT_CONFIGURED, "the credential itself"),
+        (
+            httpx.Response(403),
+            InferenceStatus.PROVIDER_ERROR,
+            "account or model policy, not the key",
+        ),
+        (httpx.Response(404), InferenceStatus.MODEL_UNAVAILABLE, "a withdrawn or renamed model"),
+        (httpx.Response(402), InferenceStatus.PROVIDER_ERROR, "credits or quota"),
+        (httpx.Response(429), InferenceStatus.RATE_LIMITED, "a rate limit"),
+        (httpx.Response(502), InferenceStatus.PROVIDER_ERROR, "provider capacity"),
+        (httpx.Response(503), InferenceStatus.PROVIDER_ERROR, "provider capacity"),
+    ],
+)
+async def test_each_provider_failure_records_its_own_class(
+    response: httpx.Response, expected: InferenceStatus, why: str
+) -> None:
+    """Seven gateway answers, seven recorded meanings — and only one of them is the credential.
+
+    This is the regression that matters after production. Every one of these used to be equally
+    likely to be described as a credential problem to whoever was debugging, and the evidence
+    record is where that distinction has to survive: task 22.8's live runs were scored as model
+    quality because an outage and a bad answer had been collapsed into one status.
+    """
+    respx.post(COMPLETIONS).mock(return_value=response)
+
+    with pytest.raises(WeathraError) as raised:
+        await _client().complete(system="", messages=[])
+
+    status, _ = classify_inference_failure(raised.value)
+    assert status is expected, f"{response.status_code} should record {expected} — {why}"
+
+    if expected is not InferenceStatus.NOT_CONFIGURED:
+        assert status is not InferenceStatus.NOT_CONFIGURED, (
+            f"{response.status_code} recorded as not_configured would blame the credential for {why}"
+        )
+
+
+@respx.mock
+async def test_a_timeout_is_not_a_credential_problem() -> None:
+    """The commonest failure of the 22.10 live run, and the one most easily misread."""
+    respx.post(COMPLETIONS).mock(side_effect=httpx.ReadTimeout("slow"))
+
+    with pytest.raises(WeathraError) as raised:
+        await _client().complete(system="", messages=[])
+
+    status, _ = classify_inference_failure(raised.value)
+    assert status is InferenceStatus.TIMEOUT
+    assert "credential" not in str(raised.value).lower()
+
+
+@respx.mock
+async def test_a_network_failure_is_not_a_credential_problem() -> None:
+    respx.post(COMPLETIONS).mock(side_effect=httpx.ConnectError("no route"))
+
+    with pytest.raises(WeathraError) as raised:
+        await _client().complete(system="", messages=[])
+
+    status, _ = classify_inference_failure(raised.value)
+    assert status in (InferenceStatus.TIMEOUT, InferenceStatus.PROVIDER_ERROR)
+    assert "credential" not in str(raised.value).lower()
+
+
+@respx.mock
+@pytest.mark.parametrize("status_code", [402, 404, 429, 500, 502, 503])
+async def test_no_non_credential_failure_mentions_credentials_to_anyone(status_code: int) -> None:
+    """Not to a person, and not to an operator reading the message.
+
+    A message that says "credential" for a 429 sends whoever reads it to rotate a key while the
+    real answer is to wait. The user-facing sentence stays simple for all of them; the *class* is
+    what carries the difference, and it lives in the evidence record.
+    """
+    respx.post(COMPLETIONS).mock(return_value=httpx.Response(status_code))
+
+    with pytest.raises(WeathraError) as raised:
+        await _client().complete(system="", messages=[])
+
+    message = str(raised.value).lower()
+    for word in ("credential", "api key", "openrouter_api_key", "not configured"):
+        assert word not in message, f"{status_code} blames {word!r}"
