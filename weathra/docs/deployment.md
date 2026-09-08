@@ -723,6 +723,21 @@ real pass, so a run that had not done what it was dispatched to do reported succ
 now `mode`, defaulting to `remove` — the operation the schedule performs, since a scheduled run
 supplies no inputs at all — and the chosen word is printed before anything runs.
 
+**The real pass ran on 2026-09-08**: run 34262284576 on commit b309214, `MODE: remove`, its log
+reading `mode: remove` and `removing what has expired` before the routine's report. The nine
+verification checks passed first, and the routine reported `threads_expired: 0`,
+`thread_checkpoints_cleared: 0`, `snapshots_expired: 0` — nothing had aged out, which is right for a
+project days old. That completes task 23.6: the routine is scheduled, it runs under the privileged
+connection, and it has completed a real invocation against production.
+
+**One clause of 23.6 was met by different means, recorded rather than glossed.** Its wording asks
+for "the `db` suite passes against it", meaning the deployed database. That suite truncates every
+user-owned table between tests (`tests/db_support.py:145`), so running it there would delete every
+account's data — including the owner's — in order to prove a schema claim. It runs against a
+disposable `pgvector` database on every push instead, and the schema properties it would have
+asserted are asserted directly against production by the verification step above. The deviation is
+deliberate; the wording is what should change if this is ever revisited.
+
 ## The production image
 
 The backend is deployed as a container. `render.yaml` sets `runtime: docker` and points at
