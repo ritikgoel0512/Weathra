@@ -306,3 +306,61 @@ def test_the_migrations_still_downgrade_and_reapply(database_url: str) -> None:
             admin.execute(
                 sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(name))
             )
+
+
+def test_the_downgrade_survives_policies_written_outside_the_migrations(database_url: str) -> None:
+    """The cycle above, on a database the application has actually started against.
+
+    `memory/checkpointer.py` writes owner-restricting policies over the three LangGraph checkpoint
+    tables, which the library creates at runtime and no migration knows about. They call
+    `weathra_current_user_id()`, so PostgreSQL refuses to drop it, so 0002's downgrade fails — and
+    the test above never saw it, because its database is fresh and nothing has ever run against it.
+    CI is what did see it: the db-marked suite provisions the checkpointer, and the downgrade step
+    that follows failed with `DependentObjectsStillExist`.
+
+    Reproduced here with the policy rather than the checkpointer, so the test states the property —
+    a downgrade is not entitled to assume it is the only thing that ever called the accessor — and
+    does not depend on LangGraph's own schema.
+    """
+    name = f"weathra_dependent_{uuid.uuid4().hex[:12]}"
+
+    with _admin_connection(database_url) as admin:
+        admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
+
+    url = _owner_url(database_url, name)
+    try:
+        _upgrade(url)
+
+        with psycopg.connect(url, autocommit=True) as conn:
+            conn.execute("CREATE TABLE outside_the_migrations (thread_id text primary key)")
+            conn.execute("ALTER TABLE outside_the_migrations ENABLE ROW LEVEL SECURITY")
+            conn.execute(
+                "CREATE POLICY outside_the_migrations_owner_only ON outside_the_migrations "
+                "FOR ALL USING (split_part(thread_id, ':', 1) = weathra_current_user_id())"
+            )
+
+        _downgrade_to_base(url)
+
+        # The accessor is gone, and so is the policy that depended on it — dropped by name rather
+        # than swept up by a CASCADE nobody would see in the log.
+        with psycopg.connect(url, autocommit=True) as conn:
+            accessor = conn.execute(
+                "SELECT to_regprocedure('weathra_current_user_id()') IS NOT NULL"
+            ).fetchone()
+            assert accessor is not None and accessor[0] is False
+            surviving = conn.execute(
+                "SELECT count(*) FROM pg_policy WHERE polname = %s",
+                ("outside_the_migrations_owner_only",),
+            ).fetchone()
+            assert surviving is not None and surviving[0] == 0
+
+        _upgrade(url)
+
+        with psycopg.connect(url, autocommit=True) as conn:
+            revision = conn.execute("SELECT version_num FROM alembic_version").fetchone()
+        assert revision is not None and revision[0] == _head_revision()
+    finally:
+        with _admin_connection(database_url) as admin:
+            admin.execute(
+                sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(name))
+            )

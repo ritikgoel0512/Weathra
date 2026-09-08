@@ -135,4 +135,64 @@ def downgrade() -> None:
     op.execute(f"REVOKE USAGE ON SCHEMA public FROM {RESTRICTED_ROLE}")
     # The role is left in place: it is cluster-scoped and may own grants in other databases, so
     # dropping it from one database's migration would be reaching outside this migration's scope.
+
+    # ------------------------------------------------------------- policies written outside Alembic
+    #
+    # The accessor above is this migration's own object, but by the time anything downgrades it is
+    # not the only thing calling it. `memory/checkpointer.py` writes owner-restricting policies over
+    # the three LangGraph checkpoint tables — created by the library at runtime, so outside every
+    # migration — and those policies test the same `weathra_current_user_id()`. PostgreSQL then
+    # refuses to drop the function while they exist, and `alembic downgrade base` fails on any
+    # database the application has ever started against. CI reproduces it exactly: the db-marked
+    # suite provisions the checkpointer, and the downgrade step then cannot undo 0002.
+    #
+    # Dropping them here is not the reaching-outside-scope the role comment above declines. The
+    # function is this migration's, the dependency is on the function, and the only alternatives are
+    # to fail the downgrade or to `DROP ... CASCADE` — which would do exactly this, silently and
+    # without naming what it took. Each policy is found through `pg_depend`, so only what actually
+    # depends on the accessor is dropped, and each is named in the log as it goes.
+    #
+    # Row Level Security is left enabled on those tables. A table with RLS on and no policy denies
+    # every row to a role that is neither its owner nor `BYPASSRLS`, which is the safe direction to
+    # leave a half-torn-down database in; `provision_checkpointer` re-creates both the policies and
+    # the grants on the next start, after the migrations are applied again.
+    op.execute(
+        """
+        DO $$
+        DECLARE
+            accessor oid := to_regprocedure('weathra_current_user_id()');
+            dependent record;
+        BEGIN
+            IF accessor IS NULL THEN
+                RETURN;
+            END IF;
+
+            FOR dependent IN
+                SELECT namespace.nspname AS schema_name,
+                       relation.relname  AS table_name,
+                       policy.polname    AS policy_name
+                  FROM pg_policy AS policy
+                  JOIN pg_class AS relation ON relation.oid = policy.polrelid
+                  JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+                 WHERE EXISTS (
+                           SELECT 1
+                             FROM pg_depend AS dependency
+                            WHERE dependency.classid = 'pg_policy'::regclass
+                              AND dependency.objid = policy.oid
+                              AND dependency.refclassid = 'pg_proc'::regclass
+                              AND dependency.refobjid = accessor
+                       )
+            LOOP
+                RAISE NOTICE
+                    'dropping policy %.%.% , which depends on weathra_current_user_id()',
+                    dependent.schema_name, dependent.table_name, dependent.policy_name;
+                EXECUTE format(
+                    'DROP POLICY %I ON %I.%I',
+                    dependent.policy_name, dependent.schema_name, dependent.table_name
+                );
+            END LOOP;
+        END
+        $$
+        """
+    )
     op.execute("DROP FUNCTION IF EXISTS weathra_current_user_id()")
