@@ -448,8 +448,15 @@ auto-detected identifiers, then `--project`, each failed at the same step, becau
 request is one `pull` makes regardless of how it was invoked. So the release does what `pull` would
 have done, from the project-scoped API the token *can* read:
 
-- `.github/scripts/vercel_release_env.py` reads `GET /v9/projects/<id>` and
-  `GET /v9/projects/<id>/env?decrypt=true`, and writes `.vercel/project.json` in the shape
+- `.github/scripts/vercel_release_env.py` reads `GET /v9/projects/<id>` for the project and
+  `GET /v3/env/pull/<id>/production` for its environment — the endpoint `vercel pull` itself reads
+  values from, which answers with the finished map: decrypted, and with target, branch and
+  custom-environment scoping already applied by Vercel. Resolving raw records by hand is a second,
+  private opinion about which record applies to production, and a value that disagrees with the one
+  the dashboard shows is then indistinguishable from a value that is simply wrong. The record
+  listing (`GET /v9/projects/<id>/env?decrypt=true`) is kept only as a fallback for a refusal on
+  that endpoint, since the token is team-scoped and a surprise refusal is the class of failure this
+  pipeline has already lost three runs to. It writes `.vercel/project.json` in the shape
   `writeProjectSettings` writes it and `.vercel/.env.production.local` in the format
   `vercel env pull` writes — sorted `KEY="value"` lines with newlines escaped, which is what
   `vercel build` parses with dotenv. `project.json`'s `settings.rootDirectory` is the load-bearing
@@ -470,7 +477,10 @@ have done, from the project-scoped API the token *can* read:
   success. The script now requires no whitespace, a scheme of exactly `http` or `https`, and a
   host; `http` stays valid because `.env.example` documents `http://localhost:8000`. Whitespace
   fails rather than being trimmed, so the value gets fixed where it is stored rather than papered
-  over on the way past.
+  over on the way past. A refusal reports the value's *shape* — its length and character class,
+  enough to tell a bare hostname from a ciphertext from an opaque token — and never the value: the
+  likeliest way this check fires is a credential pasted into the wrong field, and an Actions log on
+  a public repository is readable by anyone.
 - The org id is used **only as an assertion**, twice. The script holds the project's own
   `accountId` — the resolved answer to who owns it — to `WEATHRA_VERCEL_ORG_ID` and writes nothing
   if they differ; the workflow's next step then holds the `orgId` in the file it wrote to the same

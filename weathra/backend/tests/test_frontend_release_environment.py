@@ -50,9 +50,14 @@ PUBLIC_ENVIRONMENT = {
 }
 
 
+# Set by the `script` fixture, so `_fetcher` can raise the module's own refusal type.
+_module: Any = None
+
+
 @pytest.fixture(scope="module")
 def script(repo_root: Path) -> Any:
     """The release script, imported from its path — it lives beside the workflow, not in a package."""
+    global _module
     path = repo_root / SCRIPT
     assert path.is_file(), f"{SCRIPT} is missing: the frontend release cannot resolve its project"
     spec = importlib.util.spec_from_file_location("weathra_vercel_release_env", path)
@@ -60,6 +65,7 @@ def script(repo_root: Path) -> Any:
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
+    _module = module
     return module
 
 
@@ -86,19 +92,42 @@ def _records(values: dict[str, str], **overrides: Any) -> list[dict[str, Any]]:
     ]
 
 
+def _resolved(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """The map Vercel's own resolution would answer with, for the same records."""
+    return {
+        record["key"]: record.get("value")
+        for record in records
+        if isinstance(record, dict)
+        and "production" in (record.get("target") or [])
+        and not record.get("gitBranch")
+        and not record.get("customEnvironmentIds")
+    }
+
+
 def _fetcher(
     project: dict[str, Any] | None = None,
     records: list[dict[str, Any]] | None = None,
     *,
     seen: list[str] | None = None,
+    refuse_resolved: bool = False,
 ) -> Callable[[str], Any]:
-    """A stand-in for the API reader, recording every path it is asked for."""
+    """A stand-in for the API reader, recording every path it is asked for.
+
+    It answers both environment endpoints, because the release prefers Vercel's resolved map and
+    keeps the record listing as a fallback — so a test that only served one would quietly exercise
+    a path production does not take.
+    """
+    held = records if records is not None else _records(PUBLIC_ENVIRONMENT)
 
     def fetch(path: str) -> Any:
         if seen is not None:
             seen.append(path)
+        if path.startswith("/v3/env/pull/"):
+            if refuse_resolved:
+                raise _module.AccessRefused("the Vercel API refused the release token access")
+            return {"env": _resolved(held)}
         if "/env" in path:
-            return {"envs": records if records is not None else _records(PUBLIC_ENVIRONMENT)}
+            return {"envs": held}
         return project if project is not None else _project()
 
     return fetch
@@ -168,19 +197,43 @@ def test_the_files_land_where_the_cli_looks_for_them(script: Any, tmp_path: Path
 
 
 def test_the_environment_comes_from_the_project_scoped_api(script: Any, tmp_path: Path) -> None:
-    """Two project-scoped reads, and nothing that needs the team or the user.
+    """Project-scoped reads only, and Vercel's own resolution preferred for the values.
 
-    This is the whole fix: `/v9/projects/<id>` and its `/env` collection are reachable with a
-    team-scoped token, and `GET /v2/teams/<id>` — the request `vercel pull` cannot avoid — is
-    never made.
+    This is the whole fix: `/v9/projects/<id>` and `/v3/env/pull/<id>/production` are reachable
+    with a team-scoped token, and `GET /v2/teams/<id>` — the request `vercel pull` cannot avoid —
+    is never made.
+
+    The resolved map is preferred over the record listing because resolving records by hand is a
+    second, private opinion about which record applies to production. `/v3/env/pull` is the
+    endpoint `vercel pull` reads values from: decrypted, and with target, branch and
+    custom-environment scoping already applied by Vercel.
     """
     seen: list[str] = []
     assert script.run(PROJECT_ID, ORG_ID, tmp_path, _fetcher(seen=seen)) == 0
     assert seen[0] == f"/v9/projects/{PROJECT_ID}"
-    assert any(path.startswith(f"/v9/projects/{PROJECT_ID}/env?decrypt=true") for path in seen)
+    assert f"/v3/env/pull/{PROJECT_ID}/production" in seen
+    assert not any("/env?decrypt=true" in path for path in seen), (
+        "the release read the raw listing even though Vercel resolved the environment"
+    )
     for path in seen:
         assert "/v2/teams" not in path, f"the release asks for the team it cannot read: {path}"
         assert "/v2/user" not in path, f"the release asks for the user it cannot read: {path}"
+
+
+def test_the_listing_is_the_fallback_when_the_resolved_map_is_refused(
+    script: Any, tmp_path: Path
+) -> None:
+    """A refusal on one project-scoped endpoint must not end the release.
+
+    This pipeline's token is team-scoped, and a surprise refusal is the exact class of failure that
+    has already cost this task three runs. Falling back to the listing leaves the release no worse
+    off than reading the listing alone, which is what it did before.
+    """
+    seen: list[str] = []
+    assert script.run(PROJECT_ID, ORG_ID, tmp_path, _fetcher(seen=seen, refuse_resolved=True)) == 0
+    assert any("/env?decrypt=true" in path for path in seen), "the release did not fall back"
+    environment = _parse_dotenv((tmp_path / ".vercel" / ".env.production.local").read_text())
+    assert environment == PUBLIC_ENVIRONMENT
 
 
 def test_it_follows_the_environment_listing_to_the_end(script: Any) -> None:
@@ -705,3 +758,44 @@ def test_an_unusable_url_stops_the_release_before_the_build_has_anything_to_buil
         script.run(PROJECT_ID, ORG_ID, tmp_path, _fetcher(records=_records(environment)))
     assert not (tmp_path / ".vercel" / ".env.production.local").exists()
     assert not (tmp_path / ".vercel" / "project.json").exists()
+
+
+def test_the_resolved_map_drops_what_vercel_injects_itself(script: Any) -> None:
+    """Same rule as the listing path: a stale copy would override the live one."""
+    resolved = {"NEXT_PUBLIC_APP_URL": "https://weathra.app", "VERCEL_ANALYTICS_ID": "a"}
+    assert script.pulled_environment({"env": resolved}) == {
+        "NEXT_PUBLIC_APP_URL": "https://weathra.app"
+    }
+
+
+@pytest.mark.parametrize(
+    "payload",
+    ["not an object", {}, {"env": "not a map"}, {"env": {"NEXT_PUBLIC_APP_URL": None}}],
+)
+def test_a_malformed_resolved_map_ends_the_release(script: Any, payload: Any) -> None:
+    with pytest.raises(script.ReleaseError):
+        script.pulled_environment(payload)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("9f8c1d2e3a4b5c6d7e8f", "digest or ciphertext"),
+        ("aydhqrzzlqrzdycngfbe", "opaque token"),
+        ("https://project.supabase.co", "contains `://`"),
+        ("project.supabase.co", "no `://`"),
+    ],
+)
+def test_the_shape_report_says_which_kind_of_wrong_it_is(
+    script: Any, value: str, expected: str
+) -> None:
+    """The one thing a refusal has to be able to say, when the value itself may not be said.
+
+    A dashboard that shows a correct URL while the release is handed something else is a different
+    problem from a dashboard holding a bare hostname, and the fix is different too. Length and
+    character class separate them; neither can reconstruct the value.
+    """
+    described = script.describe_shape(value)
+    assert expected in described
+    assert str(len(value)) in described
+    assert value not in described

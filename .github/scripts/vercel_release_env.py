@@ -144,6 +144,10 @@ class ReleaseError(Exception):
     """A condition that must end the release rather than be worked around."""
 
 
+class AccessRefused(ReleaseError):
+    """The token was refused this endpoint. Separate so a caller can fall back deliberately."""
+
+
 def _api_error_code(body: bytes) -> str:
     """The `error.code` from a Vercel error body, for the message. Never the body itself."""
     try:
@@ -182,12 +186,12 @@ def make_fetch_json(token: str, *, attempts: int = 3, pause: float = 2.0) -> Fet
                     body = b""
                 code = _api_error_code(body)
                 if error.code == 401:
-                    raise ReleaseError(
+                    raise AccessRefused(
                         "the Vercel API refused the release token (401 "
                         f"{code}): VERCEL_TOKEN is missing, expired or malformed"
                     ) from None
                 if error.code == 403:
-                    raise ReleaseError(
+                    raise AccessRefused(
                         "the Vercel API refused the release token access to "
                         f"{path} (403 {code}): the token's scope does not cover this project"
                     ) from None
@@ -306,6 +310,62 @@ def read_env_records(fetch: FetchJson, project_id: str, *, pages: int = 20) -> l
     raise ReleaseError("the Vercel environment API paginated further than this release will follow")
 
 
+def pulled_environment(payload: Any) -> dict[str, str]:
+    """The Production environment as Vercel itself resolves it.
+
+    `/v3/env/pull/<project>/production` is the endpoint `vercel pull` reads its values from, and it
+    answers with the finished map rather than the raw records: decrypted, with the target and any
+    branch or custom-environment scoping already applied by Vercel. That is the whole reason to
+    prefer it — resolving records by hand means a second, private opinion about which record
+    applies to production, and a value that disagrees with the one the dashboard shows is
+    indistinguishable from a value that is simply wrong.
+    """
+    if not isinstance(payload, dict):
+        raise ReleaseError("the Vercel environment API returned something that is not an object")
+    env = payload.get("env")
+    if not isinstance(env, dict):
+        raise ReleaseError("the Vercel environment API returned no resolved `env` map")
+    found: dict[str, str] = {}
+    for key, value in env.items():
+        if not isinstance(key, str) or not key:
+            raise ReleaseError("the resolved environment contains a nameless variable")
+        if key in VARIABLES_TO_IGNORE:
+            continue
+        if value is None:
+            raise ReleaseError(
+                f"the Production value of {key} came back empty, so the build would bake in an "
+                "incomplete environment"
+            )
+        if not isinstance(value, str):
+            raise ReleaseError(f"the Production value of {key} is not a string")
+        found[key] = value
+    return found
+
+
+def resolve_production_environment(fetch: FetchJson, project_id: str) -> dict[str, str]:
+    """The Production environment, from Vercel's own resolution where the token is allowed it.
+
+    Two sources, and the order is the point. Vercel's resolved map is authoritative — it is what
+    `vercel build` would have been handed — so it is tried first. The record listing is kept as a
+    fallback rather than removed because this pipeline's token is team-scoped and a refusal on one
+    project-scoped endpoint is exactly the class of surprise that has cost this task three runs
+    already: falling back leaves the release no worse off than reading the listing alone.
+    """
+    quoted = urllib.parse.quote(project_id, safe="")
+    try:
+        resolved = pulled_environment(fetch(f"/v3/env/pull/{quoted}/production"))
+    except AccessRefused as refusal:
+        print(f"falling back to the environment listing: {refusal}", file=sys.stderr)
+    else:
+        print("Vercel resolved the Production environment")
+        validate_environment(resolved)
+        return resolved
+
+    listed = production_environment(read_env_records(fetch, project_id))
+    print("resolved the Production environment from the project's environment listing")
+    return listed
+
+
 def production_environment(records: list[Any]) -> dict[str, str]:
     """The Production environment, or a refusal.
 
@@ -333,19 +393,6 @@ def production_environment(records: list[Any]) -> dict[str, str]:
         if key in VARIABLES_TO_IGNORE:
             continue
 
-        upper = key.upper()
-        for fragment in SECRET_NAME_FRAGMENTS:
-            if fragment in upper:
-                raise ReleaseError(
-                    f"the Vercel project's Production environment holds {key}, whose name reads as "
-                    "a backend secret; it must not reach a frontend build. Remove it from the "
-                    "project rather than from this check"
-                )
-        if not VALID_NAME.match(key):
-            raise ReleaseError(
-                f"the Production environment holds {key!r}, which is not a usable variable name"
-            )
-
         value = record.get("value")
         if record.get("type") == "sensitive" or value is None:
             raise ReleaseError(
@@ -361,6 +408,26 @@ def production_environment(records: list[Any]) -> dict[str, str]:
             )
         found[key] = value
 
+    validate_environment(found)
+    return found
+
+
+def validate_environment(found: dict[str, str]) -> None:
+    """Everything the build must be able to rely on, whichever source supplied the values."""
+    for key in found:
+        upper = key.upper()
+        for fragment in SECRET_NAME_FRAGMENTS:
+            if fragment in upper:
+                raise ReleaseError(
+                    f"the Vercel project's Production environment holds {key}, whose name reads "
+                    "as a backend secret; it must not reach a frontend build. Remove it from the "
+                    "project rather than from this check"
+                )
+        if not VALID_NAME.match(key):
+            raise ReleaseError(
+                f"the Production environment holds {key!r}, which is not a usable variable name"
+            )
+
     missing = [name for name in REQUIRED_PUBLIC_NAMES if not found.get(name)]
     for alternatives in REQUIRED_PUBLIC_ALTERNATIVES:
         if not any(found.get(name) for name in alternatives):
@@ -371,7 +438,27 @@ def production_environment(records: list[Any]) -> dict[str, str]:
             f"{', '.join(missing)}; the bundle would be built without it"
         )
     validate_url_values(found)
-    return found
+
+
+def describe_shape(value: str) -> str:
+    """What a value looks like, in terms that cannot reconstruct it.
+
+    A release that refuses a value has to say something useful about it, and the value itself is
+    the one thing it must never say: the likeliest way this check ever fires is a credential pasted
+    into the wrong field, and an Actions log on a public repository is readable by anyone. Length
+    and character class are enough to tell the three cases apart — a bare hostname, a ciphertext or
+    digest that came back instead of the plaintext, and an opaque token — and enough to tell
+    whether what arrived resembles what the dashboard shows.
+    """
+    marks = [f"{len(value)} characters"]
+    marks.append("contains `://`" if "://" in value else "no `://`")
+    if re.fullmatch(r"[0-9a-f]+", value):
+        marks.append("hexadecimal throughout, so this looks like a digest or ciphertext")
+    elif re.fullmatch(r"[A-Za-z0-9+/=_-]+", value):
+        marks.append("no dots or slashes, so this looks like an opaque token rather than a URL")
+    elif any(character.isspace() for character in value):
+        marks.append("contains whitespace")
+    return "; ".join(marks)
 
 
 def validate_url_values(records: dict[str, str]) -> None:
@@ -397,16 +484,19 @@ def validate_url_values(records: dict[str, str]) -> None:
             continue
         if any(character.isspace() for character in value):
             raise ReleaseError(
-                f"the Production value of {name} contains whitespace, so it is not a usable URL. "
-                "Set it to the bare origin with no spaces, tabs or newlines around or inside it"
+                f"the Production value of {name} contains whitespace, so it is not a usable URL "
+                f"({describe_shape(value)}). Set it to the bare origin with no spaces, tabs or "
+                "newlines around or inside it"
             )
         parsed = urllib.parse.urlsplit(value)
         if parsed.scheme not in ("http", "https"):
             raise ReleaseError(
                 f"the Production value of {name} does not begin with `http://` or `https://`, so "
-                "it is not a usable URL. Next.js inlines this value at build time, so a build "
-                "would compile it into the bundle and every request would fail in production. Set "
-                "it to the full origin — for Supabase that is `https://<project-ref>.supabase.co`"
+                f"it is not a usable URL ({describe_shape(value)}). Next.js inlines this value at "
+                "build time, so a build would compile it into the bundle and every request would "
+                "fail in production. If the dashboard shows a correct value for this variable, "
+                "then what this release was handed is not what is stored — the shape above says "
+                "which of the two it is"
             )
         if not parsed.hostname:
             raise ReleaseError(
@@ -461,7 +551,7 @@ def run(project_id: str, expected_org_id: str, directory: Path, fetch: FetchJson
     print("the project named by WEATHRA_VERCEL_PROJECT_ID is owned by the expected team")
 
     link = project_link(project)
-    environment = production_environment(read_env_records(fetch, project_id))
+    environment = resolve_production_environment(fetch, project_id)
     link_path, env_path = write_files(directory, link, serialize_env(environment))
 
     print(f"wrote {link_path.name} for project {link['projectName']}")
