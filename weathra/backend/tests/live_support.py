@@ -42,14 +42,20 @@ TIMEOUT_SECONDS = 30.0
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
-# The secrets the authenticated tier needs. Two dedicated accounts, because "user A cannot see
-# user B's data" cannot be checked with one, and the public client key because signing in is done
-# the way the browser does it — Supabase's password grant — rather than by minting anything.
+# What one signed-in account needs: the project, its public client key, and the account. Signing in
+# is done the way the browser does it — Supabase's password grant — rather than by minting anything.
 CREDENTIAL_VARIABLES = (
     "WEATHRA_LIVE_SUPABASE_URL",
     "WEATHRA_LIVE_SUPABASE_ANON_KEY",
     "WEATHRA_LIVE_USER_A_EMAIL",
     "WEATHRA_LIVE_USER_A_PASSWORD",
+)
+
+# A second account, and the only thing it is for: "user A cannot see user B's data" cannot be asked
+# with one account, and it cannot be faked. Kept separate from the set above so that having no
+# second account costs only the isolation checks — one account is enough to prove a real session is
+# served, a question is answered with its evidence, and a stream completes.
+SECOND_ACCOUNT_VARIABLES = (
     "WEATHRA_LIVE_USER_B_EMAIL",
     "WEATHRA_LIVE_USER_B_PASSWORD",
 )
@@ -106,35 +112,54 @@ def target_from_env(environment: Mapping[str, str] | None = None) -> Target:
 
 @dataclass(frozen=True)
 class Credentials:
-    """Two dedicated deployed accounts, and the public configuration needed to sign in as them."""
+    """One deployed account, and optionally a second, with the public configuration to sign in."""
 
     supabase_url: str
     anon_key: str
     user_a_email: str
     user_a_password: str
-    user_b_email: str
-    user_b_password: str
+    user_b_email: str | None = None
+    user_b_password: str | None = None
+
+    @property
+    def has_second_account(self) -> bool:
+        return bool(self.user_b_email and self.user_b_password)
 
     @property
     def secrets(self) -> tuple[str, ...]:
         """Everything that must never appear in output."""
-        return (self.anon_key, self.user_a_password, self.user_b_password)
+        return tuple(
+            value for value in (self.anon_key, self.user_a_password, self.user_b_password) if value
+        )
 
 
 def credentials_from_env(
     environment: Mapping[str, str] | None = None,
 ) -> tuple[Credentials | None, tuple[str, ...]]:
-    """The credentials, or `None` and the exact names that are missing.
+    """The credentials, and the names of anything missing.
 
-    Returning the missing names rather than a bare `None` is what lets a skip message say what to
-    configure. Half a set is treated as none at all: a run that signed in as one account and
-    skipped the isolation checks would report a pass for the property those checks exist to prove.
+    Two different absences, reported differently, because they cost different things:
+
+    * without the four in `CREDENTIAL_VARIABLES` there is no session at all, so `None` comes back
+      with their names and every authenticated check skips;
+    * without the two in `SECOND_ACCOUNT_VARIABLES` there is a session but no second subject, so
+      the credentials come back *with* those names listed — only the isolation checks skip, and
+      everything one account can prove still runs.
+
+    The second case is the one worth being careful about. Treating a missing second account as "no
+    credentials" would skip checks a single account can prove; treating it as "isolation passes"
+    would report the property those checks exist to prove without having asked. It does neither.
     """
     source = environment if environment is not None else os.environ
-    present = {name: (source.get(name) or "").strip() for name in CREDENTIAL_VARIABLES}
-    missing = tuple(name for name, value in present.items() if not value)
+    present = {
+        name: (source.get(name) or "").strip()
+        for name in (*CREDENTIAL_VARIABLES, *SECOND_ACCOUNT_VARIABLES)
+    }
+    missing = tuple(name for name in CREDENTIAL_VARIABLES if not present[name])
     if missing:
         return None, missing
+
+    second = tuple(name for name in SECOND_ACCOUNT_VARIABLES if not present[name])
     return (
         Credentials(
             supabase_url=normalise(
@@ -143,10 +168,10 @@ def credentials_from_env(
             anon_key=present["WEATHRA_LIVE_SUPABASE_ANON_KEY"],
             user_a_email=present["WEATHRA_LIVE_USER_A_EMAIL"],
             user_a_password=present["WEATHRA_LIVE_USER_A_PASSWORD"],
-            user_b_email=present["WEATHRA_LIVE_USER_B_EMAIL"],
-            user_b_password=present["WEATHRA_LIVE_USER_B_PASSWORD"],
+            user_b_email=present["WEATHRA_LIVE_USER_B_EMAIL"] or None,
+            user_b_password=present["WEATHRA_LIVE_USER_B_PASSWORD"] or None,
         ),
-        (),
+        second,
     )
 
 
@@ -259,6 +284,30 @@ def preflight(client: httpx.Client, url: str, origin: str, *, method: str = "GET
     if not allowed:
         return None
     return allowed.strip().rstrip("/")
+
+
+def error_code(response: httpx.Response) -> str | None:
+    """The `error.code` a refusal carries, or `None` when the body is not one."""
+    try:
+        parsed = response.json()
+    except ValueError:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    code = (parsed.get("error") or {}).get("code")
+    return str(code) if code else None
+
+
+def upstream_refused(response: httpx.Response) -> bool:
+    """Whether the *provider* refused, rather than Weathra.
+
+    A 429 carrying `provider_rate_limited` is Weathra reporting an upstream limit correctly — the
+    documented behaviour, not a defect. It is also not evidence that the surface works, so a check
+    that hit it has to say "could not be performed" rather than pass or fail. Running this suite
+    repeatedly is enough to provoke it on a free provider tier, which is worth knowing before
+    reading a red run as a broken deployment.
+    """
+    return response.status_code == 429 and error_code(response) == "provider_rate_limited"
 
 
 def json_body(response: httpx.Response, *secrets: str) -> dict[str, Any]:

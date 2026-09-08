@@ -36,6 +36,7 @@ import pytest
 
 from tests.auth_support import build_factory
 from tests.live_support import (
+    SECOND_ACCOUNT_VARIABLES,
     Credentials,
     Target,
     assert_not_server_error,
@@ -48,6 +49,7 @@ from tests.live_support import (
     redirect_target,
     sign_in,
     target_from_env,
+    upstream_refused,
 )
 from weathra.api.classification import PROTECTED_PATHS, PUBLIC_PATHS
 
@@ -74,13 +76,29 @@ def tokens() -> Any:
 
 @pytest.fixture(scope="module")
 def credentials() -> Credentials:
+    """One deployed account. Skips, naming the four variables, when there is none."""
     found, missing = credentials_from_env()
     if found is None:
         pytest.skip(
-            "the authenticated checks need two dedicated deployed accounts; missing: "
-            + ", ".join(missing)
+            "the authenticated checks need one deployed account; missing: " + ", ".join(missing)
         )
     return found
+
+
+@pytest.fixture(scope="module")
+def second_account(credentials: Credentials) -> Credentials:
+    """The same credentials, but only for checks that genuinely need a second subject.
+
+    Isolation cannot be asked with one account and it cannot be faked, so these checks skip rather
+    than being weakened into something that passes without proving anything. Everything else an
+    authenticated session can prove runs from the first account alone.
+    """
+    if not credentials.has_second_account:
+        pytest.skip(
+            "'one account cannot see another's data' needs a second deployed account; missing: "
+            + ", ".join(SECOND_ACCOUNT_VARIABLES)
+        )
+    return credentials
 
 
 # A GET the deployed backend can answer for each protected path, so "no token means 401" can be
@@ -216,6 +234,8 @@ def test_a_public_forecast_is_served_without_a_session_and_says_where_it_came_fr
     """
     response = fetch(reader, "GET", target.api("/weather/forecast?location=Berlin&days=3"))
     assert_not_server_error(response)
+    if upstream_refused(response):
+        pytest.skip("the weather provider rate-limited this request; the surface was not exercised")
     assert_status(response, 200)
     body = json_body(response)
     attribution = body.get("attribution", {})
@@ -246,6 +266,8 @@ def test_a_baseline_comparison_labels_both_sides(reader: httpx.Client, target: T
         ),
     )
     assert_not_server_error(response)
+    if upstream_refused(response):
+        pytest.skip("the weather provider rate-limited this request; the surface was not exercised")
     assert_status(response, 200)
     body = json_body(response)
     assert body.get("baseline", {}).get("labelling"), "the baseline side carries no labelling"
@@ -396,8 +418,11 @@ def token_a(writer: httpx.Client, credentials: Credentials) -> str:
 
 
 @pytest.fixture(scope="module")
-def token_b(writer: httpx.Client, credentials: Credentials) -> str:
-    return sign_in(writer, credentials, credentials.user_b_email, credentials.user_b_password)
+def token_b(writer: httpx.Client, second_account: Credentials) -> str:
+    assert second_account.user_b_email and second_account.user_b_password
+    return sign_in(
+        writer, second_account, second_account.user_b_email, second_account.user_b_password
+    )
 
 
 def _auth(token: str) -> dict[str, str]:

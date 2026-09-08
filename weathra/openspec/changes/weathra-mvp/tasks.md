@@ -263,11 +263,11 @@ Completes before substantial frontend implementation in groups 20 and 21. Visily
 - [x] 23.4 Containerize the backend and implement the Render deployment workflow with Alembic migrations, including the RLS policies, applied under the privileged connection before the new backend release serves traffic, on an instance type that does not idle-spin-down; verify a deployment succeeds and readiness reports every dependency reachable.
 - [x] 23.5 Implement the Vercel deployment workflow for the frontend with the public Supabase configuration and backend base URL set per environment; verify the deployed frontend loads, signs a user in, and reaches the deployed backend with a bearer token.
 - [x] 23.6 Configure the Supabase database — pgvector enabled, pooler connection, RLS policies applied, and the retention routine invoked on a schedule from CI under the privileged connection; verify migrations apply, the `db` suite passes against it, and a scheduled retention invocation completes.
-- [ ] 23.7 Verify the no-local-machine requirement end to end by completing setup, sign-up, test, and deploy from a browser-based cloud environment; verify each step and record the confirmation in `docs/deployment.md`.
+- [x] 23.7 Verify the no-local-machine requirement end to end by completing setup, sign-up, test, and deploy from a browser-based cloud environment; verify each step and record the confirmation in `docs/deployment.md`.
 
 ## 24. Documentation
 
-- [ ] 24.1 Write the README — what Weathra is, the architecture at a glance, the MVP versus post-MVP split, and how to get from clone to a running pair of applications with a verified account; verify a reader following it reaches a working cloud setup and can sign in.
+- [x] 24.1 Write the README — what Weathra is, the architecture at a glance, the MVP versus post-MVP split, and how to get from clone to a running pair of applications with a verified account; verify a reader following it reaches a working cloud setup and can sign in.
 - [x] 24.2 Write `docs/architecture.md` and `docs/agents.md` covering the component boundaries, the dependency rule, the graph topology, the four agents' responsibilities, and the graph-controlled-execution decision; verify each documented component matches the implemented module layout.
 - [x] 24.3 Write `docs/authentication.md` — the Supabase Auth flows, the verification and reset paths including the code and link variants, backend token validation and key caching, the principal, the ownership model and table classification, the RLS policies, the two database roles, and the secret split; verify every requirement in `specs/authentication` is addressed and the documented table classification matches the migrations.
 - [x] 24.4 Write `docs/configuration.md` and `docs/api.md` — every environment variable for both applications with defaults and its public/secret classification, and the API surface with the OpenAPI reference, the public/protected classification per endpoint, and the SSE event catalogue; verify every variable in `Settings` and every route appears with its classification.
@@ -283,7 +283,7 @@ Completes before substantial frontend implementation in groups 20 and 21. Visily
 - [x] 25.2 Run the full frontend verification pass — lint, type-check, unit tests, build, and the Playwright flows; verify all pass.
 - [ ] 25.3 Run the authentication and authorization suite of group 18 against the deployed backend and record the results; verify every case passes, including cross-user isolation and the RLS gate.
 - [ ] 25.4 Run the live smoke check against the deployed pair — create an account and verify it by code, sign in, readiness all-reachable, an attributed public forecast without a session, a baseline comparison with both sides labelled, a question through `/ask` whose every figure appears in its evidence, an authenticated SSE stream completing, and a second account seeing none of the first's data; verify each and record the results.
-- [ ] 25.5 Trace every capability spec to its implementing tasks and tests, and record the traceability table in `docs/architecture.md`; verify every requirement in all twenty specs maps to at least one test.
+- [x] 25.5 Trace every capability spec to its implementing tasks and tests, and record the traceability table in `docs/architecture.md`; verify every requirement in all twenty specs maps to at least one test.
 
 ---
 

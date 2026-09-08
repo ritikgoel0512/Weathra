@@ -212,6 +212,58 @@ README.md
 Paths inside `weathra/docs/` and `weathra/openspec/` are relative to `weathra/`, since those
 documents sit beside the applications they describe.
 
+## Running it in production
+
+Weathra is deployed, and the deployment is part of the design rather than an afterthought. Five
+hosted services, each doing one thing, and no step that needs a particular computer:
+
+| | What it holds | How it is reached |
+|---|---|---|
+| **GitHub Codespaces** | the development environment | Both applications run inside it; nothing needs installing on a laptop |
+| **GitHub Actions** | every production credential | The only route to production. `release.yml` migrates and releases the backend; `frontend-release.yml` builds and promotes the frontend; `database-retention.yml` removes expired data on a schedule |
+| **Vercel** | the Next.js frontend | Built *on the runner* and promoted with `--prebuilt`, so what is live is what the commit built. The three `NEXT_PUBLIC_` values are the only configuration it holds |
+| **Render** | the FastAPI backend, as a container | Deployed with the request-serving database connection only. The privileged connection never reaches it |
+| **Supabase** | accounts and Postgres with `pgvector` | Auth, the user-owned tables under Row Level Security, and the vector index |
+| **Open-Meteo** | weather and geocoding | No credential. Every figure Weathra reports names it |
+| **OpenRouter** | the language model | Optional. Without it every deterministic capability still works and the Analyst says why it cannot answer |
+
+Auto-deploy is **off** on both platforms — `autoDeployTrigger: "off"` in `render.yaml`,
+`git.deploymentEnabled.main: false` in `frontend/vercel.json` — so a push to `main` never releases
+anything by itself. The workflows are the only route, which is what makes "migrations applied before
+the new release serves traffic" a property of the system rather than of timing.
+
+Setting it up yourself means creating the four accounts above, adding the repository secrets
+[`docs/deployment.md`](weathra/docs/deployment.md) lists, and dispatching the two release workflows.
+That document is the operational reference: what each secret is for, what each workflow may and may
+not do, and how each environment is verified.
+
+### Verifying a deployment
+
+Three commands, none of which need a credential:
+
+```bash
+# the backend answers, and names every dependency it depends on
+curl https://<backend>/api/v1/health
+curl https://<backend>/api/v1/ready
+
+# the frontend serves, and the route gate redirects an unauthenticated visitor
+curl -i https://<frontend>/sign-in
+```
+
+For the whole deployed pair at once, the acceptance suite checks it from outside — the pages that
+render, the routes that redirect with their destination kept, readiness, the public weather surfaces
+and their attribution, the CORS answer a browser actually receives, and every protected endpoint
+refusing every shape of invalid token:
+
+```bash
+cd weathra/backend
+SUPABASE_URL=https://placeholder.supabase.co pytest -m deployed
+```
+
+It writes nothing: the checks run through a client that refuses any method but `GET`, `HEAD` and
+`OPTIONS`. The handful of checks that need a real session skip unless deployed-account credentials
+are configured, and say which are missing.
+
 ## Licence
 
 MIT. See [LICENSE](LICENSE).

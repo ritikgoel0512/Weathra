@@ -847,6 +847,72 @@ def test_every_requirement_is_traced() -> None:
     )
 
 
+def _task_states() -> tuple[set[str], set[str]]:
+    """(open, complete) task numbers, from the checkbox list itself."""
+    text = TASKS.read_text()
+    return (
+        set(re.findall(r"^- \[ \] (\d+\.\d+)", text, re.MULTILINE)),
+        set(re.findall(r"^- \[x\] (\d+\.\d+)", text, re.MULTILINE)),
+    )
+
+
+def _names_no_test(tests: str) -> bool:
+    return tests.lstrip("— ").strip().lower() in {"", "none"}
+
+
+def test_every_delivered_requirement_maps_to_at_least_one_test() -> None:
+    """Task 25.5's verification, stated the way it can actually be true.
+
+    The rule is about the *task*, not the spec. A requirement whose governing tasks are all
+    complete is something this project claims to have built, so it must name a test — otherwise
+    the table is decoration and the claim is unchecked. That covers every MVP requirement, and it
+    also covers each SaaS-layer requirement the moment its task closes.
+
+    The specs are not partitioned into MVP and post-MVP for this, because they do not partition
+    cleanly: `agent-orchestration`, `evaluation` and `web-ui` each carry requirements the SaaS
+    change added, whose tasks sit in groups 26-34 and are open. Keying on the checkbox is what
+    makes the assertion follow reality rather than a hand-kept list.
+    """
+    _open, complete_tasks = _task_states()
+    missing: list[str] = []
+
+    for requirement, tasks, _implementation, tests, _status in _traceability_rows():
+        named = re.findall(r"\d+\.\d+", tasks)
+        if not named or not all(number in complete_tasks for number in named):
+            continue
+        if _names_no_test(tests):
+            missing.append(f"{requirement} (tasks {tasks})")
+
+    assert not missing, (
+        "requirements whose tasks are complete but which name no test:\n  " + "\n  ".join(missing)
+    )
+
+
+def test_every_untested_requirement_is_owned_by_an_open_task() -> None:
+    """The other half, and why 25.5 needs no invented tests to be satisfied.
+
+    A requirement with no test is either an omission or a thing not built yet, and the difference
+    matters. Writing tests for unimplemented SaaS features to fill the column would be the worst
+    way to satisfy a traceability requirement: the table would claim coverage of code nobody has
+    written. So each such row names the task that owes it, and this asserts that task is still
+    open — which is what keeps the absence *owned* rather than forgotten. Close a Phase B task and
+    this fails until its rows name real tests.
+    """
+    open_tasks, _complete = _task_states()
+    unowned: list[str] = []
+
+    for requirement, tasks, _implementation, tests, status in _traceability_rows():
+        if not _names_no_test(tests):
+            continue
+        named = re.findall(r"\d+\.\d+", tasks)
+        if not named or not any(number in open_tasks for number in named):
+            unowned.append(f"{requirement} (tasks {tasks!r}, status {status})")
+
+    assert not unowned, "requirements with no test and no open task to own them:\n  " + "\n  ".join(
+        unowned
+    )
+
+
 def test_every_traceability_row_names_things_that_exist() -> None:
     """A row may only cite a real task and a real path — otherwise it is decoration."""
     task_numbers = set(re.findall(r"^- \[.\] (\d+\.\d+)", TASKS.read_text(), re.MULTILINE))

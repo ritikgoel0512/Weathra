@@ -249,6 +249,23 @@ still owed. `OPEN` — the governing task is open; where the row names no test, 
 A requirement is never marked implemented because code exists: the status follows its governing
 task's checkbox, not the presence of a module.
 
+**What the table is held to, and by what.** Two assertions in `test_documentation.py`, and between
+them they are task 25.5's verification:
+
+* `test_every_delivered_requirement_maps_to_at_least_one_test` — a requirement whose governing
+  tasks are *all complete* must name a test. That is everything this project claims to have built,
+  and a claim with no test behind it is unchecked.
+* `test_every_untested_requirement_is_owned_by_an_open_task` — a requirement that names no test
+  must name a task that is still open.
+
+The second is why this table needs no invented tests to be complete. Sixty requirements — the five
+SaaS specs' own, plus the ones the SaaS change added to `agent-orchestration`, `evaluation` and
+`web-ui` — describe features nobody has written yet. Writing tests to fill their column would be
+the worst possible way to satisfy a traceability requirement: the table would claim coverage of
+code that does not exist. So each names the group 26-34 task that owes it, and the assertion holds
+that task to being open. Close one of those tasks and the first assertion starts demanding its
+tests. Both directions stay honest without anyone maintaining a list of which spec is which.
+
 Of **210** requirements across twenty specs, **150** are implemented and tested, **1** is
 manual-pending, and **59** are open. **58** requirements have no test, every one of them
 owned by an open task named in its row — 1 open requirement carries tests already

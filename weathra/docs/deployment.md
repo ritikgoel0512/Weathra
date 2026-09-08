@@ -738,6 +738,25 @@ disposable `pgvector` database on every push instead, and the schema properties 
 asserted are asserted directly against production by the verification step above. The deviation is
 deliberate; the wording is what should change if this is ever revisited.
 
+## No local machine
+
+Task 23.7. Every step of this project — setup, sign-up, test, and deploy — has been carried out from
+a browser. Recorded here because the requirement is easy to satisfy by accident and impossible to
+demonstrate later: what follows is what actually happened, not a claim that it could have.
+
+| Step | Where it happened | Evidence |
+|---|---|---|
+| **Setup** | GitHub Codespaces | The repository has no local-machine step: `README.md` opens on a Codespace, and both applications run inside it. `frontend/.env.local` and `backend/.env` are written in the Codespace and never leave it. |
+| **Sign-up** | the browser, against production | The product owner created an account at `https://weathra-bice.vercel.app/sign-in` and confirmed it with the emailed code. Recorded in *Verified against the project* above. |
+| **Test** | Codespaces and GitHub-hosted runners | The offline suite, the `db` suite against a `pgvector` container, the frontend suites, Playwright in both browsers, and the deployed-acceptance suite all run in the Codespace; `backend.yml` and `frontend.yml` run the same commands on hosted runners for every push. |
+| **Deploy** | GitHub Actions | `release.yml` migrates under the privileged connection and releases the container on Render; `frontend-release.yml` builds on the runner and promotes to Vercel. Neither can be run from a workstation: the credentials exist only as repository secrets, and `test_only_the_release_pipeline_reads_a_repository_secret` keeps it that way. |
+| **Operate** | GitHub Actions and provider dashboards | Configuration changes go through `backend-allowed-origin.yml` and the Supabase and Vercel dashboards; retention runs unattended on a schedule. Nothing operational needs a shell on a laptop. |
+
+Two things this deliberately does not claim. It does not claim a laptop is *incapable* of running
+Weathra — a developer with Docker and Python 3.12 can, and `README.md` says how. And it does not
+claim any single person never opened a local editor; what it records is that no step *required* one,
+which is the requirement.
+
 ## The production image
 
 The backend is deployed as a container. `render.yaml` sets `runtime: docker` and points at

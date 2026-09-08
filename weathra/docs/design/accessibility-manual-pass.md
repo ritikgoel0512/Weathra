@@ -195,6 +195,15 @@ A real phone, in a mobile browser, using the LAN setup in §1. Target sizes now 
 
 ---
 
+> **This worksheet is the last manual acceptance item in the MVP.** Everything task 21.8 asks for
+> that a machine can check is done and green — axe across every screen, keyboard operation of every
+> action, focus order, landmarks and accessible names, contrast on the token palette, and
+> `scrollWidth - clientWidth` at 1440, 1024, 768 and 360 on all eight screens — recorded in
+> [`accessibility.md`](accessibility.md) and enforced by `frontend/tests/accessibility.test.tsx`
+> and `frontend/tests/e2e/accessibility.spec.ts`. What remains is the three passes below, which
+> need a person: a screen reader, a keyboard-only run by hand, and a zoom pass. 21.8 stays open
+> until §5 records them with a date and an operator, and nothing else in the MVP is waiting on it.
+
 ## 5. Findings
 
 Fill in per pass. A pass with nothing to report says so, with its date and operator — that is a
