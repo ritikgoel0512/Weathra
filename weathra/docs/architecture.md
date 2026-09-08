@@ -231,3 +231,390 @@ against a test key pair, a deterministic hashing embedder, and an in-process MCP
 the RLS gate is proven by a query with its ownership predicate deliberately omitted. `live`-marked
 tests reach the real upstreams and are deselected by default. Both CI workflows run on hosted
 runners with no step that assumes a particular local machine.
+
+## Traceability
+
+Task 25.5. Every requirement in all twenty capability specs, traced to the tasks that implement it,
+the modules that hold it, and the tests that prove it. It reads in both directions: a reviewer
+starting from a requirement finds its tests, and a reviewer starting from a test finds the
+requirement that governs it.
+
+**Paths.** Implementation paths are relative to `backend/weathra/` and test paths to
+`backend/tests/` unless they begin with `frontend/` or `docs/`, which are relative to the project
+root. Task numbers refer to `openspec/changes/weathra-mvp/tasks.md`.
+
+**Status.** `IMPLEMENTED` — the governing tasks are complete and the named tests exist and run.
+`MANUAL` — implemented and automatically tested as far as automation reaches, with a human pass
+still owed. `OPEN` — the governing task is open; where the row names no test, none exists yet.
+A requirement is never marked implemented because code exists: the status follows its governing
+task's checkbox, not the presence of a module.
+
+Of **210** requirements across twenty specs, **150** are implemented and tested, **1** is
+manual-pending, and **59** are open. **58** requirements have no test, every one of them
+owned by an open task named in its row — 1 open requirement carries tests already
+(a live evaluation run is pinned to one named model, whose harness is tested offline while
+Task 22.10's live execution remains outstanding).
+
+### Coverage by spec
+
+| Spec | Requirements | Implemented | Manual | Open | Governing task groups |
+|---|---:|---:|---:|---:|---|
+| `agent-orchestration` | 17 | 15 | 0 | 2 | 13, 14 |
+| `authentication` | 20 | 17 | 0 | 3 | 3, 4, 18 |
+| `deterministic-analytics` | 10 | 10 | 0 | 0 | 7 |
+| `evaluation` | 15 | 10 | 0 | 5 | 22 |
+| `forecast-analysis` | 10 | 10 | 0 | 0 | 8 |
+| `historical-weather` | 5 | 5 | 0 | 0 | 8 |
+| `http-api` | 24 | 20 | 0 | 4 | 15, 16 |
+| `location-comparison` | 6 | 6 | 0 | 0 | 9 |
+| `location-resolution` | 7 | 7 | 0 | 0 | 6 |
+| `mcp-weather-server` | 7 | 7 | 0 | 0 | 10 |
+| `memory` | 9 | 7 | 0 | 2 | 12 |
+| `rag-knowledge` | 8 | 8 | 0 | 0 | 11 |
+| `safety-grounding` | 10 | 10 | 0 | 0 | 17 |
+| `weather-providers` | 7 | 7 | 0 | 0 | 5 |
+| `web-ui` | 16 | 11 | 1 | 4 | 19, 20, 21 |
+| `model-policy` | 10 | 0 | 0 | 10 | 28 |
+| `model-catalog` | 7 | 0 | 0 | 7 | 26, 27 |
+| `llm-telemetry` | 7 | 0 | 0 | 7 | 29 |
+| `usage-limits` | 9 | 0 | 0 | 9 | 30 |
+| `model-lab` | 6 | 0 | 0 | 6 | 32 |
+| **Total** | **210** | **150** | **1** | **59** | |
+
+### `agent-orchestration`
+
+| Requirement | Tasks | Implementation | Tests | Status |
+|---|---|---|---|---|
+| Supervisor routing across specialized agents | 14.1, 14.2 | agents/supervisor.py, agents/graph.py | unit/test_agent_state_and_routing.py, unit/test_agent_graph.py | IMPLEMENTED |
+| Multi-step queries spanning several agents | 14.6 | agents/graph.py, agents/nodes/ | unit/test_agent_graph.py | IMPLEMENTED |
+| Provider-agnostic language model abstraction | 13.1–13.4 | agents/llm/base.py, agents/llm/openrouter.py, agents/llm/registry.py | unit/test_llm.py, unit/test_no_vendor_coupling.py | IMPLEMENTED |
+| Tool access only through the approved tool interface | 14.14 | agents/nodes/, mcp/client.py | unit/test_agent_catalog.py, test_architecture.py | IMPLEMENTED |
+| The language model interprets but never calculates | 14.4, 17.1 | agents/nodes/analytics.py, analytics/ | unit/test_analytics.py, integration/test_safety.py | IMPLEMENTED |
+| Bounded execution | 14.9 | agents/budget.py | unit/test_agent_graph.py | IMPLEMENTED |
+| Evidence record | 14.8 | agents/evidence.py, domain/evidence.py | unit/test_domain_evidence.py, frontend/lib/evidence/record.test.ts | IMPLEMENTED |
+| Streaming progress | 16.1 | agents/observer.py, api/streaming.py | integration/test_api.py | IMPLEMENTED |
+| Runs act as an authenticated user | 14.1 | agents/context.py, auth/deps.py | integration/test_auth_data_path.py | IMPLEMENTED |
+| Conversation context and follow-up questions | 14.11 | agents/context.py, memory/threads.py | integration/test_agent_memory.py | IMPLEMENTED |
+| Clarification instead of assumption | 14.12 | agents/nodes/support.py | unit/test_agent_graph.py | IMPLEMENTED |
+| Scope confinement | 14.13 | agents/scope.py | unit/test_agent_state_and_routing.py | IMPLEMENTED |
+| Untrusted content is data, not instruction | 14.13 | agents/safety.py | integration/test_safety.py | IMPLEMENTED |
+| Operation without an inference credential | 13.5 | agents/llm/registry.py | integration/test_no_credential.py | IMPLEMENTED |
+| Model selection comes from the policy layer, never from a node or a caller | 28.7 | — not implemented | — none | OPEN |
+| Orchestration is gated by quota and instrumented per call | 29.3, 30.6 | — not implemented | — none | OPEN |
+| Every language model call attempt is recorded in the evidence record | 22.8 | domain/evidence.py, agents/llm/base.py | unit/test_domain_evidence.py, unit/test_llm.py | IMPLEMENTED |
+
+### `authentication`
+
+| Requirement | Tasks | Implementation | Tests | Status |
+|---|---|---|---|---|
+| Supabase Auth is the identity system | 4.1 | auth/tokens.py, auth/jwks.py | unit/test_auth_tokens.py, unit/test_auth_jwks.py, frontend/lib/supabase/clients.test.ts | IMPLEMENTED |
+| Account creation with email and password | 20.5 | frontend/components/auth/create-account-form.tsx | frontend/components/auth/create-account.test.tsx, frontend/app/(auth)/create-account/page.test.tsx, frontend/lib/auth/password.test.ts | IMPLEMENTED |
+| Mandatory email verification | 20.6 | frontend/components/auth/verify-email-form.tsx | frontend/components/auth/verify-email.test.tsx, frontend/app/(auth)/verify-email/page.test.tsx, frontend/app/auth/confirm/route.test.ts | IMPLEMENTED |
+| Verification code entry, resend, and states | 20.6 | frontend/lib/auth/verification.ts | frontend/lib/auth/verification.test.ts | IMPLEMENTED |
+| Sign in and sign out | 20.4 | frontend/components/auth/sign-in-form.tsx | frontend/components/auth/sign-in.test.tsx, frontend/tests/e2e/protected-route.spec.ts, frontend/app/(auth)/sign-in/page.test.tsx | IMPLEMENTED |
+| Forgot password and password reset | 20.7 | frontend/components/auth/forgot-password-form.tsx, frontend/components/auth/reset-password-form.tsx | frontend/components/auth/forgot-password.test.tsx, frontend/components/auth/reset-password.test.tsx, frontend/app/(auth)/forgot-password/page.test.tsx, frontend/app/(auth)/reset-password/page.test.tsx | IMPLEMENTED |
+| Session persistence and expiry | 20.8 | frontend/lib/session/state.ts, frontend/middleware.ts | frontend/lib/session/state.test.ts, frontend/middleware.test.ts, frontend/lib/session/session-layer.test.tsx | IMPLEMENTED |
+| Backend validates every token | 4.2 | auth/tokens.py, auth/deps.py | unit/test_auth_deps.py, unit/test_auth_tokens.py | IMPLEMENTED |
+| Application profile linked to the auth user | 4.4 | auth/profiles.py | integration/test_auth_data_path.py, unit/test_domain_identity.py, frontend/lib/auth/identity.test.ts | IMPLEMENTED |
+| User-owned data is scoped to its owner | 3.4 | db/session.py, auth/rls.py | integration/test_auth_data_path.py, integration/test_db_schema.py | IMPLEMENTED |
+| Cross-user access is denied | 18.3 | auth/rls.py, db/session.py | integration/test_auth_boundary.py | IMPLEMENTED |
+| Endpoint protection classification | 15.2 | api/classification.py | test_openapi_snapshot.py, integration/test_api.py | IMPLEMENTED |
+| Authorization enforced in the backend, not the client | 18.4 | auth/deps.py | integration/test_auth_boundary.py | IMPLEMENTED |
+| Row Level Security on user-owned tables | 3.2, 3.3 | db/migrations/versions/0002_row_level_security.py | integration/test_db_schema.py, integration/test_shared_data_policies.py, unit/test_db_roles.py, integration/test_db_migration_privileges.py | IMPLEMENTED |
+| Secret handling | 23.3 | config.py | test_secret_storage.py, frontend/scripts/secret-containment.test.ts, test_env_example.py, frontend/lib/env.test.ts | IMPLEMENTED |
+| Authentication in streaming requests | 16.3 | api/streaming.py | integration/test_api.py | IMPLEMENTED |
+| Account and data deletion | 15.5 | api/routers/account.py | integration/test_api.py | IMPLEMENTED |
+| Administrative and internal roles are server-held | 31.1 | — not implemented | — none | OPEN |
+| Plan and model entitlement are derived, never asserted | 28.2 | — not implemented | — none | OPEN |
+| Row Level Security on the SaaS-ready tables | 26.3 | — not implemented | — none | OPEN |
+
+### `deterministic-analytics`
+
+| Requirement | Tasks | Implementation | Tests | Status |
+|---|---|---|---|---|
+| Analytics are pure, deterministic, and free of language models | 7.1, 7.9 | analytics/ | unit/test_analytics.py, test_architecture.py | IMPLEMENTED |
+| Descriptive temperature statistics | 7.2 | analytics/descriptive.py | unit/test_analytics.py | IMPLEMENTED |
+| Precipitation statistics and probability analysis | 7.3 | analytics/precipitation.py | unit/test_analytics.py | IMPLEMENTED |
+| Humidity, pressure, and wind statistics | 7.3 | analytics/wind.py, analytics/descriptive.py | unit/test_analytics.py | IMPLEMENTED |
+| Rolling averages, deltas, and percentiles | 7.4 | analytics/rolling.py | unit/test_analytics.py | IMPLEMENTED |
+| Z-scores against a stated reference | 7.5 | analytics/distribution.py | unit/test_analytics.py | IMPLEMENTED |
+| Anomaly detection | 7.6 | analytics/anomaly.py | unit/test_analytics.py | IMPLEMENTED |
+| Trend analysis | 7.7 | analytics/trend.py | unit/test_analytics.py | IMPLEMENTED |
+| Insufficient data handling | 7.8 | analytics/support.py | unit/test_analytics.py | IMPLEMENTED |
+| Structured, self-describing results | 7.8 | domain/analytics.py | unit/test_analytics.py, unit/test_domain_weather.py | IMPLEMENTED |
+
+### `evaluation`
+
+| Requirement | Tasks | Implementation | Tests | Status |
+|---|---|---|---|---|
+| Evaluation dataset | 22.1 | evaluation/dataset/, evaluation/cases.py | unit/test_evaluation.py | IMPLEMENTED |
+| Metric definitions | 22.2 | evaluation/metrics.py | unit/test_evaluation.py | IMPLEMENTED |
+| Acceptance thresholds | 22.3 | evaluation/thresholds.py | unit/test_evaluation.py | IMPLEMENTED |
+| Evaluation runner | 22.4 | evaluation/runner.py, evaluation/harness.py | integration/test_evaluation_runner.py | IMPLEMENTED |
+| Deterministic metrics run without external services | 22.5 | evaluation/offline_llm.py, evaluation/fixtures.py | integration/test_evaluation_runner.py | IMPLEMENTED |
+| Evaluation runs authenticate | 22.6 | evaluation/provisioning.py | integration/test_evaluation_runner.py | IMPLEMENTED |
+| Reproducibility and comparison across runs | 22.7 | evaluation/storage.py | integration/test_evaluation_runner.py, unit/test_db_models.py | IMPLEMENTED |
+| Evaluation results are documented | 24.6 | docs/evaluation.md | test_documentation.py | IMPLEMENTED |
+| Candidate models are evaluated through this framework | 32.6 | — not implemented | — none | OPEN |
+| Model selection is decided on measured criteria, not on model name | 32.7 | — not implemented | — none | OPEN |
+| Model evaluation results are persisted and comparable | 32.8 | — not implemented | — none | OPEN |
+| Evaluation runs are internal usage | 32.10 | — not implemented | — none | OPEN |
+| A live evaluation run is pinned to one named model | 22.10 | evaluation/runner.py, config.py | integration/test_evaluation_runner.py | OPEN |
+| Live runs distinguish provider failure from model quality | 22.9 | evaluation/integrity.py | unit/test_evaluation.py, integration/test_evaluation_runner.py | IMPLEMENTED |
+| Live runs are paced and bounded against provider limits | 22.9 | evaluation/runner.py, agents/llm/openrouter.py | unit/test_evaluation.py, unit/test_llm.py | IMPLEMENTED |
+
+### `forecast-analysis`
+
+| Requirement | Tasks | Implementation | Tests | Status |
+|---|---|---|---|---|
+| Current conditions retrieval | 8.2 | weather/forecast_service.py | unit/test_weather_services.py | IMPLEMENTED |
+| Forecast retrieval across granularities and measures | 8.2 | weather/forecast_service.py, weather/windows.py | unit/test_weather_services.py | IMPLEMENTED |
+| Forecast window analysis | 8.1 | weather/windows.py | unit/test_weather_services.py | IMPLEMENTED |
+| Threshold crossings | 8.3 | weather/thresholds.py | unit/test_weather_services.py | IMPLEMENTED |
+| Forecast anomalies | 7.6 | analytics/anomaly.py, weather/forecast_service.py | unit/test_analytics.py, unit/test_weather_services.py | IMPLEMENTED |
+| Forecast snapshot capture | 8.6 | weather/snapshots.py | integration/test_snapshots.py | IMPLEMENTED |
+| What Changed? | 8.7 | weather/snapshots.py, api/routers/weather.py | integration/test_snapshots.py, unit/test_api_changes_route.py, integration/test_changes.py | IMPLEMENTED |
+| Confidence and uncertainty communication | 8.4 | weather/uncertainty.py | unit/test_weather_services.py, integration/test_safety.py | IMPLEMENTED |
+| Plain-language forecast summary without a language model | 8.5 | weather/forecast_service.py | unit/test_weather_services.py, integration/test_no_credential.py | IMPLEMENTED |
+| Insufficient forecast data | 7.8 | weather/forecast_service.py, analytics/support.py | unit/test_weather_services.py | IMPLEMENTED |
+
+### `historical-weather`
+
+| Requirement | Tasks | Implementation | Tests | Status |
+|---|---|---|---|---|
+| Historical observation retrieval | 8.8 | weather/history_service.py | unit/test_weather_services.py, frontend/lib/historical/analysis.test.ts | IMPLEMENTED |
+| Period-versus-period comparison | 8.8 | weather/history_service.py, weather/comparison_service.py | unit/test_weather_services.py, unit/test_comparison.py | IMPLEMENTED |
+| Historical baselines | 8.9 | weather/history_service.py | unit/test_weather_services.py | IMPLEMENTED |
+| Comparison against baseline | 8.10 | weather/comparison_service.py | unit/test_comparison.py | IMPLEMENTED |
+| Historical requests are separable from accuracy scoring | 8.11 | weather/history_service.py | unit/test_weather_services.py | IMPLEMENTED |
+
+### `http-api`
+
+| Requirement | Tasks | Implementation | Tests | Status |
+|---|---|---|---|---|
+| Authentication on the HTTP surface | 15.4 | api/dependencies.py, auth/deps.py | integration/test_api.py, integration/test_auth_boundary.py | IMPLEMENTED |
+| Public and protected endpoint classification | 15.4 | api/classification.py | test_openapi_snapshot.py | IMPLEMENTED |
+| Current-user endpoint | 15.11 | api/routers/account.py | integration/test_api.py | IMPLEMENTED |
+| User data deletion endpoint | 15.14 | api/routers/account.py | integration/test_api.py | IMPLEMENTED |
+| Versioned, documented API surface | 15.1 | api/app.py, api/openapi.py | test_openapi_snapshot.py, frontend/scripts/api-types.test.ts | IMPLEMENTED |
+| Location endpoints | 15.5 | api/routers/locations.py | integration/test_api.py | IMPLEMENTED |
+| Current weather and forecast endpoints | 15.6 | api/routers/weather.py | integration/test_api.py | IMPLEMENTED |
+| Forecast changes endpoint | 8.7 | api/routers/weather.py | unit/test_api_changes_route.py, integration/test_changes.py | IMPLEMENTED |
+| History endpoint | 15.7 | api/routers/history.py | integration/test_api.py | IMPLEMENTED |
+| Analysis endpoint | 15.8 | api/routers/analysis.py | integration/test_api.py | IMPLEMENTED |
+| Comparison endpoint | 15.9 | api/routers/comparison.py | integration/test_api.py | IMPLEMENTED |
+| Agent ask endpoint | 15.10 | api/routers/agent.py | integration/test_api.py | IMPLEMENTED |
+| SSE streaming of agent progress | 16.1, 16.2 | api/streaming.py | integration/test_api.py | IMPLEMENTED |
+| Preferences and saved-locations endpoints | 15.12 | api/routers/locations.py, memory/preferences.py | integration/test_memory_preferences.py, integration/test_memory_saved_locations.py | IMPLEMENTED |
+| Evidence endpoint | 15.13 | api/routers/evidence.py | integration/test_api.py | IMPLEMENTED |
+| Request validation | 15.2 | api/errors.py, mcp/schemas.py | integration/test_api.py | IMPLEMENTED |
+| Consistent error model | 15.2 | api/errors.py, domain/errors.py | unit/test_domain_errors.py, test_frontend_error_codes.py, frontend/lib/api/client.test.ts | IMPLEMENTED |
+| Health and readiness | 15.15 | api/routers/health.py | integration/test_api.py | IMPLEMENTED |
+| Request correlation and observability | 15.3 | api/middleware.py | integration/test_api.py | IMPLEMENTED |
+| Cross-origin access for the frontend | 15.1, 16.4 | api/app.py | integration/test_api.py | IMPLEMENTED |
+| Model selection is not caller-selectable on product endpoints | 28.2, 31.6 | — not implemented | — none | OPEN |
+| Quota enforcement on the HTTP surface | 30.6 | — not implemented | — none | OPEN |
+| Plan and usage endpoint for the signed-in person | 30.7 | — not implemented | — none | OPEN |
+| Administrative model, usage, and lab endpoints | 31.3–31.6 | — not implemented | — none | OPEN |
+
+### `location-comparison`
+
+| Requirement | Tasks | Implementation | Tests | Status |
+|---|---|---|---|---|
+| Comparison across multiple locations | 9.1 | weather/comparison_service.py | unit/test_comparison.py, frontend/lib/comparison/ranking.test.ts | IMPLEMENTED |
+| Comparison across days for one location | 9.2 | weather/comparison_service.py | unit/test_comparison.py | IMPLEMENTED |
+| Supported comparison criteria | 9.3 | domain/comparison.py | unit/test_comparison.py | IMPLEMENTED |
+| Comparison fairness | 9.4 | weather/comparison_service.py | unit/test_comparison.py | IMPLEMENTED |
+| Historical comparison mode | 9.5 | weather/comparison_service.py | unit/test_comparison.py | IMPLEMENTED |
+| Ties and partial failures | 9.5 | weather/comparison_service.py | unit/test_comparison.py | IMPLEMENTED |
+
+### `location-resolution`
+
+| Requirement | Tasks | Implementation | Tests | Status |
+|---|---|---|---|---|
+| Canonical location shape | 2.2 | domain/location.py | unit/test_domain_location.py | IMPLEMENTED |
+| Geocoding behind its own provider seam | 6.1 | geocoding/base.py, geocoding/open_meteo.py | unit/test_geocoding.py | IMPLEMENTED |
+| Resolution by place name | 6.2 | geocoding/open_meteo.py | unit/test_geocoding.py, frontend/lib/locations/place.test.ts | IMPLEMENTED |
+| Ambiguous place names | 6.3 | geocoding/open_meteo.py, domain/location.py | unit/test_geocoding.py, frontend/lib/locations/resolution.test.ts | IMPLEMENTED |
+| Unknown place names | 6.4 | geocoding/open_meteo.py | unit/test_geocoding.py | IMPLEMENTED |
+| Resolution by coordinates | 6.3 | geocoding/open_meteo.py, domain/location.py | unit/test_geocoding.py, unit/test_domain_location.py | IMPLEMENTED |
+| Location search | 6.4 | api/routers/locations.py | integration/test_api.py | IMPLEMENTED |
+
+### `mcp-weather-server`
+
+| Requirement | Tasks | Implementation | Tests | Status |
+|---|---|---|---|---|
+| Server boundary and independence | 10.1 | mcp/server.py | unit/test_mcp_server.py, test_architecture.py | IMPLEMENTED |
+| Tool catalog | 10.2 | mcp/tools/, mcp/server.py | unit/test_mcp_server.py, unit/test_agent_catalog.py | IMPLEMENTED |
+| Tools return normalized, attributed results | 10.3 | mcp/schemas.py | unit/test_mcp_server.py | IMPLEMENTED |
+| Statistics and anomaly tools are deterministic | 10.4 | mcp/tools/, analytics/ | unit/test_mcp_server.py, unit/test_analytics.py | IMPLEMENTED |
+| Input validation | 10.5 | mcp/schemas.py | unit/test_mcp_server.py | IMPLEMENTED |
+| Error semantics | 10.6 | mcp/errors.py | unit/test_mcp_server.py | IMPLEMENTED |
+| Transport and configuration | 10.8 | mcp/client.py, config.py | unit/test_mcp_server.py, test_config.py | IMPLEMENTED |
+
+### `memory`
+
+| Requirement | Tasks | Implementation | Tests | Status |
+|---|---|---|---|---|
+| Short-term memory scoped by user and thread | 12.1 | memory/threads.py, memory/checkpointer.py | integration/test_memory_threads.py, unit/test_memory_checkpointer.py, integration/test_memory_checkpointer.py | IMPLEMENTED |
+| Follow-up reference resolution | 14.11 | agents/context.py, memory/threads.py | integration/test_agent_memory.py | IMPLEMENTED |
+| Conversation retention is bounded and non-sensitive by default | 12.5 | memory/retention.py | integration/test_memory_retention.py | IMPLEMENTED |
+| Durable preference store | 12.3 | memory/preferences.py | integration/test_memory_preferences.py, frontend/lib/settings/preferences.test.ts | IMPLEMENTED |
+| Saved locations | 12.4 | memory/locations.py | integration/test_memory_saved_locations.py | IMPLEMENTED |
+| Ownership derived from the authenticated user | 12.2 | memory/, auth/rls.py | integration/test_auth_data_path.py, integration/test_checkpoint_policies.py | IMPLEMENTED |
+| Memory unavailability degrades honestly | 12.6 | memory/degradation.py, memory/availability.py | unit/test_memory_degradation.py | IMPLEMENTED |
+| Both memory tiers are retained unchanged by the model policy layer | 26.5, 28.8 | — not implemented | — none | OPEN |
+| Plan, policy, and usage state are not conversational memory | 26.3, 30.1 | — not implemented | — none | OPEN |
+
+### `rag-knowledge`
+
+| Requirement | Tasks | Implementation | Tests | Status |
+|---|---|---|---|---|
+| Curated knowledge corpus | 11.1 | rag/corpus/ | unit/test_rag_corpus.py | IMPLEMENTED |
+| Ingestion and chunking | 11.4 | rag/ingest.py | unit/test_rag_corpus.py, integration/test_rag.py | IMPLEMENTED |
+| Embedding behind an abstraction | 11.2 | rag/embed.py | integration/test_rag.py, test_architecture.py | IMPLEMENTED |
+| Semantic retrieval | 11.5 | rag/retrieve.py, rag/store.py | integration/test_rag.py | IMPLEMENTED |
+| Conceptual answers are cited | 11.5, 14.5 | agents/nodes/knowledge.py, agents/nodes/retrieval.py | integration/test_rag.py, integration/test_safety.py | IMPLEMENTED |
+| RAG is never a source of measurements | 11.6 | agents/nodes/knowledge.py | integration/test_safety.py, integration/test_rag.py | IMPLEMENTED |
+| Vector store selection and portability | 11.3 | rag/store.py | integration/test_rag.py | IMPLEMENTED |
+| Retrieval available without an inference credential | 11.6 | rag/retrieve.py | integration/test_no_credential.py | IMPLEMENTED |
+
+### `safety-grounding`
+
+| Requirement | Tasks | Implementation | Tests | Status |
+|---|---|---|---|---|
+| No fabricated weather measurements | 14.10 | agents/grounding.py | integration/test_safety.py | IMPLEMENTED |
+| Numerical analytics are deterministic | 7.9 | analytics/ | unit/test_analytics.py, integration/test_safety.py | IMPLEMENTED |
+| Data classes are labelled and never conflated | 17.3 | domain/weather.py, agents/evidence.py | unit/test_domain_weather.py, frontend/lib/design/data-class.test.ts | IMPLEMENTED |
+| Source attribution on every weather answer | 17.2 | agents/evidence.py, domain/evidence.py | integration/test_safety.py, unit/test_domain_evidence.py | IMPLEMENTED |
+| Uncertainty is communicated | 8.4 | weather/uncertainty.py | unit/test_weather_services.py, integration/test_safety.py | IMPLEMENTED |
+| Weathra does not present itself as a forecaster | 17.3 | agents/safety.py | integration/test_safety.py | IMPLEMENTED |
+| Not a replacement for official warnings | 17.3 | agents/safety.py | integration/test_safety.py | IMPLEMENTED |
+| No unsupported severe-weather claims | 17.4 | agents/safety.py, agents/grounding.py | integration/test_safety.py | IMPLEMENTED |
+| Honest handling of unavailable data | 17.5 | agents/nodes/support.py, providers/validation.py | integration/test_safety.py, unit/test_providers.py | IMPLEMENTED |
+| Data minimization in persistence | 17.6 | redaction.py, memory/retention.py | unit/test_auth_redaction.py, integration/test_memory_retention.py | IMPLEMENTED |
+
+### `weather-providers`
+
+| Requirement | Tasks | Implementation | Tests | Status |
+|---|---|---|---|---|
+| Normalized weather data model | 2.3 | domain/weather.py | unit/test_domain_weather.py | IMPLEMENTED |
+| Provider interface and registry | 5.1 | providers/base.py, providers/registry.py | unit/test_providers.py, test_architecture.py | IMPLEMENTED |
+| Open-Meteo provider implementation | 5.2 | providers/open_meteo.py | unit/test_providers.py | IMPLEMENTED |
+| Forecast horizon bounds | 5.6 | weather/windows.py, providers/validation.py | unit/test_weather_services.py | IMPLEMENTED |
+| Historical range bounds | 5.6 | weather/windows.py, providers/validation.py | unit/test_weather_services.py | IMPLEMENTED |
+| Response caching | 5.3 | providers/cache.py | unit/test_providers.py | IMPLEMENTED |
+| Upstream failure handling | 5.7 | providers/http.py, providers/validation.py | unit/test_providers.py | IMPLEMENTED |
+
+### `web-ui`
+
+| Requirement | Tasks | Implementation | Tests | Status |
+|---|---|---|---|---|
+| Separate frontend application | 20.1 | frontend/ | test_repository_layout.py | IMPLEMENTED |
+| Visily design artifacts precede implementation | 19.1 | docs/design/ | test_documentation.py | IMPLEMENTED |
+| Approved design direction carried into Visily | 19.1 | docs/design/design-system.md, docs/design/tokens.md | test_documentation.py, frontend/lib/design/tokens.test.ts, frontend/tests/design-rules.test.ts | IMPLEMENTED |
+| MVP authentication screens | 20.4–20.7 | frontend/app/(auth)/, frontend/components/auth/ | frontend/components/auth/*.test.tsx, frontend/tests/e2e/flows.spec.ts | IMPLEMENTED |
+| Protected areas and authentication states | 20.8 | frontend/middleware.ts, frontend/lib/session/ | frontend/tests/protected-route.test.tsx, frontend/tests/e2e/protected-route.spec.ts, frontend/app/(app)/layout.test.tsx | IMPLEMENTED |
+| MVP product screens | 21.1–21.7 | frontend/components/{dashboard,analyst,compare,historical,locations,settings,evidence}/ | frontend/components/*/*.test.tsx, frontend/components/shell/complete-product.test.tsx, frontend/lib/dashboard/briefing.test.ts, frontend/lib/analyst/run.test.ts, frontend/lib/fixtures/fixtures.test.ts, frontend/lib/images/locations.test.ts, frontend/lib/images/provider.test.ts | IMPLEMENTED |
+| Post-MVP screens are designed, not built | 21.7 | frontend/lib/routes.ts, frontend/lib/navigation.ts | frontend/lib/routes.test.ts, frontend/lib/navigation.test.ts | IMPLEMENTED |
+| Data classes and attribution are visible | 21.4 | frontend/components/ui/provenance.tsx | frontend/components/ui/provenance.test.tsx, frontend/lib/design/data-class.test.ts | IMPLEMENTED |
+| Loading, empty, and error states | 20.9 | frontend/components/view-state.tsx | frontend/components/ui/primitives.test.tsx, frontend/lib/query/query-layer.test.tsx | IMPLEMENTED |
+| Agent unavailability handled gracefully | 21.2 | frontend/components/analyst/, frontend/hooks/use-agent-stream.ts | frontend/components/analyst/analyst.test.tsx, frontend/hooks/use-agent-stream.test.tsx | IMPLEMENTED |
+| Ambiguous location handling in the UI | 21.5 | frontend/components/locations/candidate-choice.tsx | frontend/components/locations/candidate-choice.test.tsx | IMPLEMENTED |
+| Accessibility and responsive layout | 21.8 | frontend/components/shell/, frontend/app/globals.css | frontend/tests/accessibility.test.tsx, frontend/tests/e2e/accessibility.spec.ts, frontend/tests/e2e/axe.spec.ts, frontend/lib/design/contrast.test.ts | MANUAL |
+| Admin Model & AI Usage screen | 33.1, 33.4 | — not implemented | — none | OPEN |
+| The UI never authorizes model access or an allowance | 33.4 | — not implemented | — none | OPEN |
+| Plan and usage visible to the signed-in person | 33.2, 33.4 | — not implemented | — none | OPEN |
+| Administrative and plan screens remain subject to the Visily design gate | 33.3 | — not implemented | — none | OPEN |
+
+### `model-policy`
+
+| Requirement | Tasks | Implementation | Tests | Status |
+|---|---|---|---|---|
+| Model policy layer between orchestration and the language model client | 28.1, 28.6 | — not implemented | — none | OPEN |
+| Subscription-aware named policies | 26.6, 27.2 | — not implemented | — none | OPEN |
+| Entitlement is enforced server-side and never trusted from the client | 28.2 | — not implemented | — none | OPEN |
+| Administrative override is bounded by the allowlist | 28.3 | — not implemented | — none | OPEN |
+| Resolution is deterministic, ordered, and degrades honestly | 28.1, 28.5 | — not implemented | — none | OPEN |
+| Configured model remains the development and administrative fallback | 28.4, 28.5 | — not implemented | — none | OPEN |
+| The policy layer stays provider-agnostic | 27.4, 28.6 | — not implemented | — none | OPEN |
+| Model policy never affects deterministic computation or grounding | 28.8 | — not implemented | — none | OPEN |
+| Policy administration is privileged and auditable | 31.2, 31.3 | — not implemented | — none | OPEN |
+| Runtime provider failure fails over within the entitled policy, never on quality | 28.9 | — not implemented | — none | OPEN |
+
+### `model-catalog`
+
+| Requirement | Tasks | Implementation | Tests | Status |
+|---|---|---|---|---|
+| Model catalog as persisted data | 26.2, 26.6 | — not implemented | — none | OPEN |
+| Model availability changes without a code change | 27.1 | — not implemented | — none | OPEN |
+| Enable and disable status is honoured at resolution time | 27.1, 28.1 | — not implemented | — none | OPEN |
+| Business logic is decoupled from vendor model identifiers | 27.4 | — not implemented | — none | OPEN |
+| The catalog is the allowlist | 28.3 | — not implemented | — none | OPEN |
+| Catalog administration is privileged and validated | 27.1, 31.3 | — not implemented | — none | OPEN |
+| Catalog state is observable | 31.5 | — not implemented | — none | OPEN |
+
+### `llm-telemetry`
+
+| Requirement | Tasks | Implementation | Tests | Status |
+|---|---|---|---|---|
+| Every language model call emits a usage event | 29.1, 29.3 | — not implemented | — none | OPEN |
+| Failures, timeouts, and refusals are recorded | 29.4 | — not implemented | — none | OPEN |
+| Cost estimation is deterministic and labelled as an estimate | 29.2 | — not implemented | — none | OPEN |
+| Telemetry records metadata, not conversation content | 29.6 | — not implemented | — none | OPEN |
+| Telemetry never degrades or blocks the answer path | 29.5 | — not implemented | — none | OPEN |
+| Telemetry is owner-scoped and internal usage is separated | 29.1, 30.5 | — not implemented | — none | OPEN |
+| Telemetry is aggregatable and retained for a bounded period | 29.7, 29.8 | — not implemented | — none | OPEN |
+
+### `usage-limits`
+
+| Requirement | Tasks | Implementation | Tests | Status |
+|---|---|---|---|---|
+| Subscription plans are persisted server-side data | 26.2, 26.6 | — not implemented | — none | OPEN |
+| Quotas are enforced in the backend before the call | 30.2, 30.6 | — not implemented | — none | OPEN |
+| Allowances differ by plan and are expressed in stated dimensions | 30.1 | — not implemented | — none | OPEN |
+| Windows are explicit and reset predictably | 30.1 | — not implemented | — none | OPEN |
+| Quota refusal is honest, structured, and non-destructive | 30.6, 30.9 | — not implemented | — none | OPEN |
+| Accounting is consistent with recorded usage and safe under concurrency | 30.2, 30.3, 30.4 | — not implemented | — none | OPEN |
+| Internal and administrative usage is tracked separately | 30.5 | — not implemented | — none | OPEN |
+| Quota administration is privileged and auditable | 31.4 | — not implemented | — none | OPEN |
+| No payment processing in this change | 26.2 | — not implemented | — none | OPEN |
+
+### `model-lab`
+
+| Requirement | Tasks | Implementation | Tests | Status |
+|---|---|---|---|---|
+| Internal model selection restricted to administrative principals and the allowlist | 32.5 | — not implemented | — none | OPEN |
+| The same prompt or query compared across models | 32.1 | — not implemented | — none | OPEN |
+| Comparison runs are recorded with their measurements | 32.2 | — not implemented | — none | OPEN |
+| The lab bypasses no security control and no data isolation | 32.4 | — not implemented | — none | OPEN |
+| Lab usage is internal, bounded, and attributed | 32.3, 32.10 | — not implemented | — none | OPEN |
+| The lab does not change production policy implicitly | 32.9 | — not implemented | — none | OPEN |
+
+### What the table does not cover
+
+**Five test files govern no capability requirement**, because they prove properties of the
+repository and its pipelines rather than of a capability:
+`test_ci_workflows.py`, `test_container.py`, `test_release_workflow.py` (groups 23.1 and 23.4),
+`test_dependencies.py` (the dependency rule of group 1), and `unit/test_db_migration_chain.py`
+(migration-chain integrity, group 3). They are listed here so that every test file in the
+repository lands somewhere, in the same way every requirement does. Deployment and CI have no
+capability spec by design — they are governed by tasks 23.1–23.7 and recorded in
+[`deployment.md`](deployment.md).
+
+**No capability spec is unimplemented by accident.** Five specs — `model-policy`, `model-catalog`,
+`llm-telemetry`, `usage-limits`, and `model-lab` — are wholly open, and their thirty-nine
+requirements are owned by task groups 26 through 34. Nineteen further requirements inside otherwise
+implemented specs belong to the same layer: model selection and quota in `agent-orchestration` and
+`http-api`, the SaaS-table and role requirements in `authentication`, the model-comparison
+requirements in `evaluation`, the policy-layer guarantees in `memory`, and the administrative and
+plan screens in `web-ui`.
+
+Task 34.6 extends this table over the five wholly open specs once group 26–34 work lands. Until
+then their rows stand as written: named, owned, and untested.
+
+**Three requirements are outstanding for reasons other than Phase B.** `web-ui`'s accessibility
+and responsive layout is `MANUAL` — its automated half passes in two browser engines, and
+Task 21.8's recorded human pass is still owed. `evaluation`'s pinned-model requirement carries
+tests but awaits Task 22.10's live run. Neither is a gap in the mapping; both are gaps in the
+work the mapping honestly reports.

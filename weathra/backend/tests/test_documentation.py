@@ -777,3 +777,115 @@ def test_the_deployment_secrets_are_documented_where_they_live() -> None:
     flat = _flat(_read("deployment.md"))
     for secret in BACKEND_SECRETS:
         assert secret in flat, f"docs/deployment.md does not say where {secret} lives"
+
+
+# ---------------------------------------------------------------- 25.5 traceability
+
+
+SPECS_DIR = PROJECT_ROOT / "openspec" / "changes" / "weathra-mvp" / "specs"
+TASKS = PROJECT_ROOT / "openspec" / "changes" / "weathra-mvp" / "tasks.md"
+
+
+def _traceability_rows() -> list[tuple[str, ...]]:
+    """The traceability table's data rows, as tuples of their cells."""
+    section = _read("architecture.md").split("## Traceability", 1)
+    assert len(section) == 2, "architecture.md has no traceability section"
+    rows = []
+    for line in section[1].splitlines():
+        line = line.strip()
+        if not line.startswith("|") or set(line) <= set("|-: "):
+            continue
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        if len(cells) == 5 and cells[4] in {"IMPLEMENTED", "MANUAL", "OPEN"}:
+            rows.append(tuple(cells))
+    assert rows, "the traceability section contains no requirement rows"
+    return rows
+
+
+def _resolve(token: str) -> bool:
+    """Whether a path a traceability row names exists. Brace lists expand as a shell's would."""
+    token = token.strip()
+    if not token or token.startswith("—"):
+        return True
+    if "{" in token:
+        head, rest = token.split("{", 1)
+        inner, tail = rest.split("}", 1)
+        return all(_resolve(head + part + tail) for part in inner.split(","))
+    for base in (
+        PROJECT_ROOT,
+        PROJECT_ROOT / "backend" / "weathra",
+        PROJECT_ROOT / "backend" / "tests",
+    ):
+        candidate = base / token
+        if candidate.exists() or list(base.glob(token)):
+            return True
+    return False
+
+
+def test_every_requirement_is_traced() -> None:
+    """Task 25.5. Every requirement in every capability spec appears in the table, and vice versa.
+
+    This is the assertion that keeps the table honest as the specs move. A requirement added to a
+    spec without a row, or a row naming a requirement no spec states, is the failure mode a
+    traceability table has — it reads plausibly while no longer describing anything.
+    """
+    traced = {row[0] for row in _traceability_rows()}
+    stated: set[str] = set()
+    for spec in sorted(SPECS_DIR.iterdir()):
+        if not spec.is_dir():
+            continue
+        stated |= {
+            match.strip()
+            for match in re.findall(
+                r"^### Requirement:\s*(.+)$", (spec / "spec.md").read_text(), re.MULTILINE
+            )
+        }
+
+    assert not stated - traced, f"requirements with no traceability row: {sorted(stated - traced)}"
+    assert not traced - stated, (
+        f"traceability rows naming no requirement: {sorted(traced - stated)}"
+    )
+
+
+def test_every_traceability_row_names_things_that_exist() -> None:
+    """A row may only cite a real task and a real path — otherwise it is decoration."""
+    task_numbers = set(re.findall(r"^- \[.\] (\d+\.\d+)", TASKS.read_text(), re.MULTILINE))
+    offences: list[str] = []
+
+    for requirement, tasks, implementation, tests, _status in _traceability_rows():
+        for number in re.findall(r"\d+\.\d+", tasks):
+            if number not in task_numbers:
+                offences.append(f"{requirement}: no such task {number}")
+        for column in (implementation, tests):
+            for token in re.split(r",(?![^{]*\})", column):
+                if not _resolve(token):
+                    offences.append(f"{requirement}: no such path {token.strip()!r}")
+
+    assert not offences, "the traceability table cites things that do not exist:\n  " + "\n  ".join(
+        offences
+    )
+
+
+def test_an_untested_requirement_is_owned_by_an_open_task() -> None:
+    """No requirement is left without a test *and* without something accountable for that.
+
+    A row naming no test has to be open, and a row that is implemented has to name one. That pair
+    is what stops the table from quietly recording a gap as a completion.
+    """
+    complete = set(re.findall(r"^- \[x\] (\d+\.\d+)", TASKS.read_text(), re.MULTILINE))
+    offences: list[str] = []
+
+    for requirement, tasks, _implementation, tests, status in _traceability_rows():
+        untested = tests.startswith("—")
+        if untested and status != "OPEN":
+            offences.append(f"{requirement}: names no test but is marked {status}")
+        if status == "IMPLEMENTED":
+            if untested:
+                offences.append(f"{requirement}: marked implemented with no test")
+            for number in re.findall(r"\d+\.\d+", tasks):
+                if number not in complete:
+                    offences.append(f"{requirement}: implemented, but task {number} is open")
+
+    assert not offences, "the traceability table disagrees with the task list:\n  " + "\n  ".join(
+        offences
+    )
