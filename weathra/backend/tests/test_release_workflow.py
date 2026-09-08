@@ -36,9 +36,18 @@ RELEASE = ".github/workflows/release.yml"
 
 # The workflows that run for ordinary contribution: a pull request, or a push to main. These hold
 # no production credential at all — a fork's CI must work, and a contributor must never need one.
-# The release pipeline is deliberately not in this set; it is the only workflow that may read a
-# repository secret.
+# The release pipelines are deliberately not in this set; they are the only workflows that may read
+# a repository secret.
 ORDINARY_CI = ("backend.yml", "frontend.yml")
+
+# The workflows that release, and the only ones that may read a repository secret. `release.yml`
+# releases the backend on Render; `frontend-release.yml` (task 23.5) releases the frontend on
+# Vercel. They are separate because they share no ordering constraint and no path filter — see the
+# header of `frontend-release.yml` — and because the frontend's credential reaches one Vercel
+# project and nothing else. `test_the_frontend_release_holds_nothing_of_the_backend_s` is what
+# keeps that second statement true.
+FRONTEND_RELEASE = ".github/workflows/frontend-release.yml"
+RELEASE_PIPELINES = ("release.yml", "frontend-release.yml")
 
 # Neither ordinary CI nor the release pipeline, and recorded here because
 # `test_only_the_release_pipeline_reads_a_repository_secret` requires every workflow to sit on
@@ -308,9 +317,9 @@ def test_only_the_release_pipeline_reads_a_repository_secret(repo_root: Path) ->
     release pipeline has appeared without anyone deciding which side of the boundary it is on.
     """
     workflows = {path.name for path in (repo_root / ".github" / "workflows").glob("*.yml")}
-    unclassified = workflows - set(ORDINARY_CI) - set(DIAGNOSTIC) - {"release.yml"}
+    unclassified = workflows - set(ORDINARY_CI) - set(DIAGNOSTIC) - set(RELEASE_PIPELINES)
     assert not unclassified, (
-        f"a workflow exists that is neither ordinary CI nor the release pipeline: {unclassified}. "
+        f"a workflow exists that is neither ordinary CI nor a release pipeline: {unclassified}. "
         "Decide whether it may hold a production credential and record it here."
     )
 
@@ -382,3 +391,107 @@ def test_the_diagnostic_workflow_cannot_deploy_or_migrate(repo_root: Path) -> No
             f"{name} has DATABASE_URL in scope; the diagnostic needs only the privileged URL"
         )
         assert "hide_password=False)}" not in rendered, f"{name} interpolates a rendered DSN"
+
+
+# ------------------------------------------------------------------ 6. the frontend release (23.5)
+
+
+@pytest.fixture(scope="module")
+def frontend_release(repo_root: Path) -> dict[str, Any]:
+    path = repo_root / FRONTEND_RELEASE
+    assert path.is_file(), f"{FRONTEND_RELEASE} is missing: the frontend has no release pipeline"
+    loaded: dict[str, Any] = yaml.safe_load(path.read_text())
+    return loaded
+
+
+@pytest.fixture(scope="module")
+def frontend_release_text(repo_root: Path) -> str:
+    """The workflow with its comments stripped.
+
+    What a workflow *does* is its steps, not its prose. These assertions read the executable half
+    deliberately: a comment explaining that this pipeline holds no Alembic command must not be the
+    thing that trips the test asserting it holds none.
+    """
+    lines = (repo_root / FRONTEND_RELEASE).read_text().splitlines()
+    return "\n".join(line for line in lines if not line.lstrip().startswith("#"))
+
+
+def test_the_frontend_release_holds_nothing_of_the_backend_s(frontend_release_text: str) -> None:
+    """A second credential-holding workflow earns its place by reaching one thing only.
+
+    The frontend release exists to publish a static-and-server-rendered bundle to Vercel. If it
+    ever holds a database connection, the service-role key, or Render's API key, then the boundary
+    that made it acceptable to add has gone, and the blast radius of a leaked Vercel token is no
+    longer one Vercel project.
+    """
+    forbidden = (
+        "DATABASE_URL",
+        "DATABASE_URL_PRIVILEGED",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "WEATHRA_PRIVILEGED_SERVICE_ROLE_KEY",
+        "OPENROUTER_API_KEY",
+        "RENDER_API_KEY",
+        "RENDER_SERVICE_ID",
+    )
+    for name in forbidden:
+        assert name not in frontend_release_text, (
+            f"{FRONTEND_RELEASE} names {name}; the frontend release must reach Vercel and nothing else"
+        )
+
+
+def test_the_frontend_release_cannot_migrate_or_release_the_backend(
+    frontend_release_text: str,
+) -> None:
+    """One route to the backend, and it is `release.yml`. A second is a second race."""
+    assert "alembic" not in frontend_release_text.lower(), (
+        f"{FRONTEND_RELEASE} runs Alembic; migrations belong to the backend release alone"
+    )
+    assert "api.render.com" not in frontend_release_text, (
+        f"{FRONTEND_RELEASE} triggers a Render deploy"
+    )
+
+
+def test_no_frontend_release_step_names_the_token(frontend_release: dict[str, Any]) -> None:
+    """The Vercel token reaches the CLI through the environment, never through a command line.
+
+    A token interpolated into `run:` is visible in the runner's process list and in any shell
+    trace. The CLI reads `VERCEL_TOKEN` on its own, so no step needs to name it.
+    """
+    for name, job in frontend_release["jobs"].items():
+        for step in job.get("steps", []):
+            command = step.get("run", "")
+            assert "secrets." not in command, (
+                f"the {name} job names a secret in a command: {command!r}"
+            )
+
+
+def test_the_frontend_release_verifies_what_it_deployed(frontend_release: dict[str, Any]) -> None:
+    """The deployment answers for itself, as the backend release makes the service do.
+
+    An upload that succeeded is not a frontend that renders: a build can publish and still fail to
+    serve. The release ends by asking the deployment it just promoted for a public route.
+    """
+    steps = frontend_release["jobs"]["deploy"]["steps"]
+    commands = " ".join(step.get("run", "") for step in steps)
+    assert "vercel deploy" in commands, f"{FRONTEND_RELEASE} never deploys"
+    assert "/sign-in" in commands, (
+        f"{FRONTEND_RELEASE} does not ask the deployment for a public route after promoting it"
+    )
+
+
+def test_the_frontend_release_is_not_cancelled_half_way(frontend_release: dict[str, Any]) -> None:
+    """Two racing deployments can finish out of order and promote the older commit."""
+    assert frontend_release["concurrency"]["cancel-in-progress"] is False, (
+        f"{FRONTEND_RELEASE} cancels a running release"
+    )
+
+
+def test_the_frontend_release_runs_only_on_frontend_changes(
+    frontend_release: dict[str, Any],
+) -> None:
+    """Path-filtered, which is the reason it is a separate workflow rather than a job in `release.yml`."""
+    paths = frontend_release[True]["push"]["paths"]
+    assert "weathra/frontend/**" in paths, f"{FRONTEND_RELEASE} does not watch the frontend"
+    assert frontend_release[True]["push"]["branches"] == ["main"], (
+        f"{FRONTEND_RELEASE} releases from a branch other than main"
+    )

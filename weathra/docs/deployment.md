@@ -251,6 +251,8 @@ and purposes only; no value appears here or anywhere else in the repository.
 | | `SUPABASE_SERVICE_ROLE_KEY` | Evaluation test-user provisioning — its only consumer in the whole backend |
 | | `SUPABASE_URL` | Project URL for those jobs (public, but per-environment) |
 | | `RENDER_API_KEY`, `RENDER_SERVICE_ID` | Releasing a migrated commit on Render, from `release.yml` |
+| | `VERCEL_TOKEN` | Building and promoting the frontend, from `frontend-release.yml` |
+| | `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | Identifiers, not credentials — which Vercel project that token acts on |
 | **Render** (backend service) | `DATABASE_URL` | The request path, as `weathra_api` under the restricted role |
 | | `OPENROUTER_API_KEY` | `/ask` and `/stream` only — **optional**; the backend serves everything else without it |
 | | `SUPABASE_URL`, `CORS_ALLOWED_ORIGINS` | Required, not secret; per-environment |
@@ -327,12 +329,15 @@ After the Render service is up, `curl https://<backend>/api/v1/ready` reports ea
 name and never a credential value. That response is the evidence that secrets were injected and the
 backend started with them — which is the part of task 23.3 no repository change can satisfy.
 
-**Still outstanding.** Two dashboard actions, both of which task 23.4 needs and neither of which the
-repository can perform:
+**Still outstanding.** Three dashboard actions, none of which the repository can perform:
 
 1. **Add `RENDER_API_KEY` and `RENDER_SERVICE_ID` to GitHub Actions secrets**, as above. Until they
    exist, the `deploy` job refuses to run rather than failing obscurely mid-release.
-2. **Sync the blueprint**, so Render picks up `runtime: docker` and — the important one —
+2. **Create the Vercel project and add `VERCEL_TOKEN`, `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID`
+   to GitHub Actions secrets**, which task 23.5 needs. The two identifiers do not exist until the
+   project does, so the project has to be created first; `frontend-release.yml` is committed and
+   inert until all three are present.
+3. **Sync the blueprint**, so Render picks up `runtime: docker` and — the important one —
    `autoDeployTrigger: "off"`. Until that sync happens the service still deploys on every push to
    `main`, which is exactly the race the release ordering exists to remove: the committed
    configuration says auto-deploy is off, and the running service does not yet agree.
@@ -401,10 +406,34 @@ the container that serves browser traffic. Render's pre-deploy command was the a
 rejected for exactly that reason; `test_the_render_service_never_holds_the_privileged_database_url`
 holds the line, because the pressure to reverse it arrives disguised as a simplification.
 
-The release pipeline is the only workflow permitted to read a repository secret.
+The release pipelines are the only workflows permitted to read a repository secret.
 `backend.yml` and `frontend.yml` hold none — a fork's CI has to work, and a contributor must never
 need the production password. `test_release_workflow.py` asserts both halves, and fails if a new
 workflow appears that has not been placed on one side of that boundary.
+
+There are two release pipelines, not one, and the split is deliberate. `release.yml` is
+path-filtered to `weathra/backend/**` and `render.yaml`, so a frontend-only change never triggers
+it; a Vercel job living there would either never run for the changes it exists to publish, or
+would force every frontend commit to re-run a migration and a container release it has no reason
+to touch. The frontend also has no ordering constraint to honour — the backend's four-job chain
+exists because migrations must land before the new release serves traffic, and nothing in the
+frontend touches the database. `frontend-release.yml` therefore holds a Vercel token and nothing
+else: `test_the_frontend_release_holds_nothing_of_the_backend_s` fails if a database connection,
+the service-role key, the inference key, or a Render credential ever appears in it, so the blast
+radius of a leaked Vercel token stays one Vercel project.
+
+**`frontend-release.yml`** — the frontend's release, triggered by a push to `main` touching
+`weathra/frontend/**`. One job: `vercel pull` brings down the Production environment's variables,
+`vercel build --prod` produces the bundle *on the runner* — so what is promoted is what this commit
+built — and `vercel deploy --prebuilt --prod` promotes it. It then asks the deployment it just
+promoted for `/sign-in` and fails unless it answers 200, because an upload that succeeded is not a
+frontend that renders.
+
+The three `NEXT_PUBLIC_` values are held in the Vercel project per environment rather than in this
+workflow, which is what lets a preview and production point at different backends with no commit —
+and is why the workflow file names no configuration value at all. The token reaches the CLI through
+`VERCEL_TOKEN` in the job environment rather than as `--token` on each command, so no step names
+the credential; `test_no_frontend_release_step_names_the_token` holds that.
 
 ### On a schedule *(pending)*
 
