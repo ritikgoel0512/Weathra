@@ -42,7 +42,25 @@ Supabase instance, and every automated step runs on a hosted runner.
 |---|---|---|---|
 | **Local** | `npm run dev` on :3000, `frontend/.env.local` | `uvicorn --reload` on :8000, `backend/.env` | The hosted Supabase project, or a `pgvector/pgvector:pg16` container for `db`-marked tests |
 | **CI** | built with public placeholders | offline suite, then the `db` suite against a Postgres service container | ephemeral service container |
-| **Production** *(pending)* | Vercel, public configuration per environment | Render, secrets injected | Supabase, pooler connection |
+| **Production** | Vercel, public configuration per environment | Render, secrets injected | Supabase, pooler connection |
+
+**The frontend release is verified (task 23.5).** The production frontend is
+[https://weathra-bice.vercel.app](https://weathra-bice.vercel.app) — the domain the deployment's own
+`alias` names, not the per-deployment URL, which Vercel's Deployment Protection answers with a
+redirect to its login. Verified 2026-09-08, in this order:
+
+| What | How | Result |
+|---|---|---|
+| The release runs end to end | `frontend-release` run 34230788056 on commit 967e153 | environment resolved, ownership asserted, built on the runner, promoted `--prebuilt`, production domain verified |
+| The frontend serves | `GET /sign-in` | 200, `<title>Sign in · Weathra</title>` |
+| The gate is live | `GET /` and `GET /dashboard` unauthenticated | 307 to `/sign-in?next=…`, destination preserved |
+| The backend answers the frontend's origin | preflight and `GET` with `Origin: https://weathra-bice.vercel.app` | 200 with `access-control-allow-origin` for that origin; a foreign origin still refused with 400 |
+| **A real user signs in and reaches the product** | manual pass by the product owner against production | sign-in succeeded, the authenticated application was reached, and the Dashboard rendered live Berlin weather from Open-Meteo — so the bearer-token path to the deployed backend served real data |
+
+The last row is the acceptance criterion the automated checks cannot reach: it needs a real account
+and a real inbox. It was performed by hand against production, and the live data on the Dashboard is
+what proves the whole chain — Supabase session, bearer token, deployed backend, provider — rather
+than any one link in it.
 
 Each environment needs its own Supabase redirect URL registered, and its own
 `NEXT_PUBLIC_API_BASE_URL` pointing at the backend that belongs to it. Everything else the frontend
