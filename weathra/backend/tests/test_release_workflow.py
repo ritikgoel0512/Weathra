@@ -94,6 +94,16 @@ DIAGNOSTIC = ("db-identity.yml",)
 # and every capability it does not need is absent rather than merely unused.
 MAINTENANCE = ("backend-allowed-origin.yml",)
 
+# The one workflow that runs unattended, and the only one that deletes rows.
+#
+# `database-retention.yml` is design.md decision 11's "retention routine invoked from a scheduled CI
+# job in the MVP, no in-process scheduler" (task 23.6). It holds the privileged connection because
+# removing expired rows belonging to *other people* is precisely the work the request-serving role
+# must not be able to do — so the compensating controls are that it can do nothing else with it: no
+# Alembic, no Render credential, no service-role key, and a read-only verification of the schema
+# before anything is removed.
+SCHEDULED = ("database-retention.yml",)
+
 
 @pytest.fixture(scope="module")
 def release(repo_root: Path) -> dict[str, Any]:
@@ -351,7 +361,12 @@ def test_only_the_release_pipeline_reads_a_repository_secret(repo_root: Path) ->
     """
     workflows = {path.name for path in (repo_root / ".github" / "workflows").glob("*.yml")}
     unclassified = (
-        workflows - set(ORDINARY_CI) - set(DIAGNOSTIC) - set(RELEASE_PIPELINES) - set(MAINTENANCE)
+        workflows
+        - set(ORDINARY_CI)
+        - set(DIAGNOSTIC)
+        - set(RELEASE_PIPELINES)
+        - set(MAINTENANCE)
+        - set(SCHEDULED)
     )
     assert not unclassified, (
         f"a workflow exists that is neither ordinary CI nor a release pipeline: {unclassified}. "
@@ -528,6 +543,107 @@ def test_the_maintenance_workflow_cannot_replace_the_whole_environment(repo_root
         "the script writes through Render's whole-environment endpoint, which deletes every "
         "variable omitted from the body"
     )
+
+
+def test_the_retention_job_runs_unattended_and_by_hand(repo_root: Path) -> None:
+    """A schedule is the requirement, and a manual dispatch is how it is ever proven.
+
+    Task 23.6 asks for the routine to be *invoked on a schedule from CI*, so the cron entry is the
+    thing being required rather than a convenience. `workflow_dispatch` sits beside it because a
+    scheduled job that has never run is not evidence of anything, and waiting a day to learn
+    whether it works is not a verification strategy.
+
+    What must stay absent is `push` and `pull_request`: a contributor's commit must not be able to
+    start a job that deletes rows under the privileged connection.
+    """
+    for name in SCHEDULED:
+        path = repo_root / ".github" / "workflows" / name
+        assert path.is_file(), f"{name} is classified as scheduled but does not exist"
+
+        # PyYAML reads a bare `on` key as the boolean `True` — YAML 1.1 spells true that way.
+        parsed: dict[Any, Any] = yaml.safe_load(path.read_text())
+        triggers = set(parsed[True])
+        assert triggers == {"schedule", "workflow_dispatch"}, (
+            f"{name} has triggers beyond schedule and workflow_dispatch: "
+            f"{sorted(triggers - {'schedule', 'workflow_dispatch'})}"
+        )
+        assert parsed[True]["schedule"], f"{name} declares no cron schedule"
+        assert parsed["concurrency"]["cancel-in-progress"] is False, (
+            f"{name} cancels a running pass; cancelling mid-delete leaves the next pass more to do"
+        )
+        assert parsed["jobs"]["retain"].get("timeout-minutes"), (
+            f"{name} is unbounded; an unattended job that hangs holds the privileged connection "
+            "until somebody notices"
+        )
+
+
+def test_the_retention_job_verifies_before_it_deletes(repo_root: Path) -> None:
+    """The order is a safety property, not a tidiness one.
+
+    A schema that is not the one this code expects is the last state in which to start deleting
+    rows, so the read-only verification runs first and a failure there stops the run. It is also
+    the only evidence task 23.6 can have about the deployed database: the `db` suite truncates every
+    user-owned table between tests (`tests/db_support.py`), so pointing it at production would
+    delete everybody's data in order to prove a schema claim.
+    """
+    for name in SCHEDULED:
+        parsed: dict[Any, Any] = yaml.safe_load(
+            (repo_root / ".github" / "workflows" / name).read_text()
+        )
+        commands = [str(step.get("run", "")) for step in parsed["jobs"]["retain"]["steps"]]
+        verify_at = next(
+            index for index, command in enumerate(commands) if "verify_database.py" in command
+        )
+        delete_at = next(
+            index for index, command in enumerate(commands) if "weathra-retention" in command
+        )
+        assert verify_at < delete_at, f"{name} deletes before it verifies the schema"
+
+    assert (repo_root / "weathra" / "backend" / "scripts" / "verify_database.py").is_file(), (
+        "the verification script is missing, so the retention job cannot check what it deletes from"
+    )
+
+
+def test_the_retention_job_can_do_nothing_but_retain(repo_root: Path) -> None:
+    """It holds the most dangerous connection in the project, so every other capability is absent.
+
+    `WEATHRA_RUNTIME_MODE: privileged` is asserted as a *presence*, for the opposite reason to the
+    rest: both the verifier and the routine refuse to run without it, because under the
+    request-serving configuration the policies narrow every delete to nothing and the job would
+    report success having removed almost nothing.
+    """
+    for name in SCHEDULED:
+        rendered = (repo_root / ".github" / "workflows" / name).read_text()
+
+        for forbidden in (
+            "SUPABASE_SERVICE_ROLE_KEY",
+            "WEATHRA_PRIVILEGED_SERVICE_ROLE_KEY",
+            "OPENROUTER_API_KEY",
+            "RENDER_API_KEY",
+            "RENDER_SERVICE_ID",
+            "api.render.com",
+            "VERCEL_TOKEN",
+        ):
+            assert forbidden not in rendered, f"{name} has {forbidden} in scope"
+
+        for forbidden in ("alembic upgrade", "alembic downgrade", "alembic stamp"):
+            assert forbidden not in rendered, f"{name} runs `{forbidden}`; it may not migrate"
+
+        assert "WEATHRA_RUNTIME_MODE: privileged" in rendered, (
+            f"{name} does not run in privileged mode, so it would delete almost nothing and report "
+            "that it had succeeded"
+        )
+        assert "DATABASE_URL_PRIVILEGED: ${{ secrets.DATABASE_URL_PRIVILEGED }}" in rendered, (
+            f"{name} does not take the privileged connection from the repository secret"
+        )
+        assert re.search(r"\bDATABASE_URL\b(?!_)", rendered) is None, (
+            f"{name} has the request-path DATABASE_URL in scope; retention needs only the "
+            "privileged connection"
+        )
+        for step in yaml.safe_load(rendered)["jobs"]["retain"]["steps"]:
+            command = str(step.get("run", ""))
+            assert "secrets." not in command, f"{name} names a secret in a command: {command!r}"
+            assert "hide_password=False" not in command, f"{name} could render a DSN"
 
 
 # ------------------------------------------------------------------ 6. the frontend release (23.5)

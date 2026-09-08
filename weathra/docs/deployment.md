@@ -343,6 +343,16 @@ values above, and nothing more.
 **Supabase** — register each environment's Vercel origin under *Authentication → URL Configuration*
 so the returning-link and password-recovery paths land on an allowed redirect.
 
+> **Outstanding for production, verified 2026-09-08.** It is not registered, and the Site URL is
+> still `http://localhost:3000`. Probed without credentials, by asking the project to verify a
+> deliberately invalid token and reading where it sends the browser: a `redirect_to` of
+> `https://weathra-bice.vercel.app/…` is answered with a redirect to `http://localhost:3000`, the
+> fallback Supabase uses for an origin that is not on the list, while `http://localhost:3000/…` is
+> preserved. So every email link production sends today — the sign-up confirmation, which follows
+> the Site URL because `signUp` is called with no `emailRedirectTo`, and the recovery link, which
+> names `/auth/confirm?type=recovery` — lands on a developer's machine. Password sign-in is
+> unaffected and works, which is why this was invisible until it was looked for.
+
 After the Render service is up, `curl https://<backend>/api/v1/ready` reports each dependency by
 name and never a credential value. That response is the evidence that secrets were injected and the
 backend started with them — which is the part of task 23.3 no repository change can satisfy.
@@ -629,11 +639,40 @@ ordinary CI: `RENDER_API_KEY` is account-scoped, so a workflow holding it must n
 pushing a commit. It prints the origin it added and nothing else — not the credential, not the
 origin list, and not the values of the variables it read in order to prove it had not changed them.
 
-### On a schedule *(pending)*
+### On a schedule
 
-`weathra-retention`, under the privileged connection, against `THREAD_RETENTION_DAYS` and
-`SNAPSHOT_RETENTION_DAYS`. It refuses to run in anything but `WEATHRA_RUNTIME_MODE=privileged`, so a
-misconfigured invocation fails rather than silently doing nothing.
+**`database-retention.yml`** — `weathra-retention` under the privileged connection, at 03:17 UTC
+daily, against `THREAD_RETENTION_DAYS` and `SNAPSHOT_RETENTION_DAYS`. Expired conversation threads
+with their checkpoints, and forecast snapshots past their own longer window; nothing else. A
+person's saved locations and preferences are not expiring data, and whole-account deletion is a
+separate operation its owner performs on the request path.
+
+design.md decision 11 puts this in CI rather than in the server, and the reason is the credential
+rather than the scheduling: deleting expired rows belonging to *other people* is exactly the work
+the request-serving role must not be able to do. `weathra-retention` refuses to run in anything but
+`WEATHRA_RUNTIME_MODE=privileged`, because under the request-serving configuration the policies
+narrow every delete to nothing and the job would report success having removed almost nothing.
+
+**It verifies before it deletes.** `backend/scripts/verify_database.py` reads the deployed database
+in a session PostgreSQL refuses writes for and holds it to what task 23.6 requires: the migrations
+applied and at this checkout's head, `pgvector` present, Row Level Security enabled *and forced*
+with at least one policy on every user-owned table, and the two roles as the design needs them —
+`weathra_request` unable to log in or bypass RLS, `weathra_api` able to log in but not inheriting,
+not bypassing, and holding none of `SUPERUSER`, `CREATEDB`, `CREATEROLE` or `REPLICATION`. A failure
+there stops the run before anything is removed, because a schema that is not the one this code
+expects is the last state in which to start deleting rows.
+
+That verification exists because the obvious way to check a deployed database is the one thing that
+must never happen. Task 23.6's wording asks for "the `db` suite" against it, and that suite
+truncates every user-owned table between tests (`tests/db_support.py:145`) — running it against
+production would delete every account's data in order to prove a schema claim. The suite runs
+against a disposable `pgvector` database on every push instead, and the properties it asserts about
+the schema are asserted directly against production here.
+`tests/integration/test_database_verification.py` proves the check notices when each property it
+reports is broken, so a green run means something.
+
+The report is counts, the two windows, and a timestamp. Never a deleted row's contents, and never
+the connection string: a failure message is scrubbed of the DSN before it is printed.
 
 ## The production image
 

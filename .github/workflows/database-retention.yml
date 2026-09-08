@@ -1,0 +1,109 @@
+name: database-retention
+
+# Weathra — the retention routine, on a schedule. Task 23.6.
+#
+# design.md decision 11 puts retention in "a scheduled CI job in the MVP, no in-process scheduler",
+# and the reason is the credential rather than the scheduling: deleting expired rows that belong to
+# *other people* is exactly the work the request-serving role must not be able to do. So it runs
+# here, under the privileged connection, and the deployed backend never holds that connection at
+# all (`test_the_render_service_never_holds_the_privileged_database_url`).
+#
+# It verifies before it deletes. `scripts/verify_database.py` reads the deployed database in a
+# session PostgreSQL refuses writes for and holds it to what task 23.6 requires — migrations at the
+# repository's head, pgvector enabled, Row Level Security enabled *and forced* with policies on
+# every user-owned table, and the two roles with the attributes the design depends on. A failure
+# there stops the run before anything is removed: a schema that is not the one this code expects is
+# the last state in which to start deleting rows.
+#
+# What it may not do is as much the point as what it does. It holds no Render credential, no
+# service-role key and no request-path connection; it never invokes Alembic, so it cannot
+# migrate; and it prints only counts. `backend/tests/test_release_workflow.py` classifies it as
+# `SCHEDULED` and asserts each of those absences.
+
+on:
+  schedule:
+    # 03:17 UTC daily. Off the hour because every hosted scheduler is busiest there, and daily
+    # because the retention windows are measured in days — a missed night changes nothing, and an
+    # hourly job would spend a connection to delete nothing.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Count what would be removed without removing it"
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  # Its own group, never the release's: retention must neither queue behind a deployment nor delay
+  # one. Not cancelled in progress either — a half-finished pass is safe to repeat, but cancelling
+  # one mid-delete leaves the next pass more to do for no benefit.
+  group: database-retention
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  retain:
+    name: verify the database, then remove what has expired
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: weathra/backend
+
+    env:
+      # The migrate job's mapping (release.yml), and nothing more. `WEATHRA_RUNTIME_MODE` is not a
+      # convenience: both the verifier and `weathra-retention` refuse to run without it, because
+      # under the request-serving configuration the policies would narrow every delete to nothing
+      # and the job would report success having removed almost nothing.
+      WEATHRA_RUNTIME_MODE: privileged
+      DATABASE_URL_PRIVILEGED: ${{ secrets.DATABASE_URL_PRIVILEGED }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+
+    steps:
+      - name: Refuse without the privileged connection
+        working-directory: .
+        run: |
+          set -euo pipefail
+          if [ -z "${DATABASE_URL_PRIVILEGED}" ] || [ -z "${SUPABASE_URL}" ]; then
+            echo "::error::DATABASE_URL_PRIVILEGED and SUPABASE_URL must be set; refusing to run."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: weathra/backend/constraints.txt
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install --constraint constraints.txt .
+
+      # Read-only, and first. It is also the evidence task 23.6 asks for about the deployed
+      # database: the `db` suite cannot supply it, because that suite truncates every user-owned
+      # table between tests and pointing it at production would delete everybody's data to prove a
+      # schema claim. `tests/integration/test_database_verification.py` proves this check notices
+      # when each property it reports is broken.
+      - name: Verify the deployed database
+        run: python scripts/verify_database.py
+
+      # Threads past `THREAD_RETENTION_DAYS` with their checkpoints, and forecast snapshots past
+      # `SNAPSHOT_RETENTION_DAYS`. Nothing else: the knowledge corpus and a person's own saved
+      # locations and preferences are not expiring data, and account deletion is a separate,
+      # request-path operation the owner performs.
+      #
+      # The report is counts, the two windows, and a timestamp — never a deleted row's contents.
+      - name: Remove what has expired
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            weathra-retention --dry-run
+          else
+            weathra-retention
+          fi
