@@ -429,6 +429,22 @@ built — and `vercel deploy --prebuilt --prod` promotes it. It then asks the de
 promoted for `/sign-in` and fails unless it answers 200, because an upload that succeeded is not a
 frontend that renders.
 
+`vercel pull` and `vercel deploy` both pass `--scope "$VERCEL_ORG_ID"` and
+`--project "$VERCEL_PROJECT_ID"`, and both flags earn their place. `--scope` establishes the team
+context for the run: without it the CLI reads the two identifiers but performs its owner lookup
+with no team attached, and a team-owned project answers 403 — surfaced as *"Could not retrieve
+Project Settings. To link your Project, remove the `.vercel` directory and deploy again"*, which is
+a red herring on a runner that has no `.vercel` directory to remove. `--project` names the existing
+project by id, which turns "cannot resolve it" into a hard failure; `--yes` on its own would let the
+CLI read an unresolved project as licence to create one named after the directory it ran in, and
+then deploy to that instead. `test_the_frontend_release_targets_the_existing_vercel_project` and
+`test_the_frontend_release_cannot_create_a_vercel_project` hold both halves. `vercel build` names
+neither, deliberately: it consumes the `.vercel/project.json` and `.vercel/.env.production.local`
+the pull wrote, rather than re-resolving the project and risking disagreement with what was pulled.
+
+Nothing about this requires a developer's local `.vercel` directory — the runner derives it from the
+two identifiers on every run, and `.gitignore` keeps the local one out of the tree.
+
 `weathra/frontend/vercel.json` sets `git.deploymentEnabled.main` to `false`, which is the frontend's
 half of `autoDeployTrigger: "off"` and exists for the same reason. Vercel's default, once a project
 is connected to a repository, is to build and promote on every push to the production branch — so

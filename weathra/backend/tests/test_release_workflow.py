@@ -466,6 +466,188 @@ def test_no_frontend_release_step_names_the_token(frontend_release: dict[str, An
             )
 
 
+def _frontend_steps(frontend_release: dict[str, Any]) -> list[dict[str, Any]]:
+    steps: list[dict[str, Any]] = frontend_release["jobs"]["deploy"]["steps"]
+    return steps
+
+
+def _vercel_invocations(frontend_release: dict[str, Any]) -> dict[str, str]:
+    """Every `vercel <subcommand>` in the deploy job, keyed by subcommand.
+
+    Line continuations are folded away first: the flags that make the linking explicit are spread
+    over several lines for legibility, and a test that reads the file line by line would not see
+    them.
+    """
+    found: dict[str, str] = {}
+    for step in _frontend_steps(frontend_release):
+        body = " ".join(str(step.get("run", "")).replace("\\\n", " ").split())
+        for fragment in body.split("vercel ")[1:]:
+            subcommand = fragment.split(" ", 1)[0]
+            if subcommand in {"pull", "build", "deploy", "link", "project", "env"}:
+                found[subcommand] = f"vercel {fragment}"
+    return found
+
+
+def test_the_frontend_release_targets_the_existing_vercel_project(
+    frontend_release: dict[str, Any],
+) -> None:
+    """The linking assertion, and the one that regressed.
+
+    `vercel pull` cannot bring anything down until it has resolved *which* project it is talking
+    about, and the identifiers alone are not enough to resolve one that a team owns: the CLI's
+    owner lookup goes out with no team attached unless the scope is named, and a team-owned project
+    answers that with a 403 rendered as "Could not retrieve Project Settings. To link your Project,
+    remove the `.vercel` directory and deploy again" — misleading on a runner, which has no
+    `.vercel` directory to remove.
+
+    So both commands that reach the API name the team and the project explicitly. Asserted per
+    command rather than by searching the file, because a flag on the pull that is missing from the
+    deploy is the shape this would come back in.
+    """
+    invocations = _vercel_invocations(frontend_release)
+    for subcommand in ("pull", "deploy"):
+        assert subcommand in invocations, f"{FRONTEND_RELEASE} never runs `vercel {subcommand}`"
+        command = invocations[subcommand]
+        assert '--scope "$VERCEL_ORG_ID"' in command, (
+            f"`vercel {subcommand}` does not name the team that owns the project; "
+            "without --scope the CLI resolves the project outside any team and is refused"
+        )
+        assert '--project "$VERCEL_PROJECT_ID"' in command, (
+            f"`vercel {subcommand}` does not name the existing project"
+        )
+
+
+def test_the_frontend_release_consumes_the_project_identifiers(
+    frontend_release: dict[str, Any],
+) -> None:
+    """The identifiers come from repository secrets, and the job passes both.
+
+    The CLI refuses a half-configured pair — one without the other is an error, not a fallback —
+    so this asserts the job environment carries both and that each is a secret reference rather
+    than a value written into the file.
+    """
+    env = frontend_release["jobs"]["deploy"]["env"]
+    for name in ("VERCEL_ORG_ID", "VERCEL_PROJECT_ID"):
+        assert name in env, f"{FRONTEND_RELEASE} does not carry {name}"
+        assert f"secrets.{name}" in env[name], (
+            f"{name} is not read from a repository secret: {env[name]!r}"
+        )
+
+
+def test_the_frontend_release_holds_the_token_in_the_environment_only(
+    frontend_release: dict[str, Any],
+) -> None:
+    """The token reaches the CLI through the environment and is never named by a step.
+
+    Two separate properties. It has to be *there* — the job environment reads it from a repository
+    secret — and it must never reach a command line, where it would be visible in the runner's
+    process list and in any shell trace. The identifiers are passed as flags precisely because
+    they are not credentials; the token is not, precisely because it is.
+    """
+    job = frontend_release["jobs"]["deploy"]
+    assert "secrets.VERCEL_TOKEN" in job["env"].get("VERCEL_TOKEN", ""), (
+        f"{FRONTEND_RELEASE} does not read VERCEL_TOKEN from a repository secret"
+    )
+    for step in _frontend_steps(frontend_release):
+        command = str(step.get("run", ""))
+        assert "--token" not in command, (
+            f"a step passes the token on a command line: {command!r}"
+        )
+        assert "VERCEL_TOKEN" not in command, (
+            f"a step names the token in a command: {command!r}"
+        )
+
+
+def test_the_frontend_release_cannot_create_a_vercel_project(
+    frontend_release: dict[str, Any],
+) -> None:
+    """A second Vercel project is the failure mode that would look like success.
+
+    `--yes` answers the CLI's prompts, and one of the things it answers is "set this directory up
+    as a new project?" — named after the directory it ran in, which from the repository root would
+    be a project called after the repository, deployed to, and promoted, all while the real one
+    sits untouched. Naming the project makes an unresolved project a hard failure instead.
+
+    So every `vercel` command that both auto-confirms and reaches the API must also name the
+    project, and nothing here may create one by hand.
+    """
+    invocations = _vercel_invocations(frontend_release)
+    for subcommand, command in invocations.items():
+        if subcommand == "build":
+            continue
+        if "--yes" in command or "-y " in command:
+            assert '--project "$VERCEL_PROJECT_ID"' in command, (
+                f"`vercel {subcommand}` auto-confirms without naming the project, so an "
+                f"unresolved project would be created rather than reported: {command!r}"
+            )
+    assert "project" not in invocations, (
+        f"{FRONTEND_RELEASE} runs `vercel project`; the release may only deploy to the project "
+        "that already exists"
+    )
+
+
+def test_the_frontend_release_sequence_is_deterministic(
+    frontend_release: dict[str, Any],
+) -> None:
+    """Pull, then build, then deploy, then verify — in one job, in that order.
+
+    The order is the correctness condition, not a preference. Next.js inlines NEXT_PUBLIC_ values
+    at build time, so a build before the pull bakes in nothing; `--prebuilt` promotes whatever is
+    in `.vercel/output`, so a deploy before the build promotes the previous run's bundle or fails.
+    """
+    order = [
+        index
+        for index, step in enumerate(_frontend_steps(frontend_release))
+        if "vercel pull" in str(step.get("run", ""))
+        or "vercel build" in str(step.get("run", ""))
+        or "vercel deploy" in str(step.get("run", ""))
+    ]
+    commands = [
+        str(_frontend_steps(frontend_release)[index].get("run", "")) for index in order
+    ]
+    assert len(commands) == 3, (
+        f"{FRONTEND_RELEASE} does not run pull, build and deploy as three steps"
+    )
+    assert "vercel pull" in commands[0], "the pull is not first"
+    assert "vercel build" in commands[1], "the build does not follow the pull"
+    assert "vercel deploy" in commands[2], "the deploy does not follow the build"
+    for step in _frontend_steps(frontend_release):
+        assert not step.get("continue-on-error"), (
+            f"step {step.get('name')!r} continues on error, so a failed step would not stop the "
+            "release"
+        )
+
+
+def test_the_frontend_verification_runs_only_after_a_successful_deploy(
+    frontend_release: dict[str, Any],
+) -> None:
+    """Verification that can run without a deployment verifies the previous deployment.
+
+    Steps in a job stop at the first failure unless a step says otherwise, so the ordering is
+    enough — as long as no `if:` reintroduces the step after a failed deploy, and as long as the
+    verification reads the URL the deploy produced rather than one written into the file.
+    """
+    steps = _frontend_steps(frontend_release)
+    deploy_index = next(
+        index for index, step in enumerate(steps) if "vercel deploy" in str(step.get("run", ""))
+    )
+    verify_index = next(
+        index for index, step in enumerate(steps) if "/sign-in" in str(step.get("run", ""))
+    )
+    assert verify_index > deploy_index, (
+        f"{FRONTEND_RELEASE} verifies before it deploys"
+    )
+    verify = steps[verify_index]
+    assert "if" not in verify, (
+        "the verification carries an `if:`, which can let it run after a failed deploy: "
+        f"{verify.get('if')!r}"
+    )
+    assert "steps.deploy.outputs.url" in str(verify.get("run", "")), (
+        "the verification does not read the URL the deploy produced, so it may be checking "
+        "something other than what this run promoted"
+    )
+
+
 def test_the_frontend_release_verifies_what_it_deployed(frontend_release: dict[str, Any]) -> None:
     """The deployment answers for itself, as the backend release makes the service do.
 

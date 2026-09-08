@@ -77,20 +77,54 @@ jobs:
       # environment in the Vercel project rather than here, so a preview and production can point
       # at different backends without a commit — which is what task 23.5 asks for. It also means
       # this file names no configuration value at all.
+      #
+      # Before it can pull anything it has to resolve the project, and that resolution is what
+      # failed on the first attempt. Two flags, both load-bearing:
+      #
+      #   `--scope` establishes the team context for the whole run: the CLI resolves the team once,
+      #     up front, and every API request afterwards carries it. Without it the CLI does still
+      #     read VERCEL_ORG_ID and VERCEL_PROJECT_ID — that mechanism is not the problem — but the
+      #     owner lookup it makes to confirm the pair goes out with no team attached, and a
+      #     team-owned project answers 403. The CLI renders that 403 as "Could not retrieve Project
+      #     Settings. To link your Project, remove the `.vercel` directory and deploy again", which
+      #     is a red herring on a runner: there is no `.vercel` directory to remove, and the
+      #     failure is a missing scope rather than a stale link.
+      #   `--project` names the existing project by id instead of leaving the link implicit, and
+      #     that changes what happens when it cannot be found. `--yes` alone permits the CLI to
+      #     read an unresolved project as licence to *create* one, named after the directory it ran
+      #     in; with `--project` the same situation is a hard failure. It is what keeps this
+      #     workflow incapable of quietly standing up a second Vercel project alongside the real
+      #     one. `test_the_frontend_release_cannot_create_a_vercel_project` holds it.
+      #
+      # Both read the job environment, so neither names a secret in a command line.
       - name: Pull the production environment
-        run: vercel pull --yes --environment=production
+        run: |
+          set -euo pipefail
+          vercel pull --yes --environment=production \
+            --scope "$VERCEL_ORG_ID" \
+            --project "$VERCEL_PROJECT_ID"
 
       # Next.js inlines NEXT_PUBLIC_ values at build time, so the build has to happen after the
       # pull and with those values in scope. Building here rather than on Vercel means the bundle
       # that gets promoted is the one this commit produced.
+      #
+      # No `--scope` or `--project` here, deliberately: the pull wrote `.vercel/project.json` and
+      # `.vercel/.env.production.local`, and the build's job is to consume exactly what the pull
+      # resolved. Naming the project again would send the build back to the API to re-resolve it,
+      # which is a second chance for the build to disagree with the thing that was pulled.
       - name: Build
         run: vercel build --prod
 
+      # Scoped and named for the same two reasons as the pull. The promotion is the step that
+      # would do the damage if the link were ever wrong, so it resolves the project explicitly
+      # rather than inheriting whatever the runner happens to have on disk.
       - name: Deploy
         id: deploy
         run: |
           set -euo pipefail
-          url="$(vercel deploy --prebuilt --prod)"
+          url="$(vercel deploy --prebuilt --prod \
+            --scope "$VERCEL_ORG_ID" \
+            --project "$VERCEL_PROJECT_ID")"
           printf 'url=%s\n' "$url" >> "$GITHUB_OUTPUT"
 
       # The deployment answering for itself, in the same way the backend release ends by asking the
