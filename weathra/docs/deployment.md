@@ -429,6 +429,14 @@ built — and `vercel deploy --prebuilt --prod` promotes it. It then asks the de
 promoted for `/sign-in` and fails unless it answers 200, because an upload that succeeded is not a
 frontend that renders.
 
+`weathra/frontend/vercel.json` sets `git.deploymentEnabled.main` to `false`, which is the frontend's
+half of `autoDeployTrigger: "off"` and exists for the same reason. Vercel's default, once a project
+is connected to a repository, is to build and promote on every push to the production branch — so
+with the default left in place a push to `main` would produce two production deployments, Vercel's
+own and this workflow's, racing to be promoted last. The setting lives in the repository rather than
+in the dashboard so that changing it arrives as a diff;
+`test_vercel_does_not_deploy_on_its_own` fails if it is lost.
+
 The three `NEXT_PUBLIC_` values are held in the Vercel project per environment rather than in this
 workflow, which is what lets a preview and production point at different backends with no commit —
 and is why the workflow file names no configuration value at all. The token reaches the CLI through

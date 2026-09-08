@@ -47,6 +47,7 @@ ORDINARY_CI = ("backend.yml", "frontend.yml")
 # project and nothing else. `test_the_frontend_release_holds_nothing_of_the_backend_s` is what
 # keeps that second statement true.
 FRONTEND_RELEASE = ".github/workflows/frontend-release.yml"
+VERCEL_PROJECT = "weathra/frontend/vercel.json"
 RELEASE_PIPELINES = ("release.yml", "frontend-release.yml")
 
 # Neither ordinary CI nor the release pipeline, and recorded here because
@@ -494,4 +495,29 @@ def test_the_frontend_release_runs_only_on_frontend_changes(
     assert "weathra/frontend/**" in paths, f"{FRONTEND_RELEASE} does not watch the frontend"
     assert frontend_release[True]["push"]["branches"] == ["main"], (
         f"{FRONTEND_RELEASE} releases from a branch other than main"
+    )
+
+
+def test_vercel_does_not_deploy_on_its_own(repo_root: Path) -> None:
+    """The frontend's half of `autoDeployTrigger: "off"`, and it fails the same way if lost.
+
+    Vercel's default, once a project is connected to a repository, is to build and promote on every
+    push to the production branch. With the default left in place a push to `main` would produce
+    two production deployments — Vercel's own and `frontend-release.yml`'s — racing to be promoted
+    last, so which commit ends up live depends on which build happened to be slower.
+
+    Disabling it here rather than in the dashboard keeps the setting in version control, where a
+    change to it arrives as a diff. `render.yaml` holds the identical line for the backend, and for
+    the identical reason.
+    """
+    import json
+
+    path = repo_root / VERCEL_PROJECT
+    assert path.is_file(), (
+        f"{VERCEL_PROJECT} is missing: Vercel's own Git deployments are unbounded"
+    )
+    project = json.loads(path.read_text())
+    assert project.get("git", {}).get("deploymentEnabled", {}).get("main") is False, (
+        f"{VERCEL_PROJECT} lets Vercel deploy `main` itself; "
+        "the release workflow must be the only route to production"
     )
