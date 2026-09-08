@@ -343,15 +343,33 @@ values above, and nothing more.
 **Supabase** — register each environment's Vercel origin under *Authentication → URL Configuration*
 so the returning-link and password-recovery paths land on an allowed redirect.
 
-> **Outstanding for production, verified 2026-09-08.** It is not registered, and the Site URL is
-> still `http://localhost:3000`. Probed without credentials, by asking the project to verify a
-> deliberately invalid token and reading where it sends the browser: a `redirect_to` of
-> `https://weathra-bice.vercel.app/…` is answered with a redirect to `http://localhost:3000`, the
-> fallback Supabase uses for an origin that is not on the list, while `http://localhost:3000/…` is
-> preserved. So every email link production sends today — the sign-up confirmation, which follows
-> the Site URL because `signUp` is called with no `emailRedirectTo`, and the recovery link, which
-> names `/auth/confirm?type=recovery` — lands on a developer's machine. Password sign-in is
-> unaffected and works, which is why this was invisible until it was looked for.
+**Configured for production on 2026-09-08**: Site URL `https://weathra-bice.vercel.app`, with
+`https://weathra-bice.vercel.app/auth/confirm` added to the redirect list and the localhost entry
+retained. Before that the Site URL was `http://localhost:3000`, so every email link production sent
+— the sign-up confirmation, which follows the Site URL because `signUp` is called with no
+`emailRedirectTo`, and the recovery link, which names `/auth/confirm?type=recovery` — landed on a
+developer's machine. Password sign-in uses no redirect, which is why it worked throughout and why
+this stayed invisible until it was looked for.
+
+**How to check it without credentials, an account, or an email.** Ask the project to verify a
+deliberately invalid token and read where it sends the browser: an allow-listed `redirect_to` comes
+back in the `Location` header unchanged, and one that is not falls back to the Site URL — which is
+how the Site URL reveals itself too.
+
+```
+curl -sSI "https://<project-ref>.supabase.co/auth/v1/verify?token=invalid&type=recovery&redirect_to=<url-encoded>"
+```
+
+Run against production after the change: `https://weathra-bice.vercel.app/auth/confirm?type=recovery`
+comes back unchanged, and an unrelated origin falls back to `https://weathra-bice.vercel.app` — both
+halves of the configuration, confirmed from outside.
+
+> **One consequence for local development.** The retained localhost entry is the bare origin, and
+> Supabase matches a redirect against the whole URL: `http://localhost:3000` is still allowed, but
+> `http://localhost:3000/auth/confirm?type=recovery` now falls back to the production Site URL. It
+> used to work only because localhost *was* the Site URL. A local recovery link therefore lands on
+> production until `http://localhost:3000/**` is added alongside it. Nothing in production depends
+> on this.
 
 After the Render service is up, `curl https://<backend>/api/v1/ready` reports each dependency by
 name and never a credential value. That response is the evidence that secrets were injected and the
@@ -673,6 +691,30 @@ reports is broken, so a green run means something.
 
 The report is counts, the two windows, and a timestamp. Never a deleted row's contents, and never
 the connection string: a failure message is scrubbed of the DSN before it is printed.
+
+**Verified against production, 2026-09-08** — `database-retention` run 34252635695, dispatched with
+`dry_run` selected. The verification step reported nine passes against the deployed Supabase
+database:
+
+| Checked | Reported |
+|---|---|
+| Migrations | applied, at `0004_shared_read_policies` — this checkout's head |
+| pgvector | `vector 0.8.2` |
+| Row Level Security | `enabled=True forced=True policies=1` on `profiles`, `preferences`, `saved_locations`, `threads` and `agent_runs` |
+| `weathra_request` | `canlogin=False bypassrls=False` |
+| `weathra_api` | `canlogin=True inherit=False bypassrls=False` |
+
+and the routine then reported `threads_expired: 0`, `thread_checkpoints_cleared: 0`,
+`snapshots_expired: 0` against windows of 30 and 90 days. Nothing has aged out yet — the project's
+oldest thread is days old, not months — so the first pass with anything to remove will be the first
+that exercises a delete. What the dry run establishes is everything up to that point: the schedule,
+the privileged connection, the schema, and the counting.
+
+A dry run is deliberately *not* the routine. `main()` calls `_dry_run()` **instead of** `retain()`,
+and the two do not share their predicates — a dry run that called the real routine and rolled back
+would have to hold a transaction open across the checkpoint deletions, which are not transactional
+because the checkpointer has its own connection. So the deletion path — the privileged checkpointer,
+the two `DELETE`s and the commit — is proven only by a run with `dry_run` unselected.
 
 ## The production image
 
