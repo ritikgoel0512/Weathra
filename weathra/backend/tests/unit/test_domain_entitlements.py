@@ -134,7 +134,7 @@ def _resolution(**overrides: object) -> ent.Resolution:
         "call_role": ent.CallRole.SYNTHESIS,
     }
     fields.update(overrides)
-    return ent.Resolution(**fields)  # type: ignore[arg-type]
+    return ent.Resolution(**fields)
 
 
 def test_a_resolution_is_frozen() -> None:

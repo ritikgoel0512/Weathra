@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import ast
 import uuid
+from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
@@ -113,7 +114,7 @@ SELECT relation.relname,
 """
 
 
-def _subjects(rows: object) -> list[str]:
+def _subjects(rows: Iterable[object]) -> list[str]:
     """Row values as strings.
 
     ``user_id`` is a real ``uuid`` column and comes back as ``UUID``; ``usage_counters.subject`` is
@@ -697,9 +698,15 @@ def privileged_saas_access(sources: dict[str, str]) -> list[str]:
         if not any(table in source for table in NEW_USER_OWNED_TABLES):
             continue
         for node in ast.walk(ast.parse(source)):
-            names_privileged = isinstance(node, ast.Name) and node.id == "privileged_session"
-            names_maker = isinstance(node, ast.Attribute) and node.attr == "privileged_sessionmaker"
-            if names_privileged or names_maker:
+            # Narrowed one branch at a time so the line number is read off a node type that
+            # actually carries one; `ast.AST` in general does not.
+            if isinstance(node, ast.Name):
+                names_it = node.id == "privileged_session"
+            elif isinstance(node, ast.Attribute):
+                names_it = node.attr == "privileged_sessionmaker"
+            else:
+                continue
+            if names_it:
                 offenders.append(f"{relative}:{node.lineno}")
     return offenders
 

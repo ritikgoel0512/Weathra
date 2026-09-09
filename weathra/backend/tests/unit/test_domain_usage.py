@@ -37,7 +37,7 @@ def _event(**overrides: object) -> u.UsageEvent:
         "created_at": UTC_MOMENT,
     }
     fields.update(overrides)
-    return u.UsageEvent(**fields)  # type: ignore[arg-type]
+    return u.UsageEvent(**fields)
 
 
 # =========================================================================== the record itself
