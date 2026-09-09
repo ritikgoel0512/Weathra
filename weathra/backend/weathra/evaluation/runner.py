@@ -35,6 +35,7 @@ import os
 import subprocess
 import sys
 import time
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -546,15 +547,38 @@ async def execute_run(
     mode: EvaluationMode = EvaluationMode.OFFLINE,
     category: str | None = None,
     case_id: str | None = None,
+    pinned_model: str | None = None,
+    cases: Sequence[EvaluationCase] | None = None,
 ) -> RunResult:
-    """Execute the dataset and score it. The function CI and the CLI both call."""
-    cases = select_cases(category=category, case_id=case_id)
+    """Execute the dataset and score it. The function CI and the CLI both call.
+
+    *pinned_model* names the gateway model this run must use, which is what makes a model
+    comparison possible: `specs/evaluation` requires every variable but the model to be held fixed
+    across candidates, so the candidate is the only thing a comparison changes here. In live mode
+    it becomes ``LLM_MODEL`` for this run; offline it becomes the identity the offline client
+    records, so each candidate's results are attributed to that candidate rather than to the
+    shared offline client. ``None`` is every existing caller, unchanged.
+
+    *cases* lets a caller supply the selection instead of re-deriving it from the filters, so a
+    comparison selects once and every candidate provably runs the same set — the alternative is
+    three independent selections that agree today.
+    """
+    selected = select_cases(category=category, case_id=case_id) if cases is None else tuple(cases)
     started = datetime.now(UTC)
+    # The pin is applied to a *copy*: the process's settings outlive this run, and a comparison
+    # that mutated them would leave the last candidate configured for everything afterwards.
+    settings = (
+        settings.model_copy(update={"llm_model": pinned_model})
+        if pinned_model is not None and mode is EvaluationMode.LIVE
+        else settings
+    )
     engines = Engines.create(settings)
     pacing = settings.evaluation_llm_min_interval_seconds if mode is EvaluationMode.LIVE else 0.0
 
     try:
         async with build_evaluation_app(settings, mode=mode) as prepared:
+            if pinned_model is not None and mode is EvaluationMode.OFFLINE:
+                prepared.pinned_model_id = pinned_model
             identity = prepared.identity
             outcomes: list[CaseOutcome] = []
             records: list[CaseRecord] = []
@@ -567,7 +591,7 @@ async def execute_run(
             if probe is not None:
                 return _aborted_run(
                     settings,
-                    cases=cases,
+                    cases=selected,
                     prepared=prepared,
                     started=started,
                     probe=probe,
@@ -576,7 +600,7 @@ async def execute_run(
                     mode=mode,
                 )
 
-            for index, case in enumerate(cases):
+            for index, case in enumerate(selected):
                 if pacing > 0 and index > 0:
                     # Spacing, not a retry. Forty cases at up to two calls each would otherwise
                     # arrive as one burst and trip a free tier's per-minute ceiling on a model
@@ -588,7 +612,7 @@ async def execute_run(
                 outcomes.append(outcome)
                 records.append(record)
 
-            metrics = compute_metrics(outcomes, cases)
+            metrics = compute_metrics(outcomes, selected)
             integrity = assess_integrity(
                 outcomes,
                 metrics,
@@ -598,7 +622,7 @@ async def execute_run(
                 # Only when quarantine actually removed something; otherwise the two reports are
                 # identical by construction and computing the second would be waste.
                 metrics_before_quarantine=(
-                    compute_metrics(outcomes, cases, quarantine=False)
+                    compute_metrics(outcomes, selected, quarantine=False)
                     if metrics.cases_quarantined
                     else metrics
                 ),
@@ -615,7 +639,7 @@ async def execute_run(
                 category_filter=category,
                 case_filter=case_id,
                 test_user=identity.recorded(),
-                cases_selected=len(cases),
+                cases_selected=len(selected),
             )
     finally:
         await engines.dispose()

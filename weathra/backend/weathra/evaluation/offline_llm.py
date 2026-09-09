@@ -44,12 +44,26 @@ class OfflineLLMClient:
     Satisfies ``LLMClient`` structurally, like the fake and the gateway client do.
     """
 
-    provider_id = OFFLINE_PROVIDER_ID
-    model_id = OFFLINE_MODEL_ID
+    def __init__(
+        self,
+        *,
+        plans: Sequence[dict[str, Any]],
+        provider_id: str = OFFLINE_PROVIDER_ID,
+        model_id: str = OFFLINE_MODEL_ID,
+    ) -> None:
+        """The identity is a parameter so a comparison can tell its candidates apart.
 
-    def __init__(self, *, plans: Sequence[dict[str, Any]]) -> None:
+        It defaults to the offline constants, so every existing caller behaves exactly as before.
+        A model comparison running offline needs each candidate's result attributed to *that*
+        candidate — otherwise three candidates produce three identical records naming the offline
+        client, and the comparison compares nothing. What varies offline is only the recorded
+        identity, which is honest: an offline run measures the deterministic path, and the run
+        record says it ran offline.
+        """
         if not plans:  # pragma: no cover - the harness always derives at least one
             raise ValueError("An offline client needs at least one derived plan.")
+        self.provider_id = provider_id
+        self.model_id = model_id
         self._plans = list(plans)
         self.json_calls = 0
         self.prose_calls = 0

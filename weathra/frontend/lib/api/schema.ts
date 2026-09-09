@@ -258,6 +258,17 @@ export interface CatalogEntry {
 export interface CatalogListResponse {
   readonly count: number;
   readonly entries: CatalogEntry[];
+  /** The most recent evaluation outcome per catalog entry, where one exists. */
+  readonly observations?: Record<string, CatalogObservation>;
+}
+
+/** What the lab last recorded about one model. */
+export interface CatalogObservation {
+  readonly criteria?: Record<string, unknown>;
+  readonly dataset_version: string;
+  readonly gateway_model: string;
+  readonly passed?: boolean | null;
+  readonly recorded_at?: string | null;
 }
 
 /** Whether an entry may be resolved at all. */
@@ -322,6 +333,41 @@ export interface ComparisonResult {
   readonly unit_system: UnitSystem;
   /** Required for the composite criterion: whose heuristic the weights are. */
   readonly weighting_disclosure?: string | null;
+}
+
+/** One model's outcome for one case. Every measure `specs/model-lab` names, or a null. */
+export interface ComparisonResultRecord {
+  /** Where the agent path ran, the run whose evidence explains it. */
+  readonly agent_run_id?: string | null;
+  readonly case_id: string;
+  readonly catalog_key: string;
+  readonly completion_tokens?: number | null;
+  readonly estimated_cost?: string | null;
+  readonly evaluation_id?: string | null;
+  readonly failure_class?: FailureClass | null;
+  readonly gateway_model: string;
+  readonly latency_ms?: number | null;
+  readonly policy_id?: string | null;
+  readonly prompt_tokens?: number | null;
+  readonly succeeded: boolean;
+  readonly total_tokens?: number | null;
+  /** The telemetry this cell produced, so the two records agree. */
+  readonly usage_event_ids?: string[];
+}
+
+/** A whole comparison, as it is read back. */
+export interface ComparisonRunRecord {
+  readonly candidate_catalog_keys: string[];
+  readonly catalog_state?: Record<string, unknown>;
+  readonly commit_sha?: string | null;
+  readonly completed_at?: string | null;
+  readonly dataset_version?: string | null;
+  readonly id: string;
+  readonly initiated_by: string;
+  readonly question?: string | null;
+  readonly results?: ComparisonResultRecord[];
+  readonly started_at: string;
+  readonly status: string;
 }
 
 /** One measure's part in a composite score: which way it counts, how much, and to what effect. */
@@ -496,6 +542,9 @@ export interface ExcludedCandidate {
   readonly reason: string;
 }
 
+/** Why a call failed, classified at the coarseness decisions can actually be made at. */
+export type FailureClass = "transport" | "timeout" | "gateway_rate_limit" | "auth_config" | "schema_validation" | "unclassified";
+
 /** One structured value the answer rests on, with everything needed to check it. */
 export interface Finding {
   readonly attribution: EvidenceAttribution;
@@ -629,6 +678,27 @@ export interface KnowledgeCitation {
   readonly topic?: string | null;
 }
 
+export interface LabRunListResponse {
+  readonly count: number;
+  readonly runs: ComparisonRunRecord[];
+}
+
+/** What to compare, and over what. */
+export interface LabRunRequest {
+  readonly case_id?: string | null;
+  readonly catalog_keys: string[];
+  readonly category?: string | null;
+  readonly question?: string | null;
+}
+
+/** A run and its results, as an administrator reads them. */
+export interface LabRunResponse {
+  readonly completed_cells?: string[];
+  /** Whether a bound stopped the run before every cell completed. The completed cells are the results below; nothing is estimated for the rest. */
+  readonly partial?: boolean;
+  readonly run: ComparisonRunRecord;
+}
+
 /** A resolved place: where it is, what it is called, and what time it is there. */
 export interface Location {
   readonly country?: string | null;
@@ -728,6 +798,8 @@ export interface PointValue {
 
 /** A re-pointed candidate list — a model promotion, in practice. */
 export interface PolicyCandidatesRequest {
+  /** Promote a candidate that failed a gating criterion anyway. Recorded as such. */
+  readonly acknowledge_criteria_failure?: boolean;
   readonly candidate_catalog_keys: string[];
   readonly cited_comparison_run_ids?: string[];
 }
@@ -1210,6 +1282,43 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     successStatus: 200,
     response: "AllowanceRecord",
     parameters: [],
+  },
+  {
+    operationId: "list_comparisons_api_v1_admin_lab_comparisons_get",
+    method: "GET",
+    path: "/api/v1/admin/lab/comparisons",
+    requiresToken: true,
+    administrative: true,
+    request: null,
+    successStatus: 200,
+    response: "LabRunListResponse",
+    parameters: [
+      { name: "limit", in: "query", required: false },
+    ],
+  },
+  {
+    operationId: "start_comparison_api_v1_admin_lab_comparisons_post",
+    method: "POST",
+    path: "/api/v1/admin/lab/comparisons",
+    requiresToken: true,
+    administrative: true,
+    request: "LabRunRequest",
+    successStatus: 201,
+    response: "LabRunResponse",
+    parameters: [],
+  },
+  {
+    operationId: "read_comparison_api_v1_admin_lab_comparisons__run_id__get",
+    method: "GET",
+    path: "/api/v1/admin/lab/comparisons/{run_id}",
+    requiresToken: true,
+    administrative: true,
+    request: null,
+    successStatus: 200,
+    response: "LabRunResponse",
+    parameters: [
+      { name: "run_id", in: "path", required: true },
+    ],
   },
   {
     operationId: "list_catalog_api_v1_admin_models_get",

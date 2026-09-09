@@ -55,9 +55,32 @@ LAYERS: dict[str, int] = {
     "telemetry": 3,
     "mcp": 4,
     "agents": 5,
+    # The model lab. Above `agents` because it drives the graph per candidate, and *below* `api`
+    # because the administrative router initiates it — which is the whole reason it is not part of
+    # `evaluation/`. See `LAB_MAY_IMPORT_FROM_EVALUATION` for the one boundary that buys.
+    "lab": 5,
     "api": 6,
     "evaluation": 7,
 }
+
+# The `evaluation/` modules `lab/` may import, and the rule is about what they *do* rather than
+# where they sit. `cases`, `metrics`, `criteria`, `thresholds` and `integrity` are pure scoring
+# over recorded data — no app, no network, no database — so a request-path module using them
+# reaches nothing it should not.
+#
+# `harness`, `runner`, `provisioning` and `storage` are the other half: they call `build_app` and
+# provision a user, which is why `evaluation/` is layer 7 at all. A lab run inside a request
+# booting a second application would be the failure this rule exists to name, and it is a mistake
+# that looks entirely reasonable in a diff.
+LAB_MAY_IMPORT_FROM_EVALUATION = frozenset(
+    {
+        "weathra.evaluation.cases",
+        "weathra.evaluation.criteria",
+        "weathra.evaluation.integrity",
+        "weathra.evaluation.metrics",
+        "weathra.evaluation.thresholds",
+    }
+)
 
 # Subpackages permitted to import `auth/` at all, regardless of layer.
 #
@@ -203,6 +226,20 @@ def violations(package_root: Path) -> list[Violation]:
                         "a concrete provider client is reachable only through providers/",
                     )
                 )
+                continue
+
+            # `lab/` reaches the pure half of `evaluation/` and never the half that boots an app.
+            if origin == "lab" and target == "evaluation":
+                if imported not in LAB_MAY_IMPORT_FROM_EVALUATION:
+                    found.append(
+                        Violation(
+                            module,
+                            imported,
+                            line,
+                            "lab/ may import only the pure scoring modules of evaluation/; "
+                            "the rest build an application and must not run inside a request",
+                        )
+                    )
                 continue
 
             # The layering itself.

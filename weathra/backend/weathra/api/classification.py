@@ -271,6 +271,19 @@ _CLASSIFICATIONS: tuple[EndpointClassification, ...] = (
         administrative=True,
     ),
     EndpointClassification(
+        "/admin/lab/comparisons",
+        Access.PROTECTED,
+        "Runs one question or dataset subset across several enabled models, and lists the runs. "
+        "Internal usage, bounded, and it changes no policy.",
+        administrative=True,
+    ),
+    EndpointClassification(
+        "/admin/lab/comparisons/{run_id}",
+        Access.PROTECTED,
+        "One comparison and its per-model results, readable after a compared model is disabled.",
+        administrative=True,
+    ),
+    EndpointClassification(
         "/admin/usage",
         Access.PROTECTED,
         "Aggregate language model usage by model, policy, plan, call role, status and period, "

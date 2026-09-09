@@ -93,6 +93,9 @@ reflection vector.
 | `GET` | `/api/v1/me/usage` | **protected** | 200 | `UsageResponse` |
 | `GET` | `/api/v1/admin/allowances` | **protected** | 200 | `AllowanceListResponse` |
 | `PUT` | `/api/v1/admin/allowances/internal` | **protected** | 200 | `AllowanceRecord` |
+| `GET` | `/api/v1/admin/lab/comparisons` | **protected** | 200 | `LabRunListResponse` |
+| `POST` | `/api/v1/admin/lab/comparisons` | **protected** | 201 | `LabRunResponse` |
+| `GET` | `/api/v1/admin/lab/comparisons/{run_id}` | **protected** | 200 | `LabRunResponse` |
 | `GET` | `/api/v1/admin/models` | **protected** | 200 | `CatalogListResponse` |
 | `POST` | `/api/v1/admin/models` | **protected** | 201 | `CatalogEntry` |
 | `PATCH` | `/api/v1/admin/models/{catalog_key}` | **protected** | 200 | `CatalogEntry` |
@@ -133,6 +136,8 @@ reflection vector.
 | `/weather/history/comparison` | public | Compares two supplied past periods. Reads no user-owned row. |
 | `/agent/ask` | **protected** | Uses and writes the acting user's thread memory and stores an owned evidence record. |
 | `/agent/stream` | **protected** | The same run, streamed. Same memory and same owned record. |
+| `/admin/lab/comparisons` | **protected**, administrative | Runs one question or dataset subset across several enabled models, and lists the runs. Internal usage, bounded, and it changes no policy. |
+| `/admin/lab/comparisons/{run_id}` | **protected**, administrative | One comparison and its per-model results, readable after a compared model is disabled. |
 | `/admin/models` | **protected**, administrative | Lists and creates model catalog entries. |
 | `/admin/models/{catalog_key}` | **protected**, administrative | Edits one model catalog entry. |
 | `/admin/models/{catalog_key}/enable` | **protected**, administrative | Returns a model to resolution. |

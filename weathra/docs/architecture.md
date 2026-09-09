@@ -72,6 +72,9 @@ backend/weathra/
   telemetry/              usage.py cost.py projection.py context.py aggregate.py
                           what each call cost in tokens, money and time. Records what happened;
                           decides nothing
+  lab/                    compare.py records.py promotion.py
+                          the model lab — run one question across several named models and record
+                          what differed. Drives the graph, never a second application
   mcp/                    server.py client.py schemas.py errors.py — its own boundary
   agents/
     llm/                  base.py (Protocol) openrouter.py fake.py registry.py
@@ -86,6 +89,8 @@ backend/weathra/
                           comparison.py agent.py evidence.py account.py usage.py support.py
   evaluation/             cases.py dataset/ fixtures.py harness.py offline_llm.py metrics.py
                           thresholds.py provisioning.py runner.py storage.py
+                          criteria.py model_compare.py — the five promotion criteria, and one
+                          comparison per candidate over the same pinned configuration
 ```
 
 ## The dependency rule

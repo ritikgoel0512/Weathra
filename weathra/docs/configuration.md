@@ -110,6 +110,9 @@ bundle — see [`authentication.md`](authentication.md) for why the split is dra
 | `LLM_USAGE_RETENTION_DAYS` | `90` | behaviour | How long raw language model usage events are kept. Metadata only — no prompt, completion or retrieved text — so the window is about storage and relevance |
 | `QUOTA_ENABLED` | `true` | behaviour | Whether plan allowances are enforced. On by default including locally, so the development path is the deployed path. A suite that turns it off is testing something other than the gate |
 | `QUOTA_WINDOW_TIMEZONE` | `UTC` | behaviour | The zone in which the calendar day and month boundaries of an allowance window are computed. Named explicitly rather than taken from the server's local time, which would make a day boundary depend on where the process runs |
+| `MODEL_LAB_MAX_MODELS` | `4` | behaviour | How many candidates one lab comparison may put against each other. Refused before anything runs, naming the bound |
+| `MODEL_LAB_MAX_CASES` | `40` | behaviour | How many cases one comparison may run per candidate. The dataset's own size, so a full-dataset comparison is permitted and nothing larger is |
+| `MODEL_LAB_TIME_BUDGET_SECONDS` | `900` | behaviour | The wall clock a comparison may spend before it stops between candidates and reports what completed. Never truncates a candidate mid-run, which would be a fabricated measurement |
 | `SAVED_LOCATIONS_LIMIT` | `25` | behaviour | Saved locations per person |
 | `EVALUATION_MIN_SERVED_RATE` | `1.0` | behaviour | Proportion of a live evaluation run's cases the configured model must have served for the run to be scored as model quality at all |
 | `EVALUATION_LLM_MIN_INTERVAL_SECONDS` | `5.0` | behaviour | Minimum spacing between live evaluation cases, so the dataset does not reach a free tier's per-minute ceiling as one burst |

@@ -81,6 +81,15 @@ class PreparedApp:
     llm_model: str | None = None
     weather_provider: str = "open-meteo"
 
+    pinned_provider_id: str | None = None
+    pinned_model_id: str | None = None
+    """The identity an offline run records for its client.
+
+    Set by a model comparison so each candidate's results are attributed to that candidate rather
+    than to the offline client they all share. ``None`` leaves the offline constants in place,
+    which is every other caller.
+    """
+
     def script_for(self, case: EvaluationCase) -> None:
         """Install a scripted routing plan and prose for one case, in offline mode.
 
@@ -90,7 +99,15 @@ class PreparedApp:
         if self.mode is not EvaluationMode.OFFLINE:
             return
 
-        client = OfflineLLMClient(plans=[plan.model_dump(mode="json") for plan in _plans_for(case)])
+        identity: dict[str, str] = {}
+        if self.pinned_provider_id is not None:
+            identity["provider_id"] = self.pinned_provider_id
+        if self.pinned_model_id is not None:
+            identity["model_id"] = self.pinned_model_id
+
+        client = OfflineLLMClient(
+            plans=[plan.model_dump(mode="json") for plan in _plans_for(case)], **identity
+        )
         self.app.state.inference.override(client)
         self.llm_provider = client.provider_id
         self.llm_model = client.model_id

@@ -41,6 +41,7 @@ __all__ = [
     "EVALUATION_FIXED_POLICY",
     "FREE_DEFAULT_POLICY",
     "HIGH_REASONING_POLICY",
+    "LAB_COMPARISON_POLICY",
     "PRODUCT_PLAN_CODES",
     "SHIPPED_POLICY_IDS",
     "CallRole",
@@ -175,6 +176,13 @@ SHIPPED_POLICY_IDS: tuple[PolicyId, ...] = (
 # read. Kept distinguishable from every real policy so an aggregate never reports configuration as
 # entitlement.
 CONFIGURED_FALLBACK_POLICY = PolicyId("__fallback_config__")
+
+# Not a policy either. Recorded as the `policy_id` of a resolution the model lab pinned, because a
+# comparison names its model directly rather than resolving one — `specs/model-lab` compares
+# *named* models, and nothing in a lab run may select one. Distinguishable from every real policy
+# for the same reason as the line above: an aggregate that counted lab traffic as entitlement
+# would report a model as serving a plan it has never been mapped to.
+LAB_COMPARISON_POLICY = PolicyId("__lab_comparison__")
 
 
 class Resolution(BaseModel):

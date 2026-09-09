@@ -182,6 +182,8 @@ so there is no ordering in which a caller without the role obtains it.
 
 | Endpoint | What it administers |
 |---|---|
+| `/admin/lab/comparisons` | Runs one question or dataset subset across several enabled models, and lists the runs. Internal usage, bounded, and it changes no policy. |
+| `/admin/lab/comparisons/{run_id}` | One comparison and its per-model results, readable after a compared model is disabled. |
 | `/admin/models` | Lists and creates model catalog entries. |
 | `/admin/models/{catalog_key}` | Edits one model catalog entry. |
 | `/admin/models/{catalog_key}/enable` | Returns a model to resolution. |

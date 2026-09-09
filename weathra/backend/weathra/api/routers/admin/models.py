@@ -28,16 +28,21 @@ from weathra.api.middleware import annotate
 from weathra.api.routers.admin.deps import AdministrativeSession
 from weathra.auth.deps import AdministrativePrincipal
 from weathra.domain.entitlements import CallRole, PlanCode
+from weathra.domain.errors import ValidationFailed
+from weathra.entitlements.audit import record_change
 from weathra.entitlements.catalog import CatalogStore
 from weathra.entitlements.plans import PlanStore
-from weathra.entitlements.policies import PolicyStore
+from weathra.entitlements.policies import POLICY_SUBJECT_KIND, PolicyStore
 from weathra.entitlements.records import (
+    AdminAction,
     CapabilityTier,
     CatalogEntry,
     CatalogStatus,
     PolicyEligibility,
     PolicyRecord,
 )
+from weathra.lab.promotion import GATING_CRITERIA, criteria_failures
+from weathra.lab.records import LabRecords
 
 __all__ = ["router"]
 
@@ -134,12 +139,23 @@ class PolicyCandidatesRequest(BaseModel):
     ``cited_comparison_run_ids`` is design.md decision 26's discipline: a promotion names the
     comparison runs that justified it, so the audit trail carries the evidence rather than a
     recollection of it.
+
+    ``acknowledge_criteria_failure`` exists because the criteria gate has to be refusable by a
+    person and not merely by a machine. `specs/evaluation` forbids promoting on cost or latency a
+    candidate that failed structured reliability or groundedness; it does not forbid an
+    administrator who has read the evidence from overriding that. What it must not be is silent —
+    so the override is an explicit field, and the audit row records that it was used and which
+    criteria it overrode.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     candidate_catalog_keys: tuple[str, ...] = Field(min_length=1)
     cited_comparison_run_ids: tuple[str, ...] = ()
+    acknowledge_criteria_failure: bool = Field(
+        default=False,
+        description="Promote a candidate that failed a gating criterion anyway. Recorded as such.",
+    )
 
 
 class PolicyFallbackRequest(BaseModel):
@@ -158,11 +174,33 @@ class PlanMappingRequest(BaseModel):
     policy_by_call_role: dict[CallRole, str] = Field(min_length=1)
 
 
+class CatalogObservation(BaseModel):
+    """What the lab last recorded about one model.
+
+    `specs/model-catalog` asks the administrative listing to carry "the outcome of the most recent
+    health or evaluation observation for that model, **where recorded**" — so a model nobody has
+    evaluated is simply absent from the map rather than present with a null verdict, because
+    "never measured" and "measured and inconclusive" are different facts about a model.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    gateway_model: str
+    dataset_version: str
+    passed: bool | None = None
+    recorded_at: str | None = None
+    criteria: dict[str, Any] = Field(default_factory=dict)
+
+
 class CatalogListResponse(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     count: int = Field(ge=0)
     entries: tuple[CatalogEntry, ...]
+    observations: dict[str, CatalogObservation] = Field(
+        default_factory=dict,
+        description="The most recent evaluation outcome per catalog entry, where one exists.",
+    )
 
 
 class PolicyListResponse(BaseModel):
@@ -190,10 +228,23 @@ async def list_catalog(
     Includes disabled entries, which is the point of the status filter: `specs/model-catalog`
     requires a withdrawn model to stay auditable rather than disappearing, so an administrator can
     still see what served last month.
+
+    Each entry is accompanied by the most recent evaluation the lab recorded for it, where there
+    is one. That is what makes the catalog *observable* rather than merely listable: a status says
+    whether a model may serve, and an observation says how it did when it last served.
     """
     annotate(request, acting_user_id=principal.user_id)
     entries = await CatalogStore(session).list(status=status, capability_role=capability_role)
-    return CatalogListResponse(count=len(entries), entries=entries)
+    observed = await LabRecords(session).latest_evaluations(
+        [entry.catalog_key for entry in entries]
+    )
+    return CatalogListResponse(
+        count=len(entries),
+        entries=entries,
+        observations={
+            key: CatalogObservation(**observation) for key, observation in observed.items()
+        },
+    )
 
 
 @router.post(
@@ -315,12 +366,43 @@ async def set_policy_candidates(
     inference: Inference,
 ) -> PolicyRecord:
     annotate(request, acting_user_id=principal.user_id)
+
+    # `specs/evaluation`: a candidate failing structured JSON reliability or groundedness is not
+    # promoted on the strength of being cheaper or faster. Checked against the *recorded* criteria
+    # rather than against an opinion, and only where there are recorded criteria to check — a
+    # model nobody has evaluated is not refused here, it is simply unevidenced, and refusing it
+    # would make the lab a precondition for every catalog change rather than a basis for one.
+    failures = await criteria_failures(session, body.candidate_catalog_keys)
+    if failures and not body.acknowledge_criteria_failure:
+        raise ValidationFailed(
+            "A candidate that failed a gating criterion is not promoted on cost or latency "
+            "alone. Read the evidence and set acknowledge_criteria_failure to override.",
+            details={
+                "field": "candidate_catalog_keys",
+                "failed_criteria": failures,
+                "gating_criteria": list(GATING_CRITERIA),
+            },
+        )
+
     policy = await PolicyStore(session).set_candidates(
         policy_id,
         list(body.candidate_catalog_keys),
         acting_principal=principal.user_id,
         cited_comparison_run_ids=body.cited_comparison_run_ids,
     )
+    if failures:
+        # The override is a fact about the decision, so it goes in the trail beside the change
+        # rather than in a log line nobody correlates.
+        await record_change(
+            session,
+            acting_principal=principal.user_id,
+            action=AdminAction.POLICY_EDIT,
+            subject_kind=POLICY_SUBJECT_KIND,
+            subject_id=str(policy_id),
+            before={"criteria_gate": "failed"},
+            after={"criteria_gate": "overridden", "failed_criteria": failures},
+            cited_comparison_run_ids=body.cited_comparison_run_ids,
+        )
     inference.snapshots.invalidate()
     return policy
 

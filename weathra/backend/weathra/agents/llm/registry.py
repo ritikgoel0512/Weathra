@@ -27,16 +27,19 @@ from collections.abc import Callable
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from weathra.agents.llm.attempts import GatewayAttemptLog
 from weathra.agents.llm.base import LLMClient
-from weathra.agents.llm.instrumented import UsageRecorder
+from weathra.agents.llm.factory import build_for_resolution
+from weathra.agents.llm.instrumented import InstrumentedLLMClient, UsageRecorder
 from weathra.agents.llm.openrouter import OPENROUTER_PROVIDER_ID, OpenRouterClient
 from weathra.agents.models import ModelBroker
 from weathra.config import Settings
-from weathra.domain.entitlements import PlanCode
+from weathra.domain.entitlements import PlanCode, Resolution
 from weathra.domain.errors import AGENT_UNAVAILABLE_MESSAGE, AgentNotConfigured, ProviderNotFound
 from weathra.domain.identity import Principal
 from weathra.entitlements.resolver import PolicyResolver
 from weathra.entitlements.snapshot import SnapshotCache
+from weathra.telemetry.context import CallContext
 
 __all__ = ["LLMProvider", "available_providers", "build_client"]
 
@@ -191,6 +194,55 @@ class LLMProvider:
         entitlement systems wearing one name.
         """
         return await self._resolver.effective_plan(principal, session)
+
+    @property
+    def settings(self) -> Settings:
+        """The process's settings, for a caller that needs a bound this provider already holds."""
+        return self._settings
+
+    def lab_client(
+        self,
+        resolution: Resolution,
+        *,
+        principal: Principal,
+        run_id: str | None = None,
+        recorder: UsageRecorder | None = None,
+    ) -> LLMClient:
+        """A client bound to one named model, instrumented as internal usage.
+
+        The model lab's seam. It is *not* a resolution: the administrator named the model, so
+        nothing here walks a policy, and the resolution passed in records that fact
+        (`LAB_COMPARISON_POLICY`). What it shares with the request path is everything else — the
+        same factory, the same gateway client, and the same telemetry decorator — so a lab call is
+        recorded exactly as a product call is, and is classified internal because the caller who
+        made it holds the administrative role.
+
+        An installed client wins, as everywhere else, so the offline harness and the test suite
+        compare scripted transports rather than reaching a real gateway from a test.
+        """
+        attempts = GatewayAttemptLog()
+        inner = self._client or build_for_resolution(
+            resolution, http=self._http, settings=self._settings, attempts=attempts
+        )
+        if recorder is None:
+            return inner
+        return InstrumentedLLMClient(
+            inner,
+            context=CallContext.for_run(
+                role=resolution.call_role,
+                resolution=resolution,
+                principal=principal,
+                plan=None,
+                agent_run_id=None,
+                request_id=run_id,
+                # By construction, not by a flag somebody sets: only an administrative principal
+                # reaches the lab at all, and `specs/usage-limits` accounts their traffic against
+                # the internal allowance.
+                internal=True,
+            ),
+            recorder=recorder,
+            attempts=attempts if self._client is None else None,
+        )
 
     @property
     def snapshots(self) -> SnapshotCache:

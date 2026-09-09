@@ -29,6 +29,7 @@ record what it did.
 
 from __future__ import annotations
 
+from weathra.api.routers.admin import lab as admin_lab
 from weathra.api.routers.admin import models as admin_models
 from weathra.api.routers.admin import plans as admin_plans
 from weathra.api.routers.admin import usage as admin_usage
@@ -37,4 +38,4 @@ from weathra.api.routers.admin.deps import AdministrativeSession, administrative
 __all__ = ["AdministrativeSession", "administrative_db", "routers"]
 
 # Registered by `api/app.py` in this order, which is also the order they appear in the schema.
-routers = (admin_models.router, admin_plans.router, admin_usage.router)
+routers = (admin_models.router, admin_plans.router, admin_usage.router, admin_lab.router)

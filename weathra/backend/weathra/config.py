@@ -367,6 +367,35 @@ class Settings(BaseSettings):
         ),
     )
 
+    # ---------------------------------------------------------------- model lab
+
+    model_lab_max_models: Annotated[int, Field(ge=1, le=10)] = Field(
+        default=4,
+        validation_alias="model_lab_max_models",
+        description=(
+            "How many candidates one comparison may put against each other. A bound rather than a "
+            "preference: a comparison is the product of models and cases, and the cost of getting "
+            "that product wrong is paid to a gateway rather than noticed in a review."
+        ),
+    )
+    model_lab_max_cases: Annotated[int, Field(ge=1, le=200)] = Field(
+        default=40,
+        validation_alias="model_lab_max_cases",
+        description=(
+            "How many cases one comparison may run per candidate. The dataset's own size, so a "
+            "full-dataset comparison is permitted and nothing larger is."
+        ),
+    )
+    model_lab_time_budget_seconds: Annotated[float, Field(gt=0, le=7_200)] = Field(
+        default=900.0,
+        validation_alias="model_lab_time_budget_seconds",
+        description=(
+            "The wall clock a comparison may spend before it stops and reports what completed. "
+            "Not a timeout on any one call — those have their own — but the ceiling on the whole "
+            "matrix, so a slow candidate costs a partial result rather than an unbounded run."
+        ),
+    )
+
     # ---------------------------------------------------------------- validators
 
     @field_validator("cors_allowed_origins", "mcp_enabled_tools", mode="before")

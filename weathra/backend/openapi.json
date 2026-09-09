@@ -1245,6 +1245,14 @@
             },
             "title": "Entries",
             "type": "array"
+          },
+          "observations": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CatalogObservation"
+            },
+            "description": "The most recent evaluation outcome per catalog entry, where one exists.",
+            "title": "Observations",
+            "type": "object"
           }
         },
         "required": [
@@ -1252,6 +1260,53 @@
           "entries"
         ],
         "title": "CatalogListResponse",
+        "type": "object"
+      },
+      "CatalogObservation": {
+        "additionalProperties": false,
+        "description": "What the lab last recorded about one model.\n\n`specs/model-catalog` asks the administrative listing to carry \"the outcome of the most recent\nhealth or evaluation observation for that model, **where recorded**\" \u2014 so a model nobody has\nevaluated is simply absent from the map rather than present with a null verdict, because\n\"never measured\" and \"measured and inconclusive\" are different facts about a model.",
+        "properties": {
+          "criteria": {
+            "additionalProperties": true,
+            "title": "Criteria",
+            "type": "object"
+          },
+          "dataset_version": {
+            "title": "Dataset Version",
+            "type": "string"
+          },
+          "gateway_model": {
+            "title": "Gateway Model",
+            "type": "string"
+          },
+          "passed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passed"
+          },
+          "recorded_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded At"
+          }
+        },
+        "required": [
+          "gateway_model",
+          "dataset_version"
+        ],
+        "title": "CatalogObservation",
         "type": "object"
       },
       "CatalogStatus": {
@@ -1521,6 +1576,242 @@
           "tie_tolerance"
         ],
         "title": "ComparisonResult",
+        "type": "object"
+      },
+      "ComparisonResultRecord": {
+        "additionalProperties": false,
+        "description": "One model's outcome for one case. Every measure `specs/model-lab` names, or a null.\n\nNull and not zero, throughout. A candidate whose gateway reported no token counts has not been\nshown to have used none, and a comparison that filled those in with zeroes would make the\ncheapest model the one whose provider was least forthcoming.",
+        "properties": {
+          "agent_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the agent path ran, the run whose evidence explains it.",
+            "title": "Agent Run Id"
+          },
+          "case_id": {
+            "title": "Case Id",
+            "type": "string"
+          },
+          "catalog_key": {
+            "title": "Catalog Key",
+            "type": "string"
+          },
+          "completion_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion Tokens"
+          },
+          "estimated_cost": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost"
+          },
+          "evaluation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation Id"
+          },
+          "failure_class": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FailureClass"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gateway_model": {
+            "title": "Gateway Model",
+            "type": "string"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "policy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Id"
+          },
+          "prompt_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Tokens"
+          },
+          "succeeded": {
+            "title": "Succeeded",
+            "type": "boolean"
+          },
+          "total_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Tokens"
+          },
+          "usage_event_ids": {
+            "default": [],
+            "description": "The telemetry this cell produced, so the two records agree.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Usage Event Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "catalog_key",
+          "gateway_model",
+          "case_id",
+          "succeeded"
+        ],
+        "title": "ComparisonResultRecord",
+        "type": "object"
+      },
+      "ComparisonRunRecord": {
+        "additionalProperties": false,
+        "description": "A whole comparison, as it is read back.",
+        "properties": {
+          "candidate_catalog_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Candidate Catalog Keys",
+            "type": "array"
+          },
+          "catalog_state": {
+            "additionalProperties": true,
+            "title": "Catalog State",
+            "type": "object"
+          },
+          "commit_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Sha"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "dataset_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Version"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "initiated_by": {
+            "title": "Initiated By",
+            "type": "string"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          },
+          "results": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ComparisonResultRecord"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "initiated_by",
+          "candidate_catalog_keys",
+          "status",
+          "started_at"
+        ],
+        "title": "ComparisonRunRecord",
         "type": "object"
       },
       "ComponentContribution": {
@@ -2264,6 +2555,19 @@
         "title": "ExcludedCandidate",
         "type": "object"
       },
+      "FailureClass": {
+        "description": "Why a call failed, classified at the coarseness decisions can actually be made at.\n\nThe classes are exactly those of ``specs/llm-telemetry`` and design.md decision 24, and the\nsplit that matters most is ``GATEWAY_RATE_LIMIT`` against the rest: a rate limit is a property\nof the gateway account rather than of the model, so it is the one failure that must never move\na request to a different candidate (``specs/model-policy``).\n\n``SCHEMA_VALIDATION`` is likewise not an infrastructure failure. It is a judgement about output,\nand output quality may never select a model.",
+        "enum": [
+          "transport",
+          "timeout",
+          "gateway_rate_limit",
+          "auth_config",
+          "schema_validation",
+          "unclassified"
+        ],
+        "title": "FailureClass",
+        "type": "string"
+      },
       "Finding": {
         "additionalProperties": false,
         "description": "One structured value the answer rests on, with everything needed to check it.\n\nFindings are what the UI renders as data, next to but visually distinct from the prose. A\nfigure in the prose that has no matching finding is what the numeric audit reports.",
@@ -2855,6 +3159,112 @@
         "title": "KnowledgeCitation",
         "type": "object"
       },
+      "LabRunListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/ComparisonRunRecord"
+            },
+            "title": "Runs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "runs"
+        ],
+        "title": "LabRunListResponse",
+        "type": "object"
+      },
+      "LabRunRequest": {
+        "additionalProperties": false,
+        "description": "What to compare, and over what.\n\nNamed ``LabRun...`` rather than ``Comparison...`` because ``routers/comparison.py`` already\npublishes a ``ComparisonRequest`` for comparing *places*. Two schemas with one name are\nmangled into module paths in the generated contract, which is neither a legal TypeScript\nidentifier nor a name anyone would want on a screen's props.\n\nExactly one of *question* or a dataset selection. Not both, because a comparison that ran an\nad-hoc question *and* a dataset subset would produce two incomparable halves under one run\nidentifier, and a reader could not tell which half a figure came from.",
+        "properties": {
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "catalog_keys": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Catalog Keys",
+            "type": "array"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "question": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          }
+        },
+        "required": [
+          "catalog_keys"
+        ],
+        "title": "LabRunRequest",
+        "type": "object"
+      },
+      "LabRunResponse": {
+        "additionalProperties": false,
+        "description": "A run and its results, as an administrator reads them.",
+        "properties": {
+          "completed_cells": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Completed Cells",
+            "type": "array"
+          },
+          "partial": {
+            "default": false,
+            "description": "Whether a bound stopped the run before every cell completed. The completed cells are the results below; nothing is estimated for the rest.",
+            "title": "Partial",
+            "type": "boolean"
+          },
+          "run": {
+            "$ref": "#/components/schemas/ComparisonRunRecord"
+          }
+        },
+        "required": [
+          "run"
+        ],
+        "title": "LabRunResponse",
+        "type": "object"
+      },
       "Location": {
         "additionalProperties": false,
         "description": "A resolved place: where it is, what it is called, and what time it is there.",
@@ -3324,8 +3734,14 @@
       },
       "PolicyCandidatesRequest": {
         "additionalProperties": false,
-        "description": "A re-pointed candidate list \u2014 a model promotion, in practice.\n\n``cited_comparison_run_ids`` is design.md decision 26's discipline: a promotion names the\ncomparison runs that justified it, so the audit trail carries the evidence rather than a\nrecollection of it.",
+        "description": "A re-pointed candidate list \u2014 a model promotion, in practice.\n\n``cited_comparison_run_ids`` is design.md decision 26's discipline: a promotion names the\ncomparison runs that justified it, so the audit trail carries the evidence rather than a\nrecollection of it.\n\n``acknowledge_criteria_failure`` exists because the criteria gate has to be refusable by a\nperson and not merely by a machine. `specs/evaluation` forbids promoting on cost or latency a\ncandidate that failed structured reliability or groundedness; it does not forbid an\nadministrator who has read the evidence from overriding that. What it must not be is silent \u2014\nso the override is an explicit field, and the audit row records that it was used and which\ncriteria it overrode.",
         "properties": {
+          "acknowledge_criteria_failure": {
+            "default": false,
+            "description": "Promote a candidate that failed a gating criterion anyway. Recorded as such.",
+            "title": "Acknowledge Criteria Failure",
+            "type": "boolean"
+          },
           "candidate_catalog_keys": {
             "items": {
               "type": "string"
@@ -5453,9 +5869,166 @@
         ]
       }
     },
+    "/api/v1/admin/lab/comparisons": {
+      "get": {
+        "description": "**Protected. Administrative.** Runs one question or dataset subset across several enabled models, and lists the runs. Internal usage, bounded, and it changes no policy.",
+        "operationId": "list_comparisons_api_v1_admin_lab_comparisons_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabRunListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "List recent model comparisons",
+        "tags": [
+          "administration"
+        ]
+      },
+      "post": {
+        "description": "**Protected. Administrative.** Runs one question or dataset subset across several enabled models, and lists the runs. Internal usage, bounded, and it changes no policy.\n\nCompare the selected models, and record what each one did.\n\nEvery call this makes is internal usage attributed to the initiating administrator: the quota\nsubject is the internal one, the allowance spent is the internal allowance, and no product\nplan's consumption changes.",
+        "operationId": "start_comparison_api_v1_admin_lab_comparisons_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LabRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Run one question or dataset subset across several models",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/lab/comparisons/{run_id}": {
+      "get": {
+        "description": "**Protected. Administrative.** One comparison and its per-model results, readable after a compared model is disabled.\n\nOne run's results, readable after a compared model has been disabled.\n\nThat is the point of keeping them: \"what did this model score before we withdrew it\" is the\nquestion a withdrawal makes people ask.",
+        "operationId": "read_comparison_api_v1_admin_lab_comparisons__run_id__get",
+        "parameters": [
+          {
+            "description": "A comparison run.",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "description": "A comparison run.",
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Read one comparison and its per-model results",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
     "/api/v1/admin/models": {
       "get": {
-        "description": "**Protected. Administrative.** Lists and creates model catalog entries.\n\nEvery catalog entry, optionally narrowed by status and by capability role.\n\nIncludes disabled entries, which is the point of the status filter: `specs/model-catalog`\nrequires a withdrawn model to stay auditable rather than disappearing, so an administrator can\nstill see what served last month.",
+        "description": "**Protected. Administrative.** Lists and creates model catalog entries.\n\nEvery catalog entry, optionally narrowed by status and by capability role.\n\nIncludes disabled entries, which is the point of the status filter: `specs/model-catalog`\nrequires a withdrawn model to stay auditable rather than disappearing, so an administrator can\nstill see what served last month.\n\nEach entry is accompanied by the most recent evaluation the lab recorded for it, where there\nis one. That is what makes the catalog *observable* rather than merely listable: a status says\nwhether a model may serve, and an observation says how it did when it last served.",
         "operationId": "list_catalog_api_v1_admin_models_get",
         "parameters": [
           {
