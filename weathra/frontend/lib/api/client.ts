@@ -53,6 +53,7 @@ import type {
   ThreadSummary,
   ThreadsResponse,
   UnitSystem,
+  UsageResponse,
   WhatChanged,
 } from "./schema";
 
@@ -224,6 +225,14 @@ export interface ApiClient {
   evidence(evidenceId: string): Promise<EvidenceResponse>;
 
   me(): Promise<MeResponse>;
+
+  /**
+   * The signed-in person's plan, what they have used, and when each window resets.
+   *
+   * Takes no identifier: the backend answers for the token subject and ignores anything a caller
+   * supplies, so there is no argument here that could ask about somebody else.
+   */
+  usage(): Promise<UsageResponse>;
   preferences(): Promise<PreferenceView>;
   updatePreferences(update: PreferenceUpdate): Promise<PreferenceView>;
   resetPreferences(): Promise<PreferenceView>;
@@ -433,6 +442,7 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
       get<EvidenceResponse>(`/api/v1/evidence/${encodeURIComponent(evidenceId)}`),
 
     me: () => get<MeResponse>("/api/v1/me"),
+    usage: () => get<UsageResponse>("/api/v1/me/usage"),
     preferences: () => get<PreferenceView>("/api/v1/me/preferences"),
     updatePreferences: (update) =>
       call<PreferenceView>("PUT", "/api/v1/me/preferences", {}, update, true),

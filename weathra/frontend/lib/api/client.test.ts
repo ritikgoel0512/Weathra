@@ -363,6 +363,7 @@ async function invoke(client: ApiClient, operation: ApiOperation): Promise<unkno
     changes_api_v1_weather_changes_get: () => client.changes({ location: "Berlin" }),
     evidence_api_v1_evidence__evidence_id__get: () => client.evidence(identifier),
     me_api_v1_me_get: () => client.me(),
+    read_usage_api_v1_me_usage_get: () => client.usage(),
     read_preferences_api_v1_me_preferences_get: () => client.preferences(),
     update_preferences_api_v1_me_preferences_put: () =>
       client.updatePreferences({ unit_system: "metric" }),
