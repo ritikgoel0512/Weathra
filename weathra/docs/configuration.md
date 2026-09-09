@@ -67,7 +67,7 @@ bundle — see [`authentication.md`](authentication.md) for why the split is dra
 | `DATABASE_POOL_MAX_OVERFLOW` | `2` | behaviour | Extra connections a burst may open |
 | `DATABASE_RESTRICTED_ROLE` | `weathra_request` | behaviour | Role a request-scoped session assumes so RLS applies to Weathra's own queries |
 | `LLM_PROVIDER` | `openrouter` | behaviour | Which client implementation the registry resolves |
-| `LLM_MODEL` | `nvidia/nemotron-3-super-120b-a12b:free` | behaviour | Any gateway model id. Configuration, never architecture |
+| `LLM_MODEL` | `nvidia/nemotron-3-super-120b-a12b:free` | behaviour | The development and administrative fallback model, and the last rung of the resolution chain — **not** what serves a resolved call. Validated against `model_catalog` like any other candidate. See [`model-policy.md`](model-policy.md) |
 | `OPENROUTER_API_KEY` | — | **secret** | Absent by design in every offline path. Only `/ask` and `/stream` need it |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | behaviour | Gateway base URL |
 | `LLM_TIMEOUT_SECONDS` | `60.0` | behaviour | Per-request inference timeout |
@@ -147,10 +147,16 @@ hidden — it is not registered, so a plan that named it gets an error rather th
 **`DATABASE_POOL_SIZE`** is small on purpose. Supabase's connection limits bind long before
 application throughput does, and a pool sized for the application starves the database.
 
-**`LLM_MODEL`** is the only place the runtime model is chosen. No model id appears in the backend
-outside this setting's default in `config.py`, and a test asserts it across the whole package — so
-switching models is an environment change, never a code change. Which id to put there is a
-question about the account rather than about Weathra, and there is a command for it:
+**`LLM_MODEL`** is the only place a *vendor model string* is configured, and from group 27 onward
+that is all it is. No model id appears in the backend outside this setting's default in `config.py`
+and the rows of `model_catalog`, and a test asserts it across the whole package. What serves a
+resolved call is a catalog row reached through a policy — this setting is the fourth rung of the
+fallback chain and the development/administrative default, and a resolution that used it is
+recorded as `__fallback_config__` rather than as a policy. [`model-policy.md`](model-policy.md) is
+the resolution order in full.
+
+Which id to put there is a question about the account rather than about Weathra, and there is a
+command for it:
 
 ```
 cd backend  && python scripts/list_openrouter_models.py --free --tools
@@ -265,6 +271,31 @@ traceback, a `repr`, and `model_dump_json`; the root logger additionally carries
 that rewrites anything token- or key-shaped that reaches a log record by another route.
 
 ## What is deliberately not configuration
+
+**The policies, the plan mappings, the allowances and the catalog are database rows, not
+environment variables.** This is the single most consequential omission from the table above, and
+it is deliberate:
+
+| What | Where it lives | How it changes |
+|---|---|---|
+| Which models Weathra may use at all, with their prices, roles and enabled flag | `model_catalog` | An administrative write, audited |
+| The candidate lists, their order, their eligibility and their fallbacks | `model_policies` | An administrative write, audited |
+| Which policy a plan and call role reach | `subscription_plans` | `PUT /api/v1/admin/plans/{plan_code}/policies` |
+| What a plan is allowed to consume, per dimension and window | `plan_allowances` | An administrative write, audited |
+| Who holds the administrative role | `admin_roles` | A privileged write; never a token claim |
+
+**So a model change or a tier change needs no redeployment.** Disabling a withdrawn model,
+re-ordering a policy's candidates, re-pointing Pro at a different policy, or raising an allowance
+are all writes against a running system, taking effect for subsequent requests within
+`MODEL_CATALOG_CACHE_TTL_SECONDS`. None of them is a commit, a build, or a restart.
+
+Putting any of it in the environment would have made every one of those changes a deployment,
+which is what `specs/model-catalog` forbids. It would also have put the values beyond the reach of
+the audit trail: an environment variable has no `admin_audit` row naming who changed it and when,
+and no Row Level Security. `LLM_MODEL` survives as the fallback described above, and
+`LLM_SINGLE_MODEL_MODE` is refused at startup in a deployed environment by the same settings
+validator — together they are the whole of what configuration still decides about models.
+
 
 **The design tool** has no environment variable in either application, and needs no key at runtime.
 Visily.ai is the design tool for Weathra's UI/UX work — and UXPilot was, in an earlier exploration

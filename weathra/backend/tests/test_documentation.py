@@ -20,6 +20,7 @@ import pytest
 from pydantic import BaseModel
 
 from weathra.config import Settings
+from weathra.domain.entitlements import CallRole
 
 # The `weathra/` project directory. Every path a document names is relative to it, because the
 # documents sit inside it alongside the applications they describe. The README is the exception:
@@ -481,6 +482,224 @@ def test_the_relevance_threshold_is_documented_with_its_default() -> None:
     assert str(settings.rag_relevance_threshold) in flat
     assert str(settings.embedding_dimension) in flat
     assert settings.embedding_model_id in flat
+
+
+# ---------------------------------------------------------------- 34.1 model policy
+
+
+def _seed_module() -> object:
+    """The seed migration, imported as a module so its data can be compared against prose.
+
+    The policies, the catalog and the plan mapping are *rows*. Once seeded, no code review shows a
+    diff of them, so the seed is the only place they are written down and therefore the only place
+    a document about them can be held to.
+    """
+    import importlib.util
+
+    seed = PACKAGE / "db" / "migrations" / "versions" / "0008_seed_model_policy_data.py"
+    spec = importlib.util.spec_from_file_location("weathra_seed_documentation", seed)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture(scope="module")
+def model_policy() -> str:
+    return _read("model-policy.md")
+
+
+def test_every_shipped_policy_is_documented_with_its_candidates_in_order(
+    model_policy: str,
+) -> None:
+    """Task 34.1's verification, first half: a reader can predict which model a policy resolves.
+
+    Which needs the candidate list *in declared order*, because the first available candidate is
+    the answer — a document naming the right two models in the wrong order predicts the wrong one.
+    """
+    seed = _seed_module()
+    rows = {
+        row[0].strip("`"): row for row in _table_rows(model_policy, "Candidates, in declared order")
+    }
+
+    for policy_id, _display, candidates, _roles, _eligibility, fallback, failover in seed.POLICIES:  # type: ignore[attr-defined]
+        assert policy_id in rows, f"model-policy.md omits the {policy_id} policy"
+        row = rows[policy_id]
+        documented = [cell.strip().strip("`") for cell in row[1].split(",")]
+        assert documented == list(candidates), (
+            f"model-policy.md lists {policy_id}'s candidates as {documented}, "
+            f"the seed declares {list(candidates)}"
+        )
+        if fallback is not None:
+            assert fallback in row[4], f"model-policy.md omits {policy_id}'s fallback {fallback}"
+        assert ("no" in row[5].lower()) == (not failover), (
+            f"model-policy.md misstates whether {policy_id} may fail over"
+        )
+
+    assert set(rows) == {policy[0] for policy in seed.POLICIES}, (  # type: ignore[attr-defined]
+        "model-policy.md documents a policy the seed does not ship, or vice versa"
+    )
+
+
+def test_the_documented_plan_mapping_matches_the_seeded_one(model_policy: str) -> None:
+    """The other half of predicting an answer: which policy a plan and role reach."""
+    seed = _seed_module()
+    rows = {row[0].strip("`").lower(): row for row in _table_rows(model_policy, "Rank")}
+
+    for plan_code, _name, rank, mapping in seed.PLANS:  # type: ignore[attr-defined]
+        assert plan_code in rows, f"model-policy.md omits the {plan_code} plan"
+        row = rows[plan_code]
+        assert row[1] == str(rank), f"model-policy.md misstates {plan_code}'s rank"
+        assert mapping["routing"] in row[2], f"model-policy.md misstates {plan_code}'s routing"
+        assert mapping["synthesis"] in row[3], f"model-policy.md misstates {plan_code}'s synthesis"
+
+    assert set(rows) == {plan[0] for plan in seed.PLANS}, (  # type: ignore[attr-defined]
+        "model-policy.md's plan table and the seeded plans disagree"
+    )
+    # A substring search for "plus" would catch the document's own denial of it, which is the
+    # sentence we want. The property is that no *plan* is called plus and that the denial is there.
+    assert "there is no `plus`" in _flat(model_policy).lower()
+
+
+def test_the_documented_catalog_names_the_seeded_entries_by_key(model_policy: str) -> None:
+    seed = _seed_module()
+    documented = {row[0].strip("`") for row in _table_rows(model_policy, "Free tier")}
+    assert documented == {entry[0] for entry in seed.CATALOG}, (  # type: ignore[attr-defined]
+        "model-policy.md's catalog table and the seeded catalog disagree"
+    )
+
+
+def test_the_staleness_window_is_documented_as_a_bound_and_not_as_immediacy(
+    model_policy: str,
+) -> None:
+    """`specs/model-catalog` requires the honest statement, so the honest statement is asserted."""
+    settings = Settings(supabase_url="https://test.supabase.co")
+    flat = _flat(model_policy)
+
+    assert "MODEL_CATALOG_CACHE_TTL_SECONDS" in flat
+    assert f"**{settings.model_catalog_cache_ttl_seconds}**" in flat, (
+        "the staleness window must be documented with its default"
+    )
+    assert "a disable is not instant" in flat.lower()
+    assert "validate against the database" in flat, (
+        "the document must say an override does not read the snapshot"
+    )
+
+
+def test_the_document_says_what_happens_when_nothing_resolves(model_policy: str) -> None:
+    """Task 34.1's second verification: a reader can name the outcome when nothing is available."""
+    settings = Settings(supabase_url="https://test.supabase.co")
+    flat = _flat(model_policy)
+
+    assert "NoEligibleModel" in flat
+    assert "__fallback_config__" in flat, "the configured-fallback indicator is not documented"
+    assert "LLM_SINGLE_MODEL_MODE" in flat
+    assert "LLM_FAILOVER_MAX_MODELS" in flat
+    assert f"**{settings.llm_failover_max_models}**" in flat, (
+        "the failover bound must be documented with its default"
+    )
+    for role in CallRole:
+        assert f"`{role.value}`" in flat, f"the {role.value} call role is not documented"
+
+
+# ---------------------------------------------------------------- 34.2 configuration
+
+# The rows of design.md decision 19 that groups 26 to 32 added. Every one is behaviour rather than
+# a secret, which is itself the assertion below: a new secret would need a new destination in
+# deployment.md and a new entry in the exposure check, and none was added.
+SAAS_SETTINGS = (
+    "MODEL_CATALOG_CACHE_TTL_SECONDS",
+    "LLM_SINGLE_MODEL_MODE",
+    "LLM_FAILOVER_MAX_MODELS",
+    "QUOTA_ENABLED",
+    "QUOTA_WINDOW_TIMEZONE",
+    "LLM_USAGE_RETENTION_DAYS",
+    "MODEL_LAB_MAX_MODELS",
+    "MODEL_LAB_MAX_CASES",
+    "MODEL_LAB_TIME_BUDGET_SECONDS",
+)
+
+
+def test_every_saas_setting_is_documented_and_read() -> None:
+    """The guard on the list itself: a renamed setting must not leave this suite asserting nothing.
+
+    `test_env_example.py` already holds `.env.example` to `Settings` in both directions, so the
+    variables are covered generically. This asserts the *names below* are still real, which is what
+    makes the deployment-note assertions that follow meaningful.
+    """
+    known = {
+        str(field.validation_alias or name).upper() for name, field in Settings.model_fields.items()
+    }
+    assert set(SAAS_SETTINGS) <= known, (
+        f"no longer read by Settings: {sorted(set(SAAS_SETTINGS) - known)}"
+    )
+
+
+def test_no_saas_setting_is_a_secret_or_carries_a_public_prefix() -> None:
+    """Task 34.2's second verification. No new secret was introduced, so none can be exposed."""
+    env_example = (PROJECT_ROOT / "backend" / ".env.example").read_text()
+    frontend_env = (PROJECT_ROOT / "frontend" / ".env.example").read_text()
+
+    for variable in SAAS_SETTINGS:
+        assert f"NEXT_PUBLIC_{variable}" not in env_example
+        assert variable not in frontend_env, (
+            f"{variable} is backend configuration and must not reach the browser bundle"
+        )
+
+
+def test_the_deployment_notes_name_every_saas_setting() -> None:
+    """Task 34.2's deployment half: the person configuring the service can see all of them."""
+    flat = _flat(_read("deployment.md"))
+    for variable in SAAS_SETTINGS:
+        if variable.startswith("MODEL_LAB_"):
+            continue  # documented as one grouped row, asserted below
+        assert variable in flat, f"docs/deployment.md does not name {variable}"
+    assert "MODEL_LAB_MAX_MODELS" in flat
+
+
+def test_the_deployment_notes_state_the_two_settings_that_must_not_be_changed() -> None:
+    """Both are ways to remove a guarantee by configuration, so both are called out."""
+    flat = _flat(_read("deployment.md"))
+    assert "must stay `true`" in flat, "QUOTA_ENABLED's deployed value is not stated as required"
+    assert "refused" in flat and "LLM_SINGLE_MODEL_MODE" in flat
+
+
+def test_configuration_says_the_policy_layer_is_rows_and_not_environment_variables() -> None:
+    """Task 34.2's explicit statement, and the reason it matters: no redeployment.
+
+    Asserted as prose because that is what the task asks for — a reader must be able to learn from
+    the document that a tier change is a write rather than a deploy, without inferring it from the
+    absence of a variable.
+    """
+    flat = _flat(_read("configuration.md"))
+
+    assert "database rows, not environment variables" in flat
+    assert "needs no redeployment" in flat
+    for table in ("model_catalog", "model_policies", "subscription_plans", "plan_allowances"):
+        assert f"`{table}`" in flat, f"the rows table does not name {table}"
+
+
+def test_deployment_repeats_it_where_the_service_is_configured() -> None:
+    flat = _flat(_read("deployment.md"))
+    assert "No policy, plan mapping, allowance or catalog entry is an environment variable" in flat
+    assert "DATABASE_URL_PRIVILEGED` is still not on the service" in flat, (
+        "the administrative API must not be read as needing a privileged credential"
+    )
+
+
+def test_configuration_no_longer_claims_llm_model_chooses_the_serving_model() -> None:
+    """The correction group 27 owed this document.
+
+    It said `LLM_MODEL` was the only place the runtime model is chosen. That was true until a
+    catalog row became the answer, and a reader acting on the old sentence would change a setting
+    expecting an effect it no longer has.
+    """
+    flat = _flat(_read("configuration.md"))
+
+    assert "the only place the runtime model is chosen" not in flat
+    assert "development and administrative fallback" in flat
+    assert "__fallback_config__" in flat
+    assert "model-policy.md" in flat, "the document must point at the resolution order"
 
 
 # ---------------------------------------------------------------- 24.6 evaluation

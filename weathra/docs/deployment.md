@@ -874,6 +874,33 @@ long before application throughput does, and each horizontally-scaled instance h
 pool size is a deployment setting rather than a code constant for exactly this reason. Connect
 through the pooler.
 
+### The SaaS-layer settings, and what Render does *not* hold
+
+Groups 26 to 32 added backend variables. None is a secret, all have working defaults, and the
+service holds only the ones whose default is wrong for a deployed environment.
+
+| Variable | Default | On Render | Why |
+|---|---|---|---|
+| `MODEL_CATALOG_CACHE_TTL_SECONDS` | `60` | default | The documented staleness window. Each instance holds its own snapshot, so a disable binds within the TTL per instance, not instantly. Set `0` to read every resolution |
+| `QUOTA_ENABLED` | `true` | default (**must stay `true`**) | Allowance enforcement. On by default so the development path is the deployed path; setting it `false` in a deployed environment removes the gate |
+| `QUOTA_WINDOW_TIMEZONE` | `UTC` | default | The zone the day and month allowance boundaries are computed in. Explicit rather than the container's local time, which would make a reset hour depend on where the process runs |
+| `LLM_USAGE_RETENTION_DAYS` | `90` | default | Raw usage-event retention. The scheduled retention job reads it; metadata only, so the window is about storage rather than confidentiality |
+| `LLM_FAILOVER_MAX_MODELS` | `2` | default | How many models one call role may attempt, counting the first |
+| `MODEL_LAB_MAX_MODELS` / `_MAX_CASES` / `_TIME_BUDGET_SECONDS` | `4` / `40` / `900` | default | Lab bounds. The time budget is wall clock, and a comparison stops between candidates rather than truncating one |
+| `LLM_SINGLE_MODEL_MODE` | `false` | **refused** | It bypasses resolution entirely. `Settings` refuses to start a deployed environment with it set, so this is not a variable to be careful with — the service will not boot |
+
+**`DATABASE_URL_PRIVILEGED` is still not on the service**, and the administrative API does not
+change that. Every administrative write — a catalog disable, a policy re-order, a plan re-mapping,
+a promotion — runs on the ordinary request connection under `weathra_request`, authorized by an
+`admin_roles` row and audited into `admin_audit`. The administrative surface is a Row Level
+Security boundary, not a second database credential; see [`authentication.md`](authentication.md).
+
+**No policy, plan mapping, allowance or catalog entry is an environment variable.** They are rows,
+seeded by migration and administrable at runtime, which is why a model or tier change is a write
+against the running system rather than a redeployment.
+[`configuration.md`](configuration.md#what-is-deliberately-not-configuration) has the table and the
+reasoning; [`model-policy.md`](model-policy.md) has the resolution order.
+
 ## Verifying a deployment
 
 The `verify` job of `release.yml` does this automatically after every release, with bounded
