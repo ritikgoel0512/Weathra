@@ -225,6 +225,13 @@ async def _run(
                 claims=principal.claims,
                 restricted_role=settings.database_restricted_role,
             ) as own:
+                # The event's owner is a foreign key to `profiles`, and on a caller's *first ever*
+                # question the row this request creates is still uncommitted while this task runs
+                # — so the insert failed the constraint and the event was dropped with a warning.
+                # Every account's first question recorded nothing, and only its first, which is
+                # why it survived group 29's suite. Idempotent, and the same insert the route
+                # itself makes.
+                await ensure_profile(own, principal)
                 return await record_events(own, batch)
 
         recorder.schedule(events, write)

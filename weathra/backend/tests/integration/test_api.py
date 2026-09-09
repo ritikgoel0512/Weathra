@@ -16,7 +16,6 @@ import json
 import re
 import uuid
 from contextlib import AbstractAsyncContextManager
-from typing import Any
 
 import pytest
 
@@ -41,30 +40,6 @@ pytestmark = pytest.mark.db
 CONFIGURATION_SHAPED = re.compile(r"\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b")
 
 PREFIX = "/api/v1"
-
-
-@pytest.fixture
-def api_factory(
-    token_factory: TokenFactory, checkpointer_schema: str, clean_database: None
-) -> ApiFactory:
-    """A harness the *test* opens, rather than a fixture that holds one open.
-
-    The MCP tool client runs its transport in an anyio task group, and pytest finalizes an
-    async-generator fixture in a different task from the one that set it up — which raises
-    "attempted to exit cancel scope in a different task" over the top of whatever the test was
-    actually doing. Handing back a factory keeps setup, body, and teardown in one task, and is the
-    same shape ``tests/agent_support.connected_tools`` already uses for the same reason.
-
-    It depends on ``checkpointer_schema`` rather than ``migrated_database`` — the same URL, plus
-    LangGraph's tables — because this harness boots the whole app, and the thread and account
-    deletion routes reach the checkpointer. A deployed app always has those tables; a test app
-    built on the migrations alone did not, and failed on the ``DELETE`` routes only.
-    """
-
-    def build(**overrides: Any) -> AbstractAsyncContextManager[ApiHarness]:
-        return harness(factory=token_factory, database_url=checkpointer_schema, **overrides)
-
-    return build
 
 
 def with_inference(api_factory: ApiFactory) -> AbstractAsyncContextManager[ApiHarness]:

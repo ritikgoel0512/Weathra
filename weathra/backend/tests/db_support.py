@@ -246,15 +246,26 @@ def new_user_id() -> str:
     return str(uuid.uuid4())
 
 
-def claims_for(user_id: str, *, email: str | None = None) -> dict[str, object]:
-    """A validated claim set as ``auth/tokens.py`` would produce it."""
-    return {
+def claims_for(
+    user_id: str, *, email: str | None = None, administrative: bool = False
+) -> dict[str, object]:
+    """A validated claim set as ``auth/tokens.py`` would produce it.
+
+    ``administrative`` puts Weathra's own role under ``app_metadata``, which is where Supabase
+    keeps server-controlled claims and the only container `entitlements/administration.py` reads.
+    Spelling it out here rather than in each test keeps the shape in one place, so a test cannot
+    accidentally assert against a claim layout the code does not accept.
+    """
+    claims: dict[str, object] = {
         "sub": user_id,
         "email": email or f"{user_id[:8]}@example.test",
         "email_verified": True,
         "aud": "authenticated",
         "role": "authenticated",
     }
+    if administrative:
+        claims["app_metadata"] = {"weathra_role": "administrator"}
+    return claims
 
 
 def principal_for(user_id: str, *, email: str | None = None) -> Principal:
@@ -262,11 +273,13 @@ def principal_for(user_id: str, *, email: str | None = None) -> Principal:
     return Principal.from_claims(claims_for(user_id, email=email))
 
 
-def session_as(engines: Engines, user_id: str | None) -> AbstractAsyncContextManager[AsyncSession]:
+def session_as(
+    engines: Engines, user_id: str | None, *, administrative: bool = False
+) -> AbstractAsyncContextManager[AsyncSession]:
     """A request-scoped session acting as one user, exactly as a request would open it."""
     return request_session(
         engines.request_sessionmaker,
-        claims=claims_for(user_id) if user_id else None,
+        claims=claims_for(user_id, administrative=administrative) if user_id else None,
         restricted_role=engines.settings.database_restricted_role,
     )
 

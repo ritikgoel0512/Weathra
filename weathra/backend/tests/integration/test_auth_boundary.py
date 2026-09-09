@@ -73,6 +73,7 @@ PROTECTED_REQUESTS: tuple[tuple[str, str, dict[str, Any]], ...] = (
     ("GET", "/me/preferences", {}),
     ("PUT", "/me/preferences", {"json": {"unit_system": "imperial"}}),
     ("DELETE", "/me/preferences", {}),
+    ("GET", "/me/usage", {}),
     ("GET", "/me/locations", {}),
     ("POST", "/me/locations", {"json": {"location": "Berlin"}}),
     ("DELETE", "/me/locations/{saved_id}", {}),

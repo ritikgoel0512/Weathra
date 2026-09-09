@@ -38,7 +38,7 @@ from weathra.auth.rls import session_for
 from weathra.config import Settings
 from weathra.db.engine import Engines
 from weathra.domain.errors import McpUnavailable
-from weathra.entitlements.quotas import QuotaGate
+from weathra.entitlements.quotas import QuotaGate, stores_over
 from weathra.geocoding.base import Geocoder
 from weathra.geocoding.open_meteo import OpenMeteoGeocoder
 from weathra.mcp.client import McpToolClient
@@ -177,11 +177,12 @@ def quota_gate_of(request: Request, principal: OptionalPrincipal) -> QuotaGate:
     gets. Nothing here reaches for the privileged connection.
     """
     engines = engines_of(request)
+    settings = settings_of(request)
 
     def sessions() -> AbstractAsyncContextManager[AsyncSession]:
         return session_for(engines, principal)
 
-    return QuotaGate(sessions, settings_of(request))
+    return QuotaGate(stores_over(sessions, zone=settings.quota_zone), settings)
 
 
 HttpClient = Annotated[httpx.AsyncClient, Depends(http_client_of)]

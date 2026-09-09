@@ -38,6 +38,7 @@ from weathra.auth.tokens import TokenValidator
 from weathra.config import Settings
 from weathra.db.engine import Engines
 from weathra.db.session import privileged_session
+from weathra.entitlements.administration import ADMINISTRATOR_ROLE, ROLE_CLAIM
 
 __all__ = ["EvaluationMode", "TestIdentity", "provision_test_user"]
 
@@ -122,6 +123,17 @@ def _build_offline_tokens(settings: Settings) -> OfflineTokens:
         "iat": now,
         "exp": now + 3_600,
         "role": "authenticated",
+        # An evaluation run is internal traffic. `specs/usage-limits` accounts it against the
+        # internal allowance rather than any product plan, and the way a principal *is* internal is
+        # the role its validated token declares (`entitlements/administration.py`) — so it is
+        # declared here rather than smuggled past the gate with a flag. Without it a fifty-case
+        # dataset spends a Free tier's daily allowance a third of the way through the run and the
+        # rest of the suite measures 429s, which is how this was found.
+        #
+        # It is under `app_metadata` because that is the only container the predicate reads, and
+        # it changes nothing about resolution: no shipped plan maps `admin_experimental`, and the
+        # administrative *override* is applied only when a caller asks for one, which no route does.
+        "app_metadata": {ROLE_CLAIM: ADMINISTRATOR_ROLE},
     }
     token = jwt.encode(claims, key, algorithm="RS256", headers={"kid": key_id})
 

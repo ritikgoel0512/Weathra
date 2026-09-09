@@ -64,14 +64,16 @@ __all__ = [
     "QuotaStore",
     "QuotaSubject",
     "Reservation",
-    "SessionFactory",
+    "StoreFactory",
     "UsageReport",
     "reset_at",
+    "stores_over",
 ]
 
 logger = logging.getLogger("weathra.entitlements.quotas")
 
-# Where the gate gets a session. A factory rather than a session, because **a reservation may not
+# Where the gate gets a store, which is to say a session with the statements wrapped round it.
+# A factory rather than one store, because **a reservation may not
 # live inside the request's transaction**, and that is the single most consequential fact about
 # this module's plumbing.
 #
@@ -82,7 +84,7 @@ logger = logging.getLogger("weathra.entitlements.quotas")
 # behind each other for seconds at a time. So each quota operation opens its own short session,
 # commits, and closes. It is still the *restricted* session with the caller's claims bound, so the
 # owner policy on `usage_counters` applies to it exactly as it does to everything else.
-SessionFactory = Callable[[], AbstractAsyncContextManager[AsyncSession]]
+StoreFactory = Callable[[], AbstractAsyncContextManager["QuotaStore"]]
 
 # The order dimensions are evaluated in. The two that cannot be reserved come first, so a refusal
 # on one of them costs nothing to unwind; the reservable ones follow narrowest window first, and
@@ -520,9 +522,14 @@ class QuotaStore:
         """Requests and tokens for one month, counted from the usage events themselves.
 
         The reconciliation ``specs/usage-limits`` asks for: the counters and the event record must
-        not disagree. A *request* is a run, not a call — one question that retried its structured
-        call twice is one request and three events — so runs are counted distinctly by
-        ``agent_run_id`` while tokens are summed across every attempt.
+        not disagree. A *request* is one HTTP request, not one call — a question whose structured
+        call retried twice is one request and three events — so events are counted distinctly by
+        ``request_id`` while tokens are summed across every attempt.
+
+        Grouped by ``request_id`` rather than by ``agent_run_id``: the run identifier is written
+        only where a run was persisted, and an event whose correlation identifier is missing
+        cannot be grouped with anything, so it counts as its own request rather than silently
+        joining every other ungrouped event into one.
         """
         owner = (
             "user_id IS NULL OR subject_kind = 'internal'"
@@ -532,7 +539,7 @@ class QuotaStore:
         row = (
             await self._session.execute(
                 text(
-                    "SELECT count(DISTINCT agent_run_id) AS runs, "
+                    "SELECT count(DISTINCT coalesce(request_id, event_id::text)) AS requests, "
                     "       coalesce(sum(total_tokens), 0) AS tokens "
                     "  FROM llm_usage_events "
                     f" WHERE ({owner}) "
@@ -549,6 +556,23 @@ class QuotaStore:
         if row is None:
             return {"requests": 0, "tokens": 0}
         return {"requests": int(row[0] or 0), "tokens": int(row[1] or 0)}
+
+
+def stores_over(
+    sessions: Callable[[], AbstractAsyncContextManager[AsyncSession]], *, zone: tzinfo
+) -> StoreFactory:
+    """Turn a session factory into a store factory. What the API dependency composes with.
+
+    The gate is given stores rather than sessions so that it has no opinion about connections at
+    all — which is also what lets it be exercised over a store that never opens one.
+    """
+
+    @asynccontextmanager
+    async def factory() -> AsyncIterator[QuotaStore]:
+        async with sessions() as session:
+            yield QuotaStore(session, zone=zone)
+
+    return factory
 
 
 # =========================================================================== the gate
@@ -571,10 +595,10 @@ class QuotaGate:
     whether there is to be a call.
     """
 
-    __slots__ = ("_sessions", "_settings")
+    __slots__ = ("_settings", "_stores")
 
-    def __init__(self, sessions: SessionFactory, settings: Settings) -> None:
-        self._sessions = sessions
+    def __init__(self, stores: StoreFactory, settings: Settings) -> None:
+        self._stores = stores
         self._settings = settings
 
     @property
@@ -588,11 +612,6 @@ class QuotaGate:
             dimension: WindowKey.for_dimension(dimension, moment, zone)
             for dimension in QuotaDimension
         }
-
-    @asynccontextmanager
-    async def _store(self) -> AsyncIterator[QuotaStore]:
-        async with self._sessions() as session:
-            yield QuotaStore(session, zone=self._settings.quota_zone)
 
     # ---------------------------------------------------------------- admission
 
@@ -611,8 +630,15 @@ class QuotaGate:
             return Admission(subject=subject, windows=windows)
 
         try:
-            async with self._store() as store:
+            async with self._stores() as store:
                 allowances = await store.allowances(subject)
+                # Before the read pass, not inside the reservation: a slot a killed process never
+                # released reads as consumption, so a gauge left full would refuse the caller here
+                # and the collection below would never be reached. Found exactly that way.
+                if QuotaDimension.CONCURRENT_RUNS in allowances.limits:
+                    await self._forget_abandoned_runs(
+                        store, subject, windows[QuotaDimension.CONCURRENT_RUNS]
+                    )
                 bound = await self._binding(store, subject, allowances, windows, now)
                 if bound is None:
                     return await self._reserve_all(store, subject, allowances, windows, now)
@@ -662,8 +688,6 @@ class QuotaGate:
             allowance = allowances.limit(dimension)
             assert allowance is not None  # `bounded()` returns only dimensions with a limit
             window = windows[dimension]
-            if dimension is QuotaDimension.CONCURRENT_RUNS:
-                await self._forget_abandoned_runs(store, subject, window)
             consumed = await store.reserve(subject.key, dimension, window, allowance)
             if consumed is None:
                 # Somebody took the last unit between the read and here. Give back everything this
@@ -725,7 +749,7 @@ class QuotaGate:
         if not self.enabled:
             return
         try:
-            async with self._store() as store:
+            async with self._stores() as store:
                 if not reached_gateway:
                     await admission.release_requests(store)
                 await admission.release_concurrency(store)
@@ -758,7 +782,7 @@ class QuotaGate:
         """
         now = moment or datetime.now(UTC)
         windows = self.windows(now)
-        async with self._store() as store:
+        async with self._stores() as store:
             allowances = await store.allowances(subject)
             consumption = await store.consumption(subject.key, windows)
         return UsageReport(

@@ -186,12 +186,26 @@ async def test_a_new_user_owned_table_carries_an_owner_policy(
     policies = {row[0]: (row[1], row[2]) for row in rows}
     assert policies, f"{table} has row level security on and no policy, which denies everyone"
 
-    # Every readable policy restricts to the acting principal. `usage_counters` compares `subject`
-    # rather than `user_id`, which is the same rule spelled for a column that also holds the
-    # reserved internal subject.
+    # Every readable policy restricts to something the *validated token* says. Two accessors are
+    # allowed to be that something, and the second is narrower than the first rather than an
+    # escape from it:
+    #
+    # * `weathra_current_user_id()` — the acting subject. `usage_counters` compares it against
+    #   `subject` rather than `user_id`, which is the same rule spelled for a column that also
+    #   holds the reserved internal subject.
+    # * `weathra_is_administrative()` — only in the one policy that lets an administrator's
+    #   product-path call be accounted against the shared internal subject (`0010`). It must pin
+    #   the subject to that literal as well, so a policy claiming the role and *not* naming the
+    #   row it unlocks fails here.
     readable = [using for using, _ in policies.values() if using is not None]
     assert readable, f"{table} has no readable policy"
     for using in readable:
+        if "weathra_is_administrative()" in using:
+            assert "'internal'" in using, (
+                f"{table} has an administrative policy that does not pin the internal subject, so "
+                f"it unlocks more than the internal allowance: {using}"
+            )
+            continue
         assert "weathra_current_user_id()" in using, (
             f"{table} has a policy that does not consult the acting principal: {using}"
         )

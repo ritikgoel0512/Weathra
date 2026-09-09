@@ -24,9 +24,11 @@ from weathra.config import Settings
 # `config.py` still declares `env_file=".env"`, and this mutation lives only in the test process.
 Settings.model_config["env_file"] = None
 
-# `db`-marked tests draw their database fixtures from here. Imported as plugins so any test module
-# can request them without repeating the wiring.
-pytest_plugins = ["tests.db_support"]
+# `db`-marked tests draw their database fixtures from here, and the whole-app harness from
+# `api_support`. Imported as plugins so any test module can request them without repeating the
+# wiring — two modules now boot the app, and a fixture copied into the second would be a
+# fixture that only gets fixed in the first.
+pytest_plugins = ["tests.db_support", "tests.api_support"]
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 # The application lives in its own top-level project directory, so the two roots are distinct:
