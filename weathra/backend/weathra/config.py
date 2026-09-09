@@ -149,6 +149,20 @@ class Settings(BaseSettings):
         ),
     )
 
+    # ---------------------------------------------------------------- model policy stores
+
+    model_catalog_cache_ttl_seconds: Annotated[int, Field(ge=0, le=3_600)] = Field(
+        default=60,
+        validation_alias="model_catalog_cache_ttl_seconds",
+        description=(
+            "How long a process may serve the catalog, policy and plan snapshot before refreshing "
+            "it (design.md decision 23). This is the documented staleness window: an administrator "
+            "disabling a model may see it serve for up to this long on an instance that has not "
+            "refreshed. Zero disables the cache and reads every time, which is what the tests that "
+            "care about immediacy use."
+        ),
+    )
+
     # ---------------------------------------------------------------- weather providers
 
     default_weather_provider: str = Field(

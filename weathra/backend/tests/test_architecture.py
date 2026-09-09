@@ -44,6 +44,11 @@ LAYERS: dict[str, int] = {
     "rag": 3,
     "memory": 3,
     "auth": 3,
+    # The catalog, policy and plan stores. Above `db` because they are repositories over it, and
+    # below `agents` because the resolver that consumes them sits between the graph and the client
+    # (design.md decision 22) — a node reaching for a store directly would be exactly the model
+    # selection that layer exists to keep out of the graph.
+    "entitlements": 3,
     "mcp": 4,
     "agents": 5,
     "api": 6,

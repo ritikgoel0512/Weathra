@@ -33,6 +33,7 @@ __all__ = [
     "McpUnavailable",
     "MemoryUnavailable",
     "ModelNotAllowlisted",
+    "ModelRoleWouldBeUnavailable",
     "NoDataForRange",
     "NoEligibleModel",
     "NotFound",
@@ -384,6 +385,22 @@ class ModelNotAllowlisted(ValidationFailed):
     """
 
     code: ClassVar[str] = "model_not_allowlisted"
+
+
+class ModelRoleWouldBeUnavailable(ValidationFailed):
+    """A disable that would leave a required capability role with no enabled model.
+
+    Not a refusal of the intent — an administrator may genuinely mean it, and
+    ``specs/model-catalog`` says so: the write proceeds when the request explicitly acknowledges
+    the resulting unavailability. What is refused is doing it *by accident*, which is the
+    realistic case: "which role has only one enabled model left" is not something anybody
+    carries in their head.
+
+    ``details`` names the roles that would be stranded and the acknowledgement that would let the
+    write through, so an administrative surface can ask the question rather than relay a rejection.
+    """
+
+    code: ClassVar[str] = "model_role_would_be_unavailable"
 
 
 class NoEligibleModel(WeathraError):

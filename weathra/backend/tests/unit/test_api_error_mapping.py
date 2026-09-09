@@ -25,6 +25,9 @@ ENTITLEMENT_STATUS: dict[type[e.WeathraError], int] = {
     # A named model that the catalog does not vouch for is a bad request, refused before any
     # network call rather than attempted and reported afterwards.
     e.ModelNotAllowlisted: status.HTTP_400_BAD_REQUEST,
+    # A disable that would strand a call role: refused as a bad request, and re-sendable with
+    # an acknowledgement, which is why it is a 400 and not a 409 the caller cannot act on.
+    e.ModelRoleWouldBeUnavailable: status.HTTP_400_BAD_REQUEST,
     # The subscription saying no. Shares 429 with a gateway rate limit and is a different code.
     e.QuotaExceeded: status.HTTP_429_TOO_MANY_REQUESTS,
     # Configuration failures: the caller asked for something reasonable and the deployment has
