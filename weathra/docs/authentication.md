@@ -171,8 +171,8 @@ the policies themselves belong to `docs/model-policy.md`.*
 
 ## Ownership and the table classification
 
-Ten tables, three classes. The classification lives in the models (`ownership_of`), the migration
-that applies the policies, and the tests — all three agree, and a test asserts it.
+Twenty-one tables, three classes. The classification lives in the models (`ownership_of`), the
+migrations that apply the policies, and the tests — all three agree, and a test asserts it.
 
 | Table | Class | Who may read | Who may write |
 |---|---|---|---|
@@ -186,10 +186,46 @@ that applies the policies, and the tests — all three agree, and a test asserts
 | `knowledge_chunks` | shared, read-only | anyone | the privileged ingestion job |
 | `evaluation_runs` | operational | the privileged role | the privileged role |
 | `evaluation_case_results` | operational | the privileged role | the privileged role |
+| `subscription_plans` | operational | anyone signed in | the privileged role |
+| `model_catalog` | operational | anyone signed in | the privileged role |
+| `model_policies` | operational | anyone signed in | the privileged role |
+| `usage_limits` | operational | anyone signed in | the privileged role |
+| `user_plans` | user-owned | its owner | **the privileged role only** |
+| `usage_counters` | user-owned | its owner | its owner |
+| `llm_usage_events` | user-owned | its owner | its owner, append-only |
+| `model_evaluations` | operational | the privileged role | the privileged role |
+| `model_comparison_runs` | operational | the privileged role | the privileged role |
+| `model_comparison_results` | operational | the privileged role | the privileged role |
+| `admin_audit` | operational | the privileged role | the privileged role |
 
 `forecast_snapshots` is location-keyed and carries no user reference — a snapshot of Berlin's
 forecast is not anybody's private data, and *what changed* needs the previous snapshot whoever took
 it. The knowledge corpus is the same shape: shared, and written only by the ingestion job.
+
+The SaaS-ready tables added in group 26 follow the same rule and depart from it in three places
+that are worth stating rather than leaving to be discovered:
+
+* **`user_plans` is readable and not writable by the request path.** Its policy is `FOR SELECT` and
+  its grant is `SELECT`, where every other user-owned table gets `FOR ALL`. An owner policy written
+  the usual way would let a caller `INSERT` their own row naming `premium` — and it would pass,
+  because it *is* their row. Entitlement is something the backend establishes, so assignment is an
+  administrative write on the privileged connection, recorded in `admin_audit`.
+* **`usage_counters` is keyed by `subject`, not `user_id`.** The column holds either an auth subject
+  or the reserved non-UUID subject `internal`, which is how lab, evaluation and administrative
+  traffic is accounted separately. The owner policy compares `subject` against the acting user's id,
+  so the internal rows are denied to every caller by arithmetic rather than by a clause.
+* **`llm_usage_events` has two ownership shapes and two policies.** Reading is owner-only, so an
+  internal row — whose `user_id` is null — is invisible to every caller, since `NULL = anything` is
+  not true. Writing is owner-only *plus* the anonymous case, because a call with no principal must
+  be recordable with a null subject and never a placeholder. The administrative aggregate is a
+  separate privileged read returning counts and sums, which is safe precisely because the table
+  holds no prompt, completion or retrieved text.
+
+The four operational policy tables — `subscription_plans`, `model_catalog`, `model_policies` and
+`usage_limits` — carry a `SELECT`-only policy for `weathra_request` because resolving a model and
+checking an allowance genuinely happen on the request path. The four lab and audit tables carry no
+grant and no policy at all: nothing a browser does has any business reading a comparison run's
+provenance or the trail of who changed which model.
 
 **Cross-user access is denied identically to a missing record.** Asking for another person's
 evidence record, thread, or saved location returns the same not-found response as an identifier that
@@ -265,6 +301,11 @@ The resolution keeps Row Level Security rather than disabling it, and states the
 | `forecast_snapshots` | `_request_read`, `_request_append` | `SELECT`, `INSERT` |
 | `knowledge_documents` | `_request_read` | `SELECT` |
 | `knowledge_chunks` | `_request_read` | `SELECT` |
+| `subscription_plans`, `model_catalog`, `model_policies`, `usage_limits` | `_request_read` | `SELECT` |
+| `user_plans` | `user_plans_owner_read` | `SELECT` |
+| `usage_counters` | `usage_counters_owner_only` | `SELECT`, `INSERT`, `UPDATE` |
+| `llm_usage_events` | `llm_usage_events_owner_read`, `_owner_append` | `SELECT`, `INSERT` |
+| `model_evaluations`, `model_comparison_runs`, `model_comparison_results`, `admin_audit` | none, by design | none |
 
 Each is `TO weathra_request` — never `PUBLIC`, `anon`, or `authenticated` — and each mirrors exactly
 the grant `0002` already made, so the policy and the ACL say the same thing rather than one silently

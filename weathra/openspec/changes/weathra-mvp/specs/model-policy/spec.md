@@ -48,7 +48,7 @@ The system SHALL define model policies as named, persisted records rather than i
 
 Each policy SHALL declare an ordered list of candidate models by catalog reference, the call roles it applies to, and its eligibility condition. A policy SHALL NOT name a vendor model identifier inline in application logic; it SHALL reference catalog entries.
 
-User-facing subscription plans SHALL map onto policies, with at least Free, Plus, and Pro as the initial plan set, and the mapping SHALL be persisted data that can change without a code change. A plan SHALL be able to map to different policies for different call roles.
+User-facing subscription plans SHALL map onto policies, with at least Free, Pro, and Premium as the initial plan set, and the mapping SHALL be persisted data that can change without a code change. A plan SHALL be able to map to different policies for different call roles.
 
 #### Scenario: Shipped policies present
 
@@ -64,8 +64,8 @@ User-facing subscription plans SHALL map onto policies, with at least Free, Plus
 
 #### Scenario: Plan-to-policy mapping changed without code
 
-- **WHEN** the plan-to-policy mapping is changed so that the Plus plan maps to a different policy
-- **THEN** subsequent requests from Plus callers resolve the new policy with no code change and no redeployment
+- **WHEN** the plan-to-policy mapping is changed so that the Pro plan maps to a different policy
+- **THEN** subsequent requests from Pro callers resolve the new policy with no code change and no redeployment
 
 #### Scenario: Per-role policy mapping
 
@@ -74,7 +74,7 @@ User-facing subscription plans SHALL map onto policies, with at least Free, Plus
 
 #### Scenario: Administrative policy not reachable by a product plan
 
-- **WHEN** a caller on any of the Free, Plus, or Pro plans makes a product request
+- **WHEN** a caller on any of the Free, Pro, or Premium plans makes a product request
 - **THEN** `admin_experimental` is never resolved for that request
 
 ### Requirement: Entitlement is enforced server-side and never trusted from the client
@@ -277,7 +277,7 @@ Creating, editing, enabling, and disabling model policies and plan-to-policy map
 
 ### Requirement: Runtime provider failure fails over within the entitled policy, never on quality
 
-When a language model call fails for an infrastructure reason — the gateway reports the model unavailable, the gateway returns a server error, the call times out, or the network fails — the policy layer SHALL attempt the next enabled candidate of the same resolved policy, in the policy's declared order, bounded by a configured maximum number of models per call role. It SHALL NOT escalate to a policy above the caller's entitlement, and a Free-plan caller SHALL NOT reach a Plus or Pro candidate by this or any other path.
+When a language model call fails for an infrastructure reason — the gateway reports the model unavailable, the gateway returns a server error, the call times out, or the network fails — the policy layer SHALL attempt the next enabled candidate of the same resolved policy, in the policy's declared order, bounded by a configured maximum number of models per call role. It SHALL NOT escalate to a policy above the caller's entitlement, and a Free-plan caller SHALL NOT reach a Pro or Premium candidate by this or any other path.
 
 A model SHALL NOT be changed for any reason derived from the content or quality of a model's output. Output that failed schema validation, a groundedness result, a hallucination or unsupported-claim finding, an evaluation metric or threshold, a latency measurement, and any other judgement of answer quality SHALL NOT be an input to model selection.
 
@@ -312,8 +312,8 @@ Every attempt, including every failed attempt, SHALL be recorded with its select
 
 #### Scenario: Failover never escalates above entitlement
 
-- **WHEN** every candidate of a Free-plan caller's policy fails for an infrastructure reason and a Plus or Pro candidate is available
-- **THEN** the Plus and Pro candidates are not attempted for that caller
+- **WHEN** every candidate of a Free-plan caller's policy fails for an infrastructure reason and a Pro or Premium candidate is available
+- **THEN** the Pro and Premium candidates are not attempted for that caller
 
 #### Scenario: Failover is bounded
 

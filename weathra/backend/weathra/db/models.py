@@ -23,30 +23,37 @@ Ownership for them is established differently (design.md decision 11) — a comp
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     JSON,
+    BigInteger,
     CheckConstraint,
+    Computed,
+    Date,
     DateTime,
     Float,
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 __all__ = [
     "MAX_HORIZON_PREFERENCE_DAYS",
     "USER_ID_COLUMN",
+    "AdminAudit",
     "AgentRun",
     "Base",
     "EvaluationCaseResult",
@@ -54,11 +61,21 @@ __all__ = [
     "ForecastSnapshot",
     "KnowledgeChunk",
     "KnowledgeDocument",
+    "LlmUsageEvent",
+    "ModelCatalogEntry",
+    "ModelComparisonResult",
+    "ModelComparisonRun",
+    "ModelEvaluation",
+    "ModelPolicy",
     "Ownership",
     "Preference",
     "Profile",
     "SavedLocation",
+    "SubscriptionPlan",
     "Thread",
+    "UsageCounter",
+    "UsageLimit",
+    "UserPlan",
     "ownership_of",
     "user_owned_tables",
 ]
@@ -463,3 +480,555 @@ class EvaluationCaseResult(Base):
     created_at: Mapped[datetime] = _timestamp_column(server_default=func.now(), nullable=False)
 
     run: Mapped[EvaluationRun] = relationship(back_populates="case_results")
+
+
+# =========================================================================== SaaS: operational
+#
+# The model policy layer's own data (design.md decisions 22 to 25). Every table below is operational
+# rather than user-owned: it is read to serve a request and written only through the administrative
+# path, so an owner predicate on it would have nothing to compare against. That is a different
+# statement from "unprotected" — the migrations grant the request-serving role read access to
+# exactly the three tables a resolution needs, and nothing at all on the rest.
+
+
+class SubscriptionPlan(Base):
+    """A product tier as a row, so a plan's policies and allowances change without a deployment.
+
+    ``plan_code`` is the stable identifier — ``free``, ``pro``, ``premium`` — and it is deliberately
+    the primary key rather than a surrogate id: it is what `user_plans` rows and every recorded
+    usage event carry, and a plan code that could be renamed under them would falsify history.
+
+    ``external_subscription_ref`` is the room ``specs/usage-limits`` asks to be left for a later
+    billing integration. It stays null in this change, nothing reads it, and no behaviour depends
+    on it being populated.
+    """
+
+    __tablename__ = "subscription_plans"
+    __table_args__ = (
+        UniqueConstraint("rank", name="uq_subscription_plans_rank"),
+        {"info": {"ownership": Ownership.OPERATIONAL}},
+    )
+
+    plan_code: Mapped[str] = mapped_column(
+        String(32), primary_key=True, doc="Canonical lowercase code. One of free, pro, premium."
+    )
+    display_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    rank: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        doc="Ascending entitlement. What 'never escalate above the caller's plan' compares.",
+    )
+    policy_by_call_role: Mapped[dict[str, Any]] = mapped_column(
+        JsonB,
+        nullable=False,
+        default=dict,
+        doc="Call role -> policy id. A plan may map each role to a different policy.",
+    )
+    external_subscription_ref: Mapped[str | None] = mapped_column(
+        String(200), nullable=True, doc="Unused. Where a billing provider's id would later land."
+    )
+    created_at: Mapped[datetime] = _timestamp_column(server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = _timestamp_column(
+        server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class ModelCatalogEntry(Base):
+    """One model Weathra is allowed to use, with the metadata everything else reasons about.
+
+    The split that carries the whole "no vendor identifier in business logic" requirement:
+    ``catalog_key`` is the stable internal handle every policy, evaluation and comparison result
+    references, and ``gateway_model`` is the vendor string, which is mutable. A gateway renaming a
+    model is a one-row update that breaks nothing (design.md decision 23).
+    """
+
+    __tablename__ = "model_catalog"
+    __table_args__ = (
+        UniqueConstraint(
+            "gateway_provider", "gateway_model", name="uq_model_catalog_gateway_identity"
+        ),
+        CheckConstraint("context_window > 0", name="ck_model_catalog_context_window"),
+        CheckConstraint(
+            "input_price_per_million >= 0 and output_price_per_million >= 0",
+            name="ck_model_catalog_prices_non_negative",
+        ),
+        CheckConstraint(
+            "cardinality(capability_roles) > 0", name="ck_model_catalog_has_capability_role"
+        ),
+        CheckConstraint("status in ('enabled', 'disabled')", name="ck_model_catalog_status"),
+        Index("ix_model_catalog_status", "status"),
+        {"info": {"ownership": Ownership.OPERATIONAL}},
+    )
+
+    catalog_key: Mapped[str] = mapped_column(
+        String(120), primary_key=True, doc="Kebab-case, internal, independent of any vendor naming."
+    )
+    gateway_provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    gateway_model: Mapped[str] = mapped_column(
+        String(200), nullable=False, doc="The vendor string, as the gateway expects it. Mutable."
+    )
+    display_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    capability_roles: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), nullable=False, doc="The call roles this model is fit for."
+    )
+    capability_tier: Mapped[str] = mapped_column(
+        String(32), nullable=False, doc="What policies order candidates by. Never a vendor name."
+    )
+    supports_structured_output: Mapped[bool] = mapped_column(nullable=False)
+    context_window: Mapped[int] = mapped_column(Integer, nullable=False)
+    input_price_per_million: Mapped[Decimal] = mapped_column(Numeric(14, 6), nullable=False)
+    output_price_per_million: Mapped[Decimal] = mapped_column(Numeric(14, 6), nullable=False)
+    price_currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    pricing_recorded_on: Mapped[date] = mapped_column(
+        Date, nullable=False, doc="The pricing basis. Copied onto each usage event at write time."
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="enabled")
+    is_free_tier: Mapped[bool] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = _timestamp_column(server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = _timestamp_column(
+        server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class ModelPolicy(Base):
+    """A named, ordered candidate list — the unit a plan and a call role resolve to.
+
+    ``candidate_catalog_keys`` is ordered and its order is the resolution: the first entry present
+    in the catalog and enabled wins. ``failover_enabled`` exists for exactly one row, the fixed
+    evaluation policy, where attempting a second candidate would silently change what a run
+    measures (``specs/evaluation``).
+    """
+
+    __tablename__ = "model_policies"
+    __table_args__ = (
+        CheckConstraint(
+            "cardinality(candidate_catalog_keys) > 0", name="ck_model_policies_has_candidate"
+        ),
+        CheckConstraint(
+            "cardinality(applicable_call_roles) > 0", name="ck_model_policies_has_call_role"
+        ),
+        CheckConstraint(
+            "fallback_policy_id is null or fallback_policy_id <> policy_id",
+            name="ck_model_policies_no_self_fallback",
+        ),
+        {"info": {"ownership": Ownership.OPERATIONAL}},
+    )
+
+    policy_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    candidate_catalog_keys: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), nullable=False, doc="Ordered. The first enabled catalog entry wins."
+    )
+    applicable_call_roles: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False)
+    eligibility: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        doc="Who may resolve this at all: public, plan, administrative, internal_evaluation.",
+    )
+    fallback_policy_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("model_policies.policy_id", ondelete="SET NULL"),
+        nullable=True,
+        doc="Tried when no candidate is available. Never a policy above the caller's entitlement.",
+    )
+    failover_enabled: Mapped[bool] = mapped_column(
+        nullable=False, default=True, doc="False pins the policy to its single candidate."
+    )
+    created_at: Mapped[datetime] = _timestamp_column(server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = _timestamp_column(
+        server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class UsageLimit(Base):
+    """One allowance: a plan (or the internal subject), a dimension, a window, a number.
+
+    A row per (subject, dimension) rather than a column per dimension, so adding the estimated-cost
+    budget ``specs/usage-limits`` asks to be representable is a row and not a schema change. A
+    dimension a plan declares no row for is *unlimited* in that dimension, which is why absence has
+    to mean absence — a default of zero here would silently refuse every request.
+    """
+
+    __tablename__ = "usage_limits"
+    __table_args__ = (
+        CheckConstraint(
+            "(plan_code is null) <> (internal_subject is null)",
+            name="ck_usage_limits_exactly_one_subject",
+        ),
+        CheckConstraint("allowance >= 0", name="ck_usage_limits_allowance_non_negative"),
+        Index(
+            "uq_usage_limits_plan_dimension",
+            "plan_code",
+            "dimension",
+            unique=True,
+            postgresql_where=text("plan_code is not null"),
+        ),
+        Index(
+            "uq_usage_limits_internal_dimension",
+            "internal_subject",
+            "dimension",
+            unique=True,
+            postgresql_where=text("internal_subject is not null"),
+        ),
+        {"info": {"ownership": Ownership.OPERATIONAL}},
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    plan_code: Mapped[str | None] = mapped_column(
+        String(32),
+        ForeignKey("subscription_plans.plan_code", ondelete="CASCADE"),
+        nullable=True,
+    )
+    internal_subject: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, doc="The reserved internal subject, on the internal allowance."
+    )
+    dimension: Mapped[str] = mapped_column(String(48), nullable=False)
+    window_kind: Mapped[str] = mapped_column(
+        String(16), nullable=False, doc="Named to avoid WINDOW, which PostgreSQL reserves."
+    )
+    allowance: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = _timestamp_column(server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = _timestamp_column(
+        server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+# =========================================================================== SaaS: user-owned
+
+
+class UserPlan(Base):
+    """Which plan a person is on. **Read-only to the request path, by grant and by policy.**
+
+    The one table here where the owner-restricting policy is not the whole story. An owner policy
+    written ``FOR ALL`` would let a caller insert their own row naming ``premium`` — the row would
+    pass the ownership check, because it *is* their row — and self-service entitlement is precisely
+    what ``specs/model-policy`` says the backend must establish rather than accept. So the request
+    role is granted ``SELECT`` and nothing else, and the policy is ``FOR SELECT``. Assignment is an
+    administrative write on the privileged connection, recorded in ``admin_audit``.
+
+    A person with no row here is on Free. Absence is the default rather than an error, so a new
+    account needs no provisioning step to be able to ask a question.
+    """
+
+    __tablename__ = "user_plans"
+    __table_args__ = (
+        Index("ix_user_plans_plan_code", "plan_code"),
+        {"info": {"ownership": Ownership.USER}},
+    )
+
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("profiles.user_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    plan_code: Mapped[str] = mapped_column(
+        String(32), ForeignKey("subscription_plans.plan_code", ondelete="RESTRICT"), nullable=False
+    )
+    assigned_by: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False), nullable=True, doc="The administrative principal. Null where seeded."
+    )
+    assigned_at: Mapped[datetime] = _timestamp_column(server_default=func.now(), nullable=False)
+
+
+class UsageCounter(Base):
+    """Consumption for one (subject, dimension, window). The row admission upserts against.
+
+    Keyed naturally rather than by a surrogate id, because the composite key *is* the concurrency
+    control: the check and the increment are one ``INSERT … ON CONFLICT … DO UPDATE … WHERE
+    consumed < allowance``, and a row that does not come back means the allowance is exhausted
+    (design.md decision 25). A surrogate key would leave the conflict target with nothing to
+    conflict on.
+
+    ``subject`` is text and not a foreign key to ``profiles`` on purpose: internal traffic counts
+    against a reserved non-UUID subject, which has no profile and must not acquire one.
+    """
+
+    __tablename__ = "usage_counters"
+    __table_args__ = (
+        CheckConstraint("consumed >= 0", name="ck_usage_counters_consumed_non_negative"),
+        CheckConstraint("length(window_key) > 0", name="ck_usage_counters_window_key_present"),
+        Index("ix_usage_counters_window", "dimension", "window_key"),
+        {"info": {"ownership": Ownership.USER}},
+    )
+
+    subject: Mapped[str] = mapped_column(
+        String(64), primary_key=True, doc="An auth subject, or the reserved internal subject."
+    )
+    dimension: Mapped[str] = mapped_column(String(48), primary_key=True)
+    window_key: Mapped[str] = mapped_column(
+        String(32), primary_key=True, doc="'2026-09-03', '2026-09', or 'current' for concurrency."
+    )
+    consumed: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    updated_at: Mapped[datetime] = _timestamp_column(
+        server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class LlmUsageEvent(Base):
+    """One language model call, as recorded (``specs/llm-telemetry``, design.md decisions 24, 27).
+
+    The one table with two ownership shapes, resolved rather than shrugged at: ``user_id`` is
+    nullable, ``is_internal`` is a *generated* column so no aggregate has to remember the rule, and
+    the restricted role's read policy is owner-only — which makes an internal row invisible to every
+    caller without a clause of its own, since ``NULL = anything`` is not true.
+
+    It holds no prompt, no completion and no retrieved passage. That is what makes an administrative
+    aggregate across users safe: a table with no content in it cannot disclose content.
+    """
+
+    __tablename__ = "llm_usage_events"
+    __table_args__ = (
+        CheckConstraint("status in ('success', 'failure')", name="ck_llm_usage_events_status"),
+        CheckConstraint(
+            "(status = 'failure') = (failure_class is not null)",
+            name="ck_llm_usage_events_failure_class",
+        ),
+        CheckConstraint(
+            "subject_kind <> 'user' or user_id is not null",
+            name="ck_llm_usage_events_user_subject_has_owner",
+        ),
+        CheckConstraint(
+            "(user_id is null or subject_kind = 'internal') = (plan is null)",
+            name="ck_llm_usage_events_internal_has_no_plan",
+        ),
+        CheckConstraint(
+            "prompt_tokens is null or completion_tokens is null or total_tokens is null "
+            "or prompt_tokens + completion_tokens = total_tokens",
+            name="ck_llm_usage_events_token_sum",
+        ),
+        CheckConstraint(
+            "estimated_cost is null or total_tokens is not null",
+            name="ck_llm_usage_events_cost_needs_tokens",
+        ),
+        CheckConstraint(
+            "(estimated_cost is null) = (cost_currency is null)",
+            name="ck_llm_usage_events_cost_currency_together",
+        ),
+        CheckConstraint(
+            "retried_event_id is null or attempt >= 2", name="ck_llm_usage_events_retry_attempt"
+        ),
+        CheckConstraint(
+            "retried_event_id is null or retried_event_id <> event_id",
+            name="ck_llm_usage_events_no_self_retry",
+        ),
+        Index("ix_llm_usage_events_owner_time", USER_ID_COLUMN, "created_at"),
+        Index("ix_llm_usage_events_internal_time", "is_internal", "created_at"),
+        Index("ix_llm_usage_events_catalog_key", "catalog_key"),
+        Index("ix_llm_usage_events_policy", "policy_id"),
+        Index("ix_llm_usage_events_run", "agent_run_id"),
+        {"info": {"ownership": Ownership.USER}},
+    )
+
+    event_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("profiles.user_id", ondelete="CASCADE"),
+        nullable=True,
+        doc="Null for a call with no principal. Never a placeholder.",
+    )
+    subject_kind: Mapped[str] = mapped_column(String(16), nullable=False, default="user")
+    is_internal: Mapped[bool] = mapped_column(
+        Computed("user_id is null or subject_kind = 'internal'", persisted=True),
+        nullable=False,
+        doc="Decision 27's classification, generated so no aggregate can forget it.",
+    )
+    agent_run_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("agent_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    catalog_key: Mapped[str] = mapped_column(
+        String(120),
+        ForeignKey("model_catalog.catalog_key", ondelete="RESTRICT"),
+        nullable=False,
+        doc="RESTRICT: disabling or replacing a model must not erase what it served.",
+    )
+    gateway_provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    gateway_model: Mapped[str] = mapped_column(String(200), nullable=False)
+    policy_id: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        doc="Not a foreign key: it may be the configured-fallback indicator, which is no policy.",
+    )
+    plan: Mapped[str | None] = mapped_column(
+        String(32),
+        nullable=True,
+        doc="Not a foreign key: history must outlive a plan being retired. Null on internal rows.",
+    )
+    call_role: Mapped[str] = mapped_column(String(16), nullable=False)
+
+    prompt_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    completion_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    estimated_cost: Mapped[Decimal | None] = mapped_column(
+        Numeric(16, 8), nullable=True, doc="An estimate. Null when tokens are unknown, never zero."
+    )
+    cost_currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    pricing_recorded_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    latency_ms: Mapped[float] = mapped_column(
+        Float, nullable=False, doc="The gateway call itself, excluding the telemetry write."
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    failure_class: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    retried_event_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("llm_usage_events.event_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = _timestamp_column(server_default=func.now(), nullable=False)
+
+
+# =========================================================================== SaaS: lab and audit
+
+
+class ModelEvaluation(Base):
+    """One model's scored outcome for one evaluation run — the lab's comparable unit."""
+
+    __tablename__ = "model_evaluations"
+    __table_args__ = (
+        Index("ix_model_evaluations_catalog_key", "catalog_key"),
+        {"info": {"ownership": Ownership.OPERATIONAL}},
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    catalog_key: Mapped[str] = mapped_column(
+        String(120), ForeignKey("model_catalog.catalog_key", ondelete="RESTRICT"), nullable=False
+    )
+    gateway_model: Mapped[str] = mapped_column(
+        String(200), nullable=False, doc="What actually served it, recorded rather than inferred."
+    )
+    evaluation_run_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("evaluation_runs.id", ondelete="CASCADE"), nullable=True
+    )
+    dataset_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    commit_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    metrics: Mapped[dict[str, Any]] = mapped_column(JsonB, nullable=False, default=dict)
+    criteria: Mapped[dict[str, Any]] = mapped_column(JsonB, nullable=False, default=dict)
+    passed: Mapped[bool | None] = mapped_column(nullable=True)
+    recorded_at: Mapped[datetime] = _timestamp_column(server_default=func.now(), nullable=False)
+
+
+class ModelComparisonRun(Base):
+    """One lab comparison, with the provenance that makes two runs comparable at all."""
+
+    __tablename__ = "model_comparison_runs"
+    __table_args__ = (
+        CheckConstraint(
+            "dataset_version is not null or question is not null",
+            name="ck_model_comparison_runs_has_input",
+        ),
+        CheckConstraint(
+            "status in ('running', 'completed', 'partial', 'failed')",
+            name="ck_model_comparison_runs_status",
+        ),
+        {"info": {"ownership": Ownership.OPERATIONAL}},
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    initiated_by: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), nullable=False, doc="The administrative principal who ran it."
+    )
+    candidate_catalog_keys: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False)
+    dataset_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    question: Mapped[str | None] = mapped_column(
+        Text, nullable=True, doc="The ad-hoc question, where the run was not a dataset run."
+    )
+    catalog_state: Mapped[dict[str, Any]] = mapped_column(
+        JsonB, nullable=False, default=dict, doc="The catalog as it stood, so a rerun is checkable."
+    )
+    commit_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="running")
+    started_at: Mapped[datetime] = _timestamp_column(server_default=func.now(), nullable=False)
+    completed_at: Mapped[datetime | None] = _timestamp_column(nullable=True)
+
+
+class ModelComparisonResult(Base):
+    """One model's outcome for one case within a comparison run."""
+
+    __tablename__ = "model_comparison_results"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id", "catalog_key", "case_id", name="uq_model_comparison_results_cell"
+        ),
+        Index("ix_model_comparison_results_run", "run_id"),
+        {"info": {"ownership": Ownership.OPERATIONAL}},
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    run_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("model_comparison_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    catalog_key: Mapped[str] = mapped_column(
+        String(120), ForeignKey("model_catalog.catalog_key", ondelete="RESTRICT"), nullable=False
+    )
+    gateway_model: Mapped[str] = mapped_column(String(200), nullable=False)
+    case_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    policy_id: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, doc="The policy or lab context the cell ran under."
+    )
+    latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    prompt_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    completion_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    estimated_cost: Mapped[Decimal | None] = mapped_column(Numeric(16, 8), nullable=True)
+    succeeded: Mapped[bool] = mapped_column(nullable=False)
+    failure_class: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    evaluation_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("model_evaluations.id", ondelete="SET NULL"), nullable=True
+    )
+    usage_event_ids: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), nullable=False, default=list, doc="The telemetry this cell produced."
+    )
+    agent_run_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("agent_runs.id", ondelete="SET NULL"),
+        nullable=True,
+        doc="Where the agent path ran, the run whose evidence record explains the answer.",
+    )
+    created_at: Mapped[datetime] = _timestamp_column(server_default=func.now(), nullable=False)
+
+
+class AdminAudit(Base):
+    """Who changed which operational record, when, and from what to what.
+
+    Every administrative write to the catalog, a policy, a plan, an allowance or a plan assignment
+    lands here. ``cited_comparison_run_ids`` is what makes a model promotion traceable to the
+    evidence it was promoted on (design.md decision 26) rather than to somebody's recollection.
+    """
+
+    __tablename__ = "admin_audit"
+    __table_args__ = (
+        Index("ix_admin_audit_subject", "subject_kind", "subject_id"),
+        Index("ix_admin_audit_created_at", "created_at"),
+        {"info": {"ownership": Ownership.OPERATIONAL}},
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    acting_principal: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False)
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    subject_kind: Mapped[str] = mapped_column(
+        String(48), nullable=False, doc="What kind of record changed — a catalog entry, a plan."
+    )
+    subject_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    before: Mapped[dict[str, Any] | None] = mapped_column(JsonB, nullable=True)
+    after: Mapped[dict[str, Any] | None] = mapped_column(JsonB, nullable=True)
+    cited_comparison_run_ids: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), nullable=False, default=list
+    )
+    created_at: Mapped[datetime] = _timestamp_column(server_default=func.now(), nullable=False)

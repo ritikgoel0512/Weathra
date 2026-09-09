@@ -139,9 +139,32 @@ entirely confident answer about the wrong city.
 | Forecast snapshots | *What changed?* needs the previous snapshot. Location-keyed, no user reference | `SNAPSHOT_RETENTION_DAYS` (90 by default) |
 | Knowledge corpus | The documents a concept answer cites. Shared, read-only | Version-controlled |
 | Evaluation records | Acceptance runs. Operational, not user data | Kept |
+| Plan and policy records | Which tiers exist, which models are allowed, which candidates each policy declares, what each tier allows. Operational, not user data | Kept |
+| Plan assignment (`user_plans`) | Which tier a person is on, so entitlement is a backend fact rather than a client claim | Until the person deletes their data |
+| Usage counters | How much of a windowed allowance a subject has consumed, so a limit can be enforced before a call rather than apologised for after | `LLM_USAGE_RETENTION_DAYS` after the window closes |
+| LLM usage events | One metadata row per language model call — model, policy, plan, role, tokens, estimated cost, latency, outcome. **No prompt, completion or retrieved text** | `LLM_USAGE_RETENTION_DAYS`, and removed with the person's data |
+| Model evaluations and comparisons | Which model scored what, on which dataset, at which commit. Operational, not user data | Kept |
+| Administrative audit | Who changed which operational record, and from what to what | Kept |
 
 **Nothing else.** No arbitrary conversation content beyond the bounded thread retention, no
 behavioural profile, no analytics on what people ask.
+
+### Usage measurement holds no conversation content
+
+The per-call usage record exists so that model choice, cost and quota enforcement are factual
+rather than anecdotal. It deliberately holds only metadata: which catalog entry and gateway model
+served the call, which policy resolved it, which plan and call role it was made under, the token
+counts, an estimated cost, the latency, and whether it succeeded. It holds **no prompt, no
+completion, and no retrieved passage** — which is what makes an administrative total across
+accounts safe, because a table with no content in it cannot disclose content. Where diagnosing a
+failure needs more than metadata, the row points at the agent run whose evidence record already has
+its own ownership and its own retention, rather than copying anything into telemetry.
+
+Internal work — evaluation runs, model comparisons, administrative activity — is recorded against a
+reserved internal subject and is never counted against anyone's plan. Estimated cost is exactly
+that: an estimate computed from recorded token counts and the catalog price of the day, labelled as
+an estimate wherever it appears, and never presented as an amount owed. Weathra performs no payment
+processing and stores no payment details.
 
 ## Where credentials and contact data live
 

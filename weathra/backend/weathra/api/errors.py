@@ -46,11 +46,15 @@ from weathra.domain.errors import (
     AuthorizationFailed,
     McpUnavailable,
     MemoryUnavailable,
+    ModelNotAllowlisted,
     NoDataForRange,
+    NoEligibleModel,
     NotFound,
+    PolicyUnavailable,
     ProviderRateLimited,
     ProviderTimeout,
     ProviderUnavailable,
+    QuotaExceeded,
     SigningKeysUnavailable,
     ValidationFailed,
     VectorIndexMismatch,
@@ -99,14 +103,18 @@ _STATUS_BY_ERROR: dict[type[WeathraError], int] = {
     # ---------------------------------------------------------------- 400: the caller's request
     ValidationFailed: status.HTTP_400_BAD_REQUEST,
     AnalyticsNotPossible: status.HTTP_400_BAD_REQUEST,
+    ModelNotAllowlisted: status.HTTP_400_BAD_REQUEST,
     # ---------------------------------------------------------------- 401 / 403: identity
     AuthenticationFailed: status.HTTP_401_UNAUTHORIZED,
     AuthorizationFailed: status.HTTP_403_FORBIDDEN,
     # ---------------------------------------------------------------- 404: not here, or not yours
     NotFound: status.HTTP_404_NOT_FOUND,
     NoDataForRange: status.HTTP_404_NOT_FOUND,
-    # ---------------------------------------------------------------- 429: upstream said slow down
+    # -------------------------------------------------- 429: slow down — for two different reasons
+    # The gateway's limit and the subscription's are both 429 and must stay distinguishable by
+    # code: one clears on its own and the other does not until the window turns over.
     ProviderRateLimited: status.HTTP_429_TOO_MANY_REQUESTS,
+    QuotaExceeded: status.HTTP_429_TOO_MANY_REQUESTS,
     # ---------------------------------------------------------------- 502 / 504: upstream failed
     ProviderUnavailable: status.HTTP_502_BAD_GATEWAY,
     McpUnavailable: status.HTTP_502_BAD_GATEWAY,
@@ -117,6 +125,8 @@ _STATUS_BY_ERROR: dict[type[WeathraError], int] = {
     VectorIndexMismatch: status.HTTP_503_SERVICE_UNAVAILABLE,
     SigningKeysUnavailable: status.HTTP_503_SERVICE_UNAVAILABLE,
     AgentBudgetExceeded: status.HTTP_503_SERVICE_UNAVAILABLE,
+    NoEligibleModel: status.HTTP_503_SERVICE_UNAVAILABLE,
+    PolicyUnavailable: status.HTTP_503_SERVICE_UNAVAILABLE,
     # ---------------------------------------------------------------- the base, if nothing else
     WeathraError: status.HTTP_500_INTERNAL_SERVER_ERROR,
 }

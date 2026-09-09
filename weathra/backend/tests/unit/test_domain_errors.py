@@ -47,6 +47,11 @@ EXPECTED_CODES: dict[type[e.WeathraError], str] = {
     e.VectorIndexMismatch: "vector_index_mismatch",
     e.AgentNotConfigured: "agent_not_configured",
     e.AgentBudgetExceeded: "agent_budget_exceeded",
+    # entitlement
+    e.ModelNotAllowlisted: "model_not_allowlisted",
+    e.NoEligibleModel: "no_eligible_model",
+    e.PolicyUnavailable: "policy_unavailable",
+    e.QuotaExceeded: "quota_exceeded",
 }
 
 

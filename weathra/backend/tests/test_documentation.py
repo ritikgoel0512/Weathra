@@ -631,6 +631,17 @@ def test_every_persisted_table_is_accounted_for() -> None:
         "knowledge_chunks": "Knowledge corpus",
         "evaluation_runs": "Evaluation records",
         "evaluation_case_results": "Evaluation records",
+        "subscription_plans": "Plan and policy records",
+        "model_catalog": "Plan and policy records",
+        "model_policies": "Plan and policy records",
+        "usage_limits": "Plan and policy records",
+        "user_plans": "Plan assignment",
+        "usage_counters": "Usage counters",
+        "llm_usage_events": "LLM usage events",
+        "model_evaluations": "Model evaluations and comparisons",
+        "model_comparison_runs": "Model evaluations and comparisons",
+        "model_comparison_results": "Model evaluations and comparisons",
+        "admin_audit": "Administrative audit",
     }
     assert set(accounted) == set(Base.metadata.tables), (
         "a table was added or removed; docs/privacy-ethics.md must account for it"

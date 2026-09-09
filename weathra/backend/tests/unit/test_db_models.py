@@ -30,6 +30,20 @@ DECISION_10: dict[str, tuple[Ownership, tuple[str, ...]]] = {
     "knowledge_chunks": (Ownership.SHARED, ("id",)),
     "evaluation_runs": (Ownership.OPERATIONAL, ("id",)),
     "evaluation_case_results": (Ownership.OPERATIONAL, ("id",)),
+    # The SaaS-ready layer. Three of these are user-owned and get the same owner-restricting
+    # treatment as the five above, from migration 0006 rather than from 0002 — the classification
+    # is what decides that, which is why they are transcribed here alongside the rest.
+    "subscription_plans": (Ownership.OPERATIONAL, ("plan_code",)),
+    "model_catalog": (Ownership.OPERATIONAL, ("catalog_key",)),
+    "model_policies": (Ownership.OPERATIONAL, ("policy_id",)),
+    "usage_limits": (Ownership.OPERATIONAL, ("id",)),
+    "user_plans": (Ownership.USER, ("user_id",)),
+    "usage_counters": (Ownership.USER, ("subject", "dimension", "window_key")),
+    "llm_usage_events": (Ownership.USER, ("event_id",)),
+    "model_evaluations": (Ownership.OPERATIONAL, ("id",)),
+    "model_comparison_runs": (Ownership.OPERATIONAL, ("id",)),
+    "model_comparison_results": (Ownership.OPERATIONAL, ("id",)),
+    "admin_audit": (Ownership.OPERATIONAL, ("id",)),
 }
 
 
@@ -53,16 +67,62 @@ def test_ownership_matches_the_decision(table_name: str) -> None:
     assert ownership_of(table_name) is expected
 
 
-@pytest.mark.parametrize(
-    "table_name",
-    sorted(name for name, (ownership, _) in DECISION_10.items() if ownership is Ownership.USER),
-)
+# The column each user-owned table's Row Level Security policy compares against, and whether it may
+# be null. Six of the eight are the plain case — a non-nullable `user_id`, where a nullable one
+# would be a row that escapes every policy. The two exceptions are not laxity; each is a documented
+# decision, and spelling them out here is what stops a *third* one being added by accident.
+OWNERSHIP_COLUMN: dict[str, tuple[str, bool]] = {
+    "profiles": (USER_ID_COLUMN, False),
+    "preferences": (USER_ID_COLUMN, False),
+    "saved_locations": (USER_ID_COLUMN, False),
+    "threads": (USER_ID_COLUMN, False),
+    "agent_runs": (USER_ID_COLUMN, False),
+    "user_plans": (USER_ID_COLUMN, False),
+    # Keyed by `subject`, not `user_id`: internal traffic is accounted against a reserved
+    # non-UUID subject (design.md decision 25), which has no profile and must not acquire one.
+    # Still non-nullable — it is part of the primary key.
+    "usage_counters": ("subject", False),
+    # The one table with two ownership shapes (design.md decision 27). A call made with no
+    # principal is recorded with a null user id and never a placeholder, which `specs/llm-telemetry`
+    # requires explicitly. The nullability is safe because it is *classified* rather than loose:
+    # see the generated-column test below.
+    "llm_usage_events": (USER_ID_COLUMN, True),
+}
+
+
+def test_every_user_owned_table_is_listed_with_its_ownership_column() -> None:
+    """A new user-owned table must decide what its policy compares against, here, on purpose."""
+    user_owned = {
+        name for name, (ownership, _) in DECISION_10.items() if ownership is Ownership.USER
+    }
+    assert set(OWNERSHIP_COLUMN) == user_owned
+
+
+@pytest.mark.parametrize("table_name", sorted(OWNERSHIP_COLUMN))
 def test_every_user_owned_table_carries_the_ownership_column(table_name: str) -> None:
+    column_name, may_be_null = OWNERSHIP_COLUMN[table_name]
     table = Base.metadata.tables[table_name]
-    assert USER_ID_COLUMN in table.columns, f"{table_name} is user-owned but has no user_id"
-    assert not table.columns[USER_ID_COLUMN].nullable, (
-        f"{table_name}.user_id must not be nullable; an unowned row would escape every policy"
+    assert column_name in table.columns, f"{table_name} is user-owned but has no {column_name}"
+    assert table.columns[column_name].nullable is may_be_null, (
+        f"{table_name}.{column_name} nullability is not what the classification says. A user-owned "
+        "row with no owner escapes every policy unless something else classifies it."
     )
+
+
+def test_the_one_nullable_owner_column_is_classified_rather_than_merely_allowed() -> None:
+    """Decision 27's resolution, asserted rather than trusted.
+
+    `llm_usage_events.user_id` is nullable, which for any other user-owned table would be the bug
+    this file exists to catch. What makes it safe is that the nullability is *derived into* a
+    generated `is_internal` column, so every aggregate splits product from internal usage without
+    each query remembering the rule, and an internal event can never be counted against a plan.
+    Remove the generated column and the nullable owner really would be a hole.
+    """
+    events = Base.metadata.tables["llm_usage_events"]
+    assert events.columns["user_id"].nullable
+    is_internal = events.columns["is_internal"]
+    assert is_internal.computed is not None, "is_internal must be a generated column, not a flag"
+    assert not is_internal.nullable
 
 
 @pytest.mark.parametrize(

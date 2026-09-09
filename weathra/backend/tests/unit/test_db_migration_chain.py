@@ -22,6 +22,13 @@ EXPECTED_CHAIN = (
     "0002_row_level_security",
     "0003_request_login_role",
     "0004_shared_read_policies",
+    # The SaaS-ready layer of group 26, in the order its dependencies require: the operational
+    # tables the rest reference, the user-owned tables whose foreign keys point at them, the lab
+    # and audit tables, and only then the data, which needs every one of those to exist.
+    "0005_saas_operational_tables",
+    "0006_saas_user_owned_tables",
+    "0007_model_lab_and_audit_tables",
+    "0008_seed_model_policy_data",
 )
 
 

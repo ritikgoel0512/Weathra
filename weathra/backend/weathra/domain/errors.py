@@ -32,12 +32,16 @@ __all__ = [
     "LocationNotFound",
     "McpUnavailable",
     "MemoryUnavailable",
+    "ModelNotAllowlisted",
     "NoDataForRange",
+    "NoEligibleModel",
     "NotFound",
+    "PolicyUnavailable",
     "ProviderNotFound",
     "ProviderRateLimited",
     "ProviderTimeout",
     "ProviderUnavailable",
+    "QuotaExceeded",
     "RangeOutsideCoverage",
     "RecordNotFound",
     "SavedLocationLimitReached",
@@ -361,6 +365,66 @@ class AgentBudgetExceeded(WeathraError):
     """
 
     code: ClassVar[str] = "agent_budget_exceeded"
+
+
+# --------------------------------------------------------------------------- entitlement
+
+
+class ModelNotAllowlisted(ValidationFailed):
+    """A named model is absent from the catalog, or present and disabled.
+
+    Raised wherever a model reaches the gateway adapter by a path other than a policy walk — an
+    administrative override, a model-lab selection, a configured fallback — and the catalog does
+    not vouch for it. A validation failure because the request named something it should not have,
+    and refused *before* any network call rather than attempted and reported afterwards.
+
+    Never raised for an ordinary caller's advisory preference: ``specs/model-policy`` requires that
+    to be dropped and the entitled policy resolved, because failing the request would disclose
+    which models exist above the caller's tier.
+    """
+
+    code: ClassVar[str] = "model_not_allowlisted"
+
+
+class NoEligibleModel(WeathraError):
+    """No candidate, declared fallback, or configured model yielded an enabled catalog entry.
+
+    A configuration failure rather than a caller's, which is why it is a 503 and not a 400: the
+    caller asked for something perfectly reasonable and the deployment has nothing entitled to
+    serve it. The alternative the spec forbids is worse in both directions — substituting a model
+    outside the entitled policy would turn an outage into a free upgrade, and fabricating an answer
+    would attribute to a model something no model produced.
+    """
+
+    code: ClassVar[str] = "no_eligible_model"
+
+
+class PolicyUnavailable(WeathraError):
+    """The policy store could not be read, so no resolution could be performed.
+
+    Distinct from ``NoEligibleModel``: there may well be an eligible model, and we cannot tell.
+    The configured fallback serves the call where one is configured and enabled, and the resolution
+    is recorded as unavailable rather than as a policy — so an aggregate never reports
+    configuration as entitlement.
+    """
+
+    code: ClassVar[str] = "policy_unavailable"
+
+
+class QuotaExceeded(WeathraError):
+    """The acting principal's allowance for a bound dimension is exhausted.
+
+    Carries the bound dimension, the allowance, the consumption, and the window reset time in
+    ``details``, because "you are over your limit" without naming which limit is not actionable.
+
+    Shares its 429 with ``ProviderRateLimited`` and is deliberately a different code: one is the
+    subscription saying no and the other is the gateway saying not yet, and a client that cannot
+    tell them apart would retry the first forever. Nothing about this refusal is destructive — the
+    caller's thread, memory, preferences and saved locations are untouched, and every capability
+    that needs no model keeps serving.
+    """
+
+    code: ClassVar[str] = "quota_exceeded"
 
 
 def all_error_classes() -> list[type[WeathraError]]:
