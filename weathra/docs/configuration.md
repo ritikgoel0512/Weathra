@@ -74,6 +74,7 @@ bundle — see [`authentication.md`](authentication.md) for why the split is dra
 | `LLM_MAX_RETRIES` | `2` | behaviour | Transport retries on a retryable inference failure |
 | `LLM_JSON_MAX_ATTEMPTS` | `3` | behaviour | Attempts at a routing plan before the deterministic router takes over |
 | `LLM_RATE_LIMIT_MAX_WAIT_SECONDS` | `30.0` | behaviour | Ceiling on honouring a gateway 429's `Retry-After`; a longer stated delay stops the retry rather than waiting |
+| `MODEL_CATALOG_CACHE_TTL_SECONDS` | `60` | behaviour | How long a process serves the catalog, policy and plan snapshot before refreshing. The documented staleness window: a disable takes effect within it, not instantly. `0` reads every time |
 | `DEFAULT_WEATHER_PROVIDER` | `open-meteo` | behaviour | Provider used when a request names none |
 | `DEFAULT_GEOCODER` | `open-meteo` | behaviour | Geocoder used when a request names none |
 | `DEFAULT_UNIT_SYSTEM` | `metric` | behaviour | `metric` or `imperial`, when neither the request nor a preference says |
@@ -160,6 +161,36 @@ model proposes (see [`agents.md`](agents.md)), so what the routing path actually
 JSON-object output against a supplied schema within `LLM_JSON_MAX_ATTEMPTS` attempts. The eval
 suite settles the choice — `weathra-evaluate` against a candidate id — and this command only
 narrows the field.
+
+### Is the catalog still real?
+
+`LLM_MODEL` is the development and administrative fallback; what actually serves a request from
+group 27 onward is a row in `model_catalog`, and a row seeded from a published listing is a claim
+about a moment. Gateways withdraw models. A second command answers whether the claim still holds:
+
+```
+cd backend && python scripts/check_catalog_availability.py
+```
+
+It keeps three states apart, because conflating them is how a stale allowlist survives: the entry
+**exists** in the catalog; the gateway still **publishes** that provider-and-model pair; and the
+entry is **eligible**, meaning enabled *and* named as a candidate by some policy. Eligible and
+unpublished is the combination that matters — a policy can still resolve it and the call will fail
+— and it is the only one that exits non-zero, so a scheduled job can gate on it.
+
+It needs no credential: the gateway's model listing is public, so the check makes no inference
+call, spends nothing, and cannot leak a key it never reads. That also bounds what it proves. A
+published model can still fail at call time, which is what the infrastructure failover of
+`specs/model-policy` handles; this answers "has it been withdrawn", not "will it work".
+
+It reports and does not act. Taking a model out of resolution is an administrative write with an
+audit row and a cross-role refusal — `CatalogStore.disable`, which refuses to leave a capability
+role with no enabled model unless the request says so explicitly — and that belongs to a person
+reading this output rather than to a script running unattended. Disabling is the right response
+rather than deleting: the entry leaves resolution while its recorded usage and evaluation results
+stay attributed to it.
+
+**Last checked 2026-09-09:** all four seeded entries published, nothing stranded.
 
 ## Where the values live
 

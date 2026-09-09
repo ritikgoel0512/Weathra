@@ -275,3 +275,213 @@ def test_the_detector_recognises_real_model_identifiers(name: str) -> None:
 def test_the_detector_does_not_flag_ordinary_strings(text: str) -> None:
     """A detector that flagged "Europe/Berlin" would be turned off within a week."""
     assert not _model_literals(ast.parse(f"VALUE = {text!r}")), f"{text} was flagged"
+
+
+# ============================================ 27.4 the vendor-identifier confinement rule
+
+
+# Where a gateway model identifier is *allowed* to appear, and nowhere else (design.md decision 23,
+# `specs/model-catalog`'s "vendor identifier confined"). Each is a place the string is genuinely the
+# subject rather than a decision:
+#
+#   db/migrations/  the catalog seed. The catalog is data, and data is where the vendor string lives.
+#   config.py       the LLM_MODEL default, already pinned to one field by the tests above.
+#   .env.example    the same default, documented for a deployment.
+#   the adapter     the outbound request body, which is the one place a model id is *sent*.
+#
+# Anywhere else it would be a decision made in code about a specific vendor's model, which is the
+# coupling the catalog key exists to prevent.
+CONFINED_TO = (
+    PACKAGE_ROOT / "db" / "migrations",
+    PACKAGE_ROOT / "config.py",
+    BACKEND_ROOT / ".env.example",
+    PACKAGE_ROOT / "agents" / "llm" / "openrouter.py",
+)
+
+PROJECT_ROOT = BACKEND_ROOT.parent
+FRONTEND_ROOT = PROJECT_ROOT / "frontend"
+
+# Frontend directories that are ours. `node_modules`, build output and Playwright artefacts are
+# full of vendor names and none of it is Weathra's source.
+FRONTEND_SOURCE_DIRECTORIES = ("app", "components", "hooks", "lib")
+
+
+# Text files outside the backend package that would carry a model id into a decision: the seeded
+# evaluation dataset (a case must not pin a vendor's model) and the frontend's own source.
+def _confinement_candidates() -> list[Path]:
+    found: list[Path] = []
+    for path in PACKAGE_ROOT.rglob("*"):
+        if not path.is_file() or "__pycache__" in path.parts:
+            continue
+        if path.suffix not in {".py", ".json", ".md", ".yaml", ".yml", ".txt"}:
+            continue
+        if any(path == allowed or allowed in path.parents for allowed in CONFINED_TO):
+            continue
+        found.append(path)
+    for directory in FRONTEND_SOURCE_DIRECTORIES:
+        for path in (FRONTEND_ROOT / directory).rglob("*"):
+            if not path.is_file() or path.suffix not in {".ts", ".tsx", ".json", ".css"}:
+                continue
+            if _is_a_test_file(path):
+                continue
+            found.append(path)
+    return sorted(found)
+
+
+def _is_a_test_file(path: Path) -> bool:
+    """Whether *path* is a test rather than shipped source.
+
+    Excluded from the confinement scan, and the distinction is real rather than convenient. The
+    rule forbids *selecting behaviour* by a vendor model name. A component test that passes
+    ``model="somevendor/some-model"`` in and asserts the screen shows it back is doing the
+    opposite: it proves the UI renders whatever the backend reported and decides nothing itself,
+    which is exactly what `specs/web-ui` requires of the provenance display. Forbidding the string
+    there would mean the only way to test pass-through is to not test it.
+
+    Shipped frontend source is still scanned, and `test_no_shipped_frontend_source_is_excluded`
+    keeps this exclusion from quietly widening.
+    """
+    return any(part in {"tests", "e2e", "__tests__"} for part in path.parts) or any(
+        marker in path.name for marker in (".test.", ".spec.")
+    )
+
+
+def _model_identifiers_in_text(text: str) -> list[tuple[int, str]]:
+    """Lines carrying something shaped like a gateway model identifier.
+
+    Text rather than an AST walk, because this rule is about more than Python literals: a model id
+    in a JSON evaluation case, a Markdown table, or a TypeScript user-facing string is the same
+    coupling and none of them parse as Python.
+    """
+    hits: list[tuple[int, str]] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        for pattern in MODEL_PATTERNS:
+            if pattern.search(line):
+                hits.append((number, line.strip()[:120]))
+                break
+    return hits
+
+
+def test_the_confinement_scan_covers_something() -> None:
+    """A scan over an empty set passes vacuously, which is the failure mode of a scan."""
+    candidates = _confinement_candidates()
+    assert len(candidates) > 60, f"only {len(candidates)} files in the confinement scan"
+    assert any(path.suffix == ".tsx" for path in candidates), "no frontend source was scanned"
+    assert any(path.suffix == ".json" for path in candidates), "no evaluation data was scanned"
+    assert any(
+        path.parts[-2:] == ("routers", "agent.py") or path.name == "supervisor.py"
+        for path in candidates
+    ), "the agent and route source the rule is chiefly about was not scanned"
+
+
+def test_no_shipped_frontend_source_is_excluded_as_a_test() -> None:
+    """The exclusion above must cover tests and nothing else.
+
+    A widened exclusion is how a confinement rule stops confining: exclude `components/` because
+    one file was noisy, and the rule still passes while protecting nothing.
+    """
+    scanned = set(_confinement_candidates())
+    for directory in FRONTEND_SOURCE_DIRECTORIES:
+        for path in (FRONTEND_ROOT / directory).rglob("*"):
+            if not path.is_file() or path.suffix not in {".ts", ".tsx"}:
+                continue
+            if _is_a_test_file(path):
+                assert ".test." in path.name or ".spec." in path.name or "tests" in path.parts, (
+                    f"{path} was excluded but does not look like a test"
+                )
+                continue
+            assert path in scanned, f"shipped frontend source {path} escaped the scan"
+
+
+def test_a_gateway_model_identifier_appears_only_where_it_is_confined() -> None:
+    """Task 27.4. The identifier may live in catalog data, configuration, and the outbound request.
+
+    Not in a policy record, a plan mapping, a quota rule, an agent, a node, a route, an evaluation
+    case, or a user-facing string — because each of those would be behaviour selected by a vendor's
+    model name, and the whole point of the catalog key is that behaviour never is.
+    """
+    offenders: dict[str, list[tuple[int, str]]] = {}
+    for path in _confinement_candidates():
+        try:
+            content = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:  # pragma: no cover - binary assets are not source
+            continue
+        if hits := _model_identifiers_in_text(content):
+            offenders[str(path.relative_to(PROJECT_ROOT))] = hits
+
+    assert not offenders, (
+        "a gateway model identifier appears outside the places it is confined to "
+        f"({[str(p.relative_to(PROJECT_ROOT)) for p in CONFINED_TO]}): {offenders}"
+    )
+
+
+def test_the_seeded_policy_and_plan_data_reference_catalog_keys_and_not_vendor_names() -> None:
+    """The data half of the rule, read out of the seed migration itself.
+
+    A policy's candidates and a plan's mapping are the two places where naming a vendor model would
+    be most tempting and least visible — they are rows, so no code review would show a diff of them
+    once seeded. The seed is the one place they are written down, so it is where this is checkable.
+    """
+    import importlib.util
+
+    seed = PACKAGE_ROOT / "db" / "migrations" / "versions" / "0008_seed_model_policy_data.py"
+    spec = importlib.util.spec_from_file_location("weathra_seed_confinement", seed)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    catalog_keys = {entry[0] for entry in module.CATALOG}
+    for policy_id, _display, candidates, *_rest in module.POLICIES:
+        for candidate in candidates:
+            assert candidate in catalog_keys, f"{policy_id} names {candidate!r}, not a catalog key"
+            assert not _model_identifiers_in_text(candidate), (
+                f"{policy_id} names a vendor model identifier as a candidate: {candidate!r}"
+            )
+    for plan_code, _name, _rank, mapping in module.PLANS:
+        for role, policy in mapping.items():
+            assert not _model_identifiers_in_text(policy), (
+                f"the {plan_code} plan maps {role} to something vendor-shaped: {policy!r}"
+            )
+
+
+# ---------------------------------------------------------------- the confinement detector itself
+
+APPLICATION_LOGIC = '''
+async def choose(client, question):
+    """A node deciding for itself, which is the whole thing being prevented."""
+    if "forecast" in question:
+        return await client.complete(model="openai/gpt-5.1", messages=[])
+    return await client.complete(model="anthropic/claude-haiku-4.5", messages=[])
+'''
+
+POLICY_RULE = """
+CANDIDATES = {"high_reasoning": ["nvidia/nemotron-3-ultra-550b-a55b", "openai/gpt-oss-120b"]}
+"""
+
+UI_STRING = """
+export const ModelBadge = () => <span>Answered by GPT-5.1 Turbo</span>;
+"""
+
+EVALUATION_CASE = """
+{"case_id": "forecast-berlin", "pinned_model": "deepseek/deepseek-v4-flash-latest"}
+"""
+
+
+@pytest.mark.parametrize(
+    ("label", "source"),
+    [
+        ("application logic", APPLICATION_LOGIC),
+        ("a policy rule", POLICY_RULE),
+        ("a UI string", UI_STRING),
+        ("an evaluation case", EVALUATION_CASE),
+    ],
+)
+def test_the_confinement_detector_catches_a_model_name_being_introduced(
+    label: str, source: str
+) -> None:
+    """Task 27.4's own verification: the test fails when a model name reaches somewhere it may not.
+
+    Four shapes, because the rule names four kinds of place and a detector that only understood
+    Python would silently permit the other three.
+    """
+    assert _model_identifiers_in_text(source), f"the detector missed a model name in {label}"

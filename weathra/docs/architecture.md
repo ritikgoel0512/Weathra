@@ -62,6 +62,9 @@ backend/weathra/
   memory/                 checkpointer.py threads.py preferences.py locations.py retention.py
                           availability.py degradation.py
   auth/                   tokens.py jwks.py deps.py profiles.py repository.py rls.py
+  entitlements/           catalog.py policies.py plans.py snapshot.py records.py audit.py
+                          the catalog, policy and plan stores — data access and administration,
+                          deliberately not resolution
   mcp/                    server.py client.py schemas.py errors.py — its own boundary
   agents/
     llm/                  base.py (Protocol) openrouter.py fake.py registry.py
@@ -87,7 +90,7 @@ config, domain
       ↑
 providers, geocoding, analytics
       ↑
-weather, rag, memory, auth
+weather, rag, memory, auth, entitlements
       ↑
      mcp
       ↑
@@ -549,7 +552,7 @@ Task 22.10's live execution remains outstanding).
 | Requirement | Tasks | Implementation | Tests | Status |
 |---|---|---|---|---|
 | Model policy layer between orchestration and the language model client | 28.1, 28.6 | — not implemented | — none | OPEN |
-| Subscription-aware named policies | 26.6, 27.2 | — not implemented | — none | OPEN |
+| Subscription-aware named policies | 26.6, 27.2, 28.1 | entitlements/policies.py, entitlements/plans.py, db/migrations/versions/0008_seed_model_policy_data.py | integration/test_entitlement_stores.py, integration/test_saas_seed.py | OPEN |
 | Entitlement is enforced server-side and never trusted from the client | 28.2 | — not implemented | — none | OPEN |
 | Administrative override is bounded by the allowlist | 28.3 | — not implemented | — none | OPEN |
 | Resolution is deterministic, ordered, and degrades honestly | 28.1, 28.5 | — not implemented | — none | OPEN |
@@ -564,9 +567,9 @@ Task 22.10's live execution remains outstanding).
 | Requirement | Tasks | Implementation | Tests | Status |
 |---|---|---|---|---|
 | Model catalog as persisted data | 26.2, 26.6 | db/models.py, db/migrations/versions/0005_saas_operational_tables.py, db/migrations/versions/0008_seed_model_policy_data.py | integration/test_saas_schema.py, integration/test_saas_seed.py | IMPLEMENTED |
-| Model availability changes without a code change | 27.1 | — not implemented | — none | OPEN |
+| Model availability changes without a code change | 27.1, 27.3 | entitlements/catalog.py, entitlements/snapshot.py | integration/test_entitlement_stores.py, integration/test_entitlement_snapshot.py | IMPLEMENTED |
 | Enable and disable status is honoured at resolution time | 27.1, 28.1 | — not implemented | — none | OPEN |
-| Business logic is decoupled from vendor model identifiers | 27.4 | — not implemented | — none | OPEN |
+| Business logic is decoupled from vendor model identifiers | 27.4 | entitlements/records.py, db/migrations/versions/0008_seed_model_policy_data.py | unit/test_no_vendor_coupling.py | IMPLEMENTED |
 | The catalog is the allowlist | 28.3 | — not implemented | — none | OPEN |
 | Catalog administration is privileged and validated | 27.1, 31.3 | — not implemented | — none | OPEN |
 | Catalog state is observable | 31.5 | — not implemented | — none | OPEN |
