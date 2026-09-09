@@ -58,7 +58,20 @@ export interface AgentEvent {
 /** How a run ended. Exactly one of these, once `status` is `"done"`. */
 export type AgentTerminal =
   | { readonly kind: "final"; readonly answer: AnswerEnvelope; readonly evidenceId: string | null }
-  | { readonly kind: "error"; readonly code: string; readonly message: string }
+  | {
+      readonly kind: "error";
+      readonly code: string;
+      readonly message: string;
+      /**
+       * The field-level specifics behind the refusal, or null when it carried none.
+       *
+       * Task 33.5 needs them: an exhausted allowance is refused *before* the stream opens — a 429
+       * rather than a 200 whose first event apologises (`weathra/api/routers/agent.py`) — and the
+       * limit and reset time it names live here. Without this the Analyst would know a run was
+       * refused and not what bound it, and would have to show a plan limit as a generic failure.
+       */
+      readonly details: Record<string, unknown> | null;
+    }
   | { readonly kind: "authentication"; readonly code: string; readonly message: string }
   | { readonly kind: "interrupted" }
   | { readonly kind: "unreachable"; readonly message: string }
@@ -174,9 +187,14 @@ function terminalFrom(event: AgentEvent): AgentTerminal {
   const message =
     typeof event.data.message === "string" ? event.data.message : "The run did not complete.";
 
+  const details =
+    typeof event.data.details === "object" && event.data.details !== null
+      ? (event.data.details as Record<string, unknown>)
+      : null;
+
   return isAuthenticationCode(code)
     ? { kind: "authentication", code, message }
-    : { kind: "error", code, message };
+    : { kind: "error", code, message, details };
 }
 
 export function useAgentStream(options: UseAgentStreamOptions = {}): UseAgentStream {
@@ -266,10 +284,20 @@ export function useAgentStream(options: UseAgentStreamOptions = {}): UseAgentStr
         } else if (failure instanceof DOMException && failure.name === "AbortError") {
           terminal = { kind: "cancelled" };
         } else if (failure instanceof Error && "code" in failure) {
-          const described = failure as Error & { code: string };
+          const described = failure as Error & {
+            code: string;
+            details?: Record<string, unknown> | null;
+          };
           terminal = isAuthenticationCode(described.code)
             ? { kind: "authentication", code: described.code, message: described.message }
-            : { kind: "error", code: described.code, message: described.message };
+            : {
+                kind: "error",
+                code: described.code,
+                message: described.message,
+                // The refusal's own specifics, kept rather than dropped: this is the branch a
+                // pre-stream 429 arrives through, and the quota state is written from them.
+                details: described.details ?? null,
+              };
         } else {
           terminal = {
             kind: "unreachable",

@@ -188,8 +188,13 @@ function streaming(chunks: string[], { close = true }: { close?: boolean } = {})
   return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
 }
 
-function refusal(status: number, code: string, message: string): Response {
-  return new Response(JSON.stringify({ error: { code, message, details: null, request_id: "req-1" } }), {
+function refusal(
+  status: number,
+  code: string,
+  message: string,
+  details: Record<string, unknown> | null = null,
+): Response {
+  return new Response(JSON.stringify({ error: { code, message, details, request_id: "req-1" } }), {
     status,
     headers: { "content-type": "application/json" },
   });
@@ -787,5 +792,368 @@ describe("an ambiguous place named in a question", () => {
     expect(screen.queryByText("17.9 °C")).toBeNull();
     expect(screen.queryByRole("region", { name: "Forecast figures" })).toBeNull();
     expect(screen.queryByRole("region", { name: "Computed figures" })).toBeNull();
+  });
+});
+
+/* ------------------------------------------------ the exhausted allowance (33.5) */
+
+/**
+ * The refusal `weathra/entitlements/quotas.py` sends, and the route sends it *before* the stream
+ * opens: `specs/usage-limits` requires an exhausted caller's stream to be refused rather than
+ * opened and terminated mid-answer, so this arrives as a 429 on the POST rather than as an error
+ * event.
+ */
+const QUOTA_DETAILS = {
+  dimension: "requests_per_day",
+  window: "day",
+  allowance: 20,
+  consumed: 20,
+  resets_at: "2026-09-10T00:00:00Z",
+  retry_after_seconds: 16_200,
+};
+
+const QUOTA_MESSAGE =
+  "You have used today's allowance of agent questions. It resets at the start of the next day. " +
+  "Forecasts, history, comparisons and analysis are unaffected.";
+
+function quotaRefusal(): Response {
+  return refusal(429, "quota_exceeded", QUOTA_MESSAGE, QUOTA_DETAILS);
+}
+
+describe("an exhausted allowance", () => {
+  it("is its own state, naming the limit and when it resets", async () => {
+    fetchMock = vi.fn(async () => quotaRefusal()) as unknown as Mock;
+    renderAnalyst();
+    await ask("What should I expect tomorrow?");
+
+    const state = await waitFor(() => {
+      const found = document.querySelector('[data-quota="true"]');
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+
+    expect(within(state).getByText("Allowance used")).toBeInTheDocument();
+    expect(within(state).getByText(/used your plan.s allowance/i)).toBeInTheDocument();
+    // The backend's own sentence, which names the window and what stays available.
+    expect(within(state).getByText(QUOTA_MESSAGE)).toBeInTheDocument();
+    // The limit, from the refusal's figures.
+    expect(within(state).getByText("20 of 20 questions today")).toBeInTheDocument();
+    // The reset, from the refusal's instant.
+    expect(within(state).getByText("2026-09-10 00:00 UTC")).toBeInTheDocument();
+  });
+
+  it("is not a weather error and not a failed run", async () => {
+    fetchMock = vi.fn(async () => quotaRefusal()) as unknown as Mock;
+    renderAnalyst();
+    await ask("What should I expect tomorrow?");
+
+    await waitFor(() => expect(document.querySelector('[data-quota="true"]')).not.toBeNull());
+
+    // The generic error state's own title, which a 429 must never reach.
+    expect(screen.queryByText("That question did not complete")).toBeNull();
+    expect(screen.queryByText("Weathra could not be reached")).toBeNull();
+    expect(screen.queryByText("The run did not complete")).toBeNull();
+    // Structurally distinct too: the error state is an alert, the allowance is not a failure.
+    expect(screen.queryByRole("alert")).toBeNull();
+    // And it does not claim the provider failed. The state says the opposite in as many words —
+    // "nothing went wrong with Weathra or with the inference provider" — so what is asserted here
+    // is the absence of a failure claim, not the absence of the word.
+    const state = document.querySelector('[data-quota="true"]') as HTMLElement;
+    expect(state.textContent).not.toMatch(/provider (failed|is unavailable|error)/i);
+    expect(state.textContent).not.toMatch(/unavailable/i);
+    expect(screen.queryByText("The AI Weather Analyst is unavailable")).toBeNull();
+  });
+
+  it("is not an expired session: the person stays signed in", async () => {
+    fetchMock = vi.fn(async () => quotaRefusal()) as unknown as Mock;
+    renderAnalyst();
+    await ask("What should I expect tomorrow?");
+
+    await waitFor(() => expect(document.querySelector('[data-quota="true"]')).not.toBeNull());
+
+    // The expired-session state replaces the screen; a quota refusal must not.
+    expect(screen.queryByText(/session/i)).toBeNull();
+    expect(screen.getByLabelText("Your weather question")).toBeEnabled();
+  });
+
+  it("names no configuration and offers no retry that would be refused again", async () => {
+    fetchMock = vi.fn(async () => quotaRefusal()) as unknown as Mock;
+    renderAnalyst();
+    await ask("What should I expect tomorrow?");
+
+    const state = await waitFor(() => {
+      const found = document.querySelector('[data-quota="true"]');
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+
+    // No environment variable, no secret, no internal identifier.
+    expect(state.textContent).not.toMatch(/[A-Z][A-Z0-9]*(_[A-Z0-9]+)+/);
+    // A day's allowance does not lift by pressing a button, so none is offered.
+    expect(within(state).queryByRole("button")).toBeNull();
+  });
+
+  it("offers to ask again only where waiting can change the answer", async () => {
+    fetchMock = vi.fn(async () =>
+      refusal(429, "quota_exceeded", "You already have as many questions in flight as your plan allows.", {
+        dimension: "concurrent_runs",
+        window: "concurrent",
+        allowance: 2,
+        consumed: 2,
+        resets_at: null,
+      }),
+    ) as unknown as Mock;
+    renderAnalyst();
+    await ask("What should I expect tomorrow?");
+
+    const state = await waitFor(() => {
+      const found = document.querySelector('[data-quota="true"]');
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+
+    expect(within(state).getByRole("button", { name: "Ask again" })).toBeInTheDocument();
+    expect(within(state).getByText("As soon as one of your questions finishes.")).toBeInTheDocument();
+  });
+
+  it("leaves the thread and the answer already on screen intact", async () => {
+    // One answered question, then a refusal. The spec requires the person's thread to survive.
+    fetchMock = vi
+      .fn()
+      .mockImplementationOnce(async () => streaming(runFrames()))
+      .mockImplementationOnce(async () => quotaRefusal()) as unknown as Mock;
+
+    renderAnalyst();
+    await ask("What should I expect over the next few days in Berlin?");
+    await screen.findByText(ANSWER.answer_prose);
+
+    await ask("And the week after?");
+    await waitFor(() => expect(document.querySelector('[data-quota="true"]')).not.toBeNull());
+
+    // The earlier answer is still there, and so is its evidence link.
+    expect(screen.getByText(ANSWER.answer_prose)).toBeInTheDocument();
+    // The thread the backend opened was still sent with the refused question, so the conversation
+    // was not discarded — the refusal ends one request, not the thread.
+    expect(askedBodies()[1]?.thread_id).toBe("thread-42");
+  });
+
+  it("still distinguishes a gateway rate limit from a plan limit", async () => {
+    // Same 429. Different code, different meaning, different state.
+    fetchMock = vi.fn(async () =>
+      refusal(429, "provider_rate_limited", "The inference gateway is rate limiting requests."),
+    ) as unknown as Mock;
+    renderAnalyst();
+    await ask("What should I expect tomorrow?");
+
+    await screen.findByText("That question did not complete");
+    expect(document.querySelector('[data-quota="true"]')).toBeNull();
+  });
+});
+
+/* --------------------------------------------- what actually served it (33.6) */
+
+/** A run whose policy layer reported everything it can report. */
+const SERVED_ATTEMPTS = [
+  {
+    stage: "routing",
+    status: "served",
+    attempt_number: 1,
+    provider: "openrouter",
+    selected_model: "a-routing-model",
+    served_model: "a-routing-model",
+    catalog_key: "a-routing-model",
+    policy_id: "free-routing",
+    plan: "free",
+    resolution_reason: "First enabled candidate of the plan's routing policy.",
+    latency_ms: 210,
+  },
+  {
+    stage: "synthesis",
+    status: "served",
+    attempt_number: 1,
+    provider: "openrouter",
+    selected_model: "a-synthesis-model",
+    served_model: "a-synthesis-model",
+    catalog_key: "a-synthesis-model",
+    policy_id: "free-synthesis",
+    plan: "free",
+    resolution_reason: "First enabled candidate of the plan's synthesis policy.",
+    latency_ms: 903,
+  },
+];
+
+function answerServedBy(attempts: unknown[], envelope: Record<string, unknown> = {}) {
+  return {
+    ...ANSWER,
+    ...envelope,
+    evidence: { ...EVIDENCE, inference_attempts: attempts },
+  };
+}
+
+describe("what actually served the answer", () => {
+  it("shows the provider, model and policy the backend reported", async () => {
+    fetchMock = vi.fn(async () =>
+      streaming(runFrames(answerServedBy(SERVED_ATTEMPTS))),
+    ) as unknown as Mock;
+    renderAnalyst();
+    await ask("What should I expect tomorrow?");
+
+    const panel = await waitFor(() => {
+      const found = document.querySelector('[data-interpretation="true"]');
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+
+    // The synthesis attempt's values — the call that wrote the prose being read.
+    expect(within(panel).getByText("Model: openrouter · a-synthesis-model")).toBeInTheDocument();
+    expect(within(panel).getByText("Policy: free-synthesis")).toBeInTheDocument();
+    expect(
+      within(panel).getByText("Resolved: First enabled candidate of the plan's synthesis policy."),
+    ).toBeInTheDocument();
+  });
+
+  it("renders whatever the response says, rather than a value written into the screen", async () => {
+    // The same run with different reported values renders differently. Nothing here is a constant:
+    // a hardcoded model name would pass the assertion above and fail this one.
+    const relabelled = SERVED_ATTEMPTS.map((attempt) => ({
+      ...attempt,
+      provider: "another-gateway",
+      selected_model: "another-model",
+      served_model: "another-model",
+      policy_id: "premium-synthesis",
+    }));
+
+    fetchMock = vi.fn(async () => streaming(runFrames(answerServedBy(relabelled)))) as unknown as Mock;
+    renderAnalyst();
+    await ask("What should I expect tomorrow?");
+
+    const panel = await waitFor(() => {
+      const found = document.querySelector('[data-interpretation="true"]');
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+
+    expect(within(panel).getByText("Model: another-gateway · another-model")).toBeInTheDocument();
+    expect(within(panel).getByText("Policy: premium-synthesis")).toBeInTheDocument();
+    // Not the configured pair the envelope also carries.
+    expect(within(panel).queryByText(/a-configured-model/)).toBeNull();
+  });
+
+  it("prefers what the record says over what was configured", async () => {
+    // `llm_provider` and `llm_model` name the *configured* client and are not evidence that it
+    // answered. When the record holds an attempt, the attempt wins.
+    fetchMock = vi.fn(async () =>
+      streaming(
+        runFrames(
+          answerServedBy(SERVED_ATTEMPTS, {
+            llm_provider: "the-configured-gateway",
+            llm_model: "the-configured-model",
+          }),
+        ),
+      ),
+    ) as unknown as Mock;
+    renderAnalyst();
+    await ask("What should I expect tomorrow?");
+
+    const panel = await waitFor(() => {
+      const found = document.querySelector('[data-interpretation="true"]');
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+
+    expect(within(panel).getByText("Model: openrouter · a-synthesis-model")).toBeInTheDocument();
+    expect(within(panel).queryByText(/the-configured-model/)).toBeNull();
+    expect(panel.querySelector('[data-served="true"]')).not.toBeNull();
+  });
+
+  it("says a substituted model was substituted", async () => {
+    const substituted = [
+      { ...SERVED_ATTEMPTS[1], selected_model: "asked-for-this", served_model: "got-that-instead" },
+    ];
+
+    fetchMock = vi.fn(async () => streaming(runFrames(answerServedBy(substituted)))) as unknown as Mock;
+    renderAnalyst();
+    await ask("What should I expect tomorrow?");
+
+    const panel = await waitFor(() => {
+      const found = document.querySelector('[data-interpretation="true"]');
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+
+    expect(within(panel).getByText("Model: openrouter · got-that-instead")).toBeInTheDocument();
+    expect(
+      within(panel).getByText("Requested: asked-for-this, substituted by the gateway"),
+    ).toBeInTheDocument();
+  });
+
+  it("labels the configured pair as configured when no attempt served", async () => {
+    fetchMock = vi.fn(async () =>
+      streaming(runFrames(answerServedBy([{ ...SERVED_ATTEMPTS[1], status: "timeout", served_model: null }]))),
+    ) as unknown as Mock;
+    renderAnalyst();
+    await ask("What should I expect tomorrow?");
+
+    const panel = await waitFor(() => {
+      const found = document.querySelector('[data-interpretation="true"]');
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+
+    expect(
+      within(panel).getByText(/Model: openrouter · a-configured-model \(configured/),
+    ).toBeInTheDocument();
+    expect(within(panel).queryByText(/^Policy:/)).toBeNull();
+  });
+
+  it("reports no policy where the backend reported none", async () => {
+    // The policy fields are nullable on the backend on purpose. A run from before the policy layer
+    // filled them has no policy, and the screen must not derive one from the plan or the model.
+    const unpolicied = [
+      { ...SERVED_ATTEMPTS[1], policy_id: null, catalog_key: null, plan: null, resolution_reason: null },
+    ];
+
+    fetchMock = vi.fn(async () => streaming(runFrames(answerServedBy(unpolicied)))) as unknown as Mock;
+    renderAnalyst();
+    await ask("What should I expect tomorrow?");
+
+    const panel = await waitFor(() => {
+      const found = document.querySelector('[data-interpretation="true"]');
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+
+    expect(within(panel).getByText("Model: openrouter · a-synthesis-model")).toBeInTheDocument();
+    expect(within(panel).queryByText(/^Policy:/)).toBeNull();
+    expect(within(panel).queryByText(/^Resolved:/)).toBeNull();
+    expect(panel.querySelector("[data-policy]")).toBeNull();
+  });
+
+  it("never asks for a model, a plan, a policy or an entitlement", async () => {
+    /*
+     * "The UI never decides which model serves a request" — and the strongest form of that is that
+     * it has nothing to decide it *with*. There is no premium control on this screen, hidden or
+     * otherwise, because there is no client-held plan or model value anywhere in the request: the
+     * body carries the question, the units and the thread, and `AskRequest` on the backend forbids
+     * extra fields, so a client that invented one would be refused rather than obeyed.
+     *
+     * This is what "a hidden control is not the gate" reduces to while no such control exists. When
+     * one is added, this assertion is the one that fails if it is wired to a client-held plan.
+     */
+    fetchMock = vi.fn(async () => streaming(runFrames(answerServedBy(SERVED_ATTEMPTS)))) as unknown as Mock;
+    renderAnalyst();
+    await ask("What should I expect tomorrow?");
+    await screen.findByText(ANSWER.answer_prose);
+
+    const permitted = ["create_thread", "question", "thread_id", "units"];
+    expect(askedBodies().length).toBeGreaterThan(0);
+    for (const body of askedBodies()) {
+      for (const field of Object.keys(body)) {
+        expect(permitted, `the request carried ${field}`).toContain(field);
+      }
+      for (const forbidden of ["model", "plan", "policy", "policy_id", "catalog_key", "premium", "tier"]) {
+        expect(body, forbidden).not.toHaveProperty(forbidden);
+      }
+    }
   });
 });

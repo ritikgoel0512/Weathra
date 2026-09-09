@@ -987,6 +987,81 @@ describe("the record's own provenance line", () => {
     const synthesis = screen.getByRole("region", { name: "Final grounded synthesis" });
     expect(synthesis.textContent).not.toMatch(/Model:/);
   });
+
+  it("names the model, gateway and policy the stored attempt actually recorded", async () => {
+    /*
+     * Task 33.6. An evidence record is read to check claims, and "a language model wrote this
+     * sentence" is one of them — which is why the record carries the attempts rather than only the
+     * configured pair. `llm_provider` and `llm_model` name a client that was wired up; the attempt
+     * names what ran, and the policy that resolved it.
+     */
+    fetchMock = backend(200, {
+      ...RECORD,
+      evidence: {
+        ...STORED_EVIDENCE,
+        inference_attempts: [
+          {
+            stage: "routing",
+            status: "served",
+            attempt_number: 1,
+            provider: "openrouter",
+            selected_model: "a-routing-model",
+            served_model: "a-routing-model",
+            policy_id: "free-routing",
+            plan: "free",
+            resolution_reason: "First enabled candidate of the plan's routing policy.",
+          },
+          {
+            stage: "synthesis",
+            status: "served",
+            attempt_number: 2,
+            provider: "openrouter",
+            selected_model: "asked-for-this",
+            served_model: "got-that-instead",
+            catalog_key: "asked-for-this",
+            policy_id: "free-synthesis",
+            plan: "free",
+            resolution_reason: "The first candidate was rate limited.",
+          },
+        ],
+      },
+    });
+    renderScreen();
+    await screen.findByRole("region", { name: "Execution flow" });
+
+    const synthesis = screen.getByRole("region", { name: "Final grounded synthesis" });
+    // The synthesis attempt, not the routing one, and the model the gateway reported serving.
+    expect(within(synthesis).getByText("Model: openrouter · got-that-instead")).toBeInTheDocument();
+    expect(
+      within(synthesis).getByText("Requested: asked-for-this, substituted by the gateway"),
+    ).toBeInTheDocument();
+    expect(within(synthesis).getByText("Policy: free-synthesis")).toBeInTheDocument();
+    expect(
+      within(synthesis).getByText("Resolved: The first candidate was rate limited."),
+    ).toBeInTheDocument();
+    // Not the configured pair the record also holds.
+    expect(within(synthesis).queryByText(/a-configured-model/)).toBeNull();
+  });
+
+  it("says the pair is configured when the record holds no served attempt", async () => {
+    fetchMock = backend(200, {
+      ...RECORD,
+      evidence: {
+        ...STORED_EVIDENCE,
+        inference_attempts: [
+          { stage: "synthesis", status: "timeout", provider: "openrouter", selected_model: "a-model" },
+        ],
+      },
+    });
+    renderScreen();
+    await screen.findByRole("region", { name: "Execution flow" });
+
+    const synthesis = screen.getByRole("region", { name: "Final grounded synthesis" });
+    expect(
+      within(synthesis).getByText(/Model: openrouter · a-configured-model \(configured/),
+    ).toBeInTheDocument();
+    expect(within(synthesis).queryByText(/^Policy:/)).toBeNull();
+  });
 });
 
 describe("a partial run", () => {

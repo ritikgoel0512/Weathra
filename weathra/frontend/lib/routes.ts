@@ -122,6 +122,37 @@ export const POST_MVP_SCREENS: readonly Screen[] = [
   { path: "/travel", title: "Travel Intelligence" },
 ];
 
+/**
+ * Admin Model & AI Usage, which `specs/web-ui` names among the post-MVP screens.
+ *
+ * Under `/admin/` rather than beside the product screens, because the path is the one part of the
+ * destination a person sees before anything has decided whether they may see it. Nothing about the
+ * path grants anything: the route is protected like every other, and the administrative role is
+ * held server-side (`docs/authentication.md`) — the segment names the surface, it does not gate it.
+ */
+export const ADMIN_MODEL_USAGE_PATH = "/admin/model-usage";
+
+/** Plan & Usage — the signed-in person's own plan and consumption, and nobody else's. */
+export const PLAN_USAGE_PATH = "/plan";
+
+/**
+ * Routing structure that exists without a navigation entry.
+ *
+ * Two of the post-MVP screens of `specs/web-ui` are deliberately *not* in the sidebar while they
+ * are unbuilt, which is what `docs/design/roadmap.md` records under "Not in the navigation": one
+ * is administrative and would advertise a surface most people may not open, and the other would
+ * offer a plan view that cannot yet be shown. `POST_MVP_SCREENS` cannot hold them, because the
+ * navigation model is asserted to cover that list exactly — so they are a list of their own, and
+ * the difference between the two lists is *listed* versus *reachable*, not built versus unbuilt.
+ *
+ * Both are protected by the same default as everything else: they are absent from the public
+ * allow-list above, so `isProtectedPath` already covers them and acquires no exception.
+ */
+export const UNLISTED_SCREENS: readonly Screen[] = [
+  { path: ADMIN_MODEL_USAGE_PATH, title: "Admin Model & AI Usage" },
+  { path: PLAN_USAGE_PATH, title: "Plan & Usage" },
+];
+
 /** Where an authenticated person lands when they have asked for no particular screen. */
 export const DEFAULT_PROTECTED_PATH = "/";
 

@@ -31,6 +31,7 @@ import type {
   EvidenceResponse,
   Finding,
   GroundingReport,
+  InferenceAttempt,
   KnowledgeCitation,
   ResolvedContext,
   StatisticResult,
@@ -264,6 +265,14 @@ export interface RunRecord {
   readonly partialReason: string | null;
   readonly llmProvider: string | null;
   readonly llmModel: string | null;
+  /**
+   * Every language model call attempt the run recorded, in the order it recorded them.
+   *
+   * The *configured* pair above says which client was wired up; this says what actually ran, with
+   * the policy that resolved it (task 33.6). Empty on a run that needed no inference, and empty on
+   * a stored record from before the attempts were recorded — which is why the pair above stays.
+   */
+  readonly inferenceAttempts: readonly InferenceAttempt[];
   /** The weather provider the row recorded for the run. */
   readonly weatherProvider: string | null;
   /** The model's prose, or null when the grounding guard withheld it. */
@@ -320,6 +329,9 @@ export function runRecordFrom(response: EvidenceResponse): RunRecord | null {
     partialReason: textOf(record.partial_reason),
     llmProvider: textOf(record.llm_provider) ?? textOf(response.llm_provider),
     llmModel: textOf(record.llm_model) ?? textOf(response.llm_model),
+    inferenceAttempts: objectsOf(record.inference_attempts).filter(
+      (attempt) => textOf(attempt.stage) !== null && textOf(attempt.status) !== null,
+    ) as unknown as InferenceAttempt[],
     weatherProvider: textOf(response.weather_provider),
     answerProse: textOf(response.answer_prose),
     answer: storedAnswerOf(response.envelope),

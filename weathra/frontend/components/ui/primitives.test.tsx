@@ -19,7 +19,7 @@ import { Input } from "./input";
 import { Metric } from "./metric";
 import { Select } from "./select";
 import { Skeleton } from "./skeleton";
-import { EmptyState, ErrorState, LoadingState } from "./states";
+import { EmptyState, ErrorState, LoadingState, QuotaState } from "./states";
 import { Card, CardBody, CardFooter, CardHeader, Surface } from "./surface";
 import { TabPanel, Tabs } from "./tabs";
 
@@ -432,5 +432,76 @@ describe("ErrorState", () => {
 
     render(<ErrorState failure={{ message: "Network request failed.", requestId: null }} />);
     expect(screen.queryByText(/^Request /)).not.toBeInTheDocument();
+  });
+});
+
+describe("QuotaState", () => {
+  /** The refusal `weathra/entitlements/quotas.py` builds, as the parser hands it over. */
+  const refusal = {
+    dimension: "requests_per_day" as const,
+    window: "day" as const,
+    allowance: 20,
+    consumed: 20,
+    resetsAt: "2026-09-10T00:00:00Z",
+    retryAfterSeconds: 16_200,
+    message: "You have used today's allowance of agent questions.",
+    requestId: "req-9",
+  };
+
+  it("announces itself as a status rather than as an alert", () => {
+    // The one semantic difference from `ErrorState` that a screen-reader user actually hears: an
+    // exhausted allowance is the outcome of what they asked for, not something going wrong.
+    render(<QuotaState refusal={refusal} />);
+    expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("names the limit, the reset, and the backend's own sentence", () => {
+    render(<QuotaState refusal={refusal} />);
+
+    expect(screen.getByText("20 of 20 questions today")).toBeInTheDocument();
+    expect(screen.getByText("2026-09-10 00:00 UTC")).toBeInTheDocument();
+    expect(screen.getByText(refusal.message)).toBeInTheDocument();
+    // Machine-readable as well as legible, like every other instant on a Weathra surface.
+    expect(screen.getByText("2026-09-10 00:00 UTC")).toHaveAttribute("datetime", refusal.resetsAt);
+  });
+
+  it("says what is unaffected, so the state is not read as a failure", () => {
+    render(<QuotaState refusal={refusal} />);
+    expect(screen.getByText(/not a failure/i)).toBeInTheDocument();
+    expect(screen.getByText(/saved locations and preferences are unchanged/i)).toBeInTheDocument();
+  });
+
+  it("says the figures are missing rather than showing zeroes", () => {
+    render(
+      <QuotaState
+        refusal={{ ...refusal, allowance: null, consumed: null, resetsAt: null, retryAfterSeconds: null }}
+      />,
+    );
+
+    expect(screen.getByText("The backend did not report the figures.")).toBeInTheDocument();
+    expect(screen.getByText("The backend did not report a reset time.")).toBeInTheDocument();
+    expect(screen.queryByText(/0 of 0/)).toBeNull();
+  });
+
+  it("offers a retry only for the limit that a wait can lift", () => {
+    const onRetry = vi.fn();
+    const { unmount } = render(<QuotaState refusal={refusal} onRetry={onRetry} />);
+    // A day's allowance does not lift by pressing a button.
+    expect(screen.queryByRole("button")).toBeNull();
+    unmount();
+
+    render(
+      <QuotaState
+        refusal={{ ...refusal, dimension: "concurrent_runs", window: "concurrent", resetsAt: null }}
+        onRetry={onRetry}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Ask again" })).toBeInTheDocument();
+  });
+
+  it("carries the bound dimension as data, for a screen that needs to branch on it", () => {
+    render(<QuotaState refusal={refusal} />);
+    expect(screen.getByRole("status")).toHaveAttribute("data-quota-dimension", "requests_per_day");
   });
 });

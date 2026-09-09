@@ -24,10 +24,11 @@
  * refuses an empty question, and `useAgentStream.ask` ignores a second call while running — three
  * layers, because a duplicate submission costs somebody an inference call against their allowance.
  *
- * **A failure is never dressed as weather.** An unconfigured agent surface, a backend error, an
- * interrupted stream and an expired session are four distinct states, none of which renders a
- * figure. The last one does not belong to this screen at all: it goes to the session boundary
- * through the same interceptor every other call uses.
+ * **A failure is never dressed as weather.** An unconfigured agent surface, an exhausted
+ * allowance, a backend error, an interrupted stream and an expired session are five distinct
+ * states, none of which renders a figure. The last one does not belong to this screen at all: it
+ * goes to the session boundary through the same interceptor every other call uses. The allowance
+ * is not a failure at all, and `TerminalState` sorts it out before the error state — see there.
  *
  * Built against `docs/design/screens/02-ai-weather-analyst.png`. The artifact's fabricated
  * telemetry, station identifiers, agent version strings and synthesis percentages are recorded as
@@ -37,8 +38,9 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
-import { Button, ErrorState, Field } from "@/components/ui";
+import { Button, ErrorState, Field, QuotaState } from "@/components/ui";
 import { AGENT_NOT_CONFIGURED_CODE, presentableMessage } from "@/lib/api/errors";
+import { quotaRefusalFrom } from "@/lib/api/quota";
 import type { AskRequest } from "@/lib/api/schema";
 import { runStepsFrom } from "@/lib/analyst/run";
 import { useSession } from "@/lib/session/provider";
@@ -99,6 +101,27 @@ function TerminalState({
   }
 
   if (terminal.kind === "error") {
+    /*
+     * The allowance, before the generic failure — task 33.5.
+     *
+     * This branch has to come first, and the ordering is the whole of the requirement: a quota
+     * refusal reaching the error state below would be shown as "that question did not complete",
+     * which is true of a gateway outage, a schema failure and a timeout, and tells a person who
+     * has simply used up their plan's questions nothing they can act on. It is a 429 the stream
+     * never opened for, not a run that broke.
+     *
+     * Only `quota_exceeded`. A `provider_rate_limited` 429 is the gateway saying not yet and stays
+     * an error, and `quota_unavailable` — accounting unreachable — stays one too, because it knows
+     * no limit to name.
+     */
+    const refusal = quotaRefusalFrom({
+      code: terminal.code,
+      message: terminal.message,
+      details: terminal.details,
+      requestId: run.requestId,
+    });
+    if (refusal !== null) return <QuotaState refusal={refusal} onRetry={onRetry} />;
+
     return (
       <ErrorState
         failure={{ message: terminal.message, requestId: run.requestId }}

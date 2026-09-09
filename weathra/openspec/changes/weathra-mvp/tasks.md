@@ -368,12 +368,31 @@ Completes before substantial frontend implementation in groups 20 and 21. Visily
 
 ## 33. Visily design and frontend for the model policy surfaces
 
+Tasks 33.1–33.3 are the design half and **remain open**: the two Visily artifacts have not been
+produced, and neither `screens/09-admin-model-ai-usage.png` nor `screens/10-plan-usage.png` exists
+in this repository or its history. `docs/design/screens.md` §7 records the reserved filenames, what
+each artifact must cover, and why 33.3 cannot close on documentation alone — its criterion is a
+recorded *approval*, and there is nothing to approve. The classification half of 33.3 is in place
+and was verified: `docs/design/roadmap.md` and `docs/roadmap.md` agree, and no route advertises
+either screen as working.
+
+Tasks 33.4–33.6 are the frontend half and are independent of those artifacts, because none of them
+builds either screen — 33.4 builds the routes that say the screens are *not* built, and 33.5 and
+33.6 change MVP screens that were designed and approved in 2026-09-03. One exception is recorded
+against 33.6: it asks for "a premium control hidden for an unentitled plan", and no such control
+exists anywhere on the MVP agent surfaces — `AskRequest` carries a question, units and a thread and
+forbids extra fields, and the frontend holds no plan or entitlement value at all. Rather than
+invent one, the property behind the requirement is asserted in its strongest available form: the
+request body cannot carry a model, plan, policy or entitlement field, so there is nothing for a
+hidden control to gate and no way for the UI to decide which model serves a request. The scenario
+becomes live if such a control is ever added, and the assertion is written to fail then.
+
 - [ ] 33.1 Produce the Admin Model & AI Usage screen design in Visily — model status with its enable and disable controls, token usage, estimated cost, latency, errors, plan usage with internal usage separated, and the internal model selector with past comparison results — covering the populated, loading, empty, error and not-permitted states and following the established Weathra design system; verify the recorded artifact covers every element and state `specs/web-ui` names for the screen and is referenced by its implementation entry.
 - [ ] 33.2 Produce the Plan & Usage view design in Visily — plan name, per-dimension consumption and remaining allowance, and window reset times — covering the populated, loading, empty and error states; verify the recorded artifact covers each state and shows no other person's usage, no internal usage and no cross-user cost.
 - [ ] 33.3 Record both screens in the design roadmap as post-MVP entries and record their approval as the implementation reference before any implementation begins; verify `docs/design/` and `docs/roadmap.md` agree on the classification and that no route advertises either screen as working while it is unbuilt.
-- [ ] 33.4 Implement the post-MVP route stubs for both screens stating they are not yet available, with the administrative route fetching no catalog, usage, cost or lab content for a non-administrative visitor; verify component tests assert each stub renders its not-yet-available state and that an ordinary authenticated person navigating to the administrative route triggers no administrative request.
-- [ ] 33.5 Implement the quota-limit state across the MVP agent surfaces — the AI Weather Analyst and the Dashboard presenting an exhausted allowance as a distinct, honest state naming the limit and its reset time, visually and textually separate from a weather error and from an expired session, with the person's thread, saved locations and preferences left intact; verify component tests cover a 429 producing the quota state rather than a data or session error, the limit and reset time being shown, and the person's saved data remaining available.
-- [ ] 33.6 Implement the display of what actually served an answer — the provider, model and resolving policy reported by the backend shown as returned rather than assumed client-side, and a premium control hidden for an unentitled plan reflecting whatever the backend actually did when the underlying request is issued anyway; verify component tests assert the reported values are rendered from the response, that the UI never decides which model serves a request, and that a hidden control is not the gate.
+- [x] 33.4 Implement the post-MVP route stubs for both screens stating they are not yet available, with the administrative route fetching no catalog, usage, cost or lab content for a non-administrative visitor; verify component tests assert each stub renders its not-yet-available state and that an ordinary authenticated person navigating to the administrative route triggers no administrative request.
+- [x] 33.5 Implement the quota-limit state across the MVP agent surfaces — the AI Weather Analyst and the Dashboard presenting an exhausted allowance as a distinct, honest state naming the limit and its reset time, visually and textually separate from a weather error and from an expired session, with the person's thread, saved locations and preferences left intact; verify component tests cover a 429 producing the quota state rather than a data or session error, the limit and reset time being shown, and the person's saved data remaining available.
+- [x] 33.6 Implement the display of what actually served an answer — the provider, model and resolving policy reported by the backend shown as returned rather than assumed client-side, and a premium control hidden for an unentitled plan reflecting whatever the backend actually did when the underlying request is issued anyway; verify component tests assert the reported values are rendered from the response, that the UI never decides which model serves a request, and that a hidden control is not the gate.
 
 ## 34. SaaS-layer documentation and acceptance verification
 

@@ -829,6 +829,104 @@ describe("data classes, provenance, and the line the model does not cross", () =
     expect(screen.getByText(/Model: openrouter · nvidia/)).toBeInTheDocument();
   });
 
+  it("shows an exhausted allowance as its own state, not as a failed briefing", async () => {
+    /*
+     * Task 33.5. The briefing is the Dashboard's one agent-backed surface, so it is the one place
+     * on this screen a plan limit can be reached — and the requirement is that a 429 produces the
+     * quota state rather than a data error or a session error, naming the limit and its reset,
+     * with everything the person had still on screen.
+     */
+    fetchMock = vi.fn(async (input: string) => {
+      const path = new URL(input).pathname;
+      if (path === "/api/v1/agent/ask") {
+        return jsonResponse(429, {
+          error: {
+            code: "quota_exceeded",
+            message:
+              "You have used today's allowance of agent questions. It resets at the start of the " +
+              "next day. Forecasts, history, comparisons and analysis are unaffected.",
+            details: {
+              dimension: "requests_per_day",
+              window: "day",
+              allowance: 20,
+              consumed: 20,
+              resets_at: "2026-09-10T00:00:00Z",
+              retry_after_seconds: 16_200,
+            },
+            request_id: "req-quota",
+          },
+        });
+      }
+      return jsonResponse(200, (POPULATED as Record<string, unknown>)[path]);
+    }) as unknown as Mock;
+
+    renderDashboard();
+    const panel = await screen.findByRole("region", { name: "Weathra Intelligence" });
+    await userEvent.click(within(panel).getByRole("button", { name: "Generate interpretation" }));
+
+    const state = await waitFor(() => {
+      const found = document.querySelector('[data-quota="true"]');
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+
+    // The limit and the reset, from the refusal's own figures.
+    expect(within(state).getByText("20 of 20 questions today")).toBeInTheDocument();
+    expect(within(state).getByText("2026-09-10 00:00 UTC")).toBeInTheDocument();
+    // Not a weather error, not an unconfigured agent, not an expired session.
+    expect(screen.queryByText(/no inference provider is configured/i)).toBeNull();
+    expect(within(state).queryByRole("alert")).toBeNull();
+
+    // The person's saved locations and preferences are still there, and every retrieved and
+    // computed figure is untouched: a refusal of one request removed nothing.
+    expect(screen.getByRole("region", { name: "Current conditions" })).toBeInTheDocument();
+    expect(screen.getByText("18.2 °C")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Saved snapshots" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Anomalies and computed figures" })).toBeInTheDocument();
+  });
+
+  it("shows the provider, model and policy that actually served the briefing", async () => {
+    // Task 33.6, through the same function the Analyst uses: the run's own inference attempt wins
+    // over the configured pair the envelope also carries.
+    fetchMock = backend({
+      ...POPULATED,
+      "/api/v1/agent/ask": {
+        answer: {
+          answer_prose: "The week ahead sits close to the baseline.",
+          evidence: {
+            inference_attempts: [
+              {
+                stage: "synthesis",
+                status: "served",
+                attempt_number: 1,
+                provider: "openrouter",
+                selected_model: "a-synthesis-model",
+                served_model: "a-synthesis-model",
+                catalog_key: "a-synthesis-model",
+                policy_id: "free-synthesis",
+                plan: "free",
+                resolution_reason: "First enabled candidate of the plan's synthesis policy.",
+              },
+            ],
+          },
+          grounding: {},
+          llm_provider: "the-configured-gateway",
+          llm_model: "the-configured-model",
+          request_id: "req-9",
+        },
+        memory_available: true,
+      },
+    }) as unknown as Mock;
+
+    renderDashboard();
+    const panel = await screen.findByRole("region", { name: "Weathra Intelligence" });
+    await userEvent.click(within(panel).getByRole("button", { name: "Generate interpretation" }));
+
+    expect(await screen.findByText("Model: openrouter · a-synthesis-model")).toBeInTheDocument();
+    expect(screen.getByText("Policy: free-synthesis")).toBeInTheDocument();
+    expect(screen.queryByText(/the-configured-model/)).toBeNull();
+  });
+
   it("stays fully useful when no inference provider is configured", async () => {
     fetchMock = vi.fn(async (input: string) => {
       const path = new URL(input).pathname;

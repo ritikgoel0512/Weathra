@@ -432,6 +432,31 @@ export interface InterpretationPanelProps {
   readonly provider?: string | null;
   /** The model identifier the backend actually reported. No default. */
   readonly model?: string | null;
+  /**
+   * The policy that resolved the model, as the backend reported it — task 33.6.
+   *
+   * Shown beside the model because "which model" and "why that model" are one fact split in two,
+   * and the second is the one that says the choice was the policy layer's rather than this
+   * screen's. Null when the backend named none, and never inferred from a plan or a model name.
+   */
+  readonly policy?: string | null;
+  /** Why the policy resolved as it did, in the backend's own words. No default, never composed here. */
+  readonly resolution?: string | null;
+  /**
+   * The model that was *asked* for, when the gateway reported serving a different one.
+   *
+   * A substitution is a fact about what actually answered, and smoothing it over would make the
+   * attribution above a claim the record does not support.
+   */
+  readonly requestedModel?: string | null;
+  /**
+   * Whether the provider and model above are what served the answer, or only what was configured.
+   *
+   * True by default, which is the claim every existing caller was already making. A surface with a
+   * run record passes what the record supports, and the label says which of the two it is —
+   * because `llm_provider` and `llm_model` name a configured model whether or not it answered.
+   */
+  readonly served?: boolean;
   readonly footer?: ReactNode;
   /**
    * How much of the page the prose is entitled to.
@@ -459,12 +484,19 @@ export function InterpretationPanel({
   title = "AI interpretation",
   provider,
   model,
+  policy,
+  resolution,
+  requestedModel,
+  served = true,
   footer,
   headingLevel = 2,
   prominence = "panel",
 }: InterpretationPanelProps): ReactNode {
   const attributed = [provider?.trim(), model?.trim()].filter(Boolean).join(" · ");
   const Heading = headingLevel === 2 ? "h2" : "h3";
+  const policyId = policy?.trim() || null;
+  const resolutionReason = resolution?.trim() || null;
+  const asked = requestedModel?.trim() || null;
 
   return (
     <section
@@ -486,7 +518,23 @@ export function InterpretationPanel({
       </div>
 
       {/* Only what the backend reported. Nothing is filled in when it reported nothing. */}
-      {attributed ? <p className={styles.interpretationModel}>Model: {attributed}</p> : null}
+      {attributed ? (
+        <p className={styles.interpretationModel} data-served={served ? "true" : "false"}>
+          Model: {attributed}
+          {served ? null : " (configured; this run recorded no served attempt)"}
+        </p>
+      ) : null}
+      {asked !== null ? (
+        <p className={styles.interpretationModel}>Requested: {asked}, substituted by the gateway</p>
+      ) : null}
+      {policyId !== null ? (
+        <p className={styles.interpretationModel} data-policy={policyId}>
+          Policy: {policyId}
+        </p>
+      ) : null}
+      {resolutionReason !== null ? (
+        <p className={styles.interpretationModel}>Resolved: {resolutionReason}</p>
+      ) : null}
       {footer ? <div className={styles.interpretationFooter}>{footer}</div> : null}
     </section>
   );

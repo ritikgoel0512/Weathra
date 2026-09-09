@@ -50,6 +50,7 @@ import {
   horizonHoursOf,
   type RunStep,
 } from "@/lib/analyst/run";
+import { inferenceMetadataFrom } from "@/lib/inference/served";
 import { evidencePath } from "@/lib/routes";
 import styles from "./analyst.module.css";
 
@@ -214,6 +215,10 @@ export function AnswerView({ answer, evidenceId = null }: AnswerViewProps): Reac
   const confidence = confidenceOf(answer.uncertainty);
   const resolved = answer.resolved;
   const grounding = answer.grounding;
+  const inference = inferenceMetadataFrom(answer.evidence?.inference_attempts, {
+    provider: answer.llm_provider,
+    model: answer.llm_model,
+  });
 
   return (
     /*
@@ -238,8 +243,20 @@ export function AnswerView({ answer, evidenceId = null }: AnswerViewProps): Reac
       ) : null}
 
       <InterpretationPanel
-        provider={answer.llm_provider ?? null}
-        model={answer.llm_model ?? null}
+        /*
+         * What actually served this answer — task 33.6.
+         *
+         * From the run's own inference attempts, which is the only account that is evidence:
+         * `llm_provider` and `llm_model` are read off the configured client and are used only
+         * where the run recorded no attempt, labelled as configured when they are. Nothing here
+         * chooses a model, and nothing here fills in a policy the backend did not report.
+         */
+        provider={inference?.provider ?? null}
+        model={inference?.model ?? null}
+        requestedModel={inference?.requestedModel ?? null}
+        policy={inference?.policyId ?? null}
+        resolution={inference?.resolutionReason ?? null}
+        served={inference?.served ?? true}
         prominence="lead"
         footer={
           grounding.verified ? null : (

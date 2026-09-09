@@ -65,6 +65,7 @@ import {
   type ToolActivity,
 } from "@/lib/evidence/record";
 import { formatStatistic, unavailableReason } from "@/lib/historical/analysis";
+import { inferenceMetadataFrom } from "@/lib/inference/served";
 
 import styles from "./evidence.module.css";
 
@@ -731,13 +732,29 @@ export function FinalSynthesis({ record }: { readonly record: RunRecord }): Reac
   const grounding = record.answer?.grounding ?? null;
   const unanswered = record.answer?.unansweredParts ?? [];
   const clarification = record.answer?.clarificationQuestion ?? null;
+  const inference = inferenceMetadataFrom(record.inferenceAttempts, {
+    provider: record.llmProvider,
+    model: record.llmModel,
+  });
 
   return (
     <div data-evidence-section="synthesis">
       <InterpretationPanel
         title="Final grounded synthesis"
-        provider={record.llmProvider}
-        model={record.llmModel}
+        /*
+         * What actually served the run — task 33.6, from the stored attempts.
+         *
+         * The record holds both accounts: `llm_provider` and `llm_model` are the configured client,
+         * and the attempts are what ran, with the policy that resolved each. An evidence record is
+         * read precisely to check claims, so the weaker account is used only where the record holds
+         * no attempt, and is labelled as configured when it is.
+         */
+        provider={inference?.provider ?? null}
+        model={inference?.model ?? null}
+        requestedModel={inference?.requestedModel ?? null}
+        policy={inference?.policyId ?? null}
+        resolution={inference?.resolutionReason ?? null}
+        served={inference?.served ?? true}
         footer={
           <>
             {grounding === null ? (

@@ -37,8 +37,13 @@ export type { SkeletonProps } from "./skeleton";
 export { Card, CardBody, CardFooter, CardHeader, Surface } from "./surface";
 export type { CardHeaderProps, CardProps, SurfaceLevel, SurfaceProps } from "./surface";
 
-export { EmptyState, ErrorState, LoadingState } from "./states";
-export type { EmptyStateProps, ErrorStateProps, LoadingStateProps } from "./states";
+export { EmptyState, ErrorState, LoadingState, QuotaState } from "./states";
+export type {
+  EmptyStateProps,
+  ErrorStateProps,
+  LoadingStateProps,
+  QuotaStateProps,
+} from "./states";
 
 export { TabPanel, Tabs, tabId, tabPanelId } from "./tabs";
 export type { TabDescriptor, TabPanelProps, TabsProps } from "./tabs";

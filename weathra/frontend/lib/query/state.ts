@@ -21,6 +21,15 @@ export interface ViewFailure {
   readonly code: string | null;
   /** The request id, for a report that can be traced. */
   readonly requestId: string | null;
+  /**
+   * The field-level specifics the backend attached to the refusal, or null when it attached none.
+   *
+   * Carried because two states are decided by them rather than by the message: an exhausted
+   * allowance names its limit and reset here (task 33.5), and an unconfigured agent surface names
+   * what is missing. A view that only had the message would have to parse a sentence to find a
+   * number the backend already sent as one.
+   */
+  readonly details: Record<string, unknown> | null;
   /** Whether retrying could plausibly succeed — a network failure, not a rejected request. */
   readonly retryable: boolean;
   readonly error: unknown;
@@ -44,6 +53,7 @@ interface DescribedError {
   readonly message?: unknown;
   readonly code?: unknown;
   readonly requestId?: unknown;
+  readonly details?: unknown;
   readonly status?: unknown;
   readonly name?: unknown;
 }
@@ -65,12 +75,16 @@ export function describeFailure(error: unknown): ViewFailure {
   const code = typeof described.code === "string" ? described.code : null;
   const requestId = typeof described.requestId === "string" ? described.requestId : null;
   const status = typeof described.status === "number" ? described.status : null;
+  const details =
+    typeof described.details === "object" && described.details !== null
+      ? (described.details as Record<string, unknown>)
+      : null;
 
   // A 4xx is an answer: the request was understood and refused, and repeating it unchanged gets
   // the same refusal. A network failure or a 5xx is worth another attempt.
   const retryable = status === null ? true : status >= 500 || status === 408 || status === 429;
 
-  return { message, code, requestId, retryable, error };
+  return { message, code, requestId, details, retryable, error };
 }
 
 /** One query result as one of the four states. */

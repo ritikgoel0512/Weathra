@@ -38,8 +38,11 @@ import {
   Input,
   InterpretationPanel,
   LoadingState,
+  QuotaState,
 } from "@/components/ui";
 import { AGENT_NOT_CONFIGURED_CODE } from "@/lib/api/errors";
+import { quotaRefusalFrom, type QuotaRefusal } from "@/lib/api/quota";
+import { inferenceMetadataFrom } from "@/lib/inference/served";
 import type {
   AskResponse,
   Location,
@@ -87,7 +90,11 @@ const BRIEFING_QUESTION =
 function WeathraIntelligence({ units }: { readonly units: PreferenceView["unit_system"] }): ReactNode {
   const client = useApiClient();
   const [state, setState] = useState<
-    { kind: "idle" } | { kind: "asking" } | { kind: "answered"; answer: AskResponse } | { kind: "failed"; message: string; unavailable: boolean }
+    | { kind: "idle" }
+    | { kind: "asking" }
+    | { kind: "answered"; answer: AskResponse }
+    | { kind: "refused"; refusal: QuotaRefusal }
+    | { kind: "failed"; message: string; unavailable: boolean }
   >({ kind: "idle" });
 
   const ask = useCallback(async () => {
@@ -97,21 +104,41 @@ function WeathraIntelligence({ units }: { readonly units: PreferenceView["unit_s
       setState({ kind: "answered", answer });
     } catch (error) {
       const failure = describeFailure(error);
-      setState({
-        kind: "failed",
-        message: failure.message,
-        unavailable: failure.code === AGENT_NOT_CONFIGURED_CODE,
-      });
+      // The allowance is its own outcome, sorted out before the failure — task 33.5. The briefing
+      // is the Dashboard's one agent-backed surface, so it is the one place on this screen a plan
+      // limit can be reached, and showing it as a failed request would blame the product for a
+      // limit the plan set. Everything else here is retrieved or computed and is untouched.
+      const refusal = quotaRefusalFrom(failure);
+      setState(
+        refusal !== null
+          ? { kind: "refused", refusal }
+          : {
+              kind: "failed",
+              message: failure.message,
+              unavailable: failure.code === AGENT_NOT_CONFIGURED_CODE,
+            },
+      );
     }
   }, [client, units]);
 
   if (state.kind === "answered") {
     const envelope = state.answer.answer;
+    // Task 33.6: the run's own inference attempts, not the configured pair, wherever it recorded
+    // one. The briefing and the Analyst read the same metadata through the same function, so the
+    // two screens cannot disagree about what answered.
+    const inference = inferenceMetadataFrom(envelope.evidence?.inference_attempts, {
+      provider: envelope.llm_provider,
+      model: envelope.llm_model,
+    });
     return (
       <InterpretationPanel
         title="Weathra Intelligence"
-        provider={envelope.llm_provider ?? null}
-        model={envelope.llm_model ?? null}
+        provider={inference?.provider ?? null}
+        model={inference?.model ?? null}
+        requestedModel={inference?.requestedModel ?? null}
+        policy={inference?.policyId ?? null}
+        resolution={inference?.resolutionReason ?? null}
+        served={inference?.served ?? true}
         footer={
           state.answer.memory_available === false && state.answer.memory_note ? (
             <span>{state.answer.memory_note}</span>
@@ -130,6 +157,15 @@ function WeathraIntelligence({ units }: { readonly units: PreferenceView["unit_s
         {envelope.clarification_question ? <p>{envelope.clarification_question}</p> : null}
       </InterpretationPanel>
     );
+  }
+
+  if (state.kind === "refused") {
+    /*
+     * Outside `InterpretationPanel` deliberately: that panel is the AI-interpretation region, and
+     * an allowance refusal is not an interpretation. Putting it inside would give a plan limit the
+     * badge and the boundary sentence that exist to mark model-written language.
+     */
+    return <QuotaState refusal={state.refusal} onRetry={ask} />;
   }
 
   return (

@@ -344,6 +344,20 @@ describe("the data classes stay distinguishable", () => {
     }
   });
 
+  it("spends the quota tokens on the quota state, and the error tokens on the error state", () => {
+    // Task 33.5 reuses the pair `tokens.md` already declared for an exhausted allowance rather
+    // than introducing a colour. The assertion is that the state actually spends them: a quota
+    // state drawn in `status-error` would undo the separation the hue test below protects.
+    const quota = /\.stateQuota \{[^}]*\}/.exec(PRIMITIVES)?.[0] ?? "";
+    expect(quota).toContain("var(--color-status-quota)");
+    expect(quota).toContain("var(--color-status-quota-surface)");
+    expect(quota).not.toContain("status-error");
+
+    const error = /\.stateError \{[^}]*\}/.exec(PRIMITIVES)?.[0] ?? "";
+    expect(error).toContain("var(--color-status-error)");
+    expect(error).not.toContain("status-quota");
+  });
+
   it.each(APPEARANCES)("%s keeps the quota state out of the error hue", (appearance) => {
     // The design record is explicit: an exhausted allowance is not a failure, so it may not be a
     // shade of the failure colour.

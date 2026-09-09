@@ -18,6 +18,7 @@ import {
   isPublicPath,
   MVP_SCREENS,
   POST_MVP_SCREENS,
+  UNLISTED_SCREENS,
   safeDestination,
   signInPathFor,
 } from "./routes";
@@ -46,8 +47,22 @@ describe("the route map", () => {
   });
 
   it("protects every product route, MVP and post-MVP alike", () => {
-    for (const { path } of [...MVP_SCREENS, ...POST_MVP_SCREENS]) {
+    for (const { path } of [...MVP_SCREENS, ...POST_MVP_SCREENS, ...UNLISTED_SCREENS]) {
       expect(isProtectedPath(path), path).toBe(true);
+    }
+  });
+
+  it("keeps the two unlisted screens out of the navigable lists", () => {
+    // Task 33.4: reachable by route, deliberately absent from the sidebar. The navigation model is
+    // asserted to cover `MVP_SCREENS` and `POST_MVP_SCREENS` exactly, so putting either of these
+    // in one of those lists would advertise an unbuilt screen.
+    expect(UNLISTED_SCREENS.map(({ title }) => title)).toEqual([
+      "Admin Model & AI Usage",
+      "Plan & Usage",
+    ]);
+    const navigable = [...MVP_SCREENS, ...POST_MVP_SCREENS].map(({ path }) => path);
+    for (const { path } of UNLISTED_SCREENS) {
+      expect(navigable, path).not.toContain(path);
     }
   });
 
