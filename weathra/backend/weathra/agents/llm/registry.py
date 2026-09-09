@@ -147,6 +147,7 @@ class LLMProvider:
         recorder: UsageRecorder | None = None,
         agent_run_id: str | None = None,
         request_id: str | None = None,
+        administrative: bool = False,
     ) -> ModelBroker:
         """The model policy layer, bound to one request.
 
@@ -175,6 +176,10 @@ class LLMProvider:
             recorder=recorder,
             agent_run_id=agent_run_id,
             request_id=request_id,
+            # Resolved once per request from `admin_roles` at the identity boundary, never read
+            # again here: the quota gate and the resolver must agree about who is an administrator,
+            # and two lookups eventually would not.
+            administrative=administrative,
         )
 
     async def effective_plan(self, principal: Principal | None, session: AsyncSession) -> PlanCode:

@@ -1018,6 +1018,53 @@ class ModelComparisonResult(Base):
     created_at: Mapped[datetime] = _timestamp_column(server_default=func.now(), nullable=False)
 
 
+class AdminRole(Base):
+    """Which Weathra roles a subject holds. The backend state `specs/authentication` requires.
+
+    **A row, not a claim.** An earlier build read the administrative role from the validated
+    token's ``app_metadata``, which is server-controlled at Supabase and was a reasonable stand-in
+    while there was nothing to read it from. It is not what the spec asks for: the role is
+    "held as backend state keyed by the validated token subject", and "an unverified token claim
+    asserting the role SHALL be ignored". A claim travels with the caller; a row does not, and the
+    difference is the whole security property — an identity provider misconfiguration, a token
+    minted by a compromised project, or a claim copied between environments cannot promote anyone
+    here.
+
+    **Not a foreign key to ``profiles``.** The role is grantable before its holder has ever signed
+    in, which is what makes bootstrapping the first administrator possible without inventing an
+    account. Deleting a profile therefore leaves a role row behind; that is deliberate, because a
+    role is an operational fact about a subject rather than part of their personal data, and a
+    person deleting their account should not be able to silently drop their own administrative
+    grant out of the audit trail.
+
+    Read-only to the request path, and only for the acting subject: the grant and the policy in
+    ``0011`` between them mean a caller can discover whether *they* are an administrator and can
+    learn nothing else, and can write nothing at all.
+    """
+
+    __tablename__ = "admin_roles"
+    __table_args__ = (
+        CheckConstraint("length(role) > 0", name="ck_admin_roles_role_present"),
+        Index("ix_admin_roles_role", "role"),
+        {"info": {"ownership": Ownership.OPERATIONAL}},
+    )
+
+    # `subject_id`, not `user_id`, and the name is the classification. An operational table with a
+    # `user_id` is a table storing something *about* a person — a trail — which is the thing
+    # `test_no_shared_or_operational_table_carries_a_user_column` exists to prevent. This stores an
+    # authorization fact keyed by an auth subject, which is what `admin_audit.subject_id` and
+    # `usage_counters.subject` already call the same thing.
+    subject_id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True)
+    role: Mapped[str] = mapped_column(String(32), primary_key=True)
+    granted_by: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        nullable=True,
+        doc="The administrator who granted it. Null for the bootstrap grant, which has no "
+        "administrator to attribute it to and says so rather than naming a fiction.",
+    )
+    granted_at: Mapped[datetime] = _timestamp_column(server_default=func.now(), nullable=False)
+
+
 class AdminAudit(Base):
     """Who changed which operational record, when, and from what to what.
 

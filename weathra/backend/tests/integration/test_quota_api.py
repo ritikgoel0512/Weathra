@@ -18,7 +18,7 @@ import pytest
 from sqlalchemy import text
 
 from tests.api_support import ApiFactory, ApiHarness
-from tests.db_support import new_user_id
+from tests.db_support import grant_administrator, new_user_id
 from weathra.agents.llm.base import Completion, Message
 from weathra.agents.llm.fake import FakeLLMClient
 from weathra.agents.plan import Capability, PlanStep, RoutingPlan
@@ -28,7 +28,9 @@ from weathra.domain.errors import ProviderRateLimited
 pytestmark = pytest.mark.db
 
 PREFIX = "/api/v1"
-ADMIN_CLAIMS = {"app_metadata": {"weathra_role": "administrator"}}
+# The claim shape groups 28 to 30 honoured. As of `0011` it grants nothing — kept so the negative
+# control below is written in exactly the shape that used to work.
+ASSERTED_ROLE_CLAIM = {"app_metadata": {"weathra_role": "administrator"}}
 
 
 def _plan(*steps: PlanStep) -> dict:
@@ -496,8 +498,9 @@ async def test_an_administrators_own_usage_reports_the_internal_allowance(
     admin_id = new_user_id()
     async with with_inference(api_factory) as api:  # type: ignore[attr-defined]
         install(api)
+        await grant_administrator(api.app.state.engines, admin_id)
         response = await api.client.get(
-            f"{PREFIX}/me/usage", headers=api.authorize(subject=admin_id, **ADMIN_CLAIMS)
+            f"{PREFIX}/me/usage", headers=api.authorize(subject=admin_id)
         )
 
     body = response.json()
@@ -512,7 +515,8 @@ async def test_an_administrators_question_does_not_spend_a_plans_allowance(
     admin_id = new_user_id()
     async with with_inference(api_factory) as api:  # type: ignore[attr-defined]
         install(api)
-        assert (await ask(api, admin_id, **ADMIN_CLAIMS)).status_code == 200
+        await grant_administrator(api.app.state.engines, admin_id)
+        assert (await ask(api, admin_id)).status_code == 200
 
         async with privileged_session(api.app.state.engines.privileged_sessionmaker) as session:
             rows = await session.execute(
@@ -525,6 +529,42 @@ async def test_an_administrators_question_does_not_spend_a_plans_allowance(
 
     assert counters.get("internal") == 1
     assert admin_id not in counters, "an administrator's question was charged to their own plan"
+
+
+async def test_a_token_asserting_the_administrative_role_is_still_an_ordinary_caller(
+    api_factory: ApiFactory, seeded_reference_data: None
+) -> None:
+    """`specs/authentication`: an asserted role is ignored, and here it costs the asserter.
+
+    Through the whole app, in the shape that used to work: a token carrying the role claim and no
+    row spends its own plan's allowance and reports its own plan's limits. A build that read the
+    claim again would let anyone whose identity provider emits one field spend the internal
+    allowance instead — and would pass every other test in this file.
+    """
+    pretender = new_user_id()
+    async with with_inference(api_factory) as api:  # type: ignore[attr-defined]
+        install(api)
+        assert (await ask(api, pretender, **ASSERTED_ROLE_CLAIM)).status_code == 200
+        usage = await api.client.get(
+            f"{PREFIX}/me/usage",
+            headers=api.authorize(subject=pretender, **ASSERTED_ROLE_CLAIM),
+        )
+
+        async with privileged_session(api.app.state.engines.privileged_sessionmaker) as session:
+            rows = await session.execute(
+                text(
+                    "SELECT subject, consumed FROM usage_counters "
+                    " WHERE dimension = 'requests_per_day'"
+                )
+            )
+            counters = {row[0]: row[1] for row in rows}
+
+    assert counters.get(pretender) == 1, "the claim bought nothing; they paid for their own call"
+    assert "internal" not in counters
+    body = usage.json()
+    assert body["internal"] is False
+    daily = next(i for i in body["dimensions"] if i["dimension"] == "requests_per_day")
+    assert daily["allowance"] == 25, "Free's allowance, not the internal subject's"
 
 
 # =========================================================================== 30.8 disabled

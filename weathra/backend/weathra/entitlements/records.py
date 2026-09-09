@@ -192,6 +192,12 @@ class AdminAction(StrEnum):
     PLAN_MAPPING_EDIT = "plan_mapping_edit"
     ALLOWANCE_SET = "allowance_set"
     PLAN_ASSIGN = "plan_assign"
+    # The promotion half of `specs/authentication`'s "administrative action attributed". A role
+    # grant is the most consequential administrative write there is — it is the one that creates
+    # the ability to make the others — so it is audited by the same mechanism rather than by a
+    # log line somebody has to know to look for.
+    ROLE_GRANT = "role_grant"
+    ROLE_REVOKE = "role_revoke"
 
 
 class AuditEntry(BaseModel):

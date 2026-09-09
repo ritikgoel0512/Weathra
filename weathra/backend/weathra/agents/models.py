@@ -96,6 +96,7 @@ class ModelBroker:
     """
 
     __slots__ = (
+        "_administrative",
         "_bindings",
         "_http",
         "_installed",
@@ -122,7 +123,9 @@ class ModelBroker:
         recorder: UsageRecorder | None = None,
         agent_run_id: str | None = None,
         request_id: str | None = None,
+        administrative: bool = False,
     ) -> None:
+        self._administrative = administrative
         self._recorder = recorder
         self._run_id = agent_run_id
         self._request_id = request_id
@@ -150,6 +153,7 @@ class ModelBroker:
             role=role,
             session=self._session,
             override=self._override,
+            administrative=self._administrative,
         )
         binding = RoleBinding(self._wrap(resolved), resolved)
         self._bindings[role] = binding

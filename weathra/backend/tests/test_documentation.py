@@ -641,6 +641,7 @@ def test_every_persisted_table_is_accounted_for() -> None:
         "model_evaluations": "Model evaluations and comparisons",
         "model_comparison_runs": "Model evaluations and comparisons",
         "model_comparison_results": "Model evaluations and comparisons",
+        "admin_roles": "Administrative roles",
         "admin_audit": "Administrative audit",
     }
     assert set(accounted) == set(Base.metadata.tables), (

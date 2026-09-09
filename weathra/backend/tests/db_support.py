@@ -251,10 +251,11 @@ def claims_for(
 ) -> dict[str, object]:
     """A validated claim set as ``auth/tokens.py`` would produce it.
 
-    ``administrative`` puts Weathra's own role under ``app_metadata``, which is where Supabase
-    keeps server-controlled claims and the only container `entitlements/administration.py` reads.
-    Spelling it out here rather than in each test keeps the shape in one place, so a test cannot
-    accidentally assert against a claim layout the code does not accept.
+    ``administrative`` puts Weathra's own role under ``app_metadata``, which is the shape groups 28
+    to 30 honoured. **As of `0011` nothing honours it** — the role is a row in ``admin_roles`` and
+    `specs/authentication` requires an asserted claim to be ignored. The parameter is kept for the
+    tests that prove exactly that; a test wanting a *real* administrator grants the role with
+    ``grant_administrator`` below.
     """
     claims: dict[str, object] = {
         "sub": user_id,
@@ -271,6 +272,23 @@ def claims_for(
 def principal_for(user_id: str, *, email: str | None = None) -> Principal:
     """A principal as ``auth/deps.py`` would build it from a validated token."""
     return Principal.from_claims(claims_for(user_id, email=email))
+
+
+async def grant_administrator(engines: Engines, user_id: str) -> None:
+    """Give a subject the administrative role, the way the bootstrap script does.
+
+    Privileged, because the request role is granted no write on ``admin_roles`` at all — which is
+    the property that makes self-promotion impossible and is therefore the property a test must
+    not route around by inserting on the request session.
+    """
+    async with privileged_session(engines.privileged_sessionmaker) as session:
+        await session.execute(
+            text(
+                "INSERT INTO admin_roles (subject_id, role) VALUES (CAST(:u AS uuid), :r) "
+                "ON CONFLICT (subject_id, role) DO NOTHING"
+            ),
+            {"u": user_id, "r": "administrator"},
+        )
 
 
 def session_as(

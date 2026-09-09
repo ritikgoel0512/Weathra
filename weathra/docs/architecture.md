@@ -62,10 +62,11 @@ backend/weathra/
   memory/                 checkpointer.py threads.py preferences.py locations.py retention.py
                           availability.py degradation.py
   auth/                   tokens.py jwks.py deps.py profiles.py repository.py rls.py
+                          roles.py — the administrative role, as backend state and never a claim
   entitlements/           catalog.py policies.py plans.py snapshot.py records.py audit.py
                           the catalog, policy and plan stores — data access and administration,
                           deliberately not resolution
-                          resolver.py administration.py — the one place a model is chosen
+                          resolver.py — the one place a model is chosen
                           quotas.py — the one place a call is admitted or refused. Runs before
                           resolution: whether there is to be a call precedes which model serves it
   telemetry/              usage.py cost.py projection.py context.py aggregate.py
@@ -351,7 +352,7 @@ Task 22.10's live execution remains outstanding).
 | Authentication in streaming requests | 16.3 | api/streaming.py | integration/test_api.py | IMPLEMENTED |
 | Account and data deletion | 15.5 | api/routers/account.py | integration/test_api.py | IMPLEMENTED |
 | Administrative and internal roles are server-held | 31.1 | — not implemented | — none | OPEN |
-| Plan and model entitlement are derived, never asserted | 28.2 | entitlements/resolver.py, entitlements/administration.py | unit/test_policy_resolver.py, integration/test_agent_resolution.py | IMPLEMENTED |
+| Plan and model entitlement are derived, never asserted | 28.2 | entitlements/resolver.py, auth/roles.py | unit/test_policy_resolver.py, integration/test_agent_resolution.py | IMPLEMENTED |
 | Row Level Security on the SaaS-ready tables | 26.3, 26.4 | db/migrations/versions/0006_saas_user_owned_tables.py, db/migrations/versions/0007_model_lab_and_audit_tables.py | integration/test_saas_rls.py, integration/test_saas_schema.py | IMPLEMENTED |
 
 ### `deterministic-analytics`
@@ -559,7 +560,7 @@ Task 22.10's live execution remains outstanding).
 |---|---|---|---|---|
 | Model policy layer between orchestration and the language model client | 28.1, 28.6 | entitlements/resolver.py, agents/llm/factory.py, agents/models.py | unit/test_policy_resolver.py, unit/test_llm_failover.py, test_architecture.py | IMPLEMENTED |
 | Subscription-aware named policies | 26.6, 27.2, 28.1 | entitlements/policies.py, entitlements/plans.py, db/migrations/versions/0008_seed_model_policy_data.py | integration/test_entitlement_stores.py, integration/test_saas_seed.py | OPEN |
-| Entitlement is enforced server-side and never trusted from the client | 28.2 | entitlements/resolver.py, entitlements/administration.py | unit/test_policy_resolver.py, integration/test_agent_resolution.py | IMPLEMENTED |
+| Entitlement is enforced server-side and never trusted from the client | 28.2 | entitlements/resolver.py, auth/roles.py | unit/test_policy_resolver.py, integration/test_agent_resolution.py | IMPLEMENTED |
 | Administrative override is bounded by the allowlist | 28.3 | entitlements/resolver.py, entitlements/snapshot.py | unit/test_policy_resolver.py, integration/test_entitlement_snapshot.py | IMPLEMENTED |
 | Resolution is deterministic, ordered, and degrades honestly | 28.1, 28.5 | entitlements/resolver.py, entitlements/snapshot.py | unit/test_policy_resolver.py, integration/test_entitlement_snapshot.py | IMPLEMENTED |
 | Configured model remains the development and administrative fallback | 28.4, 28.5 | entitlements/resolver.py, config.py | unit/test_policy_resolver.py, test_config.py | IMPLEMENTED |
@@ -602,7 +603,7 @@ Task 22.10's live execution remains outstanding).
 | Windows are explicit and reset predictably | 30.1, 30.9 | domain/usage.py, entitlements/quotas.py, config.py | unit/test_quotas.py, integration/test_quota_enforcement.py | IMPLEMENTED |
 | Quota refusal is honest, structured, and non-destructive | 30.6, 30.9 | domain/errors.py, api/errors.py, entitlements/quotas.py | unit/test_quotas.py, integration/test_quota_api.py | IMPLEMENTED |
 | Accounting is consistent with recorded usage and safe under concurrency | 30.2, 30.3, 30.4, 30.8 | entitlements/quotas.py, api/routers/agent.py | integration/test_quota_enforcement.py, unit/test_quotas.py | IMPLEMENTED |
-| Internal and administrative usage is tracked separately | 30.5 | entitlements/quotas.py, entitlements/administration.py, db/migrations/versions/0010_internal_quota_accounting.py, evaluation/provisioning.py | integration/test_quota_enforcement.py, integration/test_quota_api.py | IMPLEMENTED |
+| Internal and administrative usage is tracked separately | 30.5 | entitlements/quotas.py, auth/roles.py, db/migrations/versions/0010_internal_quota_accounting.py, evaluation/provisioning.py | integration/test_quota_enforcement.py, integration/test_quota_api.py | IMPLEMENTED |
 | Quota administration is privileged and auditable | 31.4 | — not implemented | — none | OPEN |
 | No payment processing in this change | 26.2 | db/models.py, db/migrations/versions/0005_saas_operational_tables.py | test_no_payment_processing.py, integration/test_saas_seed.py | IMPLEMENTED |
 

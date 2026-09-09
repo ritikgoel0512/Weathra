@@ -144,6 +144,7 @@ entirely confident answer about the wrong city.
 | Usage counters | How much of a windowed allowance a subject has consumed, so a limit can be enforced before a call rather than apologised for after | `LLM_USAGE_RETENTION_DAYS` after the window closes |
 | LLM usage events | One metadata row per language model call — model, policy, plan, role, tokens, estimated cost, latency, outcome. **No prompt, completion or retrieved text** | `LLM_USAGE_RETENTION_DAYS`, and removed with the person's data |
 | Model evaluations and comparisons | Which model scored what, on which dataset, at which commit. Operational, not user data | Kept |
+| Administrative roles (`admin_roles`) | Which subjects hold Weathra's administrative role, so authorization is a backend fact rather than a token claim. A subject id, a role name, who granted it and when — no contact detail and no credential | Kept, and deliberately not removed with the person's data: a role is an operational fact, and letting a deletion drop it would let somebody erase their own grant out of the audit trail |
 | Administrative audit | Who changed which operational record, and from what to what | Kept |
 
 **Nothing else.** No arbitrary conversation content beyond the bounded thread retention, no

@@ -736,6 +736,10 @@ async def test_the_persisted_tables_are_only_the_declared_categories(
         "model_evaluations",
         "model_comparison_runs",
         "model_comparison_results",
+        # The administrative control plane's own two tables: who may administer, and what they did.
+        # Neither holds conversation content, and `admin_roles` holds no contact detail either —
+        # a subject id, a role name, and who granted it.
+        "admin_roles",
         "admin_audit",
     }
 

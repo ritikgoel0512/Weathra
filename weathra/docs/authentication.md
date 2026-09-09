@@ -196,6 +196,7 @@ migrations that apply the policies, and the tests — all three agree, and a tes
 | `model_evaluations` | operational | the privileged role | the privileged role |
 | `model_comparison_runs` | operational | the privileged role | the privileged role |
 | `model_comparison_results` | operational | the privileged role | the privileged role |
+| `admin_roles` | operational | **its own subject only** | the privileged role |
 | `admin_audit` | operational | the privileged role | the privileged role |
 
 `forecast_snapshots` is location-keyed and carries no user reference — a snapshot of Berlin's
@@ -305,6 +306,7 @@ The resolution keeps Row Level Security rather than disabling it, and states the
 | `user_plans` | `user_plans_owner_read` | `SELECT` |
 | `usage_counters` | `usage_counters_owner_only` | `SELECT`, `INSERT`, `UPDATE` |
 | `llm_usage_events` | `llm_usage_events_owner_read`, `_owner_append` | `SELECT`, `INSERT` |
+| `admin_roles` | `admin_roles_owner_read` | `SELECT` |
 | `model_evaluations`, `model_comparison_runs`, `model_comparison_results`, `admin_audit` | none, by design | none |
 
 Each is `TO weathra_request` — never `PUBLIC`, `anon`, or `authenticated` — and each mirrors exactly

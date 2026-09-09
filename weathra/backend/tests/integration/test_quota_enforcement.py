@@ -22,7 +22,14 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.db_support import claims_for, insert_profile, new_user_id, session_as
+from tests.db_support import (
+    claims_for,
+    grant_administrator,
+    insert_profile,
+    new_user_id,
+    session_as,
+)
+from weathra.auth.roles import is_administrative
 from weathra.db.engine import Engines
 from weathra.db.session import privileged_session
 from weathra.domain.entitlements import CallRole, PlanCode, PolicyId
@@ -120,6 +127,17 @@ async def a_user(engines: Engines, plan: PlanCode = PlanCode.FREE) -> str:
         await insert_profile(session, user_id)
     if plan is not PlanCode.FREE:
         await assign_plan(engines, user_id, plan)
+    return user_id
+
+
+async def an_administrator(engines: Engines, plan: PlanCode = PlanCode.FREE) -> str:
+    """A subject holding the administrative role in `admin_roles`, granted privileged.
+
+    A *row*, not a claim. Since `0011` a token asserting the role is ignored, so a test that set
+    one would be testing the thing group 31 exists to make impossible.
+    """
+    user_id = await a_user(engines, plan)
+    await grant_administrator(engines, user_id)
     return user_id
 
 
@@ -510,9 +528,11 @@ async def test_an_administrators_product_call_is_charged_to_the_internal_allowan
     engines: Engines, clean_database: None, seeded_reference_data: None
 ) -> None:
     """`specs/usage-limits`: administrative traffic never consumes an end user's plan."""
-    admin_id = await a_user(engines, PlanCode.PREMIUM)
-    principal = Principal.from_claims(claims_for(admin_id, administrative=True))
-    subject = QuotaSubject.for_principal(principal, PlanCode.PREMIUM)
+    admin_id = await an_administrator(engines, PlanCode.PREMIUM)
+    principal = Principal.from_claims(claims_for(admin_id))
+    async with session_as(engines, admin_id) as session:
+        assert await is_administrative(session, principal), "the role is a row, and it is there"
+    subject = QuotaSubject.for_principal(principal, PlanCode.PREMIUM, administrative=True)
     assert subject.key == INTERNAL_SUBJECT
 
     await gate_for(engines, admin_id, administrative=True).admit(subject, moment=NOW)
@@ -524,7 +544,7 @@ async def test_an_administrators_product_call_is_charged_to_the_internal_allowan
 async def test_an_exhausted_internal_allowance_refuses_internal_calls_only(
     engines: Engines, clean_database: None, seeded_reference_data: None
 ) -> None:
-    admin_id = await a_user(engines)
+    admin_id = await an_administrator(engines)
     ordinary_id = await a_user(engines)
 
     async with privileged_session(engines.privileged_sessionmaker) as session:
@@ -581,29 +601,45 @@ async def test_an_ordinary_caller_cannot_read_the_internal_counter_either(
         assert await store.consumed(INTERNAL_SUBJECT, QuotaDimension.REQUESTS_PER_DAY, DAY) == 0
 
 
-async def test_an_evaluation_runs_identity_is_internal_by_the_token_it_carries(
+async def test_an_evaluation_runs_identity_is_internal_by_a_row_and_not_by_its_token(
     engines: Engines, clean_database: None, seeded_reference_data: None
 ) -> None:
     """`specs/usage-limits`: an evaluation run is accounted as internal, not against a plan.
 
-    Asserted at the identity rather than by running the harness, because that is where the
-    property lives: the offline runner's token declares the administrative role, so every request
-    it makes is classified internal by the same predicate a product request goes through. There is
-    no evaluation-shaped exception anywhere in the gate.
+    Both halves, because the second is what changed in group 31. The runner's token carries **no**
+    role claim — one would be ignored — and the harness writes an `admin_roles` row instead, which
+    is what every other administrative principal has. There is no evaluation-shaped exception
+    anywhere in the gate.
 
-    **Live evaluation is not yet covered by this.** A live run signs in against Supabase Auth, and
-    the role would have to be set on that account's server-controlled metadata — which is account
-    provisioning rather than code, and belongs with the live-evaluation wiring in a later group.
-    Until then a live run is accounted against its own user's plan, which is stated here rather
-    than discovered by somebody reading a surprising bill.
+    **Live evaluation is not covered by this.** A live run signs in against Supabase Auth, and the
+    role row would have to be written for whatever subject that account turns out to have — which
+    is provisioning against a real project rather than code, and belongs with the live-evaluation
+    wiring in a later group. Until then a live run is accounted against its own user's plan, which
+    is stated here rather than discovered by somebody reading a surprising bill.
     """
-    from weathra.evaluation.provisioning import OFFLINE_TEST_SUBJECT, _build_offline_tokens
+    from weathra.evaluation.provisioning import (
+        OFFLINE_TEST_SUBJECT,
+        _build_offline_tokens,
+        _ensure_role_row,
+    )
 
     tokens = _build_offline_tokens(engines.settings)
     principal = await tokens.validator.validate(tokens.token)
-
-    subject = QuotaSubject.for_principal(principal, PlanCode.FREE)
     assert principal.user_id == OFFLINE_TEST_SUBJECT
+    assert "weathra_role" not in str(principal.claims), (
+        "the runner's token asserts no role; as of 0011 one would be ignored anyway"
+    )
+
+    async with session_as(engines, principal.user_id) as session:
+        assert not await is_administrative(session, principal), "no row yet, so not yet internal"
+
+    await _ensure_role_row(engines, principal.user_id)
+
+    async with session_as(engines, principal.user_id) as session:
+        administrative = await is_administrative(session, principal)
+    assert administrative
+
+    subject = QuotaSubject.for_principal(principal, PlanCode.FREE, administrative=administrative)
     assert subject.is_internal
     assert subject.key == INTERNAL_SUBJECT
 
@@ -611,7 +647,7 @@ async def test_an_evaluation_runs_identity_is_internal_by_the_token_it_carries(
 async def test_internal_usage_is_reported_apart_from_every_product_plan(
     engines: Engines, clean_database: None, seeded_reference_data: None
 ) -> None:
-    admin_id = await a_user(engines)
+    admin_id = await an_administrator(engines)
     ordinary_id = await a_user(engines)
 
     await gate_for(engines, admin_id, administrative=True).admit(
@@ -907,7 +943,7 @@ async def test_deleting_an_account_leaves_the_internal_counters_alone(
 ) -> None:
     """They are nobody's personal data, and an administrator deleting their own account must not
     reset the allowance the whole lab runs against."""
-    admin_id = await a_user(engines)
+    admin_id = await an_administrator(engines)
     await gate_for(engines, admin_id, administrative=True).admit(
         QuotaSubject.internal(), moment=NOW
     )

@@ -204,7 +204,10 @@ def _principal(user_id: str = "11111111-1111-1111-1111-111111111111", **claims: 
     return Principal.from_claims({"sub": user_id, **claims})
 
 
-ADMIN_CLAIMS: dict[str, Any] = {"app_metadata": {"weathra_role": "administrator"}}
+# A claim shaped exactly like the one groups 28 to 30 honoured. As of `0011` it is honoured
+# nowhere: the role is a row, and `specs/authentication` requires an asserted claim to be *ignored*.
+# Kept in the suite for that reason — as the negative control below, not as a way in.
+ASSERTED_ROLE_CLAIM: dict[str, Any] = {"app_metadata": {"weathra_role": "administrator"}}
 
 
 # =========================================================================== 28.1 the walk
@@ -336,7 +339,7 @@ async def test_a_client_asserted_plan_changes_nothing() -> None:
     import inspect
 
     parameters = set(inspect.signature(PolicyResolver.resolve).parameters)
-    assert parameters == {"self", "principal", "role", "session", "override"}
+    assert parameters == {"self", "principal", "role", "session", "override", "administrative"}
     assert "plan" not in parameters
     assert "model" not in parameters
 
@@ -359,15 +362,46 @@ async def test_a_plan_row_naming_the_administrative_policy_does_not_grant_it() -
 
 
 async def test_an_administrator_may_resolve_the_administrative_policy() -> None:
+    """The role arrives as an argument, resolved from `admin_roles` at the identity boundary.
+
+    Not looked up here, and not read from a claim: `entitlements/` may not reach the identity
+    layer, and a resolver that decided for itself who was an administrator would be a second
+    authorization path (design.md decision 4).
+    """
     plans = [
         _plan(PlanCode.FREE, 0, "free_default"),
         _plan(PlanCode.PRO, 1, "admin_experimental"),
         _plan(PlanCode.PREMIUM, 2, "high_reasoning"),
     ]
     resolved = await _resolver(_snapshot(plans=plans)).resolve(
-        principal=_principal(**ADMIN_CLAIMS), role=CallRole.SYNTHESIS, session=_session("pro")
+        principal=_principal(),
+        role=CallRole.SYNTHESIS,
+        session=_session("pro"),
+        administrative=True,
     )
     assert resolved.resolution.policy_id == "admin_experimental"
+
+
+async def test_a_token_claiming_the_administrative_role_resolves_nothing_extra() -> None:
+    """`specs/authentication`: an unverified claim asserting the role SHALL be ignored.
+
+    The regression this guards is a real one, because the claim *used* to work. A build that read
+    it again — a helpful refactor, a merge, a copied line — would pass every other test in this
+    file and quietly hand the administrative policy to anyone whose identity provider could be
+    persuaded to emit one field.
+    """
+    plans = [
+        _plan(PlanCode.FREE, 0, "free_default"),
+        _plan(PlanCode.PRO, 1, "admin_experimental"),
+        _plan(PlanCode.PREMIUM, 2, "high_reasoning"),
+    ]
+    resolved = await _resolver(_snapshot(plans=plans)).resolve(
+        principal=_principal(**ASSERTED_ROLE_CLAIM),
+        role=CallRole.SYNTHESIS,
+        session=_session("pro"),
+    )
+    assert resolved.resolution.policy_id == "free_default"
+    assert "administrative and the caller is not" in resolved.resolution.reason
 
 
 async def test_an_unknown_plan_code_reads_as_free_rather_than_failing() -> None:

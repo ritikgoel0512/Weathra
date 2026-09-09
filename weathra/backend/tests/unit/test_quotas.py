@@ -218,19 +218,34 @@ def test_an_ordinary_caller_is_counted_as_themselves_on_their_plan() -> None:
     assert subject.plan is PlanCode.PRO
 
 
-def test_an_administrator_is_internal_by_construction_and_carries_no_plan() -> None:
+def test_an_administrator_is_internal_and_carries_no_plan() -> None:
     """`specs/usage-limits`: administrative traffic is accounted internally even on a product path.
 
-    Derived from the validated token rather than from an argument, so there is no call site that
-    can get it wrong and no request shape that can opt out of its own plan's accounting.
+    The flag comes from `admin_roles` by way of the identity dependency, resolved once per request,
+    so the gate and the model resolver a moment later cannot disagree about who is an
+    administrator.
+    """
+    principal = Principal.from_claims(claims_for("11111111-2222-4333-8444-555555555555"))
+    subject = QuotaSubject.for_principal(principal, PlanCode.FREE, administrative=True)
+    assert subject.key == INTERNAL_SUBJECT
+    assert subject.is_internal
+    assert subject.plan is None, "an internal subject must not carry a plan to be mistaken for one"
+
+
+def test_a_token_claiming_the_administrative_role_is_counted_as_an_ordinary_caller() -> None:
+    """`specs/authentication`: an asserted role is ignored. Here that means it pays for itself.
+
+    The claim shape is exactly the one groups 28 to 30 honoured, so this is the regression guard
+    for the move to backend state: a build that read the claim again would let anyone whose
+    identity provider emits one field spend the internal allowance instead of their own.
     """
     principal = Principal.from_claims(
         claims_for("11111111-2222-4333-8444-555555555555", administrative=True)
     )
     subject = QuotaSubject.for_principal(principal, PlanCode.FREE)
-    assert subject.key == INTERNAL_SUBJECT
-    assert subject.is_internal
-    assert subject.plan is None, "an internal subject must not carry a plan to be mistaken for one"
+    assert subject.key == principal.user_id
+    assert not subject.is_internal
+    assert subject.plan is PlanCode.FREE
 
 
 def test_the_internal_subject_cannot_collide_with_a_real_one() -> None:

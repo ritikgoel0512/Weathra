@@ -53,7 +53,6 @@ from weathra.domain.usage import (
     SubjectKind,
     WindowKey,
 )
-from weathra.entitlements.administration import is_administrative
 
 __all__ = [
     "ADMISSION_ORDER",
@@ -171,15 +170,22 @@ class QuotaSubject:
         return cls(key=INTERNAL_SUBJECT, kind=SubjectKind.INTERNAL, plan=None)
 
     @classmethod
-    def for_principal(cls, principal: Principal, plan: PlanCode) -> QuotaSubject:
+    def for_principal(
+        cls, principal: Principal, plan: PlanCode, *, administrative: bool = False
+    ) -> QuotaSubject:
         """The subject *principal* is counted as, on *plan*.
 
-        The internal classification is derived from the validated token here rather than passed in
-        by the caller, which is what makes "internal by construction rather than by a flag" true:
-        there is no argument a route could get wrong, and no path that can opt a product request
-        out of its own plan's accounting.
+        *administrative* comes from `auth/roles.py`, resolved once per request at the identity
+        boundary. It is a parameter rather than a lookup because `specs/authentication` puts the
+        role in backend state and `entitlements/` may not reach the identity layer — and because
+        the resolver a moment later must get the same answer, which two independent lookups
+        eventually would not.
+
+        It is still not a *caller-supplied* flag in any sense that matters: nothing that reaches
+        the API can set it, and it defaults to ``False``, so a route that forgets it accounts an
+        administrator against their own plan rather than letting anyone reach the internal one.
         """
-        if is_administrative(principal):
+        if administrative:
             return cls.internal()
         return cls(key=principal.user_id, kind=SubjectKind.USER, plan=plan)
 

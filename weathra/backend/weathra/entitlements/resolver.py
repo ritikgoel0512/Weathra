@@ -56,7 +56,6 @@ from weathra.domain.entitlements import (
 )
 from weathra.domain.errors import ModelNotAllowlisted, NoEligibleModel, PolicyUnavailable
 from weathra.domain.identity import Principal
-from weathra.entitlements.administration import is_administrative
 from weathra.entitlements.records import CatalogEntry, PolicyEligibility, PolicyRecord
 from weathra.entitlements.snapshot import (
     EntitlementSnapshot,
@@ -114,8 +113,15 @@ class ModelPolicyResolver(Protocol):
         role: CallRole,
         session: AsyncSession,
         override: str | None = None,
+        administrative: bool = False,
     ) -> ResolvedCall:
-        """Decide which model serves one call, and say why."""
+        """Decide which model serves one call, and say why.
+
+        *administrative* is on the contract rather than inside the implementation because the
+        identity layer owns the answer (`specs/authentication` holds the role in backend state)
+        and `entitlements/` may not reach it. A resolver that looked it up itself would be a
+        second authorization path, which design.md decision 4 exists to prevent.
+        """
         ...
 
 
@@ -137,13 +143,24 @@ class PolicyResolver:
         role: CallRole,
         session: AsyncSession,
         override: str | None = None,
+        administrative: bool = False,
     ) -> ResolvedCall:
+        """Decide which model serves one call.
+
+        *administrative* is **received, not derived.** `specs/authentication` puts the role in
+        backend state keyed by the validated subject, and reading that state is the identity
+        layer's job — `auth/roles.py` — which `entitlements/` may not import and should not want
+        to. Determining it once per request at the identity boundary and passing it down also
+        means the quota gate and the resolver cannot disagree about who is an administrator, which
+        two independent lookups eventually would.
+
+        It defaults to ``False`` for the reason every security default should: a caller that
+        forgets to pass it gets the least privilege, not the most.
+        """
         if self._settings.llm_single_model_mode:
             return self._configured_fallback(
                 role, reason="single-model development mode: LLM_MODEL serves every call"
             )
-
-        administrative = is_administrative(principal)
 
         # An override is checked against the database before anything else, so an administrator
         # never acts on a snapshot up to one TTL old. A non-administrative caller's override is

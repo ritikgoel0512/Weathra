@@ -187,9 +187,31 @@ async def test_the_policy_set_matches_the_models_classification(
     )
     declared = set(Base.metadata.tables)
     owner_restricted = {row[0] for row in rows} & declared
-    assert owner_restricted == set(user_owned_tables())
-    for table in owner_restricted:
+
+    # `admin_roles` is the one operational table with an owner-restricting policy, and the
+    # exception is narrow in the direction that matters. It restricts *reads* to the acting
+    # subject — so the administrative predicate can run on the request session without becoming a
+    # way to enumerate who else is an administrator — while granting no write of any kind. The
+    # classification stays OPERATIONAL because the row is an authorization fact about a subject
+    # rather than the subject's own data: they cannot write it, and deleting their account does
+    # not remove it.
+    #
+    # The exception is paid for below rather than merely declared: a build that gave this table a
+    # write grant would fail here, which is exactly the mistake worth catching.
+    assert owner_restricted - {"admin_roles"} == set(user_owned_tables())
+    for table in owner_restricted - {"admin_roles"}:
         assert ownership_of(table) is Ownership.USER
+
+    role_grants = await privileged.execute(
+        text(
+            "SELECT privilege_type FROM information_schema.role_table_grants "
+            " WHERE table_name = 'admin_roles' AND grantee = 'weathra_request'"
+        )
+    )
+    assert {row[0] for row in role_grants} == {"SELECT"}, (
+        "admin_roles must stay read-only to the request path; a write grant here is a "
+        "self-service administrative promotion"
+    )
 
     everything = await privileged.execute(
         text("SELECT DISTINCT tablename FROM pg_policies WHERE schemaname = 'public'")

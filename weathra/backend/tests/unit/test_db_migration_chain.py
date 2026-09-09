@@ -35,6 +35,9 @@ EXPECTED_CHAIN = (
     # Group 30: the administrative-role accessor, and the second policy on `usage_counters` that
     # lets an administrator's product-path call be accounted against the internal allowance.
     "0010_internal_quota_accounting",
+    # Group 31: the administrative role as a row rather than a token claim, and the accessor
+    # rewritten to read it.
+    "0011_administrative_role_state",
 )
 
 

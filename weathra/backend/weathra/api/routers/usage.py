@@ -32,7 +32,7 @@ from sqlalchemy import text
 
 from weathra.api.dependencies import CurrentSession, Inference, Quota
 from weathra.api.middleware import annotate
-from weathra.auth.deps import RequiredPrincipal
+from weathra.auth.deps import IsAdministrative, RequiredPrincipal
 from weathra.auth.profiles import ensure_profile
 from weathra.entitlements.plans import PlanStore
 from weathra.entitlements.quotas import QuotaSubject, UsageReport
@@ -124,6 +124,7 @@ async def read_usage(
     session: CurrentSession,
     inference: Inference,
     quota: Quota,
+    administrative: IsAdministrative,
 ) -> UsageResponse:
     """Your plan, what you have used, and when each window resets.
 
@@ -136,7 +137,7 @@ async def read_usage(
 
     plan_code = await inference.effective_plan(principal, session)
     plan = await PlanStore(session).require(plan_code)
-    subject = QuotaSubject.for_principal(principal, plan_code)
+    subject = QuotaSubject.for_principal(principal, plan_code, administrative=administrative)
     report = await quota.report(subject)
 
     row = (

@@ -34,11 +34,11 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from sqlalchemy import text
 
 from weathra.auth.jwks import JwksCache
+from weathra.auth.roles import ADMINISTRATOR_ROLE
 from weathra.auth.tokens import TokenValidator
 from weathra.config import Settings
 from weathra.db.engine import Engines
 from weathra.db.session import privileged_session
-from weathra.entitlements.administration import ADMINISTRATOR_ROLE, ROLE_CLAIM
 
 __all__ = ["EvaluationMode", "TestIdentity", "provision_test_user"]
 
@@ -123,17 +123,11 @@ def _build_offline_tokens(settings: Settings) -> OfflineTokens:
         "iat": now,
         "exp": now + 3_600,
         "role": "authenticated",
-        # An evaluation run is internal traffic. `specs/usage-limits` accounts it against the
-        # internal allowance rather than any product plan, and the way a principal *is* internal is
-        # the role its validated token declares (`entitlements/administration.py`) — so it is
-        # declared here rather than smuggled past the gate with a flag. Without it a fifty-case
-        # dataset spends a Free tier's daily allowance a third of the way through the run and the
-        # rest of the suite measures 429s, which is how this was found.
-        #
-        # It is under `app_metadata` because that is the only container the predicate reads, and
-        # it changes nothing about resolution: no shipped plan maps `admin_experimental`, and the
-        # administrative *override* is applied only when a caller asks for one, which no route does.
-        "app_metadata": {ROLE_CLAIM: ADMINISTRATOR_ROLE},
+        # Deliberately *no* role claim. An evaluation run is internal traffic and must be
+        # accounted against the internal allowance (`specs/usage-limits`), but as of `0011` that
+        # is a row in `admin_roles`, not something a token can assert — `_ensure_role_row` below
+        # writes it. A claim here would be ignored, which is the property group 31 exists to
+        # establish, so putting one in would only mislead the next reader.
     }
     token = jwt.encode(claims, key, algorithm="RS256", headers={"kid": key_id})
 
@@ -173,6 +167,31 @@ async def _ensure_profile_row(engines: Engines, user_id: str) -> bool:
             )
         ).all()
     return bool(inserted)
+
+
+async def _ensure_role_row(engines: Engines, user_id: str) -> None:
+    """Give the evaluation subject the administrative role, under the privileged connection.
+
+    An evaluation run's usage is internal (`specs/usage-limits`), and since `0011` "internal" means
+    holding the role in `admin_roles` rather than carrying a claim. Privileged because the request
+    role is granted no write on that table at all — which is the point of the table.
+
+    Not audited, and that is deliberate rather than an omission: `record_change` attributes a grant
+    to an acting administrative principal, and a harness provisioning its own fixture is not one.
+    The grant is idempotent, scoped to a subject the dataset derives, and undone with the run's
+    database. A row in `admin_audit` claiming an administrator did this would be the fiction.
+
+    Without it a fifty-case dataset spends a Free tier's daily allowance a third of the way
+    through the run and every case after that measures a 429, which is how this was found.
+    """
+    async with privileged_session(engines.privileged_sessionmaker) as session:
+        await session.execute(
+            text(
+                "INSERT INTO admin_roles (subject_id, role) VALUES (CAST(:user AS uuid), :role) "
+                "ON CONFLICT (subject_id, role) DO NOTHING"
+            ),
+            {"user": user_id, "role": ADMINISTRATOR_ROLE},
+        )
 
 
 async def _provision_live_user(
@@ -265,6 +284,7 @@ async def provision_test_user(
     if mode is EvaluationMode.OFFLINE:
         offline = _build_offline_tokens(settings)
         provisioned = await _ensure_profile_row(engines, offline.subject)
+        await _ensure_role_row(engines, offline.subject)
         logger.info(
             "offline evaluation user %s %s",
             offline.subject,
@@ -286,6 +306,7 @@ async def provision_test_user(
 
     subject, token, provisioned_now = await _provision_live_user(settings, client)
     await _ensure_profile_row(engines, subject)
+    await _ensure_role_row(engines, subject)
     logger.info(
         "live evaluation user %s %s",
         subject,

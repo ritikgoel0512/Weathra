@@ -44,6 +44,7 @@ DECISION_10: dict[str, tuple[Ownership, tuple[str, ...]]] = {
     "model_evaluations": (Ownership.OPERATIONAL, ("id",)),
     "model_comparison_runs": (Ownership.OPERATIONAL, ("id",)),
     "model_comparison_results": (Ownership.OPERATIONAL, ("id",)),
+    "admin_roles": (Ownership.OPERATIONAL, ("subject_id", "role")),
     "admin_audit": (Ownership.OPERATIONAL, ("id",)),
 }
 

@@ -24,9 +24,12 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 
+from weathra.auth.rls import session_for
+from weathra.auth.roles import is_administrative
 from weathra.auth.tokens import TokenValidator
 from weathra.domain.errors import (
     AuthenticationFailed,
+    AuthorizationFailed,
     SigningKeysUnavailable,
     TokenMalformed,
     TokenMissing,
@@ -35,8 +38,11 @@ from weathra.domain.identity import Principal
 
 __all__ = [
     "IDENTITY_ASSERTING_HEADERS",
+    "AdministrativePrincipal",
+    "IsAdministrative",
     "OptionalPrincipal",
     "RequiredPrincipal",
+    "acting_role",
     "bearer_token",
     "get_token_validator",
     "optional_principal",
@@ -141,5 +147,50 @@ async def optional_principal(
         raise
 
 
+async def acting_role(
+    request: Request,
+    principal: Annotated[Principal | None, Depends(optional_principal)],
+) -> bool:
+    """Whether the acting principal holds the administrative role, resolved once per request.
+
+    Read from ``admin_roles`` on the request-scoped session, which is safe and scoped: the owner
+    policy means the query can only see the acting subject's own row (`0011`). No claim, no
+    header, no body field contributes — `specs/authentication` requires an asserted role to be
+    *ignored*, and the only thing this reads from the token is the subject it was validated for.
+
+    A boolean rather than a principal, so it can be depended on by routes that are not themselves
+    administrative — the quota gate and the model resolver both need the answer, and both need it
+    to be the *same* answer as the one an administrative route would get.
+    """
+    engines = getattr(request.app.state, "engines", None)
+    if principal is None or engines is None:
+        return False
+    async with session_for(engines, principal) as session:
+        return await is_administrative(session, principal)
+
+
+async def require_administrator(
+    principal: Annotated[Principal, Depends(require_principal)],
+    administrative: Annotated[bool, Depends(acting_role)],
+) -> Principal:
+    """The acting user for an administrative route, or a refusal.
+
+    Two dependencies deep on purpose: an unauthenticated caller is refused by
+    ``require_principal`` as 401 before this is reached, and an authenticated one without the role
+    is refused here as 403. A caller cannot tell the two apart by accident, and neither refusal
+    says anything about what the endpoint would have returned.
+
+    The message names no capability. `specs/authentication` requires the refusal to disclose
+    nothing about the endpoint's contents, and "you may not administer the model catalog" would be
+    a sentence about the model catalog.
+    """
+    if not administrative:
+        logger.info("administrative access refused for %s", principal)
+        raise AuthorizationFailed("This operation requires an administrative principal.")
+    return principal
+
+
 RequiredPrincipal = Annotated[Principal, Depends(require_principal)]
 OptionalPrincipal = Annotated[Principal | None, Depends(optional_principal)]
+IsAdministrative = Annotated[bool, Depends(acting_role)]
+AdministrativePrincipal = Annotated[Principal, Depends(require_administrator)]

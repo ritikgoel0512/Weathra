@@ -48,7 +48,7 @@ from weathra.api.dependencies import (
 )
 from weathra.api.middleware import annotate, current_request_id
 from weathra.api.streaming import StreamEmitter, sse_headers
-from weathra.auth.deps import RequiredPrincipal
+from weathra.auth.deps import IsAdministrative, RequiredPrincipal
 from weathra.auth.profiles import ensure_profile
 from weathra.config import Settings
 from weathra.db.session import request_session
@@ -194,6 +194,7 @@ async def _run(
     embedder: EmbeddingProvider,
     thread: ThreadRecord | None,
     tally: _RunTally,
+    administrative: bool,
     emitter: StreamEmitter | None = None,
 ) -> AgentRunResult:
     """One agent run, wired to this caller's memory and this request's session."""
@@ -241,6 +242,9 @@ async def _run(
         principal=principal,
         recorder=record,
         request_id=request_id,
+        # The same boolean the quota gate was given a moment ago, from the same read. Resolving it
+        # twice would let the gate and the resolver disagree about who is an administrator.
+        administrative=administrative,
     )
 
     state = GraphState.begin(
@@ -337,6 +341,8 @@ async def _admit(
     inference: Inference,
     principal: Principal,
     session: AsyncSession,
+    *,
+    administrative: bool,
 ) -> Admission:
     """Reserve this caller's allowance, before anything is asked of a gateway.
 
@@ -345,11 +351,13 @@ async def _admit(
     exhausted caller is refused rather than handed a 200 whose first event is the refusal.
 
     The plan comes from the resolver, which is the same source the model policy layer will read a
-    moment later. An administrative principal is accounted internally by construction: the subject
-    is derived from the validated token, and no argument here can opt a request out of its plan.
+    moment later. An administrative principal is accounted internally: *administrative* comes from
+    `admin_roles` by way of the identity dependency, so it is backend state rather than anything
+    the request said, and there is no argument reachable from the API that can set it.
     """
     plan = await inference.effective_plan(principal, session)
-    return await quota.admit(QuotaSubject.for_principal(principal, plan))
+    subject = QuotaSubject.for_principal(principal, plan, administrative=administrative)
+    return await quota.admit(subject)
 
 
 @router.post("/ask", response_model=AskResponse, summary="Ask a weather question")
@@ -364,6 +372,7 @@ async def ask(
     inference: Inference,
     embedder: Embedder,
     quota: Quota,
+    administrative: IsAdministrative,
 ) -> AskResponse:
     """Answer one question, with the evidence for every figure in it.
 
@@ -381,7 +390,7 @@ async def ask(
         question=body.question,
     )
 
-    admission = await _admit(quota, inference, principal, session)
+    admission = await _admit(quota, inference, principal, session, administrative=administrative)
     tally = _RunTally()
     try:
         result = await _run(
@@ -396,6 +405,7 @@ async def ask(
             embedder=embedder,
             thread=thread,
             tally=tally,
+            administrative=administrative,
         )
     except BaseException:
         # A run that never reached a gateway cost nothing, so its request reservation goes back.
@@ -428,6 +438,7 @@ async def stream(
     inference: Inference,
     embedder: Embedder,
     quota: Quota,
+    administrative: IsAdministrative,
 ) -> StreamingResponse:
     """The same run, reported as it happens.
 
@@ -462,7 +473,7 @@ async def stream(
     # Before the response, for the same reason as the guard above: `specs/usage-limits` requires an
     # exhausted caller's stream to be *refused* rather than opened and terminated mid-answer. A 429
     # here is a 429; inside the generator it would be a 200 whose first event apologises.
-    admission = await _admit(quota, inference, principal, session)
+    admission = await _admit(quota, inference, principal, session, administrative=administrative)
 
     emitter = StreamEmitter(request_id=current_request_id())
     tally = _RunTally()
@@ -485,6 +496,7 @@ async def stream(
                         embedder=embedder,
                         thread=thread,
                         tally=tally,
+                        administrative=administrative,
                         emitter=emitter,
                     )
                 ):
