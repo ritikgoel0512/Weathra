@@ -770,7 +770,21 @@ against production in full:
 | 18.8 unauthenticated stream | `/agent/stream` refuses with 401 rather than opening a stream |
 | 18.10 frontend protected routes | the redirects above, with the destination kept |
 | 18.11 secret containment | the served bundle, plus the repository check on every push |
-| The RLS gate | verified against the deployed database itself: Row Level Security **enabled and forced** with a policy on all five user-owned tables, `weathra_request` unable to log in or bypass it, `weathra_api` not inheriting and holding no privileged attribute — `database-retention` run 34262284576 |
+| The RLS gate | verified against the deployed database itself, read-only: Row Level Security **enabled and forced** with a policy on each of `profiles`, `preferences`, `saved_locations`, `threads` and `agent_runs`, `weathra_request` unable to log in or bypass it, `weathra_api` not inheriting and holding no privileged attribute — `database-retention` run 34328049918 (2026-09-09T08:15Z, commit `12d394a`) |
+
+**On the five tables, and why it is five.** Those are the user-owned tables group 18 was written
+against, and 18.9's RLS gate is the gate on them. Three more became user-owned later the same day —
+`user_plans`, `usage_counters` and `llm_usage_events`, added by `6a85a9a` at 07:55Z, after the
+05:44Z commit the run above verified — so the production verification of *those three* is a
+34.3/34.7 matter and is not part of 25.3's evidence. `scripts/verify_database.py` derives its list
+from the model metadata, so the next scheduled retention run covers all eight without any change
+here.
+
+**Re-verified after group 33.** The credential-free half of 25.3 was run again on **2026-09-09**
+against the then-current production deployment — after group 33 shipped and after `release`
+succeeded on `6b38159` — as `pytest tests/deployed/test_deployed_acceptance.py -m deployed`:
+**52 passed, 4 skipped, 0 failed**. The four skips are the session tier, named below. Nothing in
+the rejection half regressed, and the re-run needed no credential of any kind.
 
 ### What automation proved (task 34.7, the SaaS layer)
 
@@ -863,6 +877,39 @@ a comparison whose evidence means nothing.
   principals (18.5, 18.6, 18.7), the RLS gate is verified on the deployed database as above, and the
   request role is verified as unable to bypass it. **That is not a live two-user production test and
   is not recorded as one.** It is the strongest evidence available without a second account.
+
+### Task 25.3's standing, stated as a whole
+
+The task reads: *run the authentication and authorization suite of group 18 against the deployed
+backend and record the results; verify every case passes, including cross-user isolation and the RLS
+gate.* Its cases divide into three, and the division is the reason the task is still open.
+
+**Proven against the deployment, with no credential** — 52 checks, re-run 2026-09-09, 0 failures:
+18.3 on all thirteen protected endpoints, 18.4 on nine token shapes including a structurally valid
+one signed by a key production has never seen, 18.8's unauthenticated half, 18.10's redirects with
+the destination kept, and 18.11 on the served bundle. Two structural assertions hold the list to
+`openapi.json`, so a protected path cannot be added without a check.
+
+**Proven against the deployed database, read-only** — the RLS gate, above.
+
+**Not proven against the deployment, and not closable here** — 18.2's valid-request case beyond the
+endpoints the owner exercised by hand, 18.8's authenticated stream, and 18.5, 18.6 and 18.7's
+cross-user isolation. The first two need one live session; the last three need two, because
+"user A cannot read user B's data" cannot be asked with one subject and cannot be simulated: a
+locally minted token is refused by production by design, which is what makes the rejection half
+above meaningful and what makes the isolation half impossible to fake.
+
+The owner's constraints on this, recorded so the reason survives the decision: **no new Supabase
+account is to be created**, **no second test account is to be requested**, **no personal login
+credential is to be stored in GitHub Actions** — an Actions secret is readable by every workflow
+that names it — and **Supabase Auth configuration is not to be changed** without evidence that it
+is wrong, of which there is none. `live-acceptance.yml` and the suite are already built for the day
+those constraints change: six variables, and the tier runs. Until then 25.3 stays open, because
+closing it would report a two-user production result that nobody has obtained.
+
+**What would close it.** Two dedicated production accounts — not the owner's own — with their
+credentials supplied to `live-acceptance.yml`'s six variables, and one dispatch. Nothing in the
+repository needs to change.
 
 ## No local machine
 
