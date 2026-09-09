@@ -72,7 +72,7 @@ class InstrumentedLLMClient:
     attempted, because each is a separate inner call.
     """
 
-    __slots__ = ("_attempts", "_context", "_inner", "_last_event_id", "_recorder")
+    __slots__ = ("_attempts", "_context", "_inner", "_recorder")
 
     def __init__(
         self,
@@ -86,7 +86,6 @@ class InstrumentedLLMClient:
         self._context = context
         self._recorder = recorder
         self._attempts = attempts
-        self._last_event_id: str | None = None
 
     @property
     def provider_id(self) -> str:
@@ -153,12 +152,22 @@ class InstrumentedLLMClient:
         """
         try:
             events = self._project(status, http_status, error_code, elapsed_ms, served_model)
-        except Exception:  # pragma: no cover - defensive; a projection bug is not an outage
-            logger.warning("could not project a usage event for %s", self._context.call_role.value)
-            return
-        if events:
-            self._last_event_id = events[-1].event_id
-            self._recorder(events)
+            if events:
+                self._recorder(events)
+        except Exception as failure:
+            # Both the projection *and* the hand-off are inside this guard, and the second half is
+            # the one that matters: `specs/llm-telemetry` requires a telemetry failure never to be
+            # reported to a caller as a weather or agent error, and a recorder that raised would
+            # have turned a perfectly good answer into a 500. The request path's recorder schedules
+            # a background task and does not raise — but "does not raise today" is not the
+            # guarantee the spec asks for.
+            #
+            # Not silent: the type goes in the line. Its message may carry a provider payload.
+            logger.warning(
+                "could not record usage for %s: %s",
+                self._context.call_role.value,
+                type(failure).__name__,
+            )
 
     def _project(
         self,
@@ -187,11 +196,14 @@ class InstrumentedLLMClient:
                 error_code=error_code,
                 latency_ms=elapsed_ms,
             )
-            event = project_attempt(attempt, self._context, retried_event_id=self._last_event_id)
+            event = project_attempt(attempt, self._context)
             return [event] if event is not None else []
 
         events: list[UsageEvent] = []
-        previous = self._last_event_id
+        # Retries are linked *within one outer call* and never across two. A second `complete()`
+        # is a separate call, not a retry of the first — and `UsageEvent` refuses an event that
+        # claims to have retried something while being attempt one, which is how this was found.
+        previous: str | None = None
         for gateway in reported:
             attempt = InferenceAttempt(
                 stage=stage,
@@ -214,7 +226,7 @@ class InstrumentedLLMClient:
                 event_id=str(uuid.uuid4()),
                 # A retry names the event it retried, so the pair reconstructs "needed two tries"
                 # without anyone having to correlate by timestamp.
-                retried_event_id=previous if gateway.attempt_number > 1 else self._last_event_id,
+                retried_event_id=previous if gateway.attempt_number > 1 else None,
                 prompt_tokens=gateway.prompt_tokens,
                 completion_tokens=gateway.completion_tokens,
                 total_tokens=gateway.total_tokens,

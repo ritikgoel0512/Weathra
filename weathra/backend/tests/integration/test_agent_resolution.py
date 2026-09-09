@@ -35,6 +35,7 @@ from weathra.db.session import privileged_session
 from weathra.domain.entitlements import CallRole, PlanCode
 from weathra.domain.evidence import InferenceStage
 from weathra.domain.identity import Principal
+from weathra.domain.usage import UsageEvent
 from weathra.domain.weather import UnitSystem
 from weathra.entitlements.plans import PlanStore
 from weathra.entitlements.resolver import PolicyResolver
@@ -107,7 +108,12 @@ class _ResolvingBroker(ModelBroker):
     """
 
     def _wrap(self, resolved: Any) -> Any:
-        return _RecordingFake(resolved.resolution.gateway_model)
+        # Through the real `_instrumented`, so a run with a recorder exercises the actual
+        # telemetry path. Returning the fake directly would replace the transport *and* silently
+        # remove the instrumentation, and every telemetry assertion below would pass vacuously.
+        return self._instrumented(
+            _RecordingFake(resolved.resolution.gateway_model), resolved, attempts=None
+        )
 
 
 @pytest.fixture
@@ -536,3 +542,105 @@ async def test_both_memory_tiers_are_untouched_by_the_policy_layer(
     assert result.memory.available
     # And the run resolved a policy, so this was the resolving path rather than a bound client.
     assert result.envelope.evidence.inference_attempts[-1].policy_id == "balanced"
+
+
+# =========================================================================== 29.5 and 29.9 wiring
+
+
+async def test_a_real_run_records_one_usage_event_per_attempt(
+    engines: Engines, wired: tuple[Settings, PolicyResolver]
+) -> None:
+    """Task 29.9 end to end: the events are a projection of the attempts the run recorded.
+
+    Asserted against the evidence record rather than against a count, because the requirement is
+    that the two agree — one event per recorded attempt, with the same classification and the same
+    resolution facts, and no field derived twice from different places.
+    """
+    settings, resolver = wired
+    user_id = new_user_id()
+    await _assign(engines, user_id, PlanCode.PRO)
+    principal = Principal.from_claims({"sub": user_id})
+
+    recorded: list[UsageEvent] = []
+
+    async with privileged_session(engines.privileged_sessionmaker) as session:
+        broker = _ResolvingBroker(
+            resolver=resolver,
+            session=session,
+            settings=settings,
+            http=httpx.AsyncClient(),
+            principal=principal,
+            recorder=recorded.extend,
+        )
+        async with connected_tools(settings=settings) as tools:
+            result = await run_agent(
+                _state("What is the forecast for Berlin over the next 3 days?", principal),
+                RunDependencies(
+                    settings=settings, tools=tools, geocoder=StubGeocoder(), models=broker
+                ),
+            )
+
+    attempts = [
+        attempt
+        for attempt in result.envelope.evidence.inference_attempts
+        if attempt.provider is not None
+    ]
+    assert attempts, "the run called a model"
+    assert len(recorded) == len(attempts), "one event per recorded attempt"
+
+    for attempt, event in zip(attempts, recorded, strict=True):
+        assert event.call_role.value == attempt.stage.value
+        assert (event.status.value == "success") is (attempt.status.value == "served"), (
+            "the event's classification must equal the attempt's"
+        )
+        assert str(event.policy_id) == attempt.policy_id
+        assert event.catalog_key == attempt.catalog_key
+        assert event.plan is not None and event.plan.value == attempt.plan
+
+
+async def test_the_answer_is_identical_whether_recording_works_or_not(
+    engines: Engines, wired: tuple[Settings, PolicyResolver]
+) -> None:
+    """`specs/llm-telemetry`: recording changes nothing about the answer.
+
+    One run with a working recorder and one with a recorder that raises on every call. The envelope
+    — prose, findings, tool calls, grounding — must be the same, and the failing run must still
+    produce an answer rather than an error.
+    """
+    settings, resolver = wired
+    user_id = new_user_id()
+    await _assign(engines, user_id, PlanCode.PRO)
+    principal = Principal.from_claims({"sub": user_id})
+
+    def exploding(_events: Sequence[UsageEvent]) -> None:
+        raise RuntimeError("the telemetry store is unreachable")
+
+    async def once(recorder: Any) -> Any:
+        async with privileged_session(engines.privileged_sessionmaker) as session:
+            broker = _ResolvingBroker(
+                resolver=resolver,
+                session=session,
+                settings=settings,
+                http=httpx.AsyncClient(),
+                principal=principal,
+                recorder=recorder,
+            )
+            async with connected_tools(settings=settings) as tools:
+                return await run_agent(
+                    _state("What is the forecast for Berlin over the next 3 days?", principal),
+                    RunDependencies(
+                        settings=settings, tools=tools, geocoder=StubGeocoder(), models=broker
+                    ),
+                )
+
+    working = await once(lambda events: None)
+    broken = await once(exploding)
+
+    assert broken.envelope.answer_prose == working.envelope.answer_prose
+    assert [call.tool for call in broken.envelope.evidence.tool_calls] == [
+        call.tool for call in working.envelope.evidence.tool_calls
+    ]
+    assert [(f.label, f.value) for f in broken.envelope.findings] == [
+        (f.label, f.value) for f in working.envelope.findings
+    ]
+    assert broken.envelope.grounding.verified == working.envelope.grounding.verified

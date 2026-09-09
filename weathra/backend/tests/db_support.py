@@ -224,8 +224,17 @@ async def _reseed_reference_data(engines: Engines) -> None:
     spec.loader.exec_module(seed_module)
 
     async with privileged_session(engines.privileged_sessionmaker) as session:
-        # FK-safe order: allowances and plans reference nothing the others need, policies reference
-        # the catalog, and the catalog is referenced by rows `clean_database` has already removed.
+        # FK-safe order, and the first group is the part that is easy to get wrong: `model_catalog`
+        # is referenced with ON DELETE RESTRICT by recorded usage and by evaluation results, so a
+        # reseed that went straight for the catalog fails as soon as anything has recorded a call.
+        # Those tables are a test's own rows — `clean_database` empties them too — so clearing them
+        # here is removing test data rather than reaching past a boundary.
+        for referencing in (
+            "llm_usage_events",
+            "model_comparison_results",
+            "model_evaluations",
+        ):
+            await session.execute(text(f"DELETE FROM {referencing}"))
         for table in ("usage_limits", "user_plans", "subscription_plans", "model_policies"):
             await session.execute(text(f"DELETE FROM {table}"))
         await session.execute(text("DELETE FROM model_catalog"))

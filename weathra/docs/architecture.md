@@ -582,13 +582,13 @@ Task 22.10's live execution remains outstanding).
 
 | Requirement | Tasks | Implementation | Tests | Status |
 |---|---|---|---|---|
-| Every language model call emits a usage event | 29.1, 29.3 | — not implemented | — none | OPEN |
-| Failures, timeouts, and refusals are recorded | 29.4 | — not implemented | — none | OPEN |
-| Cost estimation is deterministic and labelled as an estimate | 29.2 | — not implemented | — none | OPEN |
-| Telemetry records metadata, not conversation content | 29.6 | — not implemented | — none | OPEN |
-| Telemetry never degrades or blocks the answer path | 29.5 | — not implemented | — none | OPEN |
+| Every language model call emits a usage event | 29.1, 29.3 | telemetry/usage.py, telemetry/projection.py, agents/llm/instrumented.py | unit/test_telemetry.py, integration/test_telemetry_persistence.py, integration/test_agent_resolution.py | IMPLEMENTED |
+| Failures, timeouts, and refusals are recorded | 29.4 | agents/llm/instrumented.py, telemetry/projection.py, agents/llm/attempts.py | unit/test_telemetry.py, integration/test_telemetry_persistence.py | IMPLEMENTED |
+| Cost estimation is deterministic and labelled as an estimate | 29.2 | telemetry/cost.py | unit/test_telemetry.py | IMPLEMENTED |
+| Telemetry records metadata, not conversation content | 29.6 | domain/usage.py, telemetry/projection.py | integration/test_telemetry_persistence.py, unit/test_telemetry.py | IMPLEMENTED |
+| Telemetry never degrades or blocks the answer path | 29.5 | telemetry/usage.py, agents/llm/instrumented.py | integration/test_telemetry_persistence.py, integration/test_agent_resolution.py | IMPLEMENTED |
 | Telemetry is owner-scoped and internal usage is separated | 29.1, 30.5 | — not implemented | — none | OPEN |
-| Telemetry is aggregatable and retained for a bounded period | 29.7, 29.8 | — not implemented | — none | OPEN |
+| Telemetry is aggregatable and retained for a bounded period | 29.7, 29.8 | telemetry/aggregate.py, memory/retention.py | integration/test_telemetry_persistence.py | IMPLEMENTED |
 
 ### `usage-limits`
 
