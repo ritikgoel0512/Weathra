@@ -283,12 +283,26 @@ def _statistics_for(case: EvaluationCase) -> tuple[str, ...]:
 
 @asynccontextmanager
 async def build_evaluation_app(
-    settings: Settings, *, mode: EvaluationMode
+    settings: Settings, *, mode: EvaluationMode, pinned_catalog_key: str | None = None
 ) -> AsyncIterator[PreparedApp]:
-    """The app an evaluation run drives, with this mode's substitutions in place."""
+    """The app an evaluation run drives, with this mode's substitutions in place.
+
+    *pinned_catalog_key* names the candidate a model comparison is measuring. It reaches the
+    request path through the same pin as the policy itself — see `pin_evaluation_policy` — so a
+    candidate run's resolution is a real catalog-validated resolution rather than an environment
+    variable the policy layer happens to fall back to.
+    """
     app = build_app(settings)
 
     async with app.router.lifespan_context(app):
+        # `specs/evaluation`: a live run resolves its pinned model through the fixed-model
+        # evaluation policy rather than through the evaluation test user's subscription plan. The
+        # pin goes on before the corpus, the identity or the first case, because everything after
+        # this line can issue an inference call. Offline mode resolves nothing — the scripted
+        # client is installed at the same seam and there is no model to pin.
+        if mode is EvaluationMode.LIVE:
+            app.state.inference.pin_evaluation_policy(catalog_key=pinned_catalog_key)
+
         outbound = app.state.http_client
 
         if mode is EvaluationMode.OFFLINE:
@@ -330,8 +344,11 @@ async def build_evaluation_app(
             settings=settings,
             mode=mode,
             identity=identity,
-            llm_provider=app.state.inference.provider_id if mode is EvaluationMode.LIVE else None,
-            llm_model=app.state.inference.model_id if mode is EvaluationMode.LIVE else None,
+            # Left unset for a live run: `LLM_MODEL` is no longer what serves one, and recording
+            # it here would have the run record name a model the policy layer never selected. The
+            # runner fills both in from the resolution its pre-flight actually obtained.
+            llm_provider=None,
+            llm_model=None,
             weather_provider=settings.default_weather_provider,
         )
 

@@ -101,6 +101,8 @@ class ModelBroker:
         "_http",
         "_installed",
         "_override",
+        "_pinned_catalog_key",
+        "_pinned_evaluation",
         "_principal",
         "_recorder",
         "_request_id",
@@ -124,8 +126,12 @@ class ModelBroker:
         agent_run_id: str | None = None,
         request_id: str | None = None,
         administrative: bool = False,
+        pinned_evaluation: bool = False,
+        pinned_catalog_key: str | None = None,
     ) -> None:
         self._administrative = administrative
+        self._pinned_evaluation = pinned_evaluation
+        self._pinned_catalog_key = pinned_catalog_key
         self._recorder = recorder
         self._run_id = agent_run_id
         self._request_id = request_id
@@ -148,13 +154,7 @@ class ModelBroker:
         if existing is not None:
             return existing
 
-        resolved = await self._resolver.resolve(
-            principal=self._principal,
-            role=role,
-            session=self._session,
-            override=self._override,
-            administrative=self._administrative,
-        )
+        resolved = await self._resolve(role)
         binding = RoleBinding(self._wrap(resolved), resolved)
         self._bindings[role] = binding
         logger.debug(
@@ -164,6 +164,30 @@ class ModelBroker:
             resolved.resolution.catalog_key,
         )
         return binding
+
+    async def _resolve(self, role: CallRole) -> ResolvedCall:
+        """One role's resolution: the policy walk, or the pinned evaluation path.
+
+        `specs/evaluation` requires a live evaluation run's model to come from the fixed-model
+        evaluation policy rather than from the evaluation test user's subscription plan. The branch
+        is here, in the one place that resolves, rather than in the runner — a runner that chose
+        its own model would be the second model-selection path `specs/model-policy` exists to
+        prevent, and it is what `LLM_MODEL` was quietly doing before this.
+
+        Note what the pinned branch does *not* pass: no principal, no override, no administrative
+        flag. There is nothing for a plan, a caller's field or a role grant to influence.
+        """
+        if self._pinned_evaluation:
+            return await self._resolver.resolve_fixed_evaluation(
+                role=role, session=self._session, pinned_catalog_key=self._pinned_catalog_key
+            )
+        return await self._resolver.resolve(
+            principal=self._principal,
+            role=role,
+            session=self._session,
+            override=self._override,
+            administrative=self._administrative,
+        )
 
     def resolved_roles(self) -> dict[CallRole, RoleBinding]:
         """Every role this run actually resolved. Only what was needed, never speculative."""

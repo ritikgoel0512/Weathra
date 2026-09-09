@@ -9,7 +9,7 @@ be able to prove the gateway client works without either.
 from __future__ import annotations
 
 import json
-from typing import Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import httpx
 import pytest
@@ -32,6 +32,7 @@ from weathra.agents.llm.fake import FakeLLMClient, ScriptExhausted
 from weathra.agents.llm.openrouter import OPENROUTER_PROVIDER_ID, OpenRouterClient
 from weathra.agents.llm.registry import LLMProvider, available_providers, build_client
 from weathra.config import Settings
+from weathra.domain.entitlements import CallRole, PolicyId, Resolution
 from weathra.domain.errors import (
     AGENT_UNAVAILABLE_MESSAGE,
     AgentNotConfigured,
@@ -43,6 +44,10 @@ from weathra.domain.errors import (
     WeathraError,
 )
 from weathra.domain.evidence import InferenceStatus
+from weathra.entitlements.resolver import ResolvedCall
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 BASE_URL = "https://gateway.test/api/v1"
 COMPLETIONS = f"{BASE_URL}/chat/completions"
@@ -602,6 +607,110 @@ def test_a_provider_can_be_overridden_with_the_fake_for_tests() -> None:
     fake = FakeLLMClient(completions=["scripted"])
     provider.override(fake)
     assert provider.get() is fake
+
+
+# =========================================================================== task 34.7
+#
+# The defect group 34's evaluation wiring found in group 28's. `LLMProvider.get()` cached the
+# `LLM_MODEL` client in the same slot `override()` writes, and `broker()` passed that slot on as
+# the *installed* client — so from the agent route, which calls `get()` first for the credential
+# guard, every resolution was recorded and none was honoured. Every call in the process was served
+# by `LLM_MODEL` while the evidence record, the usage event and the response envelope named the
+# resolved catalog entry.
+
+
+class _StubResolver:
+    """A resolver that always returns one known resolution, so the seam is what is under test."""
+
+    def __init__(self, gateway_model: str) -> None:
+        self.gateway_model = gateway_model
+
+    async def resolve(self, *, role: CallRole, **_: object) -> ResolvedCall:
+        return ResolvedCall(
+            resolution=Resolution(
+                policy_id=PolicyId("balanced"),
+                catalog_key="standard-general",
+                gateway_provider=OPENROUTER_PROVIDER_ID,
+                gateway_model=self.gateway_model,
+                reason="stub",
+                call_role=role,
+            ),
+            remaining=(),
+            failover_enabled=False,
+        )
+
+    async def resolve_fixed_evaluation(self, *, role: CallRole, **_: object) -> ResolvedCall:
+        return await self.resolve(role=role)
+
+
+# The pinned and stubbed resolutions below never touch a session — the stub answers without one,
+# and the pinned path reads no plan — so there is nothing for a real one to do here.
+_NO_SESSION = cast("AsyncSession", None)
+
+
+def _provider_with(resolver: _StubResolver, **overrides: object) -> LLMProvider:
+    """A provider whose resolver is the stub above.
+
+    Reaching for the private slot deliberately: what is under test is the seam between the
+    provider and the broker, and there is no production reason for a resolver to be injectable —
+    adding a setter to make this test prettier would add an API nothing else needs.
+    """
+    provider = LLMProvider(httpx.AsyncClient(), _settings(**overrides))
+    provider._resolver = resolver  # type: ignore[assignment]
+    return provider
+
+
+async def test_the_resolved_model_serves_the_call_even_after_the_credential_guard_ran() -> None:
+    """The regression. `LLM_MODEL` is the fallback rung, never what a resolved call is served by."""
+    provider = _provider_with(_StubResolver("resolved/policy-model"))
+
+    provider.get()  # the agent route's credential guard, which is what used to poison the broker
+    broker = provider.broker(session=_NO_SESSION, principal=None)
+    client = await broker.client_for(CallRole.SYNTHESIS)
+    binding = await broker.binding_for(CallRole.SYNTHESIS)
+
+    assert binding.resolution.gateway_model == "resolved/policy-model"
+    assert client.model_id == "resolved/policy-model", (
+        "the client must serve the model the resolution names, not the configured fallback"
+    )
+    assert client.model_id != MODEL
+
+
+async def test_an_explicitly_installed_client_still_wins_over_resolution() -> None:
+    """The offline evaluation harness and the fake-LLM suites depend on this half."""
+    provider = _provider_with(_StubResolver("resolved/policy-model"))
+    fake = FakeLLMClient(completions=["scripted"])
+    provider.override(fake)
+
+    broker = provider.broker(session=_NO_SESSION, principal=None)
+    assert await broker.client_for(CallRole.SYNTHESIS) is fake
+    assert provider.get() is fake
+
+
+async def test_two_call_roles_resolve_two_clients_from_one_provider() -> None:
+    """`specs/model-policy`: one client per resolved model per call role, from the same process."""
+    provider = _provider_with(_StubResolver("resolved/policy-model"))
+    provider.get()
+    broker = provider.broker(session=_NO_SESSION, principal=None)
+
+    routing = await broker.client_for(CallRole.ROUTING)
+    synthesis = await broker.client_for(CallRole.SYNTHESIS)
+    assert routing is not synthesis, "each role holds its own client"
+    assert routing.model_id == synthesis.model_id == "resolved/policy-model"
+
+
+async def test_a_pinned_evaluation_process_resolves_the_pinned_path() -> None:
+    """Task 34.7. The pin is process state, and it is what the broker asks through."""
+    provider = _provider_with(_StubResolver("pinned/evaluation-model"))
+    assert not provider.evaluation_pinned
+
+    provider.pin_evaluation_policy()
+    assert provider.evaluation_pinned
+
+    provider.get()
+    broker = provider.broker(session=_NO_SESSION, principal=None)
+    client = await broker.client_for(CallRole.ROUTING)
+    assert client.model_id == "pinned/evaluation-model"
 
 
 # =========================================================================== task 22.8

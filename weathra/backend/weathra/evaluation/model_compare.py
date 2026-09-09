@@ -248,6 +248,10 @@ async def _run_candidate(
             mode=mode,
             category=category,
             case_id=case_id,
+            # Both halves of the same pin: the catalog key is what a live run resolves through
+            # (validated against the catalog, no plan read), and the gateway identifier is what an
+            # offline run records so a candidate's results are attributed to that candidate.
+            pinned_catalog_key=entry.catalog_key,
             pinned_model=entry.gateway_model,
             cases=cases,
         )

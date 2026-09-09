@@ -14,7 +14,7 @@ indirectly, would show up here as two runs that differ in something they must no
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 import httpx
@@ -33,11 +33,14 @@ from weathra.config import Settings
 from weathra.db.engine import Engines
 from weathra.db.session import privileged_session
 from weathra.domain.entitlements import CallRole, PlanCode
+from weathra.domain.errors import ModelNotAllowlisted
 from weathra.domain.evidence import InferenceStage
 from weathra.domain.identity import Principal
 from weathra.domain.usage import UsageEvent
 from weathra.domain.weather import UnitSystem
+from weathra.entitlements.catalog import CatalogStore
 from weathra.entitlements.plans import PlanStore
+from weathra.entitlements.records import CapabilityTier
 from weathra.entitlements.resolver import PolicyResolver
 from weathra.entitlements.snapshot import SnapshotCache
 from weathra.memory.preferences import PreferenceStore
@@ -157,6 +160,7 @@ async def _run(
     principal: Principal,
     *,
     question: str = "What is the forecast for Berlin over the next 3 days?",
+    pinned_evaluation: bool = False,
 ) -> Any:
     """One run, on a session opened for it — the way a request does."""
     async with privileged_session(engines.privileged_sessionmaker) as session:
@@ -166,6 +170,7 @@ async def _run(
             settings=settings,
             http=httpx.AsyncClient(),
             principal=principal,
+            pinned_evaluation=pinned_evaluation,
         )
         async with connected_tools(settings=settings) as tools:
             return await run_agent(
@@ -426,6 +431,165 @@ async def test_no_product_plan_can_reach_the_pinned_policy_through_a_run(
         result = await _run(engines, settings, resolver, Principal.from_claims({"sub": user_id}))
         for attempt in result.envelope.evidence.inference_attempts:
             assert attempt.policy_id != "evaluation_fixed"
+
+
+# =========================================================================== 34.7 the wiring
+#
+# 28.10 built `resolve_fixed_evaluation` and proved it in isolation; nothing called it. A live
+# evaluation run reached the model through the *product* walk — the evaluation test user's plan,
+# then its policy, then whatever that resolved — with `LLM_MODEL` reachable only as the chain's
+# last rung. These are the tests that the pinned path is now the path a run actually takes.
+
+
+async def test_a_pinned_broker_resolves_the_evaluation_policy_and_reads_no_plan(
+    engines: Engines, wired: tuple[Settings, PolicyResolver]
+) -> None:
+    """The broker's own branch, against the seeded policy and a caller mapped somewhere else."""
+    settings, resolver = wired
+    user_id = new_user_id()
+    await _assign(engines, user_id, PlanCode.PREMIUM)
+    principal = Principal.from_claims({"sub": user_id})
+
+    async with privileged_session(engines.privileged_sessionmaker) as session:
+        broker = _ResolvingBroker(
+            resolver=resolver,
+            session=session,
+            settings=settings,
+            http=httpx.AsyncClient(),
+            principal=principal,
+            pinned_evaluation=True,
+        )
+        for role in (CallRole.ROUTING, CallRole.SYNTHESIS):
+            binding = await broker.binding_for(role)
+            assert binding.resolution.policy_id == "evaluation_fixed"
+            assert binding.resolution.catalog_key == "economy-free-primary"
+            assert "no plan is read" in binding.resolution.reason
+            assert not binding.resolved.may_fail_over
+
+
+async def test_a_pinned_run_records_the_evaluation_policy_for_every_call(
+    engines: Engines, wired: tuple[Settings, PolicyResolver]
+) -> None:
+    """A whole run through the graph, so the record a run archives is what is asserted."""
+    settings, resolver = wired
+    user_id = new_user_id()
+    await _assign(engines, user_id, PlanCode.PREMIUM)
+    principal = Principal.from_claims({"sub": user_id})
+
+    result = await _run(engines, settings, resolver, principal, pinned_evaluation=True)
+
+    attempts = result.envelope.evidence.inference_attempts
+    assert attempts, "a pinned run still records every call it made"
+    assert {attempt.policy_id for attempt in attempts} == {"evaluation_fixed"}
+    assert {attempt.catalog_key for attempt in attempts} == {"economy-free-primary"}
+    # One model across the whole run, which is the requirement `specs/evaluation` states.
+    assert len({attempt.selected_model for attempt in attempts}) == 1
+
+
+async def test_moving_the_evaluation_users_plan_does_not_move_a_pinned_run(
+    engines: Engines, wired: tuple[Settings, PolicyResolver]
+) -> None:
+    """`specs/evaluation`'s reason for the pinned policy, asked of a run rather than a resolver."""
+    settings, resolver = wired
+    user_id = new_user_id()
+    await _assign(engines, user_id, PlanCode.FREE)
+    principal = Principal.from_claims({"sub": user_id})
+
+    before = await _run(engines, settings, resolver, principal, pinned_evaluation=True)
+    await _assign(engines, user_id, PlanCode.PREMIUM)
+    async with privileged_session(engines.privileged_sessionmaker) as admin:
+        await PlanStore(admin).set_policy_mapping(
+            PlanCode.PREMIUM,
+            {CallRole.ROUTING: "high_reasoning", CallRole.SYNTHESIS: "high_reasoning"},
+            acting_principal=ADMIN,
+        )
+
+    after = await _run(engines, settings, resolver, principal, pinned_evaluation=True)
+
+    assert (
+        before.envelope.evidence.inference_attempts[-1].selected_model
+        == after.envelope.evidence.inference_attempts[-1].selected_model
+    ), "a plan change must not change what an evaluation run measures"
+
+    # And the control: the same caller on the product path *does* move, so the test above is
+    # asserting the pin rather than a catalog with only one usable entry in it.
+    product = await _run(engines, settings, resolver, principal)
+    assert product.envelope.evidence.inference_attempts[-1].policy_id == "high_reasoning"
+
+
+async def test_a_pinned_candidate_resolves_that_candidate_and_nothing_else(
+    engines: Engines, wired: tuple[Settings, PolicyResolver]
+) -> None:
+    """The comparison pin: one named candidate, catalog-validated, no plan and no failover."""
+    _settings, resolver = wired
+    async with privileged_session(engines.privileged_sessionmaker) as session:
+        resolved = await resolver.resolve_fixed_evaluation(
+            role=CallRole.SYNTHESIS, session=session, pinned_catalog_key="frontier-reasoning"
+        )
+    assert resolved.resolution.catalog_key == "frontier-reasoning"
+    assert resolved.resolution.policy_id == "__lab_comparison__"
+    assert resolved.resolution.policy_id.is_reserved, (
+        "a pinned candidate did not resolve a policy, and an aggregate must be able to tell"
+    )
+    assert resolved.remaining == ()
+    assert not resolved.may_fail_over
+
+
+async def test_a_pinned_candidate_is_refused_when_the_catalog_refuses_it(
+    engines: Engines, wired: tuple[Settings, PolicyResolver]
+) -> None:
+    """Validated against the database, not the snapshot — so a disable binds immediately."""
+    _settings, resolver = wired
+
+    async with privileged_session(engines.privileged_sessionmaker) as admin:
+        await CatalogStore(admin).disable(
+            "frontier-reasoning", acting_principal=ADMIN, acknowledge_role_unavailability=True
+        )
+
+    async with privileged_session(engines.privileged_sessionmaker) as session:
+        with pytest.raises(ModelNotAllowlisted, match="disabled"):
+            await resolver.resolve_fixed_evaluation(
+                role=CallRole.SYNTHESIS, session=session, pinned_catalog_key="frontier-reasoning"
+            )
+        with pytest.raises(ModelNotAllowlisted, match="not in the model catalog"):
+            await resolver.resolve_fixed_evaluation(
+                role=CallRole.SYNTHESIS, session=session, pinned_catalog_key="no-such-entry"
+            )
+
+
+async def test_a_pinned_candidate_unfit_for_the_role_is_refused_separately(
+    engines: Engines, wired: tuple[Settings, PolicyResolver]
+) -> None:
+    """Enabled and wrong for the call are two findings, and a reader needs to tell them apart."""
+    _settings, resolver = wired
+
+    async with privileged_session(engines.privileged_sessionmaker) as admin:
+        await CatalogStore(admin).create(
+            acting_principal=ADMIN,
+            catalog_key="lab-only-entry",
+            gateway_provider="openrouter",
+            gateway_model="testvendor/lab-only",
+            display_name="Lab only",
+            capability_roles=[CallRole.LAB],
+            capability_tier=CapabilityTier.ECONOMY,
+            supports_structured_output=True,
+            context_window=100_000,
+            input_price_per_million="0",
+            output_price_per_million="0",
+            pricing_recorded_on=date(2026, 9, 9),
+            is_free_tier=True,
+        )
+
+    async with privileged_session(engines.privileged_sessionmaker) as session:
+        with pytest.raises(ModelNotAllowlisted, match="not fit for the synthesis role"):
+            await resolver.resolve_fixed_evaluation(
+                role=CallRole.SYNTHESIS, session=session, pinned_catalog_key="lab-only-entry"
+            )
+        # And fit for the one it declares, so the refusal is about the role rather than the entry.
+        resolved = await resolver.resolve_fixed_evaluation(
+            role=CallRole.LAB, session=session, pinned_catalog_key="lab-only-entry"
+        )
+        assert resolved.resolution.catalog_key == "lab-only-entry"
 
 
 # =========================================================================== security

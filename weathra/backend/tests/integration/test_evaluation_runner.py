@@ -35,6 +35,7 @@ from weathra.evaluation.runner import (
     RunResult,
     _aborted_run,
     _preflight,
+    _resolve_pinned,
     execute_run,
     select_cases,
 )
@@ -654,9 +655,14 @@ async def _run_with_failing_gateway(
             OpenRouterClient(client=httpx.AsyncClient(), settings=live)
         )
         prepared.mode = EvaluationMode.LIVE
-        prepared.llm_provider = "openrouter"
-        prepared.llm_model = live.llm_model
-        probe = await _preflight(prepared, EvaluationMode.LIVE)
+        # The same pin a live run gets, so resolution goes through the fixed-model evaluation
+        # policy here too (task 34.7) — the installed client above is still what serves, which is
+        # the one situation where the resolution and the served model differ on purpose.
+        prepared.app.state.inference.pin_evaluation_policy()
+        pinned = await _resolve_pinned(prepared)
+        prepared.llm_provider = pinned.client.provider_id
+        prepared.llm_model = pinned.client.model_id
+        probe = await _preflight(EvaluationMode.LIVE, pinned)
         assert probe is not None
         return _aborted_run(
             live,
@@ -667,4 +673,5 @@ async def _run_with_failing_gateway(
             category=Category.KNOWLEDGE.value,
             case_id=None,
             mode=EvaluationMode.LIVE,
+            resolution=pinned.resolution,
         )

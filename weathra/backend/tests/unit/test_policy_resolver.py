@@ -646,6 +646,21 @@ async def test_the_pinned_policy_is_unreachable_through_an_ordinary_resolution()
     assert not resolved.resolution.is_configured_fallback
 
 
+async def test_the_pinned_entry_point_cannot_be_handed_a_principal() -> None:
+    """Task 34.7. The absence of the parameter is the guarantee, so it is asserted.
+
+    A pinned resolution reads no plan, and the way that is kept true is that there is nothing to
+    read one *from*: a caller cannot pass an identity here even by mistake, so no future edit can
+    make the pinned path depend on who the evaluation user happens to be.
+    """
+    import inspect
+
+    parameters = set(inspect.signature(PolicyResolver.resolve_fixed_evaluation).parameters)
+    assert parameters == {"self", "role", "session", "pinned_catalog_key"}
+    for forbidden in ("principal", "plan", "administrative", "override"):
+        assert forbidden not in parameters
+
+
 async def test_a_missing_pinned_candidate_aborts_rather_than_substituting() -> None:
     snapshot = _snapshot(
         catalog=[_entry("cheap-a", enabled=False), _entry("cheap-b"), _entry("mid"), _entry("top")]

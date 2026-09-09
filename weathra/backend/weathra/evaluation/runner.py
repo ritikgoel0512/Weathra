@@ -45,6 +45,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from weathra.config import Settings
 from weathra.db.engine import Engines
+from weathra.domain.entitlements import Resolution
 from weathra.domain.evidence import InferenceAttempt
 from weathra.evaluation.cases import (
     DATASET_VERSION,
@@ -78,6 +79,21 @@ class RunConfiguration(BaseModel):
     mode: EvaluationMode
     llm_provider: str | None = None
     llm_model: str | None = None
+    policy_id: str | None = Field(
+        default=None,
+        description=(
+            "The policy that resolved this run's model. `evaluation_fixed` for a live run, the "
+            "pinned-candidate indicator for a comparison candidate, null for an offline run — "
+            "which resolves nothing, because the scripted client is installed rather than chosen."
+        ),
+    )
+    catalog_key: str | None = Field(
+        default=None, description="The catalog entry the resolution selected. Never a vendor name."
+    )
+    resolution_reason: str | None = Field(
+        default=None,
+        description="The resolver's own ordered walk, so 'why this model' needs no re-resolution.",
+    )
     weather_provider: str
     embedding_model: str
     commit_sha: str | None = None
@@ -172,7 +188,12 @@ class RunResult(BaseModel):
             f"mode          {self.configuration.mode.value}",
             f"provider      {self.configuration.weather_provider}",
             f"model         {self.configuration.llm_provider or '-'}/"
-            f"{self.configuration.llm_model or '-'}",
+            f"{self.configuration.llm_model or '-'}"
+            + (
+                f"  (policy {self.configuration.policy_id}, {self.configuration.catalog_key})"
+                if self.configuration.policy_id
+                else ""
+            ),
             f"embedder      {self.configuration.embedding_model}",
             f"commit        {self.configuration.commit_sha or '-'}",
             f"cases         {len(self.cases)} of {self.configuration.cases_selected} selected",
@@ -548,16 +569,27 @@ async def execute_run(
     category: str | None = None,
     case_id: str | None = None,
     pinned_model: str | None = None,
+    pinned_catalog_key: str | None = None,
     cases: Sequence[EvaluationCase] | None = None,
 ) -> RunResult:
     """Execute the dataset and score it. The function CI and the CLI both call.
 
-    *pinned_model* names the gateway model this run must use, which is what makes a model
-    comparison possible: `specs/evaluation` requires every variable but the model to be held fixed
-    across candidates, so the candidate is the only thing a comparison changes here. In live mode
-    it becomes ``LLM_MODEL`` for this run; offline it becomes the identity the offline client
-    records, so each candidate's results are attributed to that candidate rather than to the
-    shared offline client. ``None`` is every existing caller, unchanged.
+    **The model comes from the policy layer.** `specs/evaluation` requires a live run to resolve
+    its pinned model through the fixed-model evaluation policy rather than through the evaluation
+    test user's subscription plan, so the harness pins the process and the resolution is read back
+    from the broker. Nothing here selects a model, which is why ``LLM_MODEL`` no longer appears in
+    this function: it was a second model-selection path, and the only reason a live run happened to
+    use it was that the policy walk fell all the way through to it.
+
+    *pinned_catalog_key* names the candidate a model comparison is measuring. `specs/evaluation`
+    compares models "by executing several pinned runs, one per model", and this is that pin — a
+    catalog key, validated against the database at resolution time, so a candidate run's record
+    names a real catalog entry rather than a string.
+
+    *pinned_model* is the offline half of the same pin: offline mode resolves nothing and installs
+    a scripted client, so the candidate's gateway identifier is what the client *records* in order
+    that each candidate's results are attributed to that candidate rather than to the shared
+    offline client. ``None`` is every existing caller, unchanged.
 
     *cases* lets a caller supply the selection instead of re-deriving it from the filters, so a
     comparison selects once and every candidate provably runs the same set — the alternative is
@@ -565,18 +597,13 @@ async def execute_run(
     """
     selected = select_cases(category=category, case_id=case_id) if cases is None else tuple(cases)
     started = datetime.now(UTC)
-    # The pin is applied to a *copy*: the process's settings outlive this run, and a comparison
-    # that mutated them would leave the last candidate configured for everything afterwards.
-    settings = (
-        settings.model_copy(update={"llm_model": pinned_model})
-        if pinned_model is not None and mode is EvaluationMode.LIVE
-        else settings
-    )
     engines = Engines.create(settings)
     pacing = settings.evaluation_llm_min_interval_seconds if mode is EvaluationMode.LIVE else 0.0
 
     try:
-        async with build_evaluation_app(settings, mode=mode) as prepared:
+        async with build_evaluation_app(
+            settings, mode=mode, pinned_catalog_key=pinned_catalog_key
+        ) as prepared:
             if pinned_model is not None and mode is EvaluationMode.OFFLINE:
                 prepared.pinned_model_id = pinned_model
             identity = prepared.identity
@@ -587,7 +614,16 @@ async def execute_run(
             # model, an exhausted quota or a rejected credential all answer here, in one call
             # rather than eighty — which is exactly what should have happened to the Task 22.8
             # live runs instead of forty fallback answers being scored as model quality.
-            probe = await _preflight(prepared, mode)
+            pinned = await _resolve_pinned(prepared) if mode is EvaluationMode.LIVE else None
+            resolution = pinned.resolution if pinned else None
+            if pinned is not None:
+                # Read off the client that will actually serve, not off the resolution: where the
+                # two differ the record has to show what answered. `configuration.catalog_key`
+                # below carries the resolution's own side of the same question.
+                prepared.llm_provider = pinned.client.provider_id
+                prepared.llm_model = pinned.client.model_id
+
+            probe = await _preflight(mode, pinned)
             if probe is not None:
                 return _aborted_run(
                     settings,
@@ -598,6 +634,7 @@ async def execute_run(
                     category=category,
                     case_id=case_id,
                     mode=mode,
+                    resolution=resolution,
                 )
 
             for index, case in enumerate(selected):
@@ -633,6 +670,9 @@ async def execute_run(
                 mode=mode,
                 llm_provider=prepared.llm_provider,
                 llm_model=prepared.llm_model,
+                policy_id=str(resolution.policy_id) if resolution else None,
+                catalog_key=resolution.catalog_key if resolution else None,
+                resolution_reason=resolution.reason if resolution else None,
                 weather_provider=prepared.weather_provider,
                 embedding_model=settings.embedding_model_id,
                 commit_sha=_commit_sha(),
@@ -658,17 +698,75 @@ async def execute_run(
     )
 
 
-async def _preflight(prepared: Any, mode: EvaluationMode) -> InferenceAttempt | None:
-    """Ask the configured model one structured question. ``None`` means it answered.
+class PinnedInference(BaseModel):
+    """What a live run is pinned to: the resolution that governed it, and the client that serves.
+
+    Two facts rather than one, because they can differ and a run record that collapsed them would
+    hide exactly the substitution `specs/evaluation` requires to be visible. They differ in one
+    situation — a client explicitly installed over the resolved one, which is how the provider-
+    outage suites exercise a live-shaped run without a credential.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
+
+    client: Any = Field(repr=False, exclude=True)
+    resolution: Resolution
+
+
+async def _resolve_pinned(prepared: Any) -> PinnedInference:
+    """The model this live run is pinned to, from the policy layer rather than from `LLM_MODEL`.
+
+    `specs/evaluation` requires a live run to resolve its pinned model "through a fixed-model
+    evaluation policy rather than through the evaluation test user's subscription plan". So the
+    runner asks the same broker the request path asks, on a process the harness has already
+    pinned — which is what makes the run record's model and the model the cases actually reach the
+    same fact rather than two settings that agree today.
+
+    Resolved once, for `ROUTING`. The pinned policy applies to every role and has one candidate, so
+    a second resolution would be the same answer; recording it once is what lets the run claim
+    *one* model, which is the requirement.
+
+    The client comes back with it, from the same binding, so the pre-flight probes what the cases
+    will reach rather than something built alongside it.
+    """
+    from weathra.auth.rls import session_for
+    from weathra.domain.entitlements import CallRole
+    from weathra.domain.identity import Principal
+
+    provider = prepared.app.state.inference
+    principal = Principal(user_id=prepared.identity.user_id, email=prepared.identity.email)
+    async with session_for(prepared.app.state.engines, principal) as session:
+        # The restricted session, as a request would use — the catalog and policy reads a
+        # resolution makes are the same reads under the same Row Level Security. `principal` is
+        # handed over so the session binds claims; the pinned path never reads a plan from it.
+        broker = provider.broker(session=session, principal=principal)
+        binding = await broker.binding_for(CallRole.ROUTING)
+    resolution = binding.resolution
+    logger.info(
+        "run pinned by policy %s to %s (%s/%s)",
+        resolution.policy_id,
+        resolution.catalog_key,
+        resolution.gateway_provider,
+        resolution.gateway_model,
+    )
+    return PinnedInference(client=binding.client, resolution=resolution)
+
+
+async def _preflight(
+    mode: EvaluationMode, pinned: PinnedInference | None
+) -> InferenceAttempt | None:
+    """Ask the pinned model one structured question. ``None`` means it answered.
 
     Only in live mode: offline substitutes a client that cannot fail this way, and spending a
     probe on it would test the stand-in.
 
     The probe goes through Weathra's own client and its own ``complete_json``, so it exercises the
     same translation and the same bounded JSON retry a case would. A probe that bypassed them
-    could pass while every real call failed.
+    could pass while every real call failed — and the client is the one the *resolution* produced,
+    so what it proves is that the model the dataset is about to reach can answer, rather than that
+    whatever `LLM_MODEL` names can.
     """
-    if mode is not EvaluationMode.LIVE:
+    if mode is not EvaluationMode.LIVE or pinned is None:
         return None
 
     from weathra.agents.llm.base import Message, classify_inference_failure
@@ -677,7 +775,7 @@ async def _preflight(prepared: Any, mode: EvaluationMode) -> InferenceAttempt | 
     from weathra.domain.errors import WeathraError
     from weathra.domain.evidence import InferenceStage
 
-    client = prepared.app.state.inference.get()
+    client = pinned.client
     started = time.perf_counter()
     try:
         await client.complete_json(
@@ -723,6 +821,7 @@ def _aborted_run(
     category: str | None,
     case_id: str | None,
     mode: EvaluationMode,
+    resolution: Resolution | None = None,
 ) -> RunResult:
     """A run that never executed a case, recorded honestly rather than not at all.
 
@@ -754,6 +853,9 @@ def _aborted_run(
             mode=mode,
             llm_provider=prepared.llm_provider,
             llm_model=prepared.llm_model,
+            policy_id=str(resolution.policy_id) if resolution else None,
+            catalog_key=resolution.catalog_key if resolution else None,
+            resolution_reason=resolution.reason if resolution else None,
             weather_provider=prepared.weather_provider,
             embedding_model=settings.embedding_model_id,
             commit_sha=_commit_sha(),

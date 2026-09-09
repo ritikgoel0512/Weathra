@@ -50,6 +50,7 @@ from weathra.domain.entitlements import (
     CONFIGURED_FALLBACK_POLICY,
     EVALUATION_FIXED_POLICY,
     FREE_DEFAULT_POLICY,
+    LAB_COMPARISON_POLICY,
     CallRole,
     PlanCode,
     Resolution,
@@ -104,7 +105,13 @@ class ResolvedCall:
 
 
 class ModelPolicyResolver(Protocol):
-    """The contract the graph depends on. One method, so nothing above can reach further."""
+    """The contract the graph depends on: resolve a call role, or resolve a pinned evaluation.
+
+    Two methods rather than one, and the second is not a convenience. `specs/evaluation` requires a
+    live run's model to come from the fixed-model evaluation policy *without* the plan walk
+    happening at all, so the guarantee is that `resolve` is not called — which a flag on `resolve`
+    could not express and a reader could not check.
+    """
 
     async def resolve(
         self,
@@ -121,6 +128,17 @@ class ModelPolicyResolver(Protocol):
         identity layer owns the answer (`specs/authentication` holds the role in backend state)
         and `entitlements/` may not reach it. A resolver that looked it up itself would be a
         second authorization path, which design.md decision 4 exists to prevent.
+        """
+        ...
+
+    async def resolve_fixed_evaluation(
+        self, *, role: CallRole, session: AsyncSession, pinned_catalog_key: str | None = None
+    ) -> ResolvedCall:
+        """Decide which model serves one evaluation call, reading no principal's plan.
+
+        No *principal* parameter, and that absence is the contract: a caller cannot hand this a
+        plan-bearing identity even by accident, so "an evaluation run's model does not depend on
+        who the evaluation user is" is a property of the signature rather than of the body.
         """
         ...
 
@@ -544,7 +562,7 @@ class PolicyResolver:
     # ---------------------------------------------------------------- the pinned evaluation path
 
     async def resolve_fixed_evaluation(
-        self, *, role: CallRole, session: AsyncSession
+        self, *, role: CallRole, session: AsyncSession, pinned_catalog_key: str | None = None
     ) -> ResolvedCall:
         """The fixed-model evaluation policy, resolved without reading anybody's plan.
 
@@ -557,7 +575,22 @@ class PolicyResolver:
         Failover is off and there is no fallback chain: a provider failure aborts the run rather
         than substituting a candidate, because a run that measured a second model while claiming
         the first would be worse than a run that failed.
+
+        *pinned_catalog_key* is the model-comparison case. `specs/evaluation` says comparing
+        several models is done "by executing several pinned runs, one per model", so a candidate
+        run is pinned to *that candidate* rather than to the evaluation policy's own — while still
+        reading no plan, walking no candidate list and permitting no failover. It is validated
+        against the database rather than the snapshot, for the same reason an administrative
+        override is: a deliberate act must not be allowed to rest on an allowlist a TTL old. The
+        resolution is recorded under `LAB_COMPARISON_POLICY`, because a pinned candidate did not
+        resolve a policy and an aggregate that counted it as one would report a model as serving a
+        plan it has never been mapped to.
         """
+        if pinned_catalog_key is not None:
+            return self._pinned_candidate(
+                await validate_override_against_database(session, pinned_catalog_key), role
+            )
+
         snapshot = await self._snapshots.current(session)
         policy = snapshot.policy(EVALUATION_FIXED_POLICY)
         if policy is None:
@@ -585,6 +618,38 @@ class PolicyResolver:
                 gateway_provider=selected.gateway_provider,
                 gateway_model=selected.gateway_model,
                 reason="; ".join(trail),
+                call_role=role,
+            ),
+            remaining=(),
+            failover_enabled=False,
+        )
+
+    def _pinned_candidate(self, entry: CatalogEntry, role: CallRole) -> ResolvedCall:
+        """One named, catalog-validated candidate, with nothing else considered.
+
+        The role check is here rather than inside the validator because the validator answers
+        "is this model allowed at all" and this answers "is it fit for this call" — two refusals a
+        reader of the error needs to be able to tell apart.
+        """
+        if not entry.serves(role):
+            raise ModelNotAllowlisted(
+                f"{entry.catalog_key!r} is enabled but is not fit for the {role.value} role.",
+                details={
+                    "catalog_key": entry.catalog_key,
+                    "call_role": role.value,
+                    "reason": "role",
+                },
+            )
+        return ResolvedCall(
+            resolution=Resolution(
+                policy_id=LAB_COMPARISON_POLICY,
+                catalog_key=entry.catalog_key,
+                gateway_provider=entry.gateway_provider,
+                gateway_model=entry.gateway_model,
+                reason=(
+                    "pinned evaluation candidate: no plan is read, no candidate list is walked, "
+                    f"pinned to {entry.catalog_key}"
+                ),
                 call_role=role,
             ),
             remaining=(),

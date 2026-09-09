@@ -90,12 +90,24 @@ class LLMProvider:
     endpoint rather than merely intended.
     """
 
-    __slots__ = ("_client", "_http", "_resolver", "_settings", "_snapshots")
+    __slots__ = (
+        "_client",
+        "_http",
+        "_installed",
+        "_pinned_catalog_key",
+        "_pinned_evaluation",
+        "_resolver",
+        "_settings",
+        "_snapshots",
+    )
 
     def __init__(self, http: httpx.AsyncClient, settings: Settings) -> None:
         self._http = http
         self._settings = settings
         self._client: LLMClient | None = None
+        self._installed: LLMClient | None = None
+        self._pinned_evaluation = False
+        self._pinned_catalog_key: str | None = None
         # One snapshot per process (design.md decision 23), and one resolver over it. Built here
         # rather than per request because the TTL is only worth anything if the snapshot outlives
         # the request that refreshed it.
@@ -123,15 +135,24 @@ class LLMProvider:
     @property
     def built(self) -> bool:
         """Whether anything has actually needed inference in this process."""
-        return self._client is not None
+        return self._client is not None or self._installed is not None
 
     def get(self) -> LLMClient:
-        """The client, constructed on first use.
+        """The configured client, constructed on first use — or an installed one, if there is one.
 
         Raises ``AgentNotConfigured`` when no credential resolves — at the moment of the agent
         request, which is where the caller can be told what is missing and every other route can
         go on working.
+
+        **What this returns is not what a resolved call is served by.** This is the credential
+        guard and the pre-policy path; the model a request actually reaches comes from `broker()`.
+        The two used to share one slot, and the consequence was that the agent route's guard call
+        cached the ``LLM_MODEL`` client where the broker looked for a *deliberately installed*
+        one — so every resolution in the process was recorded and none was honoured. They are two
+        slots now, and `_installed` is written by `override` alone.
         """
+        if self._installed is not None:
+            return self._installed
         if self._client is None:
             self._client = build_client(self._http, self._settings)
             logger.info(
@@ -172,8 +193,10 @@ class LLMProvider:
             override=override,
             # An explicitly installed client wins over building one. `override()` is how the
             # offline evaluation harness and the test suite supply a scripted transport, and a
-            # broker that ignored it would quietly reach the real gateway from a test.
-            installed=self._client,
+            # broker that ignored it would quietly reach the real gateway from a test. Only
+            # `override` writes this — never `get`, whose lazily-built client is the configured
+            # fallback and not somebody's decision.
+            installed=self._installed,
             # Telemetry is a decorator the broker installs, so the route supplies where events go
             # and never emits one itself.
             recorder=recorder,
@@ -183,6 +206,10 @@ class LLMProvider:
             # again here: the quota gate and the resolver must agree about who is an administrator,
             # and two lookups eventually would not.
             administrative=administrative,
+            # Set only by `pin_evaluation_policy`, which only the evaluation harness calls. False
+            # in every deployed process, because nothing there can set it.
+            pinned_evaluation=self._pinned_evaluation,
+            pinned_catalog_key=self._pinned_catalog_key,
         )
 
     async def effective_plan(self, principal: Principal | None, session: AsyncSession) -> PlanCode:
@@ -221,7 +248,7 @@ class LLMProvider:
         compare scripted transports rather than reaching a real gateway from a test.
         """
         attempts = GatewayAttemptLog()
-        inner = self._client or build_for_resolution(
+        inner = self._installed or build_for_resolution(
             resolution, http=self._http, settings=self._settings, attempts=attempts
         )
         if recorder is None:
@@ -241,7 +268,9 @@ class LLMProvider:
                 internal=True,
             ),
             recorder=recorder,
-            attempts=attempts if self._client is None else None,
+            # The log belongs to the client that was actually built; an installed one keeps
+            # its own record and never writes into this.
+            attempts=attempts if self._installed is None else None,
         )
 
     @property
@@ -250,5 +279,47 @@ class LLMProvider:
         return self._snapshots
 
     def override(self, client: LLMClient) -> None:
-        """Install a specific client. For tests and offline evaluation, which use the fake."""
-        self._client = client
+        """Install a specific client. For tests and offline evaluation, which use the fake.
+
+        Its own slot, separate from the lazily-built configured client: this one means *somebody
+        chose this*, which is why the broker honours it over a resolution, and the configured
+        client means nothing more than "a credential exists".
+        """
+        self._installed = client
+
+    # ---------------------------------------------------------------- the pinned evaluation run
+
+    def pin_evaluation_policy(self, *, catalog_key: str | None = None) -> None:
+        """Make every broker this process builds resolve the fixed-model evaluation policy.
+
+        `specs/evaluation` requires a live run to resolve its pinned model "through a fixed-model
+        evaluation policy rather than through the evaluation test user's subscription plan", and
+        this is how that reaches the request path: the evaluation harness builds the *real*
+        application and flips this before any case runs, so the run's own `/agent/ask` calls
+        resolve the pinned policy instead of walking a plan.
+
+        **Process state, and deliberately not a setting.** There is no environment variable for
+        this and no request field: a deployed backend has no way to be put in this mode, and the
+        only caller is a harness that already owns the process it is configuring. A flag in the
+        environment would have been one operator mistake away from serving product traffic from an
+        internal policy.
+
+        *catalog_key* pins a named candidate instead — the model-comparison case, where the run is
+        pinned to the candidate under test rather than to the policy's own single candidate. Still
+        no plan, still no failover; see `PolicyResolver.resolve_fixed_evaluation`.
+        """
+        self._pinned_evaluation = True
+        self._pinned_catalog_key = catalog_key
+        logger.info(
+            "inference pinned to the evaluation policy%s",
+            f" candidate {catalog_key}" if catalog_key else "",
+        )
+
+    @property
+    def evaluation_pinned(self) -> bool:
+        """Whether this process resolves the fixed-model evaluation policy.
+
+        Read back rather than assumed: the run record states the pin, and a run that claims a
+        pinned model should be checkable against whether the process was actually pinned.
+        """
+        return self._pinned_evaluation
