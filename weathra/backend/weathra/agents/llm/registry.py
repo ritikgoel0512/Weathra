@@ -32,6 +32,7 @@ from weathra.agents.llm.instrumented import UsageRecorder
 from weathra.agents.llm.openrouter import OPENROUTER_PROVIDER_ID, OpenRouterClient
 from weathra.agents.models import ModelBroker
 from weathra.config import Settings
+from weathra.domain.entitlements import PlanCode
 from weathra.domain.errors import AGENT_UNAVAILABLE_MESSAGE, AgentNotConfigured, ProviderNotFound
 from weathra.domain.identity import Principal
 from weathra.entitlements.resolver import PolicyResolver
@@ -175,6 +176,16 @@ class LLMProvider:
             agent_run_id=agent_run_id,
             request_id=request_id,
         )
+
+    async def effective_plan(self, principal: Principal | None, session: AsyncSession) -> PlanCode:
+        """Which plan the quota gate should account this caller against.
+
+        Delegated to the resolver rather than answered here, because the resolver already owns the
+        question and the gate must get the same answer the model policy layer will get a moment
+        later. A caller admitted against Pro's allowance and then served Free's policy would be two
+        entitlement systems wearing one name.
+        """
+        return await self._resolver.effective_plan(principal, session)
 
     @property
     def snapshots(self) -> SnapshotCache:

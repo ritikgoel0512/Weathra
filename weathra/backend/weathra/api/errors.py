@@ -55,6 +55,7 @@ from weathra.domain.errors import (
     ProviderTimeout,
     ProviderUnavailable,
     QuotaExceeded,
+    QuotaUnavailable,
     SigningKeysUnavailable,
     ValidationFailed,
     VectorIndexMismatch,
@@ -127,6 +128,7 @@ _STATUS_BY_ERROR: dict[type[WeathraError], int] = {
     AgentBudgetExceeded: status.HTTP_503_SERVICE_UNAVAILABLE,
     NoEligibleModel: status.HTTP_503_SERVICE_UNAVAILABLE,
     PolicyUnavailable: status.HTTP_503_SERVICE_UNAVAILABLE,
+    QuotaUnavailable: status.HTTP_503_SERVICE_UNAVAILABLE,
     # ---------------------------------------------------------------- the base, if nothing else
     WeathraError: status.HTTP_500_INTERNAL_SERVER_ERROR,
 }

@@ -107,6 +107,7 @@ def second_account(credentials: Credentials) -> Credentials:
 PROTECTED_GETS: tuple[str, ...] = (
     "/me",
     "/me/preferences",
+    "/me/usage",
     "/me/locations",
     "/threads",
     "/threads/00000000-0000-4000-8000-000000000000",

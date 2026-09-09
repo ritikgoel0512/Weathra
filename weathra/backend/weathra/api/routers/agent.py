@@ -43,6 +43,7 @@ from weathra.api.dependencies import (
     Embedder,
     Inference,
     Places,
+    Quota,
     Tools,
 )
 from weathra.api.middleware import annotate, current_request_id
@@ -56,6 +57,7 @@ from weathra.domain.evidence import AnswerEnvelope
 from weathra.domain.identity import Principal
 from weathra.domain.usage import UsageEvent
 from weathra.domain.weather import UnitSystem
+from weathra.entitlements.quotas import Admission, QuotaGate, QuotaSubject
 from weathra.memory.preferences import PreferenceStore
 from weathra.memory.threads import ThreadRecord, ThreadStore, TurnRecord
 from weathra.rag.embed import EmbeddingProvider
@@ -153,6 +155,32 @@ async def _thread_for(
     return None
 
 
+class _RunTally:
+    """What the gateway actually did during one run, collected as the events go past.
+
+    Two facts the quota layer needs and cannot get anywhere honest: whether a model was called at
+    all — which decides whether a failed run gives its request reservation back — and how many
+    tokens it used, which is the monthly dimension's settlement. Both are read off the usage events
+    of `specs/llm-telemetry` rather than counted a second time here, so the counters and the event
+    record cannot disagree about what happened.
+
+    A retry is several events and one request: the tally sums their tokens and never touches the
+    request count, which is reserved once before the run and never incremented from here.
+    """
+
+    __slots__ = ("reached_gateway", "tokens")
+
+    def __init__(self) -> None:
+        self.tokens = 0
+        self.reached_gateway = False
+
+    def observe(self, events: Sequence[UsageEvent]) -> None:
+        for event in events:
+            self.reached_gateway = True
+            if event.total_tokens:
+                self.tokens += event.total_tokens
+
+
 async def _run(
     request: Request,
     body: AskRequest,
@@ -165,6 +193,7 @@ async def _run(
     inference: Inference,
     embedder: EmbeddingProvider,
     thread: ThreadRecord | None,
+    tally: _RunTally,
     emitter: StreamEmitter | None = None,
 ) -> AgentRunResult:
     """One agent run, wired to this caller's memory and this request's session."""
@@ -184,6 +213,11 @@ async def _run(
         connection open past its response. The session is still the *restricted* one, so the owner
         policy on `llm_usage_events` applies to the write exactly as it does to a read.
         """
+
+        # Read on the way past, before the write is even scheduled: the quota layer's two facts
+        # come from the events themselves, and a background write that failed must not also lose
+        # the accounting.
+        tally.observe(events)
 
         async def write(batch: Sequence[UsageEvent]) -> int:
             async with request_session(
@@ -291,6 +325,26 @@ async def _record_turn(
         )
 
 
+async def _admit(
+    quota: QuotaGate,
+    inference: Inference,
+    principal: Principal,
+    session: AsyncSession,
+) -> Admission:
+    """Reserve this caller's allowance, before anything is asked of a gateway.
+
+    `specs/usage-limits` requires the check to happen in the backend *before* the call, so this
+    runs ahead of the graph on both paths — and on the streaming one, ahead of the response, so an
+    exhausted caller is refused rather than handed a 200 whose first event is the refusal.
+
+    The plan comes from the resolver, which is the same source the model policy layer will read a
+    moment later. An administrative principal is accounted internally by construction: the subject
+    is derived from the validated token, and no argument here can opt a request out of its plan.
+    """
+    plan = await inference.effective_plan(principal, session)
+    return await quota.admit(QuotaSubject.for_principal(principal, plan))
+
+
 @router.post("/ask", response_model=AskResponse, summary="Ask a weather question")
 async def ask(
     request: Request,
@@ -302,12 +356,14 @@ async def ask(
     geocoder: Places,
     inference: Inference,
     embedder: Embedder,
+    quota: Quota,
 ) -> AskResponse:
     """Answer one question, with the evidence for every figure in it.
 
-    Returns 503 naming the missing configuration when no inference credential is set. Every public
-    weather endpoint keeps working in that case, which is why the client is constructed here rather
-    than at startup.
+    Returns 503 naming the missing configuration when no inference credential is set, and 429 with
+    the bound dimension when the caller's plan allowance is spent. Every public weather endpoint
+    keeps working in both cases, which is why the client is constructed here rather than at
+    startup and why the quota gate covers this route rather than the application.
     """
     thread = await _thread_for(
         session,
@@ -318,18 +374,28 @@ async def ask(
         question=body.question,
     )
 
-    result = await _run(
-        request,
-        body,
-        principal=principal,
-        session=session,
-        settings=settings,
-        tools=tools,
-        geocoder=geocoder,
-        inference=inference,
-        embedder=embedder,
-        thread=thread,
-    )
+    admission = await _admit(quota, inference, principal, session)
+    tally = _RunTally()
+    try:
+        result = await _run(
+            request,
+            body,
+            principal=principal,
+            session=session,
+            settings=settings,
+            tools=tools,
+            geocoder=geocoder,
+            inference=inference,
+            embedder=embedder,
+            thread=thread,
+            tally=tally,
+        )
+    except BaseException:
+        # A run that never reached a gateway cost nothing, so its request reservation goes back.
+        # One that failed after a model answered is a request that happened, and stays counted.
+        await quota.finish(admission, reached_gateway=tally.reached_gateway)
+        raise
+    await quota.finish(admission, tokens=tally.tokens)
 
     evidence_id = await persist_run(session, principal, result.envelope)
     await _record_turn(session, principal, settings, thread, result)
@@ -354,6 +420,7 @@ async def stream(
     geocoder: Places,
     inference: Inference,
     embedder: Embedder,
+    quota: Quota,
 ) -> StreamingResponse:
     """The same run, reported as it happens.
 
@@ -385,50 +452,75 @@ async def stream(
             details={"missing": "inference_credential", "provider": inference.provider_id},
         )
 
+    # Before the response, for the same reason as the guard above: `specs/usage-limits` requires an
+    # exhausted caller's stream to be *refused* rather than opened and terminated mid-answer. A 429
+    # here is a 429; inside the generator it would be a 200 whose first event apologises.
+    admission = await _admit(quota, inference, principal, session)
+
     emitter = StreamEmitter(request_id=current_request_id())
+    tally = _RunTally()
 
     async def events() -> AsyncIterator[str]:
         """Run the graph, emitting each stage, and always end with a terminal event."""
+        served = False
         try:
-            async for event in emitter.drain_while(
-                _run(
-                    request,
-                    body,
-                    principal=principal,
-                    session=session,
-                    settings=settings,
-                    tools=tools,
-                    geocoder=geocoder,
-                    inference=inference,
-                    embedder=embedder,
-                    thread=thread,
-                    emitter=emitter,
+            try:
+                async for event in emitter.drain_while(
+                    _run(
+                        request,
+                        body,
+                        principal=principal,
+                        session=session,
+                        settings=settings,
+                        tools=tools,
+                        geocoder=geocoder,
+                        inference=inference,
+                        embedder=embedder,
+                        thread=thread,
+                        tally=tally,
+                        emitter=emitter,
+                    )
+                ):
+                    yield event
+            except WeathraError as failure:
+                # A terminal error event rather than a truncated stream: the response is
+                # already 200, so a client that saw the connection close would have to guess
+                # whether the answer was complete (``specs/http-api``).
+                logger.info("stream failed: %s", failure.code)
+                yield emitter.error_event(code=failure.code, message=failure.message)
+                return
+            except (
+                Exception
+            ) as failure:  # pragma: no cover - the handler above covers named failures
+                logger.exception("stream failed unexpectedly", exc_info=failure)
+                yield emitter.error_event(
+                    code="internal_error",
+                    message="The run failed unexpectedly. The failure is logged with this "
+                    "request id.",
                 )
-            ):
-                yield event
-        except WeathraError as failure:
-            # A terminal error event rather than a truncated stream: the response is already 200,
-            # so a client that saw the connection close would have to guess whether the answer was
-            # complete (``specs/http-api``).
-            logger.info("stream failed: %s", failure.code)
-            yield emitter.error_event(code=failure.code, message=failure.message)
-            return
-        except Exception as failure:  # pragma: no cover - the handler above covers named failures
-            logger.exception("stream failed unexpectedly", exc_info=failure)
-            yield emitter.error_event(
-                code="internal_error",
-                message="The run failed unexpectedly. The failure is logged with this request id.",
+                return
+
+            result = emitter.result
+            if result is None:  # pragma: no cover - drain_while always sets one on success
+                yield emitter.error_event(
+                    code="internal_error", message="The run produced no answer."
+                )
+                return
+
+            evidence_id = await persist_run(session, principal, result.envelope)
+            await _record_turn(session, principal, settings, thread, result)
+            yield emitter.final_event(result.envelope, evidence_id=evidence_id)
+            served = True
+        finally:
+            # Always, including a client that disconnected mid-answer: the concurrency slot is
+            # given back here or not at all, and a stream abandoned halfway is not a slot still in
+            # flight. `served` covers the one case the tally cannot see — a run that answered
+            # without recording an event, which must still count as a request that happened.
+            await quota.finish(
+                admission,
+                tokens=tally.tokens,
+                reached_gateway=tally.reached_gateway or served,
             )
-            return
-
-        result = emitter.result
-        if result is None:  # pragma: no cover - drain_while always sets one on success
-            yield emitter.error_event(code="internal_error", message="The run produced no answer.")
-            return
-
-        evidence_id = await persist_run(session, principal, result.envelope)
-        await _record_turn(session, principal, settings, thread, result)
-        yield emitter.final_event(result.envelope, evidence_id=evidence_id)
 
     return StreamingResponse(
         events(),

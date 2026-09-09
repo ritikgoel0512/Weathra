@@ -32,6 +32,9 @@ EXPECTED_CHAIN = (
     # Group 29: the one grant account deletion needs, once telemetry gave the request path rows to
     # delete. Separate from 0006 because it is a change of mind about privilege, not a table.
     "0009_usage_counter_delete_grant",
+    # Group 30: the administrative-role accessor, and the second policy on `usage_counters` that
+    # lets an administrator's product-path call be accounted against the internal allowance.
+    "0010_internal_quota_accounting",
 )
 
 

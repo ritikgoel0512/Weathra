@@ -180,6 +180,17 @@ class PolicyResolver:
 
     # ---------------------------------------------------------------- step 1: principal to plan
 
+    async def effective_plan(self, principal: Principal | None, session: AsyncSession) -> PlanCode:
+        """The acting principal's plan, for a caller that needs it without resolving a model.
+
+        The quota gate is that caller: it runs *before* resolution, because whether there is to be
+        a call is a question that precedes which model serves it. Answering it here rather than
+        letting the gate query `user_plans` itself is what keeps one implementation of "which plan
+        is this person on" — two would eventually disagree, and the one that disagreed silently
+        would be the one deciding what somebody is allowed to use.
+        """
+        return await self._plan_for(principal, session, await self._snapshots.current(session))
+
     async def _plan_for(
         self, principal: Principal | None, session: AsyncSession, snapshot: EntitlementSnapshot
     ) -> PlanCode:

@@ -53,6 +53,7 @@ EXPECTED_CODES: dict[type[e.WeathraError], str] = {
     e.NoEligibleModel: "no_eligible_model",
     e.PolicyUnavailable: "policy_unavailable",
     e.QuotaExceeded: "quota_exceeded",
+    e.QuotaUnavailable: "quota_unavailable",
 }
 
 

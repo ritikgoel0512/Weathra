@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager
 from typing import Annotated
 
 import httpx
@@ -37,6 +38,7 @@ from weathra.auth.rls import session_for
 from weathra.config import Settings
 from weathra.db.engine import Engines
 from weathra.domain.errors import McpUnavailable
+from weathra.entitlements.quotas import QuotaGate
 from weathra.geocoding.base import Geocoder
 from weathra.geocoding.open_meteo import OpenMeteoGeocoder
 from weathra.mcp.client import McpToolClient
@@ -52,6 +54,7 @@ __all__ = [
     "HttpClient",
     "Inference",
     "Places",
+    "Quota",
     "Tools",
     "WeatherFor",
     "settings_of",
@@ -161,6 +164,26 @@ async def current_session(
         yield session
 
 
+def quota_gate_of(request: Request, principal: OptionalPrincipal) -> QuotaGate:
+    """The quota gate, bound to this caller's identity.
+
+    Handed a *factory* rather than the request's session on purpose. A reservation taken inside the
+    request transaction would be invisible to the caller's own concurrent requests until the
+    response was written, and would hold the counter row locked for the whole run — so one account
+    asking two questions at once would serialise, and the concurrency gauge would read zero to
+    everybody. Each quota operation therefore opens its own short session, commits, and closes.
+
+    The factory is `session_for`, which is the same restricted, claims-bound session every handler
+    gets. Nothing here reaches for the privileged connection.
+    """
+    engines = engines_of(request)
+
+    def sessions() -> AbstractAsyncContextManager[AsyncSession]:
+        return session_for(engines, principal)
+
+    return QuotaGate(sessions, settings_of(request))
+
+
 HttpClient = Annotated[httpx.AsyncClient, Depends(http_client_of)]
 Engine = Annotated[Engines, Depends(engines_of)]
 Tools = Annotated[McpToolClient, Depends(tools_of)]
@@ -171,3 +194,4 @@ CurrentSession = Annotated[AsyncSession, Depends(current_session)]
 Configuration = Annotated[Settings, Depends(settings_of)]
 Embedder = Annotated[EmbeddingProvider, Depends(embedder_of)]
 Memory = Annotated[Checkpointer | None, Depends(checkpointer_of)]
+Quota = Annotated[QuotaGate, Depends(quota_gate_of)]

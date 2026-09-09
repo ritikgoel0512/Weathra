@@ -444,6 +444,23 @@ class QuotaExceeded(WeathraError):
     code: ClassVar[str] = "quota_exceeded"
 
 
+class QuotaUnavailable(WeathraError):
+    """The accounting store could not be read or written, so no allowance could be established.
+
+    Deliberately *not* ``QuotaExceeded``. That error names an allowance, a consumption and a reset
+    time, and here none of the three is known — reporting a limit we failed to read as a limit the
+    caller reached would be a lie, and one the caller could not act on. This says the gate is down.
+
+    It is a refusal all the same. ``specs/usage-limits`` requires an accounting failure to fail
+    closed for a bounded dimension rather than admit an unaccounted call, because the alternative
+    is that a store outage becomes unmetered use of a paid gateway. Shares its 503 with
+    ``PolicyUnavailable`` for the same reason: a dependency the request path needs is not
+    answering, and it may well be answering again shortly.
+    """
+
+    code: ClassVar[str] = "quota_unavailable"
+
+
 def all_error_classes() -> list[type[WeathraError]]:
     """Every concrete error class, breadth-first from ``WeathraError``.
 

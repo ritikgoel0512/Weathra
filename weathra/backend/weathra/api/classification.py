@@ -154,6 +154,12 @@ _CLASSIFICATIONS: tuple[EndpointClassification, ...] = (
         "Removes one of the acting user's saved locations.",
     ),
     EndpointClassification(
+        "/me/usage",
+        Access.PROTECTED,
+        "The acting user's own plan, allowances and consumption. No other subject's, and no "
+        "internal usage.",
+    ),
+    EndpointClassification(
         "/me/data",
         Access.PROTECTED,
         "Deletes the acting user's Weathra application data.",

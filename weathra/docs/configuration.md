@@ -108,6 +108,8 @@ bundle — see [`authentication.md`](authentication.md) for why the split is dra
 | `THREAD_RETENTION_DAYS` | `30` | behaviour | How long an inactive thread and its checkpoints are kept |
 | `SNAPSHOT_RETENTION_DAYS` | `90` | behaviour | How long forecast snapshots are kept |
 | `LLM_USAGE_RETENTION_DAYS` | `90` | behaviour | How long raw language model usage events are kept. Metadata only — no prompt, completion or retrieved text — so the window is about storage and relevance |
+| `QUOTA_ENABLED` | `true` | behaviour | Whether plan allowances are enforced. On by default including locally, so the development path is the deployed path. A suite that turns it off is testing something other than the gate |
+| `QUOTA_WINDOW_TIMEZONE` | `UTC` | behaviour | The zone in which the calendar day and month boundaries of an allowance window are computed. Named explicitly rather than taken from the server's local time, which would make a day boundary depend on where the process runs |
 | `SAVED_LOCATIONS_LIMIT` | `25` | behaviour | Saved locations per person |
 | `EVALUATION_MIN_SERVED_RATE` | `1.0` | behaviour | Proportion of a live evaluation run's cases the configured model must have served for the run to be scored as model quality at all |
 | `EVALUATION_LLM_MIN_INTERVAL_SECONDS` | `5.0` | behaviour | Minimum spacing between live evaluation cases, so the dataset does not reach a free tier's per-minute ceiling as one burst |

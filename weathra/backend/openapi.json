@@ -1328,6 +1328,73 @@
         "title": "DependencyStatus",
         "type": "object"
       },
+      "DimensionView": {
+        "additionalProperties": false,
+        "description": "One allowance dimension as the caller sees it.",
+        "properties": {
+          "allowance": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the plan permits. Null means this plan does not limit it.",
+            "title": "Allowance"
+          },
+          "consumed": {
+            "description": "What has been used in the current window.",
+            "minimum": 0.0,
+            "title": "Consumed",
+            "type": "integer"
+          },
+          "dimension": {
+            "description": "The allowance dimension, such as 'requests_per_day'.",
+            "title": "Dimension",
+            "type": "string"
+          },
+          "remaining": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What is left. Null where the dimension is unlimited.",
+            "title": "Remaining"
+          },
+          "resets_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the window turns over. Null for concurrency, which has no boundary \u2014 it falls as soon as a run finishes.",
+            "title": "Resets At"
+          },
+          "window": {
+            "description": "The period it is counted over: 'day', 'month', 'concurrent'.",
+            "title": "Window",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dimension",
+          "window",
+          "consumed"
+        ],
+        "title": "DimensionView",
+        "type": "object"
+      },
       "Direction": {
         "description": "Which way is \"better\" for a measure under a criterion, and which way a threshold points.",
         "enum": [
@@ -2854,6 +2921,49 @@
         "title": "ReadinessResponse",
         "type": "object"
       },
+      "RecentUsage": {
+        "additionalProperties": false,
+        "description": "A bounded look back over the caller's own calls. Counts, never content and never cost.",
+        "properties": {
+          "calls": {
+            "description": "Language model calls, counting each retry separately.",
+            "minimum": 0.0,
+            "title": "Calls",
+            "type": "integer"
+          },
+          "days": {
+            "description": "How far back this summary looks.",
+            "minimum": 1.0,
+            "title": "Days",
+            "type": "integer"
+          },
+          "failures": {
+            "description": "How many of them failed.",
+            "minimum": 0.0,
+            "title": "Failures",
+            "type": "integer"
+          },
+          "total_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Tokens across those calls, or null where the gateway reported none. Null is not zero: zero would claim the calls used nothing.",
+            "title": "Total Tokens"
+          }
+        },
+        "required": [
+          "days",
+          "calls",
+          "failures"
+        ],
+        "title": "RecentUsage",
+        "type": "object"
+      },
       "ResolvedContext": {
         "additionalProperties": false,
         "description": "What the run decided the question was actually about.\n\n``specs/agent-orchestration`` requires an answer to *state* which location and window it\nresolved to, and where a default came from \u2014 so a person can tell \"you used my saved default\"\nfrom \"you guessed\".",
@@ -3877,6 +3987,53 @@
         "title": "UnitSystem",
         "type": "string"
       },
+      "UsageResponse": {
+        "additionalProperties": false,
+        "description": "The caller's plan, their standing in every dimension, and a bounded recent summary.",
+        "properties": {
+          "dimensions": {
+            "description": "Every dimension, unlimited ones too.",
+            "items": {
+              "$ref": "#/components/schemas/DimensionView"
+            },
+            "title": "Dimensions",
+            "type": "array"
+          },
+          "internal": {
+            "default": false,
+            "description": "Whether this caller's traffic is accounted against the internal allowance rather than a product plan, which is the case for an administrative principal.",
+            "title": "Internal",
+            "type": "boolean"
+          },
+          "plan_code": {
+            "description": "The plan in effect, from backend state.",
+            "title": "Plan Code",
+            "type": "string"
+          },
+          "plan_name": {
+            "description": "Its display name.",
+            "title": "Plan Name",
+            "type": "string"
+          },
+          "recent": {
+            "$ref": "#/components/schemas/RecentUsage"
+          },
+          "user_id": {
+            "description": "The token subject. Never a value the request supplied.",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "plan_code",
+          "plan_name",
+          "dimensions",
+          "recent"
+        ],
+        "title": "UsageResponse",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -4105,7 +4262,7 @@
   "paths": {
     "/api/v1/agent/ask": {
       "post": {
-        "description": "**Protected.** Uses and writes the acting user's thread memory and stores an owned evidence record.\n\nAnswer one question, with the evidence for every figure in it.\n\nReturns 503 naming the missing configuration when no inference credential is set. Every public\nweather endpoint keeps working in that case, which is why the client is constructed here rather\nthan at startup.",
+        "description": "**Protected.** Uses and writes the acting user's thread memory and stores an owned evidence record.\n\nAnswer one question, with the evidence for every figure in it.\n\nReturns 503 naming the missing configuration when no inference credential is set, and 429 with\nthe bound dimension when the caller's plan allowance is spent. Every public weather endpoint\nkeeps working in both cases, which is why the client is constructed here rather than at\nstartup and why the quota gate covers this route rather than the application.",
         "operationId": "ask_api_v1_agent_ask_post",
         "requestBody": {
           "content": {
@@ -4720,6 +4877,36 @@
           }
         ],
         "summary": "Update your preferences",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/v1/me/usage": {
+      "get": {
+        "description": "**Protected.** The acting user's own plan, allowances and consumption. No other subject's, and no internal usage.\n\nYour plan, what you have used, and when each window resets.\n\nThe recent summary is read under your own session, so Row Level Security is what scopes it: the\nowner policy on ``llm_usage_events`` returns your rows and nothing else, whatever this query\nsays. That is the second gate behind the missing user-id parameter.",
+        "operationId": "read_usage_api_v1_me_usage_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Your plan and your usage",
         "tags": [
           "account"
         ]

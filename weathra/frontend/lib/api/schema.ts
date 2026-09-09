@@ -315,6 +315,22 @@ export interface DependencyStatus {
   readonly required?: boolean;
 }
 
+/** One allowance dimension as the caller sees it. */
+export interface DimensionView {
+  /** What the plan permits. Null means this plan does not limit it. */
+  readonly allowance?: number | null;
+  /** What has been used in the current window. */
+  readonly consumed: number;
+  /** The allowance dimension, such as 'requests_per_day'. */
+  readonly dimension: string;
+  /** What is left. Null where the dimension is unlimited. */
+  readonly remaining?: number | null;
+  /** When the window turns over. Null for concurrency, which has no boundary — it falls as soon as a run finishes. */
+  readonly resets_at?: string | null;
+  /** The period it is counted over: 'day', 'month', 'concurrent'. */
+  readonly window: string;
+}
+
 /** Which way is "better" for a measure under a criterion, and which way a threshold points. */
 export type Direction = "above" | "below";
 
@@ -643,6 +659,18 @@ export interface ReadinessResponse {
   readonly version: string;
 }
 
+/** A bounded look back over the caller's own calls. Counts, never content and never cost. */
+export interface RecentUsage {
+  /** Language model calls, counting each retry separately. */
+  readonly calls: number;
+  /** How far back this summary looks. */
+  readonly days: number;
+  /** How many of them failed. */
+  readonly failures: number;
+  /** Tokens across those calls, or null where the gateway reported none. Null is not zero: zero would claim the calls used nothing. */
+  readonly total_tokens?: number | null;
+}
+
 /** What the run decided the question was actually about. */
 export interface ResolvedContext {
   readonly criterion?: string | null;
@@ -866,6 +894,21 @@ export interface UncertaintyStatement {
 /** The unit system a result is expressed in. Metric unless a caller says otherwise. */
 export type UnitSystem = "metric" | "imperial";
 
+/** The caller's plan, their standing in every dimension, and a bounded recent summary. */
+export interface UsageResponse {
+  /** Every dimension, unlimited ones too. */
+  readonly dimensions: DimensionView[];
+  /** Whether this caller's traffic is accounted against the internal allowance rather than a product plan, which is the case for an administrative principal. */
+  readonly internal?: boolean;
+  /** The plan in effect, from backend state. */
+  readonly plan_code: string;
+  /** Its display name. */
+  readonly plan_name: string;
+  readonly recent: RecentUsage;
+  /** The token subject. Never a value the request supplied. */
+  readonly user_id: string;
+}
+
 export interface ValidationError {
   readonly ctx?: Record<string, unknown>;
   readonly input?: unknown;
@@ -1080,6 +1123,16 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     request: null,
     successStatus: 200,
     response: "PreferenceView",
+    parameters: [],
+  },
+  {
+    operationId: "read_usage_api_v1_me_usage_get",
+    method: "GET",
+    path: "/api/v1/me/usage",
+    requiresToken: true,
+    request: null,
+    successStatus: 200,
+    response: "UsageResponse",
     parameters: [],
   },
   {

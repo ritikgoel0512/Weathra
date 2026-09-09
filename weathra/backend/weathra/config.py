@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from typing import Annotated, Literal, Self
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import AnyHttpUrl, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -186,6 +187,28 @@ class Settings(BaseSettings):
             "disabling a model may see it serve for up to this long on an instance that has not "
             "refreshed. Zero disables the cache and reads every time, which is what the tests that "
             "care about immediacy use."
+        ),
+    )
+
+    # ---------------------------------------------------------------- quotas
+
+    quota_enabled: bool = Field(
+        default=True,
+        validation_alias="quota_enabled",
+        description=(
+            "Whether plan allowances are enforced. On by default, including locally, so the "
+            "development path is the deployed path. A suite that turns it off is exercising "
+            "something other than the gate, and says so by setting this."
+        ),
+    )
+    quota_window_timezone: str = Field(
+        default="UTC",
+        validation_alias="quota_window_timezone",
+        description=(
+            "The zone in which the calendar day and calendar month boundaries of an allowance "
+            "window are computed (design.md decision 25). Named explicitly rather than taken from "
+            "the server's local time, which would make a day boundary depend on where the process "
+            "happens to run — noticed only when two instances disagree about who is over."
         ),
     )
 
@@ -427,6 +450,25 @@ class Settings(BaseSettings):
             raise ValueError(SINGLE_MODEL_MODE_DEPLOYED_MESSAGE)
         return self
 
+    @field_validator("quota_window_timezone")
+    @classmethod
+    def _resolve_quota_zone(cls, value: str) -> str:
+        """Refuse a zone name the platform cannot resolve, at construction.
+
+        Left to first use, an unknown name would surface as an exception inside the quota gate on
+        somebody's first question of the day — a 500 on the answer path for a configuration
+        mistake. Here it is a boot failure naming the variable.
+        """
+        name = value.strip()
+        try:
+            ZoneInfo(name)
+        except (ZoneInfoNotFoundError, ValueError) as failure:
+            raise ValueError(
+                f"QUOTA_WINDOW_TIMEZONE is not a zone this platform knows: {name!r}. "
+                "Use an IANA name such as 'UTC' or 'Europe/Berlin'."
+            ) from failure
+        return name
+
     @model_validator(mode="after")
     def _refuse_overlapping_chunk_bounds(self) -> Self:
         if self.rag_chunk_overlap_tokens >= self.rag_chunk_max_tokens:
@@ -434,6 +476,15 @@ class Settings(BaseSettings):
         return self
 
     # ---------------------------------------------------------------- derived values
+
+    @property
+    def quota_zone(self) -> ZoneInfo:
+        """`QUOTA_WINDOW_TIMEZONE` as a `tzinfo`, for the window-key derivation.
+
+        `domain/` reads no configuration, so `WindowKey.for_window` takes the zone as an argument;
+        this is where that argument comes from, and the one place the name is turned into a zone.
+        """
+        return ZoneInfo(self.quota_window_timezone)
 
     @property
     def is_deployed(self) -> bool:
