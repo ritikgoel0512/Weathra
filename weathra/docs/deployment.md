@@ -740,10 +740,11 @@ deliberate; the wording is what should change if this is ever revisited.
 
 ## Deployed acceptance
 
-Tasks 25.3 and 25.4 ask for the deployed pair to be exercised and the results recorded. This is the
-record. `backend/tests/deployed/` is the suite; it runs from a Codespace or from
-`live-acceptance.yml` with `pytest -m deployed`, and its last run reported **49 passed, 5 skipped,
-0 failed**.
+Tasks 25.3, 25.4 and 34.7 ask for the deployed pair to be exercised and the results recorded. This
+is the record. `backend/tests/deployed/` is the suite — `test_deployed_acceptance.py` for 25.3 and
+25.4, `test_saas_acceptance.py` for 34.7's SaaS layer. It runs from a Codespace or from
+`live-acceptance.yml` with `pytest -m deployed`, and its last run reported **84 passed, 28 skipped,
+0 failed** (2026-09-09, against `weathra-backend.onrender.com` and `weathra-bice.vercel.app`).
 
 ### What automation proved (task 25.4)
 
@@ -771,6 +772,30 @@ against production in full:
 | 18.11 secret containment | the served bundle, plus the repository check on every push |
 | The RLS gate | verified against the deployed database itself: Row Level Security **enabled and forced** with a policy on all five user-owned tables, `weathra_request` unable to log in or bypass it, `weathra_api` not inheriting and holding no privileged attribute — `database-retention` run 34262284576 |
 
+### What automation proved (task 34.7, the SaaS layer)
+
+The credential-free tier of 34.7 ran in full. It needs nothing configured, so this is the half of
+the SaaS-layer acceptance verification that is *done* rather than pending:
+
+| Criterion | Evidence |
+|---|---|
+| Every administrative operation refuses an absent token | all 22 published administrative operations across the 18 paths — GET, POST, PUT, PATCH and DELETE alike — answer 401, with path parameters filled by identifiers that do not exist so the refusal cannot be a 404 in disguise |
+| Every administrative read refuses a foreign token | a structurally valid token signed by a key production has never seen is refused on all 8 administrative GETs |
+| A refusal discloses no model identifier | no administrative refusal body contains any seeded catalog key or any vendor model string — `specs/model-lab` requires the unentitled caller to learn nothing about which models exist |
+| The check list cannot fall behind the surface | the completeness assertion compares *operations* against `openapi.json`, so a route added or a method changed fails it |
+
+**A defect this found.** The equivalent assertion for the ordinary protected surface,
+`test_every_protected_path_has_a_credential_free_check`, had been failing since group 31 added the
+administrative paths — the `deployed` marker is deselected by default, so no ordinary CI run
+reported it. Both modules now assert their own half, and a third assertion holds that the two
+halves partition the protected surface, so a path cannot be dropped from one list and excluded from
+the other with both modules still reporting themselves complete.
+
+**What the three method corrections cost.** The first run of this tier reported 5 failures, all
+405 rather than 401: `/admin/models/{catalog_key}` publishes only `PATCH`,
+`/admin/allowances/internal` only `PUT`, and `/admin/plans` no `POST`. A hand-written path list
+had assumed each answered `GET`. That is why the assertion is now driven off the contract.
+
 ### What the product owner verified by hand
 
 The owner signed into production with their own account and reported: sign-up confirmed by emailed
@@ -783,7 +808,49 @@ endpoints the product uses.
 
 ### What is not verified, and why
 
-Three criteria remain, and none of them is a gap in the deployment:
+None of these is a gap in the deployment. Each is a criterion that needs something this repository
+deliberately cannot produce: a real account, a real inbox, or real spend.
+
+**Task 34.7's session tiers.** The SaaS-layer criteria that need a signed-in account are
+implemented in `test_saas_acceptance.py` and skip, naming their variables. They are, exactly:
+
+| Criterion | Needs | Tier |
+|---|---|---|
+| A Free-plan caller served their entitled model with the resolution in the evidence record | one account | `WEATHRA_LIVE_USER_A_*` |
+| A body field claiming Pro ignored | one account | `WEATHRA_LIVE_USER_A_*` |
+| A usage event recorded for every call, including a failed one | one account | `WEATHRA_LIVE_USER_A_*` |
+| Forecast, history, analysis and comparison still serving throughout | one account | `WEATHRA_LIVE_USER_A_*` |
+| An ordinary account refused the administrative surface with no model disclosed | one account | `WEATHRA_LIVE_USER_A_*` |
+| A second account seeing none of the first's usage | a second account | `WEATHRA_LIVE_USER_B_*` |
+| An override accepted for an enabled model and refused for an absent one | an administrative account | `WEATHRA_LIVE_ADMIN_*` |
+| An estimated cost present and labelled | an administrative account | `WEATHRA_LIVE_ADMIN_*` |
+| Internal lab and evaluation usage reported separately from every product plan | an administrative account | `WEATHRA_LIVE_ADMIN_*` |
+| An exhausted allowance returning 429 with its basis | one account, and its day allowance | `WEATHRA_LIVE_EXHAUST_ALLOWANCE=1` |
+
+Two of those deserve their reasons stated rather than listed.
+
+The **429** is opt-in per dispatch because the honest way to reach it costs a real day's
+allowance on the dedicated account. The convenient way — lowering a plan's allowance to a number
+the check can reach quickly — is refused in the suite: `plan_allowances` rows are shared by every
+account on that plan, so it would be changing production for real people to make an assertion
+cheap.
+
+The **disabled-model refusal** is asked with an *absent* catalog key rather than a disabled one.
+Disabling a seeded model to watch a refusal would take it out of resolution for every account on a
+plan that names it, for as long as the check ran plus one cache TTL. Absent and disabled are one
+branch apart in the same allowlist check, and `integration/test_agent_resolution.py` covers the
+disabled branch in process, against a database that is nobody's.
+
+**Task 34.5's live comparison.** The first model comparison across the seeded catalog candidates is
+not run. The implementation is complete and tested — group 32's lab, its bounds, its records, its
+criteria and its promotion action — but executing it means four candidates' worth of real
+inference against the gateway and writing `model_comparison_runs` rows into the production
+database, and *then* re-ordering a policy's candidate list from what it found. An offline run
+cannot substitute: it scores `FakeLLMClient`, so promoting a candidate from its numbers would be a
+decision made on measurements of the harness. The task stays open rather than being satisfied with
+a comparison whose evidence means nothing.
+
+**And three criteria from 25.3 and 25.4:**
 
 * **A question through `/ask` whose every figure appears in its evidence**, and **an authenticated
   SSE stream completing** (25.4). Both need a signed-in session. The suite implements them and skips

@@ -51,7 +51,7 @@ from tests.live_support import (
     target_from_env,
     upstream_refused,
 )
-from weathra.api.classification import PROTECTED_PATHS, PUBLIC_PATHS
+from weathra.api.classification import ADMINISTRATIVE_PATHS, PROTECTED_PATHS, PUBLIC_PATHS
 
 pytestmark = pytest.mark.deployed
 
@@ -134,7 +134,13 @@ NOT_A_REAL_ID = "00000000-0000-4000-8000-000000000000"
 
 
 def test_every_protected_path_has_a_credential_free_check() -> None:
-    """The completeness half: a protected route added later must appear here or fail this test."""
+    """The completeness half: a protected route added later must appear here or fail this test.
+
+    The administrative paths are covered by `test_saas_acceptance.py`, which owns task 34.7, and
+    are excluded here rather than duplicated — that module asserts its own half is complete, and
+    the assertion below asserts the two halves partition the protected surface with nothing
+    falling between them.
+    """
     covered = {path.split("?")[0] for path in PROTECTED_GETS}
     covered |= {path for _, path in PROTECTED_WRITES}
     identified = {
@@ -142,10 +148,28 @@ def test_every_protected_path_has_a_credential_free_check() -> None:
         .replace("{thread_id}", NOT_A_REAL_ID)
         .replace("{evidence_id}", NOT_A_REAL_ID)
         for path in PROTECTED_PATHS
+        if path not in ADMINISTRATIVE_PATHS
     }
     assert not identified - covered, (
         f"protected paths with no deployed check: {sorted(identified - covered)}"
     )
+
+
+def test_the_two_deployed_modules_between_them_cover_every_protected_path() -> None:
+    """Neither module can be complete on its own, so the partition itself is asserted.
+
+    Without this, a path could be dropped from `ADMINISTRATIVE_PATHS` *and* stay excluded here,
+    and both modules would report themselves complete while nothing checked it.
+    """
+    administrative = set(ADMINISTRATIVE_PATHS)
+    ordinary = set(PROTECTED_PATHS) - administrative
+
+    assert administrative <= set(PROTECTED_PATHS), (
+        "an administrative path is not classified protected, so no tier checks its refusal: "
+        f"{sorted(administrative - set(PROTECTED_PATHS))}"
+    )
+    assert ordinary | administrative == set(PROTECTED_PATHS)
+    assert not ordinary & administrative
 
 
 # ------------------------------------------------------------------ 25.4, the frontend

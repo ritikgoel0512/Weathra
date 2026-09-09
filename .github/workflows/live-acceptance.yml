@@ -26,6 +26,13 @@ name: live-acceptance
 
 on:
   workflow_dispatch:
+    inputs:
+      exhaust_allowance:
+        description: >-
+          Spend account A's day allowance to verify the 429 refusal and its basis.
+          Off by default: the allowance is real and resets on the window boundary.
+        type: boolean
+        default: false
 
 concurrency:
   # Its own group. It must neither queue behind a release nor delay one, and two concurrent runs
@@ -60,6 +67,22 @@ jobs:
       WEATHRA_LIVE_USER_A_PASSWORD: ${{ secrets.WEATHRA_LIVE_USER_A_PASSWORD }}
       WEATHRA_LIVE_USER_B_EMAIL: ${{ secrets.WEATHRA_LIVE_USER_B_EMAIL }}
       WEATHRA_LIVE_USER_B_PASSWORD: ${{ secrets.WEATHRA_LIVE_USER_B_PASSWORD }}
+
+      # The SaaS-layer tier of task 34.7. A third dedicated account, holding the administrative
+      # role — granted out of band by `scripts/grant_administrator.py`, never by this job, which
+      # has no privileged credential to grant it with. Absent is a supported state: the
+      # administrative checks skip and name these two, and every other tier still runs.
+      #
+      # It is deliberately not one of the two accounts above. An account that can disable a model
+      # is not an account whose isolation checks prove anything about an ordinary caller.
+      WEATHRA_LIVE_ADMIN_EMAIL: ${{ secrets.WEATHRA_LIVE_ADMIN_EMAIL }}
+      WEATHRA_LIVE_ADMIN_PASSWORD: ${{ secrets.WEATHRA_LIVE_ADMIN_PASSWORD }}
+
+      # The allowance-exhaustion check spends account A's own day allowance, so it is opt-in per
+      # dispatch rather than on by default. Set it to `1` in a manual re-run when the 429 is the
+      # thing being verified. The alternative — lowering a plan's allowance — is refused in the
+      # suite: `plan_allowances` rows are shared by every account on that plan.
+      WEATHRA_LIVE_EXHAUST_ALLOWANCE: ${{ inputs.exhaust_allowance && '1' || '' }}
 
       # `Settings()` is constructed while collecting the suite. A placeholder is enough — nothing
       # in these checks reads the local configuration, and pointing it at the real project would
