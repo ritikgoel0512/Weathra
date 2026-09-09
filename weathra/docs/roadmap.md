@@ -79,11 +79,19 @@ Intelligence are represented in the design roadmap and **not implemented** in th
 routes exist in the frontend and state plainly that they are not yet available — routing structure
 that is real, with nothing rendering broken or empty.
 
-**Admin Model & AI Usage** and **Plan & Usage** are designed and approved under the same design
-gate as every other screen and are **not implemented** in this change. They are recorded as
-post-MVP entries in [`design/roadmap.md`](design/roadmap.md); their routes state that they are not
-yet available, and the administrative route fetches no catalog, usage, cost, or lab content for
-anyone while it is unbuilt.
+**Admin Model & AI Usage** (`/admin/model-usage`) and **Plan & Usage** (`/plan`) are subject to the
+same design gate as every other screen and are **not implemented** in this change. They are
+recorded as post-MVP entries in [`design/roadmap.md`](design/roadmap.md), and unlike the five above
+they are deliberately absent from the navigation while they are unbuilt: one is administrative, and
+the other would offer a plan view that cannot yet be shown. Both routes exist and state that the
+screen is not yet available, and **neither issues any request** — the administrative route fetches
+no catalog, usage, cost, or lab content for *anyone*, including an administrator, while it is
+unbuilt.
+
+Their designs are still owed. Neither artifact has been produced, so the design half of the gate is
+open and `docs/design/screens.md` §7 records what each must cover; the plan-and-usage view will
+show the signed-in person their own plan, consumption and reset times and nobody else's, and the
+administrative screen the aggregates that `/api/v1/admin/usage` already reports.
 
 ### Commercial and model governance
 

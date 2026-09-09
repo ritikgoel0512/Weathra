@@ -13,10 +13,12 @@ to its artifact status and each post-MVP screen to its roadmap entry.
 | [`fidelity-review.md`](fidelity-review.md) | Task 21.9's formal visual-fidelity review — the fifteen MVP screens/states against the eight approved artifacts, the divergences and their reasons, the one defect corrected, and the review's own limitations |
 | [`accessibility.md`](accessibility.md) | Task 21.8's accessibility and responsiveness record — the instruments, what each verified, the defects found and corrected, and the limitations |
 | [`accessibility-manual-pass.md`](accessibility-manual-pass.md) | The worksheet and findings for 21.8's manual pass, which remains incomplete |
-| [`screens/`](screens/) | The eight approved Visily exports themselves |
+| [`screens/`](screens/) | The eight approved Visily exports themselves. Two more are owed — the model-policy screens of tasks 33.1 and 33.2 — and neither has been produced; [`screens.md`](screens.md) §7 records the reserved filenames and what each must cover |
 
-The design phase completed on **2026-09-03**. The eight approved artifacts are committed under
-[`screens/`](screens/) — seven MVP product screens and the shared authentication shell — and
+The design phase for the **MVP** completed on **2026-09-03**; the two post-MVP model-policy screens
+remain outside it and are still owed an artifact ([`screens.md`](screens.md) §7). The eight approved
+artifacts are committed under [`screens/`](screens/) — seven MVP product screens and the shared
+authentication shell — and
 [`screens.md`](screens.md) maps each screen to its file, records the approval, and records the
 exceptions taken against each artifact. The literal design tokens were established in task 20.3 and
 are recorded in [`tokens.md`](tokens.md) — chosen from the recorded direction and verified against

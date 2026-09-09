@@ -30,17 +30,30 @@ a post-MVP screen as built. See [`screens.md`](screens.md) §5.
 
 ## Not in the navigation
 
-| Screen | Design status | Roadmap entry |
-|---|---|---|
-| Admin Model & AI Usage | Roadmap entry — subject to the same design gate, designed in task 33.1, **not yet designed or approved** | Part B of the change's `tasks.md`, *Screens* |
-| Plan & Usage | Roadmap entry — subject to the same design gate, designed in task 33.2, **not yet designed or approved** | Part B of the change's `tasks.md`, *Screens* |
+| Screen | Route | Design status | Roadmap entry |
+|---|---|---|---|
+| Admin Model & AI Usage | `/admin/model-usage` | Roadmap entry — subject to the same design gate, designed in task 33.1, **not yet designed or approved** | Part B of the change's `tasks.md`, *Screens* |
+| Plan & Usage | `/plan` | Roadmap entry — subject to the same design gate, designed in task 33.2, **not yet designed or approved** | Part B of the change's `tasks.md`, *Screens* |
 
-Both are reachable only by their route, which states that the screen is not yet available; the
-administrative route fetches no catalog, usage, cost, or lab content for any visitor in this
-change. Their designs must cover the populated, loading, empty, error, and not-permitted states and
-must follow [`design-system.md`](design-system.md) rather than a generic styling, and their
-approval must be recorded before implementation begins. Neither has been designed, so tasks
-33.1–33.3 remain open — see [`screens.md`](screens.md) §5.
+Both routes exist as of task 33.4 and are declared as `UNLISTED_SCREENS` in
+`frontend/lib/routes.ts` — a list of their own rather than `POST_MVP_SCREENS`, because the
+navigation model is asserted to cover that list exactly and putting either screen in it would put
+it in the sidebar. **Why they are absent from the sidebar while the other five are present:** one is
+administrative and would advertise a surface most people may not open, and the other would offer a
+plan view that cannot yet be shown. Both are protected by the same default as every other route.
+
+Each route states that its screen is not yet available and **issues no request at all** — for any
+visitor, not only for a person without the administrative role. `specs/web-ui` asks for exactly
+that: "no catalog, usage, cost, or lab request is issued". The guarantee is a property of the two
+page modules, which hold no API client, no session read and no administrative import, rather than a
+condition inside them; `frontend/app/(app)/unlisted-routes.test.tsx` asserts it from both
+directions.
+
+Their designs must cover the populated, loading, empty, error, and not-permitted states and must
+follow [`design-system.md`](design-system.md) rather than a generic styling, and their approval must
+be recorded before implementation begins. **Neither has been designed**, so tasks 33.1–33.3 remain
+open — see [`screens.md`](screens.md) §7 for what is outstanding and the filenames reserved for the
+artifacts when they arrive.
 
 ## When a roadmap entry becomes an artifact
 

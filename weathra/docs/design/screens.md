@@ -87,6 +87,25 @@ than in eight near-identical images.
 
 Not MVP artifacts. Recorded as design-roadmap entries in [`roadmap.md`](roadmap.md).
 
+Seven screens sit here, and they are in two groups that differ in one respect only — whether the
+navigation offers them:
+
+| Screen | Route | In the navigation | Artifact |
+|---|---|---|---|
+| Weather Intelligence Report | `/report` | Yes, marked not yet available | None — roadmap entry (task 19.4) |
+| Forecast Explorer | `/explorer` | Yes, marked not yet available | None — roadmap entry (task 19.4) |
+| Weather Scenario Lab | `/scenarios` | Yes, marked not yet available | None — roadmap entry (task 19.4) |
+| Weather Watch | `/watch` | Yes, marked not yet available | None — roadmap entry (task 19.4) |
+| Travel Intelligence | `/travel` | Yes, marked not yet available | None — roadmap entry (task 19.4) |
+| Admin Model & AI Usage | `/admin/model-usage` | No — reachable by route only | **Outstanding**, task 33.1 (§7) |
+| Plan & Usage | `/plan` | No — reachable by route only | **Outstanding**, task 33.2 (§7) |
+
+The last two carry a design obligation the first five do not: `specs/web-ui` requires an artifact
+per screen covering the populated, loading, empty, error and **not-permitted** states, and a
+recorded approval, before implementation begins. Their routes exist (task 33.4) and issue no
+request; their screens are not designed. [`roadmap.md`](roadmap.md) holds the classification and the
+route behaviour.
+
 ## 5. Recorded exceptions to the artifacts
 
 The artifacts are approved as visual references. Their sample content is illustrative and is
@@ -207,6 +226,36 @@ the three defects it found, the five corrections, and the limitations of the pas
 The one item that stood open here — the literal token values — was established in task 20.3 and is
 recorded in [`tokens.md`](tokens.md), with the contrast of every declared pair verified in both
 appearances. No value was sampled from an export.
+
+### Still open: the two model-policy screen designs
+
+The gate closed on the MVP set. Two screens are still owed an artifact, and neither exists:
+
+| Task | Screen | Reserved filename | State |
+|---|---|---|---|
+| 33.1 | Admin Model & AI Usage | `screens/09-admin-model-ai-usage.png` | **Not produced.** No file, in this repository or its history. |
+| 33.2 | Plan & Usage | `screens/10-plan-usage.png` | **Not produced.** No file, in this repository or its history. |
+
+The filenames continue the approved sequence and are reserved so an artifact lands where §1 already
+looks for one; recording a reserved name is not an approval, and neither row may move into §1 or
+§6 until the file exists and has been reviewed. What each must cover is in `specs/web-ui`
+("Administrative and plan screens remain subject to the Visily design gate") and is repeated in
+[`roadmap.md`](roadmap.md): every element the screen names, the populated, loading, empty, error and
+not-permitted states, conformance to [`design-system.md`](design-system.md) rather than generic
+generated styling, and a recorded approval before implementation.
+
+**Task 33.3 depends on both and is therefore also open.** Its criterion is that the two screens are
+recorded as post-MVP entries *and their approval recorded* before implementation begins; the
+classification half is done — [`roadmap.md`](roadmap.md) and [`../roadmap.md`](../roadmap.md) agree,
+and no route advertises either screen as working — and the approval half cannot be satisfied by a
+document, because there is nothing to approve.
+
+The five roadmap screens of task 19.4 remain deliberately **artifact-free**: they were classified as
+roadmap entries rather than designed, which is what 19.4 asked for and what §4 records. Numbering
+past 10 is reserved for them in the same way, should any of them be designed later:
+`11-forecast-explorer`, `12-weather-intelligence-report`, `13-weather-scenario-lab`,
+`14-weather-watch`, `15-travel-intelligence`. No such file exists, and none is required by this
+change.
 
 ## 8. Divergence log
 

@@ -144,9 +144,14 @@ The paths behind all twelve already exist in `frontend/lib/routes.ts` as `MVP_SC
 `POST_MVP_SCREENS`. Task 20.12 composes the single ordered navigation list above from those two
 constants; the split in code is the authentication and status boundary, not the display order.
 
-The **Admin Model & AI Usage** and **Plan & Usage** screens are not in the navigation in this
-change. They are recorded in [`roadmap.md`](roadmap.md) and reached only by their routes, which
-state that they are not yet available.
+The **Admin Model & AI Usage** (`/admin/model-usage`) and **Plan & Usage** (`/plan`) screens are not
+in the navigation in this change. They are recorded in [`roadmap.md`](roadmap.md) and reached only
+by their routes, which state that they are not yet available and issue no request. They are
+declared as `UNLISTED_SCREENS` rather than as `POST_MVP_SCREENS` for exactly that reason: the
+navigation list above is composed from the other two constants and is asserted to cover them
+completely, so a screen placed in either would appear in the sidebar. The difference between the
+lists is *listed* against *reachable*, not built against unbuilt — all seven post-MVP screens are
+equally unbuilt.
 
 **Responsive behavior** of the shell is in §13.
 
