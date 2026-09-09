@@ -21,11 +21,43 @@ the eight approved Visily exports are committed under [`screens/`](screens/).
 | [`screens/06-saved-locations.png`](screens/06-saved-locations.png) | Saved Locations | PNG, 1488 × 1567 |
 | [`screens/07-settings.png`](screens/07-settings.png) | Settings | PNG, 1488 × 1150 |
 | [`screens/08-authentication.png`](screens/08-authentication.png) | The shared authentication shell | PNG, 1488 × 988 |
+| [`screens/09-admin-model-ai-usage.png`](screens/09-admin-model-ai-usage.png) | Admin Model & AI Usage | PNG, 1488 × 2146 |
+| [`screens/10-plan-usage.png`](screens/10-plan-usage.png) | Plan & Usage | PNG, 1488 × 1969 |
 
-Each carries Visily's "Made with Visily" export watermark, which is the visible evidence that the
-gate was satisfied on Visily's freely available export — no paid export capability, no
-design-to-code handoff, and no second design tool. The watermark is part of the export, not part of
-the design, and is not implemented.
+The last two arrived on **2026-09-09** for tasks 33.1 and 33.2, and are approved on the same terms
+as the eight before them — a reference for layout, hierarchy and finish, with their sample content
+superseded (§5). Their screens stay post-MVP: an approved artifact is what implementation needs
+before it starts, not a decision that it starts now. §4 records the classification, and
+[`roadmap.md`](roadmap.md) records what their routes do meanwhile.
+
+### Design-roadmap references
+
+Five further exports arrived on the same date. They are **not** approved implementation references,
+because the screens they draw have no specification to be implemented against — their capabilities
+are Part B of the change, not requirements of it. They are recorded as *visual* roadmap references
+so a later implementation starts from a drawn composition rather than a blank page:
+
+| File | Screen | Route | Export |
+|---|---|---|---|
+| [`screens/11-forecast-explorer.png`](screens/11-forecast-explorer.png) | Forecast Explorer | `/explorer` | PNG, 1488 × 2029 |
+| [`screens/12-weather-intelligence-report.png`](screens/12-weather-intelligence-report.png) | Weather Intelligence Report | `/report` | PNG, 1488 × 2650 |
+| [`screens/13-weather-scenario-lab.png`](screens/13-weather-scenario-lab.png) | Weather Scenario Lab | `/scenarios` | PNG, 1488 × 2442 |
+| [`screens/14-weather-watch.png`](screens/14-weather-watch.png) | Weather Watch | `/watch` | PNG, 1488 × 2454 |
+| [`screens/15-travel-intelligence.png`](screens/15-travel-intelligence.png) | Travel Intelligence | `/travel` | PNG, 1488 × 3839 |
+
+**Recording them changes nothing about what Weathra does.** All five routes stay
+not-yet-available; task 19.4 classified these screens as roadmap entries rather than MVP artifacts,
+and an image does not reclassify them. Each is drawn with heavier invented content than the MVP
+eight — sensor and node networks, neural agent versions, simulation engines, model recalibration,
+convergence and grounding percentages, encryption and compliance banners, exports Weathra has no
+endpoint for — and **none of it is a requirement**. Whoever implements one of these screens reads
+its specification first and this image second; §5's refusals apply to all five, and the
+capabilities themselves would have to be specified before any of it could be built.
+
+Each of the fifteen carries Visily's "Made with Visily" export watermark, which is the visible
+evidence that the gate was satisfied on Visily's freely available export — no paid export
+capability, no design-to-code handoff, and no second design tool. The watermark is part of the
+export, not part of the design, and is not implemented.
 
 ## 2. MVP product screens
 
@@ -90,21 +122,26 @@ Not MVP artifacts. Recorded as design-roadmap entries in [`roadmap.md`](roadmap.
 Seven screens sit here, and they are in two groups that differ in one respect only — whether the
 navigation offers them:
 
-| Screen | Route | In the navigation | Artifact |
-|---|---|---|---|
-| Weather Intelligence Report | `/report` | Yes, marked not yet available | None — roadmap entry (task 19.4) |
-| Forecast Explorer | `/explorer` | Yes, marked not yet available | None — roadmap entry (task 19.4) |
-| Weather Scenario Lab | `/scenarios` | Yes, marked not yet available | None — roadmap entry (task 19.4) |
-| Weather Watch | `/watch` | Yes, marked not yet available | None — roadmap entry (task 19.4) |
-| Travel Intelligence | `/travel` | Yes, marked not yet available | None — roadmap entry (task 19.4) |
-| Admin Model & AI Usage | `/admin/model-usage` | No — reachable by route only | **Outstanding**, task 33.1 (§7) |
-| Plan & Usage | `/plan` | No — reachable by route only | **Outstanding**, task 33.2 (§7) |
+| Screen | Route | In the navigation | Artifact | Approved as an implementation reference |
+|---|---|---|---|---|
+| Forecast Explorer | `/explorer` | Yes, marked not yet available | `11-forecast-explorer.png` | No — roadmap visual reference (§1) |
+| Weather Intelligence Report | `/report` | Yes, marked not yet available | `12-weather-intelligence-report.png` | No — roadmap visual reference (§1) |
+| Weather Scenario Lab | `/scenarios` | Yes, marked not yet available | `13-weather-scenario-lab.png` | No — roadmap visual reference (§1) |
+| Weather Watch | `/watch` | Yes, marked not yet available | `14-weather-watch.png` | No — roadmap visual reference (§1) |
+| Travel Intelligence | `/travel` | Yes, marked not yet available | `15-travel-intelligence.png` | No — roadmap visual reference (§1) |
+| Admin Model & AI Usage | `/admin/model-usage` | No — reachable by route only | `09-admin-model-ai-usage.png` | **Yes**, 2026-09-09 (§6), with §5's exceptions |
+| Plan & Usage | `/plan` | No — reachable by route only | `10-plan-usage.png` | **Yes**, 2026-09-09 (§6), with §5's exceptions |
 
-The last two carry a design obligation the first five do not: `specs/web-ui` requires an artifact
-per screen covering the populated, loading, empty, error and **not-permitted** states, and a
-recorded approval, before implementation begins. Their routes exist (task 33.4) and issue no
-request; their screens are not designed. [`roadmap.md`](roadmap.md) holds the classification and the
-route behaviour.
+The last two carry a design obligation the first five do not, and it is the reason they are the
+only two of the seven that are *approved*: `specs/web-ui` requires an artifact per screen covering
+the populated, loading, empty, error and **not-permitted** states, conformance to
+[`design-system.md`](design-system.md), and a recorded approval before implementation begins. That
+gate is now satisfied for both (§6). The other five have no such requirement, because they have no
+requirements at all in this change.
+
+**Approved is not built.** All seven routes state that their screen is not yet available, and the
+two administrative and plan routes issue no request whatsoever (task 33.4).
+[`roadmap.md`](roadmap.md) holds the classification and the route behaviour.
 
 ## 5. Recorded exceptions to the artifacts
 
@@ -145,6 +182,42 @@ its artifact in task 21.9 knows which differences are intended.
 | "Remember me" (`08`) | Session persistence is the Supabase SSR cookie session, which persists without a checkbox. A control implying a second session mode would misdescribe the architecture. |
 | Suggested prompt "Predict thermal drift for Tokyo next week" (`02`) | See the language-model line below. |
 
+**The two model-policy screens.** `09` and `10` arrived after the MVP eight and carry their own
+inventions. The general rule above applies to them unchanged; these are the items specific to them,
+and they matter more than the MVP set's because both screens are *about* the model layer, where an
+invented figure reads as a real operational fact.
+
+| In `09-admin-model-ai-usage.png` | What is implemented instead |
+|---|---|
+| The catalog rows — GPT-4o / OpenAI, Claude 3.5 Sonnet / Anthropic, Llama 3.1 70B / Meta (Groq), Gemini 1.5 Flash / Google, with their prices | The actual `model_catalog` rows the backend returns, through one gateway. The columns are right and the rows are sample data; a seeded catalog is a database row, not a design decision. |
+| "MODEL A: WEATHRA-CORE-V4.8" and "MODEL B: WEATHRA-CORE-V5.0-BETA" | The catalog keys an administrator actually selected for a comparison run. Weathra trains no model and has no model of its own to version. |
+| "REASONING SCORE 94.2%", "COST EFFICIENCY 88.5%" | The five recorded selection criteria of `docs/evaluation.md`, measured as that document defines them. An invented composite score is the thing a model comparison exists to replace. |
+| "EXPORT DATA", "FULL RELIABILITY AUDIT" | Neither exists. Administrative aggregates are read through `/api/v1/admin/usage`; there is no export endpoint and no audit report. |
+| "PLAN USAGE — PREMIUM 842 USERS, LIMIT: 1,000" | Consumption against **allowance**, per plan, which is what `specs/usage-limits` bounds. A plan's user headcount against a user cap is a different quantity that Weathra neither stores nor limits. |
+| "WEATHRA ADMIN V4.8.2-LTS", "ALL SERVICES OPERATIONAL", "ESTIMATED COST SYNCED" | Nothing. The readiness endpoint reports reachability; a status bar asserting that everything is operational, on a screen that did not check, is a claim rather than a report. |
+| "TOTAL TOKEN BURN", "ACTIVE CALLS 2,842" | Prompt, completion and total tokens as the usage events record them. "Active calls" is the concurrency dimension, and only where the store actually reports it. |
+| The `+14.2%` / `-12ms` deltas on every KPI, and "Stable" | A delta only where the period being compared is stated. A trend arrow with no comparison window behind it is decoration. |
+
+| In `10-plan-usage.png` | What is implemented instead |
+|---|---|
+| "SUBSCRIPTION ID WX-PRO-8891-BETA", "BILLING INTERVAL Monthly Professional", "NEXT BILLING DATE", "PAYMENT METHOD Visa ending in 4421", "Manage Payment Information", "DOWNLOAD INVOICES", "UPGRADE PLAN" | **Nothing.** This change bills nobody: plans are administratively assigned rows, `subscription_plans` carries an unused external reference so a payment integration has somewhere to land later, and there is no interval, no invoice, no card and no self-service upgrade. Drawing them would be an invented commercial relationship — the largest single refusal in the set. |
+| "ENTERPRISE AUTHORIZED", "TOKEN POOL (ENTERPRISE)" | Nothing. The canonical plans are FREE, PRO and PREMIUM. There is no enterprise tier. |
+| "VECTOR STORAGE NODES 8 / 10 NODES", "VECTOR STORE FLUSH", "CLEAR NODE CACHE", "THRESHOLD WARNING — Vector Storage Node usage is at 80%" | Nothing. The vector store is one retrieval index behind an interface; it is not a per-person quota dimension, it is not administered from a plan screen, and its cache is not a person's to clear. |
+| "USAGE EXPORT — Generate a detailed CSV breakdown of **per-user** token consumption for departmental cost attribution", "RECALCULATE ATTRIBUTION" | Nothing, and this one is refused twice over: `specs/web-ui` requires this view to show no other person's usage and no cross-user cost, and there is no export. It is the one panel in the artifact that contradicts the requirement the screen exists to satisfy. |
+| "PLAN ENTITLEMENTS — Unlimited Historical Weather Queries, Advanced AI Neural Agent Access, Deterministic Analytics Kernel v4.2, Priority Model Context Protocol (MCP), 10 Dedicated Saved Location Slots" | The entitlements the backend actually resolves for the plan — its policies per call role and its allowances. Neural agents, kernel versions and MCP priority are not entitlements Weathra has. |
+| "API RATE LIMITERS — ROLLING 1M WINDOW", "TELEMETRY_SYNC: STABLE", "ENCRYPTION: 256-AES", "USAGE PIPELINE ACTIVE", "WEATHRA PLAN SERVICES V4.8.2-PRO", "LOCKED" | Nothing. Public-endpoint rate limiting is post-MVP, and an encryption banner on a usage screen is a security claim the screen cannot make. |
+| "12:04:00 HH:MM:SS" countdowns, "T-MINUS" timers | The window reset time the backend reports, stated as an instant. A live countdown is a presentation choice that may follow; it is not what makes the reset legible. |
+
+**What `09` and `10` do carry, and it is the reason they are approved.** Between them they compose
+every element `specs/web-ui` names — the model-status table with its enable and disable actions and
+all seven of its columns; token usage with the model, policy, plan and call-role filters; estimated
+cost broken down by model, policy and plan; latency; failure counts and rates split by
+classification, timeouts, gateway rate limits and schema validation among them; per-plan
+consumption with internal and evaluation usage in their own rows; the internal model selector; and
+on `10` the plan name, per-dimension consumption with remaining allowance, and the reset windows.
+That composition — where each belongs, at what density, in what hierarchy — is what an artifact is
+for, and it is what these two are approved as.
+
 **The language-model line.** `specs/web-ui` requires that no screen's design imply the language
 model produced a numerical weather value. The badge system, the separation of the interpretation
 panel from the data cards, and the deterministic-analytics block all carry that distinction
@@ -173,7 +246,10 @@ are silent, the specs govern and the artifact's own card language is extended:
 | Saved Locations | The remove action, the empty state, and ambiguous-location candidate selection | `specs/web-ui`; tasks 21.6 and 21.7 |
 | Settings | Sign-out within the screen, session-memory deletion with confirmation, account-data deletion with an explicit confirmation step, and a wind-speed unit distinct from the unit-system toggle | `specs/memory`, `specs/authentication`, `specs/web-ui`; task 21.6 |
 | Historical Analytics | A range rejected as outside coverage, and baselines stating the years actually used rather than citing a published climate normal | `specs/analytics`, `specs/historical`; task 21.3 |
+| Admin Model & AI Usage | 95th-percentile latency beside the median, latency and errors broken down **by call role**, and the list of *past* comparison runs beside the one the lab panel draws | `specs/web-ui`, "Admin Model & AI Usage screen"; the artifact draws the surfaces and one figure short in two of them, which is a data question rather than a visual one |
+| Plan & Usage | A dimension the plan leaves unset, which is unlimited rather than a limit of zero | `specs/usage-limits`; a progress bar cannot draw an unlimited dimension, so it is stated in words |
 | Every screen | The loading, empty, error, interrupted-stream, agent-unavailable and quota states | [`design-system.md`](design-system.md) §11 |
+| Admin Model & AI Usage | The **not-permitted** state | [`design-system.md`](design-system.md) §11, "Not permitted" — a not-available state that fetches no administrative content |
 | Authentication | The seven states beyond sign-in | §3 above and `specs/authentication` |
 
 Two of the artifacts' own additions are kept, because `specs/memory` allows a preference the person
@@ -206,11 +282,25 @@ advertise as built something that is not.
 | 2026-09-03 | The seven MVP product screens | Approved visual references, recorded as `screens/01`–`screens/07`, with the exceptions in §5 |
 | 2026-09-03 | The authentication screen as the shared authentication-shell reference for all eight authentication screens | Approved visual reference, recorded as `screens/08-authentication.png`, with the exceptions in §5 |
 | 2026-09-03 | The corrections carried out of the mockups — invented sources and station identifiers, fabricated telemetry and confidence figures, agent version strings, audit and cryptographic framing, model-recalibration controls, sample copy | Recorded as binding on implementation (§5 and [`design-system.md`](design-system.md) §15) |
+| 2026-09-09 | **Admin Model & AI Usage** — task 33.1. Reviewed against every element and state `specs/web-ui` names for the screen; the composition carries all of them (§5, "What `09` and `10` do carry") | Approved visual reference, recorded as `screens/09-admin-model-ai-usage.png`, with §5's refusals binding and §5's two element gaps to be filled from the spec |
+| 2026-09-09 | **Plan & Usage** — task 33.2. Reviewed for the plan name, per-dimension consumption and remaining allowance, and the window reset times, and reviewed for the requirement it exists to satisfy: that it shows no other person's usage, no internal usage and no cross-user cost | Approved visual reference, recorded as `screens/10-plan-usage.png`, **with the per-user usage export, the whole billing block and the enterprise tier refused** (§5) |
+| 2026-09-09 | The five design-roadmap references — Forecast Explorer, Weather Intelligence Report, Weather Scenario Lab, Weather Watch, Travel Intelligence | **Not** approved as implementation references. Recorded as visual roadmap references only (§1); the screens stay Part B, and their capabilities would have to be specified before any of them could be built |
 
 The gate was satisfied with Visily's freely available capabilities: no paid export capability, no
 design-to-code handoff, and no second design tool — Figma included. Every approved screen is a
 visual reference implemented by hand in Next.js against
 [`design-system.md`](design-system.md).
+
+**On the state coverage of `09` and `10`.** Each is one export, drawing the **populated** state.
+The loading, empty, error and not-permitted treatments are the approved shared patterns of
+[`design-system.md`](design-system.md) §11 applied to that composition — the same basis on which
+§3 approves one authentication export as the shell for eight screens and their success, failure,
+expired and in-progress states. State coverage lives in the state patterns rather than in near-
+identical images of the same screen with one panel swapped, and §11 already names all five,
+including the not-permitted state as "the administrative treatment: a not-available state that
+fetches no administrative content". This is a recorded, deliberate reading of the gate, not an
+omission: a reviewer who wants per-state exports for these two screens is asking for something the
+project decided against for the MVP set and would be reversing that decision, not enforcing it.
 
 ## 7. Outstanding
 
@@ -227,35 +317,26 @@ The one item that stood open here — the literal token values — was establish
 recorded in [`tokens.md`](tokens.md), with the contrast of every declared pair verified in both
 appearances. No value was sampled from an export.
 
-### Still open: the two model-policy screen designs
+### The two model-policy screen designs, and the five roadmap references
 
-The gate closed on the MVP set. Two screens are still owed an artifact, and neither exists:
+Both outstanding designs arrived on **2026-09-09** and are recorded and approved: `09` and `10` in
+§1, their refusals in §5, their approval in §6. Tasks 33.1, 33.2 and 33.3 are closed on that
+basis. Two things about it are worth stating plainly, because both are easy to misread:
 
-| Task | Screen | Reserved filename | State |
-|---|---|---|---|
-| 33.1 | Admin Model & AI Usage | `screens/09-admin-model-ai-usage.png` | **Not produced.** No file, in this repository or its history. |
-| 33.2 | Plan & Usage | `screens/10-plan-usage.png` | **Not produced.** No file, in this repository or its history. |
+- **Approval is a gate on implementation, not a decision to implement.** Both screens remain
+  post-MVP. Their routes exist and say so, and the administrative route issues no request at all
+  (task 33.4). What the approval settles is that whenever they *are* built, the composition is
+  already decided and the refusals are already recorded.
+- **Two elements the artifact under-draws are recorded rather than waived.** `09` shows a median
+  latency and no 95th percentile, and splits neither latency nor errors by call role; and its
+  comparison lab draws one run rather than a list of past ones. `specs/web-ui` fixes those figures,
+  the artifact fixes where they sit, and §5's gap table records which is which. An implementation
+  that shipped the artifact's figures and stopped would be short of the spec.
 
-The filenames continue the approved sequence and are reserved so an artifact lands where §1 already
-looks for one; recording a reserved name is not an approval, and neither row may move into §1 or
-§6 until the file exists and has been reviewed. What each must cover is in `specs/web-ui`
-("Administrative and plan screens remain subject to the Visily design gate") and is repeated in
-[`roadmap.md`](roadmap.md): every element the screen names, the populated, loading, empty, error and
-not-permitted states, conformance to [`design-system.md`](design-system.md) rather than generic
-generated styling, and a recorded approval before implementation.
-
-**Task 33.3 depends on both and is therefore also open.** Its criterion is that the two screens are
-recorded as post-MVP entries *and their approval recorded* before implementation begins; the
-classification half is done — [`roadmap.md`](roadmap.md) and [`../roadmap.md`](../roadmap.md) agree,
-and no route advertises either screen as working — and the approval half cannot be satisfied by a
-document, because there is nothing to approve.
-
-The five roadmap screens of task 19.4 remain deliberately **artifact-free**: they were classified as
-roadmap entries rather than designed, which is what 19.4 asked for and what §4 records. Numbering
-past 10 is reserved for them in the same way, should any of them be designed later:
-`11-forecast-explorer`, `12-weather-intelligence-report`, `13-weather-scenario-lab`,
-`14-weather-watch`, `15-travel-intelligence`. No such file exists, and none is required by this
-change.
+The five design-roadmap references — `11` through `15` — are recorded in §1 and are deliberately
+**not** approved as implementation references. Nothing about their arrival moves a screen out of
+Part B or authorizes building one; each is drawn with substantial invented content, and the
+capability behind each would have to be specified first.
 
 ## 8. Divergence log
 

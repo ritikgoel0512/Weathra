@@ -14,6 +14,12 @@
  *
  * The administrative role stays server-held regardless (`docs/authentication.md`). Nothing on this
  * page decides anything about authorization, and nothing here is the gate for the moment it does.
+ *
+ * The screen's approved design is `docs/design/screens/09-admin-model-ai-usage.png` (task 33.1,
+ * approved 2026-09-09). Nothing of it is implemented here, and whoever implements it reads
+ * `docs/design/screens.md` §5 first: the artifact's catalog rows, model names, composite scores,
+ * export and audit controls, operational banners and per-tier user counts are all refused, and two
+ * of its panels are one figure short of what `specs/web-ui` requires.
  */
 
 import type { Metadata } from "next";

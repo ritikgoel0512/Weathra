@@ -375,6 +375,29 @@ The following came from mockup filler and is **not** implemented:
 - **Sample copy** — replaced with grounded, user-facing language that says what the screen actually
   does.
 
+The two model-policy artifacts of 2026-09-09 added a class of invention the MVP eight did not, and
+it is the one to watch hardest, because it describes a commercial relationship rather than the
+weather:
+
+- **Billing, payment and subscription content** — a subscription identifier, a billing interval, a
+  next billing date, a payment method, an invoice download, "Manage Payment Information" and
+  "Upgrade Plan". None is implemented. This change assigns plans administratively and bills nobody;
+  `subscription_plans` carries an unused external reference so a payment integration has somewhere
+  to land later, and drawing a card on a screen would invent the relationship it implies.
+- **An enterprise tier** — the canonical plans are FREE, PRO and PREMIUM, and there is no fourth.
+- **Infrastructure presented as a person's quota** — vector-storage nodes with a limit, a node
+  cache to clear, API rate limiters. The vector store is one retrieval index behind an interface;
+  it is not a per-person allowance and is not administered from a plan screen.
+- **Cross-user usage** — a per-user token-consumption export "for departmental cost attribution".
+  A person's own usage view shows their own usage: no other person's, no internal usage, no
+  aggregate cost across users.
+- **Invented model names, scores and audits** — "WEATHRA-CORE-V5.0-BETA", a "reasoning score", a
+  "cost efficiency" percentage, "Full Reliability Audit". Model selection is made on the five
+  recorded criteria of `docs/evaluation.md`; Weathra trains no model and versions none.
+- **Fabricated operational banners** — "All services operational", "Estimated cost synced",
+  "Encryption: 256-AES", "Telemetry sync: stable", `LOCKED`. A screen that did not check may not
+  report.
+
 Where a mockup implies the language model produced a measurement, the implementation does not
 follow it (§9).
 

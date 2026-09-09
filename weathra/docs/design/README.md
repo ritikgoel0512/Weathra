@@ -13,12 +13,14 @@ to its artifact status and each post-MVP screen to its roadmap entry.
 | [`fidelity-review.md`](fidelity-review.md) | Task 21.9's formal visual-fidelity review — the fifteen MVP screens/states against the eight approved artifacts, the divergences and their reasons, the one defect corrected, and the review's own limitations |
 | [`accessibility.md`](accessibility.md) | Task 21.8's accessibility and responsiveness record — the instruments, what each verified, the defects found and corrected, and the limitations |
 | [`accessibility-manual-pass.md`](accessibility-manual-pass.md) | The worksheet and findings for 21.8's manual pass, which remains incomplete |
-| [`screens/`](screens/) | The eight approved Visily exports themselves. Two more are owed — the model-policy screens of tasks 33.1 and 33.2 — and neither has been produced; [`screens.md`](screens.md) §7 records the reserved filenames and what each must cover |
+| [`screens/`](screens/) | The fifteen Visily exports themselves — ten approved implementation references, and five design-roadmap references that are deliberately not approved as any kind of requirement ([`screens.md`](screens.md) §1) |
 
-The design phase for the **MVP** completed on **2026-09-03**; the two post-MVP model-policy screens
-remain outside it and are still owed an artifact ([`screens.md`](screens.md) §7). The eight approved
-artifacts are committed under [`screens/`](screens/) — seven MVP product screens and the shared
-authentication shell — and
+The design phase for the **MVP** completed on **2026-09-03**, and the two post-MVP model-policy
+screens of tasks 33.1 and 33.2 were designed and approved on **2026-09-09** — approved as the
+reference implementation will use, not as a decision to implement them, which stays post-MVP. Ten
+approved artifacts are committed under [`screens/`](screens/) — seven MVP product screens, the
+shared authentication shell, and the two model-policy screens — alongside five design-roadmap
+references that are not approved as implementation references at all, and
 [`screens.md`](screens.md) maps each screen to its file, records the approval, and records the
 exceptions taken against each artifact. The literal design tokens were established in task 20.3 and
 are recorded in [`tokens.md`](tokens.md) — chosen from the recorded direction and verified against
@@ -36,9 +38,13 @@ An approved artifact is a reference for **layout, hierarchy, and finish only**. 
 is not carried into the implementation: the mock providers, fake station identifiers, fake agent
 version strings, crypto and audit wording, model-recalibration controls, invented meteorological
 source names, incomplete sidebar labels, and sample copy are all superseded by the real Weathra
-architecture and the actually configured providers and MCP tools. The list is in
-[`design-system.md`](design-system.md) §15, and the official navigation that replaces the mockups'
-sidebar is in §5.
+architecture and the actually configured providers and MCP tools. The two model-policy artifacts
+add a class of their own — invented billing, payment and subscription content, an enterprise tier,
+infrastructure drawn as a person's quota, and a cross-user usage export — and it is refused for the
+same reason and more firmly: this change bills nobody, and a person's usage view shows their own
+usage. The list is in [`design-system.md`](design-system.md) §15, the per-screen record is in
+[`screens.md`](screens.md) §5, and the official navigation that replaces the mockups' sidebar is in
+§5 of the design system.
 
 ## Design direction carried forward
 

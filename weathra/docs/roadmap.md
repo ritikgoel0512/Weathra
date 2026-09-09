@@ -77,7 +77,10 @@ snapshot table that already exists.
 Weather Intelligence Report, Forecast Explorer, Weather Scenario Lab, Weather Watch, and Travel
 Intelligence are represented in the design roadmap and **not implemented** in this change. Their
 routes exist in the frontend and state plainly that they are not yet available — routing structure
-that is real, with nothing rendering broken or empty.
+that is real, with nothing rendering broken or empty. Each gained a *visual* roadmap reference on
+2026-09-09; none is an approved implementation reference, and none authorizes building the screen,
+because the capability behind each is a Part B entry above rather than a requirement of this
+change.
 
 **Admin Model & AI Usage** (`/admin/model-usage`) and **Plan & Usage** (`/plan`) are subject to the
 same design gate as every other screen and are **not implemented** in this change. They are
@@ -88,10 +91,14 @@ screen is not yet available, and **neither issues any request** — the administ
 no catalog, usage, cost, or lab content for *anyone*, including an administrator, while it is
 unbuilt.
 
-Their designs are still owed. Neither artifact has been produced, so the design half of the gate is
-open and `docs/design/screens.md` §7 records what each must cover; the plan-and-usage view will
-show the signed-in person their own plan, consumption and reset times and nobody else's, and the
-administrative screen the aggregates that `/api/v1/admin/usage` already reports.
+Both were designed and approved on 2026-09-09, which closes the design half of the gate and
+settles nothing about the implementation half. `docs/design/screens.md` §5 records what each
+artifact draws that Weathra refuses — a subscription id, a billing interval, a payment method,
+invoices, a self-service upgrade, an enterprise tier, vector-storage-node quotas, and a per-user
+usage export — because those are the inventions a plan screen attracts, and this change bills
+nobody. When built, the plan-and-usage view shows the signed-in person their own plan, consumption
+and reset times and nobody else's, and the administrative screen the aggregates that
+`/api/v1/admin/usage` already reports.
 
 ### Commercial and model governance
 
