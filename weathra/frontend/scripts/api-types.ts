@@ -47,6 +47,8 @@ export interface OpenApiParameter {
 
 export interface OpenApiOperation {
   readonly operationId?: string;
+  /** The prose FastAPI publishes, prefixed by the backend with its access classification. */
+  readonly description?: string;
   readonly summary?: string;
   readonly security?: readonly Record<string, readonly string[]>[];
   readonly parameters?: readonly OpenApiParameter[];

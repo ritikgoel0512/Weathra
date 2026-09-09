@@ -153,7 +153,7 @@ class RoleStore:
         rows = await self._session.execute(
             text(
                 "SELECT subject_id, role, granted_by, granted_at FROM admin_roles "
-                " WHERE role = :role ORDER BY granted_at, user_id"
+                " WHERE role = :role ORDER BY granted_at, subject_id"
             ),
             {"role": role},
         )

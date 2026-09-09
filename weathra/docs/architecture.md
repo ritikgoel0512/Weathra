@@ -287,12 +287,12 @@ Task 22.10's live execution remains outstanding).
 | Spec | Requirements | Implemented | Manual | Open | Governing task groups |
 |---|---:|---:|---:|---:|---|
 | `agent-orchestration` | 17 | 17 | 0 | 0 | 13, 14 |
-| `authentication` | 20 | 19 | 0 | 1 | 3, 4, 18 |
+| `authentication` | 20 | 20 | 0 | 0 | 3, 4, 18 |
 | `deterministic-analytics` | 10 | 10 | 0 | 0 | 7 |
 | `evaluation` | 15 | 10 | 0 | 5 | 22 |
 | `forecast-analysis` | 10 | 10 | 0 | 0 | 8 |
 | `historical-weather` | 5 | 5 | 0 | 0 | 8 |
-| `http-api` | 24 | 22 | 0 | 2 | 15, 16 |
+| `http-api` | 24 | 23 | 0 | 1 | 15, 16 |
 | `location-comparison` | 6 | 6 | 0 | 0 | 9 |
 | `location-resolution` | 7 | 7 | 0 | 0 | 6 |
 | `mcp-weather-server` | 7 | 7 | 0 | 0 | 10 |
@@ -301,12 +301,12 @@ Task 22.10's live execution remains outstanding).
 | `safety-grounding` | 10 | 10 | 0 | 0 | 17 |
 | `weather-providers` | 7 | 7 | 0 | 0 | 5 |
 | `web-ui` | 16 | 11 | 1 | 4 | 19, 20, 21 |
-| `model-policy` | 10 | 8 | 0 | 2 | 28 |
-| `model-catalog` | 7 | 5 | 0 | 2 | 26, 27 |
+| `model-policy` | 10 | 9 | 0 | 1 | 28 |
+| `model-catalog` | 7 | 6 | 0 | 1 | 26, 27 |
 | `llm-telemetry` | 7 | 7 | 0 | 0 | 29 |
-| `usage-limits` | 9 | 8 | 0 | 1 | 30 |
+| `usage-limits` | 9 | 9 | 0 | 0 | 30 |
 | `model-lab` | 6 | 0 | 0 | 6 | 32 |
-| **Total** | **210** | **186** | **1** | **23** | |
+| **Total** | **210** | **191** | **1** | **18** | |
 
 ### `agent-orchestration`
 
@@ -351,7 +351,7 @@ Task 22.10's live execution remains outstanding).
 | Secret handling | 23.3 | config.py | test_secret_storage.py, frontend/scripts/secret-containment.test.ts, test_env_example.py, frontend/lib/env.test.ts | IMPLEMENTED |
 | Authentication in streaming requests | 16.3 | api/streaming.py | integration/test_api.py | IMPLEMENTED |
 | Account and data deletion | 15.5 | api/routers/account.py | integration/test_api.py | IMPLEMENTED |
-| Administrative and internal roles are server-held | 31.1 | — not implemented | — none | OPEN |
+| Administrative and internal roles are server-held | 31.1 | auth/roles.py, auth/deps.py, db/migrations/versions/0011_administrative_role_state.py | integration/test_admin_roles.py, integration/test_admin_api.py | IMPLEMENTED |
 | Plan and model entitlement are derived, never asserted | 28.2 | entitlements/resolver.py, auth/roles.py | unit/test_policy_resolver.py, integration/test_agent_resolution.py | IMPLEMENTED |
 | Row Level Security on the SaaS-ready tables | 26.3, 26.4 | db/migrations/versions/0006_saas_user_owned_tables.py, db/migrations/versions/0007_model_lab_and_audit_tables.py | integration/test_saas_rls.py, integration/test_saas_schema.py | IMPLEMENTED |
 
@@ -439,10 +439,10 @@ Task 22.10's live execution remains outstanding).
 | Health and readiness | 15.15 | api/routers/health.py | integration/test_api.py | IMPLEMENTED |
 | Request correlation and observability | 15.3 | api/middleware.py | integration/test_api.py | IMPLEMENTED |
 | Cross-origin access for the frontend | 15.1, 16.4 | api/app.py | integration/test_api.py | IMPLEMENTED |
-| Model selection is not caller-selectable on product endpoints | 28.2, 31.6 | — not implemented | — none | OPEN |
+| Model selection is not caller-selectable on product endpoints | 28.2, 31.6 | api/routers/agent.py, entitlements/resolver.py, api/classification.py | unit/test_policy_resolver.py, integration/test_admin_api.py | IMPLEMENTED |
 | Quota enforcement on the HTTP surface | 30.6 | api/routers/agent.py, api/errors.py, domain/errors.py | integration/test_quota_api.py | IMPLEMENTED |
 | Plan and usage endpoint for the signed-in person | 30.7 | api/routers/usage.py, entitlements/quotas.py | integration/test_quota_api.py, integration/test_auth_boundary.py | IMPLEMENTED |
-| Administrative model, usage, and lab endpoints | 31.3–31.6 | — not implemented | — none | OPEN |
+| Administrative model, usage, and lab endpoints | 31.3–31.6, 32.6 | api/routers/admin/models.py, api/routers/admin/plans.py, api/routers/admin/usage.py | integration/test_admin_api.py | OPEN |
 
 ### `location-comparison`
 
@@ -566,7 +566,7 @@ Task 22.10's live execution remains outstanding).
 | Configured model remains the development and administrative fallback | 28.4, 28.5 | entitlements/resolver.py, config.py | unit/test_policy_resolver.py, test_config.py | IMPLEMENTED |
 | The policy layer stays provider-agnostic | 27.4, 28.6 | agents/llm/factory.py, entitlements/records.py | unit/test_no_vendor_coupling.py, unit/test_llm_failover.py | IMPLEMENTED |
 | Model policy never affects deterministic computation or grounding | 28.8 | agents/graph.py, entitlements/records.py | integration/test_agent_resolution.py | IMPLEMENTED |
-| Policy administration is privileged and auditable | 31.2, 31.3 | — not implemented | — none | OPEN |
+| Policy administration is privileged and auditable | 31.2, 31.3 | api/routers/admin/models.py, entitlements/policies.py, entitlements/audit.py | integration/test_admin_api.py, integration/test_entitlement_stores.py | IMPLEMENTED |
 | Runtime provider failure fails over within the entitled policy, never on quality | 28.9 | agents/llm/failover.py | unit/test_llm_failover.py | IMPLEMENTED |
 
 ### `model-catalog`
@@ -578,8 +578,8 @@ Task 22.10's live execution remains outstanding).
 | Enable and disable status is honoured at resolution time | 27.1, 28.1 | entitlements/catalog.py, entitlements/resolver.py, entitlements/snapshot.py | unit/test_policy_resolver.py, integration/test_entitlement_stores.py, integration/test_entitlement_snapshot.py | IMPLEMENTED |
 | Business logic is decoupled from vendor model identifiers | 27.4 | entitlements/records.py, db/migrations/versions/0008_seed_model_policy_data.py | unit/test_no_vendor_coupling.py | IMPLEMENTED |
 | The catalog is the allowlist | 28.3 | entitlements/snapshot.py, agents/llm/factory.py | unit/test_policy_resolver.py, integration/test_entitlement_snapshot.py | IMPLEMENTED |
-| Catalog administration is privileged and validated | 27.1, 31.3 | — not implemented | — none | OPEN |
-| Catalog state is observable | 31.5 | — not implemented | — none | OPEN |
+| Catalog administration is privileged and validated | 27.1, 31.3 | api/routers/admin/models.py, entitlements/catalog.py | integration/test_admin_api.py, integration/test_entitlement_stores.py | IMPLEMENTED |
+| Catalog state is observable | 31.3, 32.4 | api/routers/admin/models.py, entitlements/catalog.py | integration/test_admin_api.py | OPEN |
 
 ### `llm-telemetry`
 
@@ -604,7 +604,7 @@ Task 22.10's live execution remains outstanding).
 | Quota refusal is honest, structured, and non-destructive | 30.6, 30.9 | domain/errors.py, api/errors.py, entitlements/quotas.py | unit/test_quotas.py, integration/test_quota_api.py | IMPLEMENTED |
 | Accounting is consistent with recorded usage and safe under concurrency | 30.2, 30.3, 30.4, 30.8 | entitlements/quotas.py, api/routers/agent.py | integration/test_quota_enforcement.py, unit/test_quotas.py | IMPLEMENTED |
 | Internal and administrative usage is tracked separately | 30.5 | entitlements/quotas.py, auth/roles.py, db/migrations/versions/0010_internal_quota_accounting.py, evaluation/provisioning.py | integration/test_quota_enforcement.py, integration/test_quota_api.py | IMPLEMENTED |
-| Quota administration is privileged and auditable | 31.4 | — not implemented | — none | OPEN |
+| Quota administration is privileged and auditable | 31.4 | api/routers/admin/plans.py, entitlements/plans.py, entitlements/audit.py | integration/test_admin_api.py | IMPLEMENTED |
 | No payment processing in this change | 26.2 | db/models.py, db/migrations/versions/0005_saas_operational_tables.py | test_no_payment_processing.py, integration/test_saas_seed.py | IMPLEMENTED |
 
 ### `model-lab`
@@ -638,6 +638,13 @@ administrative screens (33), and the documentation and acceptance pass (34).
 
 The counts in the table above are the rows below it, recounted rather than remembered — they had
 drifted while groups 27 to 29 filled in their own sections and left the summary alone.
+
+**Two rows read `OPEN` while naming code that exists, and that is deliberate.** "Administrative
+model, usage, and lab endpoints" has its model, plan and usage thirds; the lab has no endpoint at
+all until group 32. "Catalog state is observable" lists and filters the catalog; the recorded
+evaluation outcome it also asks for is group 32's table. Both cite what landed so a reader can find
+it, and both stay open because a requirement two thirds met is not met. Marking them implemented
+would be the drift these rows exist to catch.
 
 **Three requirements are outstanding for reasons other than Phase B.** `web-ui`'s accessibility
 and responsive layout is `MANUAL` — its automated half passes in two browser engines, and

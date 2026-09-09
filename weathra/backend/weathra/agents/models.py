@@ -226,6 +226,11 @@ class ModelBroker:
                 plan=resolved.plan,
                 agent_run_id=self._run_id,
                 request_id=self._request_id,
+                # The same boolean the quota gate accounted this call with. Without it an
+                # administrator's *counter* went to the internal subject while their *event* was
+                # recorded as product usage carrying their plan — the two disagreeing about one
+                # call, which is exactly the reconciliation `specs/usage-limits` requires to hold.
+                internal=self._administrative,
             ),
             recorder=self._recorder,
             attempts=attempts,
