@@ -29,7 +29,7 @@ from weathra.agents.safety import (
     describes_severity,
     mentions_severe_weather,
 )
-from weathra.db.models import Ownership, ownership_of, user_owned_tables
+from weathra.db.models import Ownership, ownership_column, ownership_of, user_owned_tables
 from weathra.db.session import privileged_session
 from weathra.domain.errors import ProviderUnavailable
 from weathra.domain.weather import DataClass, Granularity, Measure
@@ -724,6 +724,19 @@ async def test_the_persisted_tables_are_only_the_declared_categories(
         "knowledge_chunks",
         "evaluation_runs",
         "evaluation_case_results",
+        # The SaaS-ready layer. Each is accounted for in docs/privacy-ethics.md, and the usage
+        # record deliberately holds metadata only — no prompt, completion or retrieved text.
+        "subscription_plans",
+        "model_catalog",
+        "model_policies",
+        "usage_limits",
+        "user_plans",
+        "usage_counters",
+        "llm_usage_events",
+        "model_evaluations",
+        "model_comparison_runs",
+        "model_comparison_results",
+        "admin_audit",
     }
 
     undeclared = present - declared - infrastructure
@@ -929,6 +942,7 @@ async def test_a_users_own_id_is_the_only_identifier_in_their_records(
 
         async with privileged_session(api.app.state.engines.privileged_sessionmaker) as session:
             for table in user_owned_tables():
-                rows = await session.execute(text(f"SELECT user_id FROM {table}"))
-                owners = {str(row[0]) for row in rows}
+                owner = ownership_column(table)
+                rows = await session.execute(text(f"SELECT {owner} FROM {table}"))
+                owners = {str(row[0]) for row in rows if row[0] is not None}
                 assert owners <= {USER_A}, f"{table} references someone other than the subject"

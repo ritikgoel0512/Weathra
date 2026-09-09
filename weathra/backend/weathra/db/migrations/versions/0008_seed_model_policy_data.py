@@ -40,12 +40,14 @@ Create date: 2026-09-09
 
 from __future__ import annotations
 
-import json
 import uuid
 from collections.abc import Sequence
+from datetime import date
+from decimal import Decimal
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision: str = "0008_seed_model_policy_data"
 down_revision: str | None = "0007_model_lab_and_audit_tables"
@@ -250,15 +252,46 @@ def allowance_id(subject: str, dimension: str) -> str:
     return str(uuid.uuid5(_ALLOWANCE_NAMESPACE, f"weathra:usage_limit:{subject}:{dimension}"))
 
 
-def _text_array(values: Sequence[str]) -> str:
-    rendered = ", ".join(f'"{value}"' for value in values)
-    return f"{{{rendered}}}"
+# Bind parameters are given explicit types rather than being cast in the SQL text. A PostgreSQL
+# array *literal* (`{"a","b"}`) is accepted by the synchronous driver Alembic runs under and
+# rejected by asyncpg, which infers the parameter type from the surrounding CAST and then finds a
+# string where it wants a sequence. Typing the bind instead lets SQLAlchemy render each value the
+# way the connected driver expects, so the same seed applies from a migration and from a test.
+_TEXT_ARRAY = postgresql.ARRAY(sa.Text())
 
 
-def upgrade() -> None:
-    connection = op.get_bind()
+def seed(connection: sa.engine.Connection) -> None:
+    """Write the initial data, skipping anything already present.
+
+    A named function rather than the body of ``upgrade()`` so the idempotency this migration claims
+    can actually be exercised: a test applies it a second time against an already-seeded database
+    and asserts nothing changed. "Every statement says ON CONFLICT DO NOTHING" is a description of
+    the code; running it twice is evidence.
+    """
+    pricing_date = date.fromisoformat(PRICING_RECORDED_ON)
 
     # ------------------------------------------------------------------ catalog
+    catalog_insert = sa.text(
+        """
+        INSERT INTO model_catalog (
+            catalog_key, gateway_provider, gateway_model, display_name,
+            capability_roles, capability_tier, supports_structured_output,
+            context_window, input_price_per_million, output_price_per_million,
+            price_currency, pricing_recorded_on, status, is_free_tier
+        ) VALUES (
+            :catalog_key, :provider, :gateway_model, :display_name,
+            :roles, :tier, :structured,
+            :context_window, :input_price, :output_price,
+            'USD', :pricing_recorded_on, 'enabled', :is_free
+        )
+        ON CONFLICT (catalog_key) DO NOTHING
+        """
+    ).bindparams(
+        sa.bindparam("roles", type_=_TEXT_ARRAY),
+        sa.bindparam("input_price", type_=sa.Numeric(14, 6)),
+        sa.bindparam("output_price", type_=sa.Numeric(14, 6)),
+        sa.bindparam("pricing_recorded_on", type_=sa.Date()),
+    )
     for (
         catalog_key,
         provider,
@@ -273,58 +306,46 @@ def upgrade() -> None:
         is_free,
     ) in CATALOG:
         connection.execute(
-            sa.text(
-                """
-                INSERT INTO model_catalog (
-                    catalog_key, gateway_provider, gateway_model, display_name,
-                    capability_roles, capability_tier, supports_structured_output,
-                    context_window, input_price_per_million, output_price_per_million,
-                    price_currency, pricing_recorded_on, status, is_free_tier
-                ) VALUES (
-                    :catalog_key, :provider, :gateway_model, :display_name,
-                    CAST(:roles AS text[]), :tier, :structured,
-                    :context_window, CAST(:input_price AS numeric), CAST(:output_price AS numeric),
-                    'USD', CAST(:pricing_recorded_on AS date), 'enabled', :is_free
-                )
-                ON CONFLICT (catalog_key) DO NOTHING
-                """
-            ),
+            catalog_insert,
             {
                 "catalog_key": catalog_key,
                 "provider": provider,
                 "gateway_model": gateway_model,
                 "display_name": display_name,
-                "roles": _text_array(roles),
+                "roles": list(roles),
                 "tier": tier,
                 "structured": structured,
                 "context_window": context_window,
-                "input_price": input_price,
-                "output_price": output_price,
-                "pricing_recorded_on": PRICING_RECORDED_ON,
+                "input_price": Decimal(input_price),
+                "output_price": Decimal(output_price),
+                "pricing_recorded_on": pricing_date,
                 "is_free": is_free,
             },
         )
 
     # ------------------------------------------------------------------ policies
+    policy_insert = sa.text(
+        """
+        INSERT INTO model_policies (
+            policy_id, display_name, candidate_catalog_keys, applicable_call_roles,
+            eligibility, fallback_policy_id, failover_enabled
+        ) VALUES (
+            :policy_id, :display_name, :candidates, :roles, :eligibility, :fallback, :failover
+        )
+        ON CONFLICT (policy_id) DO NOTHING
+        """
+    ).bindparams(
+        sa.bindparam("candidates", type_=_TEXT_ARRAY),
+        sa.bindparam("roles", type_=_TEXT_ARRAY),
+    )
     for policy_id, display_name, candidates, roles, eligibility, fallback, failover in POLICIES:
         connection.execute(
-            sa.text(
-                """
-                INSERT INTO model_policies (
-                    policy_id, display_name, candidate_catalog_keys, applicable_call_roles,
-                    eligibility, fallback_policy_id, failover_enabled
-                ) VALUES (
-                    :policy_id, :display_name, CAST(:candidates AS text[]),
-                    CAST(:roles AS text[]), :eligibility, :fallback, :failover
-                )
-                ON CONFLICT (policy_id) DO NOTHING
-                """
-            ),
+            policy_insert,
             {
                 "policy_id": policy_id,
                 "display_name": display_name,
-                "candidates": _text_array(candidates),
-                "roles": _text_array(roles),
+                "candidates": list(candidates),
+                "roles": list(roles),
                 "eligibility": eligibility,
                 "fallback": fallback,
                 "failover": failover,
@@ -332,42 +353,39 @@ def upgrade() -> None:
         )
 
     # ------------------------------------------------------------------ plans
+    plan_insert = sa.text(
+        """
+        INSERT INTO subscription_plans (
+            plan_code, display_name, rank, policy_by_call_role, external_subscription_ref
+        ) VALUES (:plan_code, :display_name, :rank, :mapping, NULL)
+        ON CONFLICT (plan_code) DO NOTHING
+        """
+    ).bindparams(sa.bindparam("mapping", type_=postgresql.JSONB()))
     for plan_code, display_name, rank, mapping in PLANS:
         connection.execute(
-            sa.text(
-                """
-                INSERT INTO subscription_plans (
-                    plan_code, display_name, rank, policy_by_call_role, external_subscription_ref
-                ) VALUES (
-                    :plan_code, :display_name, :rank, CAST(:mapping AS jsonb), NULL
-                )
-                ON CONFLICT (plan_code) DO NOTHING
-                """
-            ),
+            plan_insert,
             {
                 "plan_code": plan_code,
                 "display_name": display_name,
                 "rank": rank,
-                "mapping": json.dumps(mapping),
+                "mapping": dict(mapping),
             },
         )
 
     # ------------------------------------------------------------------ allowances
+    allowance_insert = sa.text(
+        """
+        INSERT INTO usage_limits (
+            id, plan_code, internal_subject, dimension, window_kind, allowance
+        ) VALUES (:id, :plan_code, :internal_subject, :dimension, :window_kind, :allowance)
+        ON CONFLICT (id) DO NOTHING
+        """
+    ).bindparams(sa.bindparam("id", type_=postgresql.UUID(as_uuid=False)))
     for subject, dimensions in ALLOWANCES.items():
         internal = subject == INTERNAL_SUBJECT
         for dimension, allowance in dimensions.items():
             connection.execute(
-                sa.text(
-                    """
-                    INSERT INTO usage_limits (
-                        id, plan_code, internal_subject, dimension, window_kind, allowance
-                    ) VALUES (
-                        CAST(:id AS uuid), :plan_code, :internal_subject,
-                        :dimension, :window_kind, :allowance
-                    )
-                    ON CONFLICT (id) DO NOTHING
-                    """
-                ),
+                allowance_insert,
                 {
                     "id": allowance_id(subject, dimension),
                     "plan_code": None if internal else subject,
@@ -379,6 +397,10 @@ def upgrade() -> None:
             )
 
 
+def upgrade() -> None:
+    seed(op.get_bind())
+
+
 def downgrade() -> None:
     connection = op.get_bind()
 
@@ -386,28 +408,35 @@ def downgrade() -> None:
     # a plan somebody is assigned to, or a model something recorded usage against — and failing is
     # the right answer, because the alternative is deleting that data to remove a seed row.
     connection.execute(
-        sa.text("DELETE FROM usage_limits WHERE id = ANY(CAST(:ids AS uuid[]))"),
+        sa.text("DELETE FROM usage_limits WHERE id = ANY(:ids)").bindparams(
+            sa.bindparam("ids", type_=postgresql.ARRAY(postgresql.UUID(as_uuid=False)))
+        ),
         {
-            "ids": _text_array(
-                [
-                    allowance_id(subject, dimension)
-                    for subject, dimensions in ALLOWANCES.items()
-                    for dimension in dimensions
-                ]
-            )
+            "ids": [
+                allowance_id(subject, dimension)
+                for subject, dimensions in ALLOWANCES.items()
+                for dimension in dimensions
+            ]
         },
     )
     connection.execute(
-        sa.text("DELETE FROM subscription_plans WHERE plan_code = ANY(CAST(:codes AS text[]))"),
-        {"codes": _text_array([plan_code for plan_code, *_ in PLANS])},
+        sa.text("DELETE FROM subscription_plans WHERE plan_code = ANY(:codes)").bindparams(
+            sa.bindparam("codes", type_=_TEXT_ARRAY)
+        ),
+        {"codes": [plan_code for plan_code, *_ in PLANS]},
     )
-    # Policies before the catalog they reference, and in reverse insertion order so a declared
-    # fallback is removed after the policy that declares it.
+    # Policies before the catalog they reference. The delete is set-based, so a policy and the
+    # fallback it declares go in one statement and the self-referencing key never sees a
+    # half-removed graph.
     connection.execute(
-        sa.text("DELETE FROM model_policies WHERE policy_id = ANY(CAST(:ids AS text[]))"),
-        {"ids": _text_array([policy_id for policy_id, *_ in POLICIES])},
+        sa.text("DELETE FROM model_policies WHERE policy_id = ANY(:ids)").bindparams(
+            sa.bindparam("ids", type_=_TEXT_ARRAY)
+        ),
+        {"ids": [policy_id for policy_id, *_ in POLICIES]},
     )
     connection.execute(
-        sa.text("DELETE FROM model_catalog WHERE catalog_key = ANY(CAST(:keys AS text[]))"),
-        {"keys": _text_array([catalog_key for catalog_key, *_ in CATALOG])},
+        sa.text("DELETE FROM model_catalog WHERE catalog_key = ANY(:keys)").bindparams(
+            sa.bindparam("keys", type_=_TEXT_ARRAY)
+        ),
+        {"keys": [catalog_key for catalog_key, *_ in CATALOG]},
     )

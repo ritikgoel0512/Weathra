@@ -76,6 +76,7 @@ __all__ = [
     "UsageCounter",
     "UsageLimit",
     "UserPlan",
+    "ownership_column",
     "ownership_of",
     "user_owned_tables",
 ]
@@ -118,6 +119,21 @@ def ownership_of(table_name: str) -> Ownership:
             "classified user-owned, shared, or operational."
         )
     return Ownership(declared)
+
+
+def ownership_column(table_name: str) -> str:
+    """The column a user-owned table's Row Level Security policy compares against.
+
+    ``user_id`` for almost every table, and declared per table rather than assumed because
+    ``usage_counters`` is keyed by ``subject`` — a column that holds either an auth subject or the
+    reserved internal one, so internal consumption is accounted separately by construction. Code
+    that iterates the user-owned tables asking "who owns this row" needs to be told which column to
+    ask, rather than discovering the exception as an ``UndefinedColumn`` at runtime.
+    """
+    table = Base.metadata.tables[table_name]
+    if ownership_of(table_name) is not Ownership.USER:
+        raise LookupError(f"{table_name!r} is not user-owned, so it has no ownership column.")
+    return str(table.info.get("owner_column", USER_ID_COLUMN))
 
 
 def user_owned_tables() -> tuple[str, ...]:
@@ -750,7 +766,7 @@ class UsageCounter(Base):
         CheckConstraint("consumed >= 0", name="ck_usage_counters_consumed_non_negative"),
         CheckConstraint("length(window_key) > 0", name="ck_usage_counters_window_key_present"),
         Index("ix_usage_counters_window", "dimension", "window_key"),
-        {"info": {"ownership": Ownership.USER}},
+        {"info": {"ownership": Ownership.USER, "owner_column": "subject"}},
     )
 
     subject: Mapped[str] = mapped_column(

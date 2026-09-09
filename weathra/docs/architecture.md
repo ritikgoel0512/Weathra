@@ -343,7 +343,7 @@ Task 22.10's live execution remains outstanding).
 | Account and data deletion | 15.5 | api/routers/account.py | integration/test_api.py | IMPLEMENTED |
 | Administrative and internal roles are server-held | 31.1 | — not implemented | — none | OPEN |
 | Plan and model entitlement are derived, never asserted | 28.2 | — not implemented | — none | OPEN |
-| Row Level Security on the SaaS-ready tables | 26.3 | — not implemented | — none | OPEN |
+| Row Level Security on the SaaS-ready tables | 26.3, 26.4 | db/migrations/versions/0006_saas_user_owned_tables.py, db/migrations/versions/0007_model_lab_and_audit_tables.py | integration/test_saas_rls.py, integration/test_saas_schema.py | IMPLEMENTED |
 
 ### `deterministic-analytics`
 
@@ -563,7 +563,7 @@ Task 22.10's live execution remains outstanding).
 
 | Requirement | Tasks | Implementation | Tests | Status |
 |---|---|---|---|---|
-| Model catalog as persisted data | 26.2, 26.6 | — not implemented | — none | OPEN |
+| Model catalog as persisted data | 26.2, 26.6 | db/models.py, db/migrations/versions/0005_saas_operational_tables.py, db/migrations/versions/0008_seed_model_policy_data.py | integration/test_saas_schema.py, integration/test_saas_seed.py | IMPLEMENTED |
 | Model availability changes without a code change | 27.1 | — not implemented | — none | OPEN |
 | Enable and disable status is honoured at resolution time | 27.1, 28.1 | — not implemented | — none | OPEN |
 | Business logic is decoupled from vendor model identifiers | 27.4 | — not implemented | — none | OPEN |
@@ -587,7 +587,7 @@ Task 22.10's live execution remains outstanding).
 
 | Requirement | Tasks | Implementation | Tests | Status |
 |---|---|---|---|---|
-| Subscription plans are persisted server-side data | 26.2, 26.6 | — not implemented | — none | OPEN |
+| Subscription plans are persisted server-side data | 26.2, 26.6, 28.2 | db/models.py, db/migrations/versions/0005_saas_operational_tables.py, db/migrations/versions/0008_seed_model_policy_data.py | integration/test_saas_seed.py, integration/test_saas_rls.py | OPEN |
 | Quotas are enforced in the backend before the call | 30.2, 30.6 | — not implemented | — none | OPEN |
 | Allowances differ by plan and are expressed in stated dimensions | 30.1 | — not implemented | — none | OPEN |
 | Windows are explicit and reset predictably | 30.1 | — not implemented | — none | OPEN |
@@ -595,7 +595,7 @@ Task 22.10's live execution remains outstanding).
 | Accounting is consistent with recorded usage and safe under concurrency | 30.2, 30.3, 30.4 | — not implemented | — none | OPEN |
 | Internal and administrative usage is tracked separately | 30.5 | — not implemented | — none | OPEN |
 | Quota administration is privileged and auditable | 31.4 | — not implemented | — none | OPEN |
-| No payment processing in this change | 26.2 | — not implemented | — none | OPEN |
+| No payment processing in this change | 26.2 | db/models.py, db/migrations/versions/0005_saas_operational_tables.py | test_no_payment_processing.py, integration/test_saas_seed.py | IMPLEMENTED |
 
 ### `model-lab`
 

@@ -194,10 +194,24 @@ async def test_the_policy_set_matches_the_models_classification(
     everything = await privileged.execute(
         text("SELECT DISTINCT tablename FROM pg_policies WHERE schemaname = 'public'")
     )
+    # A policy that does not consult the acting principal must be on a table where there is no
+    # principal to consult: the shared data everyone may read, or the operational policy tables a
+    # resolution reads on the way to a model. Both are allowed and neither may be user-owned —
+    # an owner-less policy on a user-owned table would hand every row to every caller.
     for table in ({row[0] for row in everything} & declared) - owner_restricted:
-        assert ownership_of(table) is Ownership.SHARED, (
+        ownership = ownership_of(table)
+        assert ownership in (Ownership.SHARED, Ownership.OPERATIONAL), (
             f"{table} carries a policy that is neither owner-restricting nor shared-read"
         )
+        if ownership is Ownership.OPERATIONAL:
+            commands = await privileged.execute(
+                text("SELECT DISTINCT cmd FROM pg_policies WHERE tablename = :table"),
+                {"table": table},
+            )
+            assert {row[0] for row in commands} == {"SELECT"}, (
+                f"{table} is operational and carries a policy that is not read-only; the request "
+                "path never writes these, and administration goes through the privileged path"
+            )
 
 
 async def test_the_restricted_role_exists_and_cannot_bypass_policies(

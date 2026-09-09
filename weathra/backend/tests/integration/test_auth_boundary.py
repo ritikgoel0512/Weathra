@@ -32,7 +32,7 @@ from weathra.api.classification import PROTECTED_PATHS
 from weathra.api.streaming import StreamEventType
 from weathra.auth.deps import IDENTITY_ASSERTING_HEADERS
 from weathra.db.engine import Engines
-from weathra.db.models import user_owned_tables
+from weathra.db.models import ownership_column, user_owned_tables
 from weathra.db.session import privileged_session
 
 pytestmark = pytest.mark.db
@@ -160,8 +160,11 @@ async def test_a_valid_token_succeeds_and_acts_as_its_subject(
         # Every record the request touched belongs to the token's subject and nobody else.
         async with privileged_session(api.app.state.engines.privileged_sessionmaker) as session:
             for table in user_owned_tables():
-                rows = await session.execute(text(f"SELECT DISTINCT user_id FROM {table}"))
-                owners = {str(row[0]) for row in rows}
+                # Each table names the column its policy compares against: `usage_counters` is
+                # keyed by `subject`, which also carries the reserved internal subject.
+                owner = ownership_column(table)
+                rows = await session.execute(text(f"SELECT DISTINCT {owner} FROM {table}"))
+                owners = {str(row[0]) for row in rows if row[0] is not None}
                 assert owners <= {USER_A}, f"{table} holds a row for {owners - {USER_A}}"
 
 
@@ -188,7 +191,8 @@ async def test_an_identity_asserting_header_never_overrides_the_token(
 
         async with privileged_session(api.app.state.engines.privileged_sessionmaker) as session:
             for table in user_owned_tables():
-                rows = await session.execute(text(f"SELECT DISTINCT user_id FROM {table}"))
+                owner = ownership_column(table)
+                rows = await session.execute(text(f"SELECT DISTINCT {owner} FROM {table}"))
                 owners = {str(row[0]) for row in rows}
                 assert USER_B not in owners, f"{table} was written under the header's identity"
 
@@ -460,8 +464,9 @@ async def _owned_rows(session: Any, subject: str) -> dict[str, list[Any]]:
     """Every row one user owns, ordered, for a byte-for-byte comparison."""
     snapshot: dict[str, list[Any]] = {}
     for table in user_owned_tables():
+        owner = ownership_column(table)
         rows = await session.execute(
-            text(f"SELECT * FROM {table} WHERE user_id = :subject ORDER BY user_id"),
+            text(f"SELECT * FROM {table} WHERE {owner} = :subject ORDER BY {owner}"),
             {"subject": subject},
         )
         snapshot[table] = [tuple(str(value) for value in row) for row in rows]

@@ -40,6 +40,26 @@ SKIP_REASON = (
 )
 
 
+# Tables the truncation deliberately leaves alone, because none of them holds a test's rows.
+#
+# The first two are schema bookkeeping — emptying them would make the next test re-run every
+# migration. The four after are the reference data migration 0008 seeds: the catalog, the shipped
+# policies, the plans and their allowances. A deployed database always has them, so a test that ran
+# against an empty catalog would be testing a state that never occurs, and every model resolution
+# would fail for a reason no production deployment could reproduce. A test that adds its *own*
+# catalog entry or policy is responsible for removing it.
+PRESERVED_TABLES = (
+    "alembic_version",
+    "checkpoint_migrations",
+    "subscription_plans",
+    "model_catalog",
+    "model_policies",
+    "usage_limits",
+)
+
+_PRESERVED_TABLES_SQL = ", ".join(f"'{name}'" for name in PRESERVED_TABLES)
+
+
 def test_database_url() -> str | None:
     return os.environ.get("WEATHRA_TEST_DATABASE_URL")
 
@@ -130,19 +150,33 @@ async def clean_database(engines: Engines) -> AsyncIterator[None]:
     async def truncate() -> None:
         async with privileged_session(engines.privileged_sessionmaker) as session:
             # Computed rather than listed. A new table would otherwise leak rows between tests
-            # until someone remembered to add it here, and the two exclusions are the schema
-            # bookkeeping the migrations and the checkpointer's own setup own: emptying those
-            # would make the next test re-run every migration.
+            # until someone remembered to add it here, and the exclusions are all data the
+            # migrations themselves own rather than anything a test produced.
             rows = await session.execute(
                 text(
                     "SELECT table_name FROM information_schema.tables "
                     "WHERE table_schema = 'public' AND table_type = 'BASE TABLE' "
-                    "AND table_name NOT IN ('alembic_version', 'checkpoint_migrations')"
+                    f"AND table_name NOT IN ({_PRESERVED_TABLES_SQL})"
                 )
             )
             tables = sorted(row[0] for row in rows)
-            if tables:
-                await session.execute(text(f"TRUNCATE {', '.join(tables)} CASCADE"))
+            if not tables:
+                return
+
+            # Only the tables that actually hold something. TRUNCATE writes a new relfilenode and
+            # fsyncs it per table whether or not there was a row in it, which is unnoticeable at
+            # ten tables and is not at twenty-one — most tests touch two or three. One round trip
+            # finds them, and an EXISTS against an empty heap costs nothing.
+            occupied = await session.execute(
+                text(
+                    " UNION ALL ".join(
+                        f"SELECT '{name}' WHERE EXISTS (SELECT 1 FROM {name})" for name in tables
+                    )
+                )
+            )
+            dirty = sorted(row[0] for row in occupied)
+            if dirty:
+                await session.execute(text(f"TRUNCATE {', '.join(dirty)} CASCADE"))
 
     await truncate()
     try:

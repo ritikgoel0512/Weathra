@@ -14,6 +14,7 @@ from weathra.db.models import (
     USER_ID_COLUMN,
     Base,
     Ownership,
+    ownership_column,
     ownership_of,
     user_owned_tables,
 )
@@ -102,6 +103,10 @@ def test_every_user_owned_table_is_listed_with_its_ownership_column() -> None:
 def test_every_user_owned_table_carries_the_ownership_column(table_name: str) -> None:
     column_name, may_be_null = OWNERSHIP_COLUMN[table_name]
     table = Base.metadata.tables[table_name]
+    assert ownership_column(table_name) == column_name, (
+        f"{table_name} declares a different ownership column than this test expects; the "
+        "declaration is what every policy and every iterating test reads"
+    )
     assert column_name in table.columns, f"{table_name} is user-owned but has no {column_name}"
     assert table.columns[column_name].nullable is may_be_null, (
         f"{table_name}.{column_name} nullability is not what the classification says. A user-owned "
