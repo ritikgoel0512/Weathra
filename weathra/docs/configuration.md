@@ -107,6 +107,7 @@ bundle — see [`authentication.md`](authentication.md) for why the split is dra
 | `VECTOR_STORE` | `pgvector` | behaviour | Vector store implementation |
 | `THREAD_RETENTION_DAYS` | `30` | behaviour | How long an inactive thread and its checkpoints are kept |
 | `SNAPSHOT_RETENTION_DAYS` | `90` | behaviour | How long forecast snapshots are kept |
+| `LLM_USAGE_RETENTION_DAYS` | `90` | behaviour | How long raw language model usage events are kept. Metadata only — no prompt, completion or retrieved text — so the window is about storage and relevance |
 | `SAVED_LOCATIONS_LIMIT` | `25` | behaviour | Saved locations per person |
 | `EVALUATION_MIN_SERVED_RATE` | `1.0` | behaviour | Proportion of a live evaluation run's cases the configured model must have served for the run to be scored as model quality at all |
 | `EVALUATION_LLM_MIN_INTERVAL_SECONDS` | `5.0` | behaviour | Minimum spacing between live evaluation cases, so the dataset does not reach a free tier's per-minute ceiling as one burst |

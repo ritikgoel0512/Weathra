@@ -22,6 +22,7 @@ import logging
 
 import httpx
 
+from weathra.agents.llm.attempts import GatewayAttemptLog
 from weathra.agents.llm.base import LLMClient
 from weathra.agents.llm.openrouter import OPENROUTER_PROVIDER_ID, OpenRouterClient
 from weathra.config import Settings
@@ -34,7 +35,11 @@ logger = logging.getLogger("weathra.agents.llm.factory")
 
 
 def build_for_resolution(
-    resolution: Resolution, *, http: httpx.AsyncClient, settings: Settings
+    resolution: Resolution,
+    *,
+    http: httpx.AsyncClient,
+    settings: Settings,
+    attempts: GatewayAttemptLog | None = None,
 ) -> LLMClient:
     """A client bound to exactly the model the resolver chose.
 
@@ -54,7 +59,14 @@ def build_for_resolution(
             },
         )
 
-    client = OpenRouterClient(client=http, settings=settings, model_id=resolution.gateway_model)
+    client = OpenRouterClient(
+        client=http,
+        settings=settings,
+        model_id=resolution.gateway_model,
+        # Where the instrumented wrapper reads the gateway's own retries from. ``None`` for a
+        # client nobody is instrumenting, which costs that client nothing.
+        attempts=attempts,
+    )
     logger.debug(
         "client built for %s: policy=%s catalog_key=%s",
         resolution.call_role.value,

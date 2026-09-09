@@ -65,6 +65,10 @@ backend/weathra/
   entitlements/           catalog.py policies.py plans.py snapshot.py records.py audit.py
                           the catalog, policy and plan stores — data access and administration,
                           deliberately not resolution
+                          resolver.py administration.py — the one place a model is chosen
+  telemetry/              usage.py cost.py projection.py context.py aggregate.py
+                          what each call cost in tokens, money and time. Records what happened;
+                          decides nothing
   mcp/                    server.py client.py schemas.py errors.py — its own boundary
   agents/
     llm/                  base.py (Protocol) openrouter.py fake.py registry.py
@@ -90,7 +94,7 @@ config, domain
       ↑
 providers, geocoding, analytics
       ↑
-weather, rag, memory, auth, entitlements
+weather, rag, memory, auth, entitlements, telemetry
       ↑
      mcp
       ↑

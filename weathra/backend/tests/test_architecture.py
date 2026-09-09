@@ -49,6 +49,10 @@ LAYERS: dict[str, int] = {
     # (design.md decision 22) — a node reaching for a store directly would be exactly the model
     # selection that layer exists to keep out of the graph.
     "entitlements": 3,
+    # Usage events, cost estimation and aggregation. Above `db` because it writes rows, and below
+    # `agents` because the instrumented client is a wrapper the agent layer installs — telemetry
+    # records what a run did and never participates in it.
+    "telemetry": 3,
     "mcp": 4,
     "agents": 5,
     "api": 6,
@@ -73,7 +77,11 @@ AUTH_CONSUMERS = frozenset({"auth", "api", "memory", "evaluation"})
 # for a different call role's client, or resolve a second time mid-run, or consult the catalog
 # directly — and "no node selects a model" (`specs/model-policy`) would become a convention rather
 # than a fact. The graph resolves both roles and passes each node the client it gets.
-NODES_FORBIDDEN = frozenset({"providers", "geocoding", "entitlements"})
+#
+# `telemetry` is there for the mirror-image reason. Recording is a decorator over the client
+# (design.md decision 24), so a node that emitted its own usage event would be a second, parallel
+# record of the same call — which is exactly what task 29.9 forbids.
+NODES_FORBIDDEN = frozenset({"providers", "geocoding", "entitlements", "telemetry"})
 
 # Task 5.8: no module *above* the provider layer names a concrete provider client. `providers/`
 # and `geocoding/` are the provider layer — they sit at the same level and share both the vendor's

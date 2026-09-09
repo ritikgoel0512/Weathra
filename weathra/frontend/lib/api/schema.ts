@@ -17,6 +17,8 @@ export interface AccountDeletionReport {
   readonly saved_locations: number;
   readonly thread_checkpoints_cleared: number;
   readonly threads: number;
+  readonly usage_counters?: number;
+  readonly usage_events?: number;
   readonly user_id: string;
 }
 

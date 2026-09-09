@@ -29,13 +29,16 @@ from typing import Protocol
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from weathra.agents.llm.attempts import GatewayAttemptLog
 from weathra.agents.llm.base import LLMClient
 from weathra.agents.llm.factory import build_for_resolution
 from weathra.agents.llm.failover import FailoverClient
+from weathra.agents.llm.instrumented import InstrumentedLLMClient, UsageRecorder
 from weathra.config import Settings
 from weathra.domain.entitlements import CallRole, Resolution
 from weathra.domain.identity import Principal
 from weathra.entitlements.resolver import ModelPolicyResolver, ResolvedCall
+from weathra.telemetry.context import CallContext
 
 __all__ = ["ModelBroker", "ModelSource", "RoleBinding"]
 
@@ -98,7 +101,10 @@ class ModelBroker:
         "_installed",
         "_override",
         "_principal",
+        "_recorder",
+        "_request_id",
         "_resolver",
+        "_run_id",
         "_session",
         "_settings",
     )
@@ -113,7 +119,13 @@ class ModelBroker:
         principal: Principal | None = None,
         override: str | None = None,
         installed: LLMClient | None = None,
+        recorder: UsageRecorder | None = None,
+        agent_run_id: str | None = None,
+        request_id: str | None = None,
     ) -> None:
+        self._recorder = recorder
+        self._run_id = agent_run_id
+        self._request_id = request_id
         self._installed = installed
         self._resolver = resolver
         self._session = session
@@ -166,21 +178,53 @@ class ModelBroker:
             # are real — and only the transport is the installed one. Skipping the resolution
             # instead would mean the offline suite exercised a different code path from the one it
             # is meant to be checking.
-            return self._installed
+            return self._instrumented(self._installed, resolved, attempts=None)
 
+        # One log per client, drained by the instrumented wrapper after each outer call, so a
+        # schema retry inside `complete_json` becomes its own usage event rather than vanishing.
+        attempts = GatewayAttemptLog()
         primary = build_for_resolution(
-            resolved.resolution, http=self._http, settings=self._settings
+            resolved.resolution, http=self._http, settings=self._settings, attempts=attempts
         )
         if not resolved.may_fail_over:
-            return primary
-        return FailoverClient(
+            return self._instrumented(primary, resolved, attempts=attempts)
+
+        failover = FailoverClient(
             primary,
             resolution=resolved.resolution,
             remaining=resolved.remaining,
             build=lambda updated: build_for_resolution(
-                updated, http=self._http, settings=self._settings
+                updated, http=self._http, settings=self._settings, attempts=attempts
             ),
             max_models=self._settings.llm_failover_max_models,
+        )
+        # Instrumentation on the *outside* of failover, deliberately: each candidate the walk
+        # attempts is a separate inner call, so each becomes its own usage event. Inside, the
+        # wrapper would only ever see whichever candidate happened to answer.
+        return self._instrumented(failover, resolved, attempts=attempts)
+
+    def _instrumented(
+        self, client: LLMClient, resolved: ResolvedCall, *, attempts: GatewayAttemptLog | None
+    ) -> LLMClient:
+        """Wrap for telemetry, where a recorder was supplied.
+
+        No recorder means no instrumentation and no overhead — the evaluation harness and the unit
+        tests run that way. The request path always supplies one.
+        """
+        if self._recorder is None:
+            return client
+        return InstrumentedLLMClient(
+            client,
+            context=CallContext.for_run(
+                role=resolved.resolution.call_role,
+                resolution=resolved.resolution,
+                principal=self._principal,
+                plan=resolved.plan,
+                agent_run_id=self._run_id,
+                request_id=self._request_id,
+            ),
+            recorder=self._recorder,
+            attempts=attempts,
         )
 
 

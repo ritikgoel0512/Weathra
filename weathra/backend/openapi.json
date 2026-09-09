@@ -35,6 +35,18 @@
             "title": "Threads",
             "type": "integer"
           },
+          "usage_counters": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Usage Counters",
+            "type": "integer"
+          },
+          "usage_events": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Usage Events",
+            "type": "integer"
+          },
           "user_id": {
             "title": "User Id",
             "type": "string"

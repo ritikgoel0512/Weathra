@@ -307,6 +307,15 @@ class Settings(BaseSettings):
     snapshot_retention_days: Annotated[int, Field(ge=1, le=3_650)] = Field(
         default=90, validation_alias="snapshot_retention_days"
     )
+    llm_usage_retention_days: Annotated[int, Field(ge=1, le=3_650)] = Field(
+        default=90,
+        validation_alias="llm_usage_retention_days",
+        description=(
+            "How long raw language model usage events are kept before the retention routine "
+            "removes them. They hold no conversation content, only per-call metadata, so the "
+            "window is about storage and relevance rather than about disclosure."
+        ),
+    )
     saved_locations_limit: Annotated[int, Field(ge=1, le=500)] = Field(
         default=25, validation_alias="saved_locations_limit"
     )

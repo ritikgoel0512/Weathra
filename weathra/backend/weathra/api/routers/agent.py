@@ -24,7 +24,7 @@ carries the request id and a monotonic sequence number so a client can order and
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Request, status
@@ -50,14 +50,17 @@ from weathra.api.streaming import StreamEmitter, sse_headers
 from weathra.auth.deps import RequiredPrincipal
 from weathra.auth.profiles import ensure_profile
 from weathra.config import Settings
+from weathra.db.session import request_session
 from weathra.domain.errors import AGENT_UNAVAILABLE_MESSAGE, AgentNotConfigured, WeathraError
 from weathra.domain.evidence import AnswerEnvelope
 from weathra.domain.identity import Principal
+from weathra.domain.usage import UsageEvent
 from weathra.domain.weather import UnitSystem
 from weathra.memory.preferences import PreferenceStore
 from weathra.memory.threads import ThreadRecord, ThreadStore, TurnRecord
 from weathra.rag.embed import EmbeddingProvider
 from weathra.rag.retrieve import RetrievalResult, retrieve
+from weathra.telemetry.usage import BackgroundUsageRecorder, record_events
 
 __all__ = ["router"]
 
@@ -168,11 +171,40 @@ async def _run(
     # The credential guard first, so "no key configured" is still a 503 naming what is missing
     # rather than a resolution that succeeds and then cannot build a client.
     inference.get()
-    broker = inference.broker(session=session, principal=principal)
+
+    request_id = current_request_id()
+    recorder: BackgroundUsageRecorder = request.app.state.usage_recorder
+    engines = request.app.state.engines
+
+    def record(events: Sequence[UsageEvent]) -> None:
+        """Hand events to the background writer.
+
+        A separate session, opened when the task runs: this request's transaction has committed by
+        then, and reusing it would either write into a closed transaction or hold the request's
+        connection open past its response. The session is still the *restricted* one, so the owner
+        policy on `llm_usage_events` applies to the write exactly as it does to a read.
+        """
+
+        async def write(batch: Sequence[UsageEvent]) -> int:
+            async with request_session(
+                engines.request_sessionmaker,
+                claims=principal.claims,
+                restricted_role=settings.database_restricted_role,
+            ) as own:
+                return await record_events(own, batch)
+
+        recorder.schedule(events, write)
+
+    broker = inference.broker(
+        session=session,
+        principal=principal,
+        recorder=record,
+        request_id=request_id,
+    )
 
     state = GraphState.begin(
         question=body.question,
-        request_id=current_request_id(),
+        request_id=request_id,
         principal=principal,
         thread_id=thread.id if thread else None,
         requested_unit_system=body.units,

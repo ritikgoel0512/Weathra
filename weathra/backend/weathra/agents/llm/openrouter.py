@@ -44,12 +44,14 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from collections.abc import Sequence
 from typing import Any
 
 import httpx
 from pydantic import BaseModel
 
+from weathra.agents.llm.attempts import GatewayAttempt, GatewayAttemptLog
 from weathra.agents.llm.base import (
     JSON_INSTRUCTION,
     Completion,
@@ -67,6 +69,7 @@ from weathra.domain.errors import (
     ValidationFailed,
     WeathraError,
 )
+from weathra.domain.evidence import InferenceStatus
 from weathra.providers.http import RetryPolicy, post_json
 
 __all__ = ["OPENROUTER_PROVIDER_ID", "OpenRouterClient"]
@@ -85,7 +88,12 @@ class OpenRouterClient:
     provider_id = OPENROUTER_PROVIDER_ID
 
     def __init__(
-        self, *, client: httpx.AsyncClient, settings: Settings, model_id: str | None = None
+        self,
+        *,
+        client: httpx.AsyncClient,
+        settings: Settings,
+        model_id: str | None = None,
+        attempts: GatewayAttemptLog | None = None,
     ) -> None:
         credential = settings.openrouter_api_key
         if credential is None:
@@ -107,13 +115,22 @@ class OpenRouterClient:
         self._client = client
         self._settings = settings
         self._policy = RetryPolicy.for_inference(settings)
+        # Optional, because a client built outside the instrumented path has nobody to report
+        # to. When present, each POST below appends one entry, which is the only way a schema
+        # retry inside `complete_json` is visible from outside this class.
+        self._attempts = attempts
         self._url = f"{settings.openrouter_base_url.rstrip('/')}/chat/completions"
 
     # ---------------------------------------------------------------- the contract
 
     async def complete(self, *, system: str, messages: Sequence[Message]) -> Completion:
+        started = time.perf_counter()
         payload = await self._post(self._body(system, messages))
-        return self._completion(payload)
+        completion = self._completion(payload)
+        self._note(
+            1, InferenceStatus.SERVED, completion, (time.perf_counter() - started) * 1000.0, None
+        )
+        return completion
 
     async def complete_json[Schema: BaseModel](
         self, *, system: str, messages: Sequence[Message], schema: type[Schema]
@@ -129,12 +146,15 @@ class OpenRouterClient:
         last_error: ValidationFailed | None = None
 
         for attempt in range(1, attempts + 1):
+            started = time.perf_counter()
             payload = await self._post(self._body(instruction, conversation))
             completion = self._completion(payload)
+            elapsed = (time.perf_counter() - started) * 1000.0
 
             try:
-                return validate_against(extract_json_object(completion.text), schema)
+                validated = validate_against(extract_json_object(completion.text), schema)
             except ValidationFailed as exc:
+                self._note(attempt, InferenceStatus.INVALID_OUTPUT, completion, elapsed, exc.code)
                 last_error = exc
                 if attempt == attempts:
                     break
@@ -152,6 +172,10 @@ class OpenRouterClient:
                         f"matching the schema."
                     ),
                 ]
+                continue
+
+            self._note(attempt, InferenceStatus.SERVED, completion, elapsed, None)
+            return validated
 
         raise ValidationFailed(
             f"The model did not produce a valid {schema.__name__} in {attempts} attempts. "
@@ -162,6 +186,35 @@ class OpenRouterClient:
                 "provider": self.provider_id,
                 "model": self.model_id,
             },
+        )
+
+    def _note(
+        self,
+        attempt_number: int,
+        status: InferenceStatus,
+        completion: Completion,
+        latency_ms: float,
+        error_code: str | None,
+    ) -> None:
+        """Record one gateway attempt, where somebody is listening.
+
+        The token counts come from the gateway's own `usage` block and stay ``None`` when it sent
+        none — `TokenUsage` already refuses to turn an unreported count into a zero, and this
+        carries that decision through rather than re-making it.
+        """
+        if self._attempts is None:
+            return
+        self._attempts.record(
+            GatewayAttempt(
+                attempt_number=attempt_number,
+                status=status,
+                served_model=completion.model_id,
+                error_code=error_code,
+                latency_ms=latency_ms,
+                prompt_tokens=completion.usage.prompt_tokens,
+                completion_tokens=completion.usage.completion_tokens,
+                total_tokens=completion.usage.total_tokens,
+            )
         )
 
     # ---------------------------------------------------------------- transport

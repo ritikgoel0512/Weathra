@@ -28,6 +28,7 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from weathra.agents.llm.base import LLMClient
+from weathra.agents.llm.instrumented import UsageRecorder
 from weathra.agents.llm.openrouter import OPENROUTER_PROVIDER_ID, OpenRouterClient
 from weathra.agents.models import ModelBroker
 from weathra.config import Settings
@@ -142,6 +143,9 @@ class LLMProvider:
         session: AsyncSession,
         principal: Principal | None = None,
         override: str | None = None,
+        recorder: UsageRecorder | None = None,
+        agent_run_id: str | None = None,
+        request_id: str | None = None,
     ) -> ModelBroker:
         """The model policy layer, bound to one request.
 
@@ -165,6 +169,11 @@ class LLMProvider:
             # offline evaluation harness and the test suite supply a scripted transport, and a
             # broker that ignored it would quietly reach the real gateway from a test.
             installed=self._client,
+            # Telemetry is a decorator the broker installs, so the route supplies where events go
+            # and never emits one itself.
+            recorder=recorder,
+            agent_run_id=agent_run_id,
+            request_id=request_id,
         )
 
     @property

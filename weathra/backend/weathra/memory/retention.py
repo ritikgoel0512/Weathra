@@ -42,7 +42,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from weathra.config import Settings
 from weathra.db.engine import Engines
-from weathra.db.models import AgentRun, ForecastSnapshot, Preference, Profile, SavedLocation, Thread
+from weathra.db.models import (
+    AgentRun,
+    ForecastSnapshot,
+    LlmUsageEvent,
+    Preference,
+    Profile,
+    SavedLocation,
+    Thread,
+    UsageCounter,
+)
 from weathra.db.session import privileged_session
 from weathra.db.urls import ConnectionRole
 from weathra.domain.errors import MemoryUnavailable
@@ -71,13 +80,15 @@ class RetentionReport(BaseModel):
     threads_expired: int = Field(ge=0)
     thread_checkpoints_cleared: int = Field(ge=0)
     snapshots_expired: int = Field(ge=0)
+    usage_events_expired: int = Field(default=0, ge=0)
     thread_retention_days: int = Field(ge=1)
     snapshot_retention_days: int = Field(ge=1)
+    llm_usage_retention_days: int = Field(default=90, ge=1)
     ran_at: datetime
 
     @property
     def anything_removed(self) -> bool:
-        return bool(self.threads_expired or self.snapshots_expired)
+        return bool(self.threads_expired or self.snapshots_expired or self.usage_events_expired)
 
 
 class AccountDeletionReport(BaseModel):
@@ -95,12 +106,20 @@ class AccountDeletionReport(BaseModel):
     saved_locations: int = Field(ge=0)
     preferences: int = Field(ge=0)
     agent_runs: int = Field(ge=0)
+    usage_events: int = Field(default=0, ge=0)
+    usage_counters: int = Field(default=0, ge=0)
     profile: int = Field(ge=0)
 
     @property
     def total(self) -> int:
         return (
-            self.threads + self.saved_locations + self.preferences + self.agent_runs + self.profile
+            self.threads
+            + self.saved_locations
+            + self.preferences
+            + self.agent_runs
+            + self.usage_events
+            + self.usage_counters
+            + self.profile
         )
 
 
@@ -174,14 +193,29 @@ async def run_retention(
                 .returning(ForecastSnapshot.id)
             )
         ).all()
+
+        # Raw usage events age out here rather than in a second scheduled job. `specs/memory`
+        # already has one routine invoked from CI, and a second scheduler would be a second thing
+        # to notice had stopped running. The events hold per-call metadata and no conversation
+        # content, so the window is about storage and relevance rather than disclosure.
+        usage_cutoff = moment - timedelta(days=settings.llm_usage_retention_days)
+        removed_usage = (
+            await session.execute(
+                delete(LlmUsageEvent)
+                .where(LlmUsageEvent.created_at < usage_cutoff)
+                .returning(LlmUsageEvent.event_id)
+            )
+        ).all()
         await session.flush()
 
     report = RetentionReport(
         threads_expired=len(removed_threads),
         thread_checkpoints_cleared=cleared,
         snapshots_expired=len(removed_snapshots),
+        usage_events_expired=len(removed_usage),
         thread_retention_days=settings.thread_retention_days,
         snapshot_retention_days=settings.snapshot_retention_days,
+        llm_usage_retention_days=settings.llm_usage_retention_days,
         ran_at=moment,
     )
     logger.info(
@@ -262,6 +296,30 @@ async def delete_account_data(
         # Agent runs first: they reference threads. The FK is ON DELETE SET NULL rather than
         # CASCADE, so deleting the thread would leave the run behind — which is right for a thread
         # deleted on its own, and wrong here, where the run is the person's data too.
+        # Usage events before agent runs: an event references the run it belonged to. The FK is
+        # ON DELETE SET NULL, so the run's deletion would orphan the event rather than remove it —
+        # and `specs/llm-telemetry` requires a person's raw events to go with their data.
+        usage_events = (
+            await session.execute(
+                delete(LlmUsageEvent)
+                .where(LlmUsageEvent.user_id == principal.user_id)
+                .returning(LlmUsageEvent.event_id)
+            )
+        ).all()
+        counts["usage_events"] = len(usage_events)
+
+        # Consumption counters are keyed by `subject` and have no foreign key to a profile, so
+        # nothing cascades them. They are the person's data and go here explicitly; the reserved
+        # internal subject's counters are untouched because they are nobody's.
+        usage_counters = (
+            await session.execute(
+                delete(UsageCounter)
+                .where(UsageCounter.subject == principal.user_id)
+                .returning(UsageCounter.subject)
+            )
+        ).all()
+        counts["usage_counters"] = len(usage_counters)
+
         for name, model in (
             ("agent_runs", AgentRun),
             ("threads", Thread),
@@ -291,6 +349,8 @@ async def delete_account_data(
         saved_locations=counts["saved_locations"],
         preferences=counts["preferences"],
         agent_runs=counts["agent_runs"],
+        usage_events=counts["usage_events"],
+        usage_counters=counts["usage_counters"],
         profile=len(profile),
     )
     logger.info("account data deleted for %s: %s", principal, report.model_dump(mode="json"))

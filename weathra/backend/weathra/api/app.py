@@ -76,6 +76,7 @@ from weathra.providers.http import build_http_client
 from weathra.providers.registry import build_provider
 from weathra.rag.embed import build_embedder
 from weathra.redaction import install_redaction
+from weathra.telemetry.usage import BackgroundUsageRecorder
 
 __all__ = ["build_app", "create_app"]
 
@@ -155,6 +156,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     app.state.embedder = build_embedder(settings)
     app.state.inference = LLMProvider(app.state.http_client, settings)
+    # One per process, so the telemetry failure counter is a property of the deployment rather
+    # than of a request. Writes are scheduled off the answer path (`specs/llm-telemetry`).
+    app.state.usage_recorder = BackgroundUsageRecorder()
 
     app.state.tools = await _connect_tools(app, settings)
     app.state.checkpointer = await _open_memory(settings)
@@ -163,6 +167,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         logger.info("shutting down Weathra")
+        await app.state.usage_recorder.drain()
         if app.state.checkpointer is not None:
             await app.state.checkpointer.close()
         if app.state.tools is not None:
