@@ -114,7 +114,7 @@ def test_the_frontend_reads_the_detail_keys_the_refusal_actually_carries(
     """
     from datetime import UTC, datetime, timedelta
 
-    from weathra.domain.usage import QuotaDimension, QuotaWindow
+    from weathra.domain.usage import QuotaDimension, QuotaWindow, WindowKey
     from weathra.entitlements.quotas import DimensionUsage, QuotaGate
 
     # The refusal itself, built by the one method that builds it — not a scrape of the source.
@@ -122,7 +122,7 @@ def test_the_frontend_reads_the_detail_keys_the_refusal_actually_carries(
         DimensionUsage(
             dimension=QuotaDimension.REQUESTS_PER_DAY,
             window=QuotaWindow.DAY,
-            window_key="2026-09-09",
+            window_key=WindowKey("2026-09-09"),
             allowance=20,
             consumed=20,
             resets_at=datetime.now(UTC) + timedelta(hours=4),
