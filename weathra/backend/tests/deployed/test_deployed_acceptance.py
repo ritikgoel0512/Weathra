@@ -558,3 +558,77 @@ def test_an_authenticated_stream_completes(
     assert any("complete" in event or "done" in event for event in events), (
         f"the stream never reported completion: {events[-3:]}"
     )
+
+
+def test_a_question_s_every_figure_appears_in_its_evidence(
+    writer: httpx.Client, target: Target, token_a: str, credentials: Credentials
+) -> None:
+    """25.4's remaining criterion: a question through `/ask`, and its figures held to its evidence.
+
+    **Why the grounding report is the assertion rather than a re-derivation here.** "Every figure
+    appears in its evidence" is a claim the product already computes, over the prose it just wrote:
+    `GroundingReport.verified` is documented as true exactly when every figure in the prose matched
+    a finding or an evidence value, with the extraction method and rounding tolerance named beside
+    it. Re-implementing that matching in a test would be asserting a second, weaker version of it
+    and calling the agreement proof.
+
+    So this asks three things the report cannot fake. `figures_checked` must be non-zero — a
+    verified report over nothing checked is vacuous, and is the shape a broken extractor would
+    take. `ungrounded_figures` must be empty, and is printed when it is not, because that list is
+    the actual finding. And `prose_discarded` must be false: the zero-retrieval guard withholding
+    the prose is a legitimate outcome for the *product* and a failed check for this criterion,
+    since there are then no figures to appear anywhere.
+
+    **The round trip is the other half.** An answer that carries its own evidence proves the run
+    recorded one; fetching `/evidence/{id}` as the same caller proves the record was *stored* and
+    is retrievable, which is what a person following the answer's evidence link actually does. The
+    two request identifiers must agree, or the link points at somebody else's run.
+    """
+    response = fetch(
+        writer,
+        "POST",
+        target.api("/agent/ask"),
+        headers=_auth(token_a),
+        json={"question": "What is the temperature in Berlin over the next three days?"},
+        timeout=180.0,
+    )
+    assert_not_server_error(response, *credentials.secrets)
+    assert_status(response, 200, *credentials.secrets)
+    body = json_body(response, *credentials.secrets)
+
+    answer = body.get("answer") or {}
+    grounding = answer.get("grounding") or {}
+    assert grounding, "the answer carried no grounding report"
+    assert not grounding.get("prose_discarded"), (
+        "the prose was withheld by the zero-retrieval guard, so no figure appears anywhere"
+    )
+    assert grounding.get("figures_checked", 0) > 0, (
+        f"the grounding report checked no figures: {grounding}"
+    )
+    assert not grounding.get("ungrounded_figures"), (
+        f"figures in the prose that the evidence does not support: "
+        f"{grounding.get('ungrounded_figures')}"
+    )
+    assert grounding.get("verified") is True, f"the grounding report is not verified: {grounding}"
+
+    record = answer.get("evidence") or {}
+    assert record.get("request_id"), "the answer carried no evidence record"
+
+    # Every figure the answer *reports* — not only the ones in the prose — carries the class and
+    # the source it came from. A finding with a value and no data class is a number with no
+    # provenance, which is the thing `specs/safety-grounding` exists to prevent.
+    for finding in answer.get("findings") or ():
+        if finding.get("value") is None:
+            continue
+        assert finding.get("data_class"), f"a reported figure names no data class: {finding}"
+
+    evidence_id = body.get("evidence_id")
+    if evidence_id:
+        stored = fetch(
+            writer, "GET", target.api(f"/evidence/{evidence_id}"), headers=_auth(token_a)
+        )
+        assert_status(stored, 200, *credentials.secrets)
+        held = json_body(stored, *credentials.secrets)
+        assert held.get("request_id") == record.get("request_id"), (
+            "the stored evidence record belongs to a different run than the answer"
+        )

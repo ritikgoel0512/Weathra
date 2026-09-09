@@ -867,8 +867,9 @@ a comparison whose evidence means nothing.
 **And three criteria from 25.3 and 25.4:**
 
 * **A question through `/ask` whose every figure appears in its evidence**, and **an authenticated
-  SSE stream completing** (25.4). Both need a signed-in session. The suite implements them and skips
-  until credentials are configured; the product owner has declined to store an account password in
+  SSE stream completing** (25.4). Both need a signed-in session. Both are implemented in the suite
+  and skip, naming their variables — the first only as of this pass, which found it missing; see
+  *Task 25.4's standing* below. The product owner has declined to store an account password in
   GitHub Actions, which is a reasonable position — an Actions secret is readable by every workflow
   that names it. Either can be confirmed in a browser in a minute by asking the Analyst a question.
 * **A second account seeing none of the first's data** (25.4), and **cross-user isolation against
@@ -877,6 +878,68 @@ a comparison whose evidence means nothing.
   principals (18.5, 18.6, 18.7), the RLS gate is verified on the deployed database as above, and the
   request role is verified as unable to bypass it. **That is not a live two-user production test and
   is not recorded as one.** It is the strongest evidence available without a second account.
+
+### Task 25.4's standing, stated as a whole
+
+The task reads: *run the live smoke check against the deployed pair — create an account and verify
+it by code, sign in, readiness all-reachable, an attributed public forecast without a session, a
+baseline comparison with both sides labelled, a question through `/ask` whose every figure appears
+in its evidence, an authenticated SSE stream completing, and a second account seeing none of the
+first's data; verify each and record the results.* Eight criteria, verified one by one on
+**2026-09-09** against `weathra-backend.onrender.com` and `weathra-bice.vercel.app`.
+
+| # | Criterion | Verdict | Evidence |
+|---|---|---|---|
+| 1 | Create an account and verify it by code | **PASS** | The owner, in the browser, against production — recorded under *What the product owner verified by hand*. Not automatable: it needs a real inbox, and the suite provisions no account. |
+| 2 | Sign in | **PASS** | Same pass. The authenticated Dashboard rendered live Berlin weather, which is the whole chain — Supabase session, bearer token, deployed backend, Open-Meteo — answering at once. |
+| 3 | Readiness all-reachable | **PASS** | `/api/v1/ready` → 200, `ready: true`, `environment: production`, `version 0.1.0`. Every required dependency `configured: true`; `database`, `vector_store` (pgvector, BAAI/bge-small-en-v1.5, 384 dimensions) and `mcp_server` (7 tools) reachable. `weather_provider`, `authentication_provider` and `inference_provider` report `reachable: null` **by design**, each with its reason in `detail` — a readiness probe that called Open-Meteo on every hit would spend the provider's rate limit on liveness. |
+| 4 | An attributed public forecast without a session | **PASS** | `/weather/forecast?location=Berlin&days=3` → 200 with no credential, carrying `provider: open-meteo`, the resolved location (`Berlin`, 52.52437/13.41053, `Europe/Berlin`, 74 m), `retrieved_at`, `data_class: forecast` and `units_source`. |
+| 5 | A baseline comparison with both sides labelled | **PASS** | `/weather/history/baseline/comparison` → 200 with the baseline's labelling, the observed side's data class and a characterisation. An instantaneous measure is refused clearly rather than averaged. |
+| 6 | A question through `/ask` whose every figure appears in its evidence | **BLOCKED** | Needs a signed-in session: `/agent/ask` is protected, so no automation without an account can reach it. Implemented as of this pass and skipping — see below. |
+| 7 | An authenticated SSE stream completing | **BLOCKED** | Needs a signed-in session. Implemented and skipping. |
+| 8 | A second account seeing none of the first's data | **BLOCKED** | Needs two live production accounts, and the owner has declined to create a second. |
+
+Five of eight pass. The scoped suite — `pytest tests/deployed/test_deployed_acceptance.py -m
+deployed` — reported **52 passed, 5 skipped, 0 failed**; the five skips are criteria 6, 7 and 8
+plus group 18's valid-request case, each naming the exact variables it wants.
+
+**A gap this pass found, and closed.** The record above used to say the suite implemented criterion
+6. It did not. `test_an_authenticated_stream_completes` covered criterion 7, and 34.7's module has
+an `/ask` helper for the model-resolution criteria, but nothing anywhere asserted that an answer's
+figures appear in its evidence against the deployment — the criterion was listed as pending when it
+was in fact unwritten, which is worse than pending. `test_a_question_s_every_figure_appears_in_its_evidence`
+now covers it and skips like its siblings. It holds the answer to its own grounding report, which is
+documented as verified exactly when every figure in the prose matched a finding or an evidence
+value, and additionally requires that the report checked a non-zero number of figures, listed no
+ungrounded ones, and did not withhold the prose — a verified report over nothing checked is the
+shape a broken extractor takes. Then it follows `evidence_id` to `/evidence/{id}` as the same
+caller and requires the two request identifiers to agree, which is the round trip a person makes
+when they follow an answer's evidence link.
+
+**No inference call was made, and none could be.** Criterion 6 is the only one that would reach
+OpenRouter, and it is protected. The production configuration is intact and untouched:
+`/api/v1/ready` reports `inference_provider` as `configured: true` on `openrouter` with its model
+named. Nothing in this pass sent a prompt, changed a key, or retried a provider.
+
+**What production discloses when it refuses.** Six read-only probes across the public and
+unauthenticated-protected surface — `/ready`, `/me`, `/me/usage`, `/evidence/{unknown}`, a baseline
+with an instantaneous measure, and a forecast for an unresolvable location — were checked for
+`SCREAMING_SNAKE_CASE` configuration identifiers, stack-trace markers, and gateway or database
+credential shapes. **All six clean**, each answering its own stable code: `token_missing` three
+times, `validation_failed`, `location_not_found`. This is the production side of task 33.5's rule
+that a refusal names no configuration a reader cannot act on.
+
+**Deterministic analytics are the arithmetic, not the model.** `/weather/analysis` needs no session
+and no inference provider, and every figure it returned carried `data_class: computed_statistic`,
+`points_used`, and its method named in full — *arithmetic mean of usable points*, *maximum minus
+minimum over usable points*, *Theil-Sen slope (median of pairwise slopes) per day* with its
+insignificance margin. The summary is composed from those figures and names the provider. There is
+no path by which a language model produced any of it: the endpoint is public, and a public endpoint
+has no principal to bill an inference call to.
+
+**What would close it.** Criteria 6 and 7 need one production account; criterion 8 needs a second.
+Supplied to `live-acceptance.yml`'s existing variables, one dispatch runs all three. No repository
+change is needed — as of this pass, all three checks exist.
 
 ### Task 25.3's standing, stated as a whole
 
