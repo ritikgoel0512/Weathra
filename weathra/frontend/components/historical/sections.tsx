@@ -55,15 +55,141 @@ import {
 
 import styles from "./historical.module.css";
 
+/**
+ * A tile glyph, drawn in the same stroke language as the navigation icons.
+ *
+ * Six of them rather than a shared icon set: these name measures, not destinations, and the two
+ * vocabularies have no overlap. Decorative — `Metric` marks them `aria-hidden` and the tile's label
+ * is what names the figure.
+ */
+function TileGlyph({ children }: { readonly children: ReactNode }): ReactNode {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {children}
+    </svg>
+  );
+}
+
+const GLYPHS = {
+  // A thermometer.
+  temperature: (
+    <TileGlyph>
+      <path d="M14 14.8V5a2 2 0 1 0-4 0v9.8a4 4 0 1 0 4 0z" />
+      <path d="M12 9v6" />
+    </TileGlyph>
+  ),
+  // A range, low to high.
+  range: (
+    <TileGlyph>
+      <path d="M4 12h16" />
+      <path d="M8 8l-4 4 4 4" />
+      <path d="M16 8l4 4-4 4" />
+    </TileGlyph>
+  ),
+  // A raindrop.
+  precipitation: (
+    <TileGlyph>
+      <path d="M12 3.5c3 3.6 4.5 6.2 4.5 8.5a4.5 4.5 0 0 1-9 0c0-2.3 1.5-4.9 4.5-8.5z" />
+    </TileGlyph>
+  ),
+  // Moving air.
+  wind: (
+    <TileGlyph>
+      <path d="M4 9h9a2.5 2.5 0 1 0-2.5-2.5" />
+      <path d="M4 14h13a2.5 2.5 0 1 1-2.5 2.5" />
+    </TileGlyph>
+  ),
+  // Humidity: a drop with a level in it.
+  humidity: (
+    <TileGlyph>
+      <path d="M12 3.5c3 3.6 4.5 6.2 4.5 8.5a4.5 4.5 0 0 1-9 0c0-2.3 1.5-4.9 4.5-8.5z" />
+      <path d="M7.8 13.5h8.4" />
+    </TileGlyph>
+  ),
+} as const;
+
 /** The statistics the tile row reports for the selected period, in the artifact's order. */
-const HEADLINE: readonly { statistic: Statistic; measure: Measure; label: string }[] = [
-  { statistic: "mean", measure: "temperature_mean", label: "Mean temperature" },
-  { statistic: "minimum", measure: "temperature_min", label: "Lowest temperature" },
-  { statistic: "maximum", measure: "temperature_max", label: "Highest temperature" },
-  { statistic: "total", measure: "precipitation_sum", label: "Total precipitation" },
-  { statistic: "mean", measure: "wind_speed_max", label: "Mean wind speed" },
-  { statistic: "mean", measure: "relative_humidity", label: "Mean humidity" },
+const HEADLINE: readonly {
+  statistic: Statistic;
+  measure: Measure;
+  label: string;
+  icon: ReactNode;
+}[] = [
+  {
+    statistic: "mean",
+    measure: "temperature_mean",
+    label: "Mean temperature",
+    icon: GLYPHS.temperature,
+  },
+  {
+    statistic: "minimum",
+    measure: "temperature_min",
+    label: "Lowest temperature",
+    icon: GLYPHS.range,
+  },
+  {
+    statistic: "maximum",
+    measure: "temperature_max",
+    label: "Highest temperature",
+    icon: GLYPHS.range,
+  },
+  {
+    statistic: "total",
+    measure: "precipitation_sum",
+    label: "Total precipitation",
+    icon: GLYPHS.precipitation,
+  },
+  {
+    statistic: "mean",
+    measure: "wind_speed_max",
+    label: "Mean wind speed",
+    icon: GLYPHS.wind,
+  },
+  {
+    statistic: "mean",
+    measure: "relative_humidity",
+    label: "Mean humidity",
+    icon: GLYPHS.humidity,
+  },
 ];
+
+/**
+ * The tile's comparison caption: how this period's figure moved against the earlier one.
+ *
+ * `03-historical-analytics.png` puts a short caption under every tile — "+3.2°C vs Normal". This is
+ * that caption, and it is the backend's own delta: `PeriodComparison.deltas` carries one result per
+ * measure with its method and its point count, so nothing here subtracts anything. Where the
+ * backend computed no delta for a measure there is no caption, which is the same rule the figures
+ * themselves follow.
+ */
+function tileDelta(
+  comparison: PeriodComparison,
+  statistic: Statistic,
+  measure: Measure,
+): { text: string; tone: "up" | "down" | "flat" } | undefined {
+  const delta = (comparison.deltas ?? []).find(
+    (result) => result.measure === measure && result.statistic === statistic,
+  );
+  const signed = formatSigned(delta);
+  if (signed === null) return undefined;
+  const unit = delta?.unit ? ` ${delta.unit}` : "";
+  const value = Number(formatStatistic(delta));
+  return {
+    text: `${signed}${unit} against the earlier period`,
+    tone: value > 0 ? "up" : value < 0 ? "down" : "flat",
+  };
+}
 
 /** What a `StatisticResult` reads as, or the backend's reason for having no value. */
 function StatisticFigure({
@@ -161,15 +287,17 @@ export interface HeadlineFiguresProps {
 export function HeadlineFigures({ comparison }: HeadlineFiguresProps): ReactNode {
   return (
     <section className={styles.tiles} aria-label="Figures for the selected period">
-      {HEADLINE.map(({ statistic, measure, label }) => {
+      {HEADLINE.map(({ statistic, measure, label, icon }) => {
         const result = statisticFor(comparison.later, statistic, measure);
         const value = formatStatistic(result);
         return (
           <Metric
             key={`${statistic}-${measure}`}
             dataClass="analytics"
+            icon={icon}
             label={label}
             value={value ?? "Not computable"}
+            delta={value === null ? undefined : tileDelta(comparison, statistic, measure)}
             unit={value === null ? undefined : (result?.unit ?? undefined)}
             note={
               value === null ? (

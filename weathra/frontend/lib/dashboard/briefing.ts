@@ -162,6 +162,59 @@ export interface ForecastDay {
   readonly other: Reading[];
 }
 
+/* --------------------------------------------------------------- precipitation */
+
+/**
+ * What a day's card shows where `01-dashboard.png` shows a condition glyph — finding 1.8 of the
+ * runtime fidelity audit of 2026-09-08.
+ *
+ * The artifact captions each day "LIGHT RAIN", "SUNNY", "OVERCAST". Weathra's provider reports no
+ * condition, and it never will from this endpoint: the daily series carries figures. So this is
+ * **not** a condition. It is the day's own precipitation, read back — a total in millimetres and
+ * the day's maximum probability — and the glyph is a picture of that figure rather than a guess at
+ * the sky. A dry day is drawn as "no precipitation reported for it", never as sunshine, because
+ * zero rainfall is not evidence of clear sky and drawing a sun would be exactly the fabrication
+ * this product exists to avoid.
+ *
+ * `null` when the provider reported neither figure: no glyph and no caption, on the same rule as
+ * every other absent value on the screen.
+ */
+export type PrecipitationOutlookLevel = "wet" | "possible" | "dry";
+
+export interface DayPrecipitation {
+  readonly level: PrecipitationOutlookLevel;
+  /** The caption under the glyph — a retrieved figure, formatted, never a word for the weather. */
+  readonly caption: string;
+  /** The glyph's accessible name, naming every figure it was drawn from. */
+  readonly description: string;
+}
+
+/** The probability at which a day is drawn as one precipitation is expected on. */
+const PRECIPITATION_LIKELY_PERCENT = 50;
+
+export function dayPrecipitationFrom(day: ForecastDay): DayPrecipitation | null {
+  const total = day.other.find((reading) => reading.key === "precipitation_sum") ?? null;
+  const chance = day.other.find((reading) => reading.key === "precipitation_probability_max") ?? null;
+  if (total === null && chance === null) return null;
+
+  const totalText = total ? formatReading(total) : null;
+  const chanceText = chance ? `${formatReading(chance)} chance` : null;
+  // Both where both were reported, so the caption never implies the other figure is missing.
+  const description = [totalText, chanceText].filter((part) => part !== null).join(", ");
+
+  if (total !== null && total.value > 0) {
+    return { level: "wet", caption: totalText ?? "", description: `Precipitation ${description}` };
+  }
+  if (chance !== null && chance.value >= PRECIPITATION_LIKELY_PERCENT) {
+    return {
+      level: "possible",
+      caption: chanceText ?? "",
+      description: `Precipitation ${description}`,
+    };
+  }
+  return { level: "dry", caption: "No rain", description: `Precipitation ${description}` };
+}
+
 /** The local calendar date of a local timestamp, read as text so no timezone is re-applied. */
 export function localDateOf(timeLocal: string): string {
   return /^(\d{4}-\d{2}-\d{2})/.exec(timeLocal)?.[1] ?? timeLocal;

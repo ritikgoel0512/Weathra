@@ -380,6 +380,16 @@ export interface TypeRole {
 
 export const TYPE_ROLES = {
   display: { face: "display", size: "2rem", lineHeight: "1.15", weight: 600 },
+  /*
+   * The one figure a screen is opened to read.
+   *
+   * Added in the runtime fidelity pass of 2026-09-08. The Dashboard's hero temperature was set at
+   * `display`, the same step as the place name beside it and as every screen title, so the band
+   * `01-dashboard.png` builds around one enormous number had no dominant element at all — finding
+   * 1.6. It is deliberately a single role rather than a size used ad hoc: exactly one figure per
+   * screen may take it, and on the Dashboard that is the observed temperature.
+   */
+  readout: { face: "display", size: "3.25rem", lineHeight: "1.05", weight: 600 },
   heading: { face: "display", size: "1.5rem", lineHeight: "1.2", weight: 600 },
   section: { face: "display", size: "1.125rem", lineHeight: "1.3", weight: 600 },
   card: { face: "display", size: "0.9375rem", lineHeight: "1.35", weight: 600 },

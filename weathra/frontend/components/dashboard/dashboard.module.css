@@ -52,14 +52,21 @@
   color: var(--color-text-muted);
 }
 
+/*
+ * The observed temperature: the one figure the Dashboard is opened to read, at the `readout` role.
+ *
+ * It was at `display` — the same step as the place name beside it and as the screen title above it
+ * — which is finding 1.6 of the runtime fidelity audit of 2026-09-08: the artifact's hero is built
+ * around one enormous number and production's had no dominant element at all.
+ */
 .readout {
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
   font-family: var(--family-display);
-  font-size: var(--type-display-size);
-  line-height: var(--type-display-line);
-  font-weight: var(--type-display-weight);
+  font-size: var(--type-readout-size);
+  line-height: var(--type-readout-line);
+  font-weight: var(--type-readout-weight);
   font-variant-numeric: tabular-nums;
   color: var(--color-accent);
 }
@@ -241,6 +248,43 @@
  * `docs/design/screens.md` §5 records the ambiguous-location interaction among the per-screen gaps
  * the specs fill, and §8 records this control.
  */
+/*
+ * The place entry, folded away once there is a briefing to read. Finding 1.7.
+ *
+ * The marker is the browser's own triangle: `specs/web-ui` wants every control keyboard-operable
+ * and a native `<summary>` is one for free, on every platform, with the open state announced.
+ */
+.entryDisclosure {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  min-width: 0;
+}
+
+.entrySummary {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.entrySummary:hover {
+  color: var(--color-text-primary);
+}
+
+.entryDisclosure[open] .entrySummary {
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+/* The form no longer carries the frame — the disclosure around it does. */
+.entryDisclosure .entry {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
 .entry {
   display: flex;
   flex-wrap: wrap;
@@ -308,6 +352,18 @@
   min-width: 0;
 }
 
+/*
+ * The place name inside the hero, one step below the temperature.
+ *
+ * `.place` is the display role, which is right where the name is the band's subject — the Compare
+ * and Locations cards use it that way. In the hero the subject is the figure, so the name takes the
+ * heading step and the readout is left as the only thing at its own size.
+ */
+.heroPlace .place {
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+}
+
 .heroReadout {
   min-width: 0;
 }
@@ -321,6 +377,16 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3) var(--space-4);
   margin: 0;
+  /*
+   * The artifact's metric cluster: the four secondary measures on their own inset ground, read as
+   * one block beside the temperature rather than as four labels floating in the band. Finding 1.6's
+   * second half. The ground is translucent so the hero's photograph, where there is one, still
+   * shows through.
+   */
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-surface-inset) 72%, transparent);
+  border: 1px solid var(--color-border-subtle);
 }
 
 .heroMeasure {
@@ -382,6 +448,39 @@
  * person's preference and the provider answers with what it has, so the strip fills the width it is
  * given with the days that exist instead of drawing empty slots for days nobody forecast.
  */
+/*
+ * The day card's precipitation glyph and its caption. `position: relative` so the visually-hidden
+ * description inside it is positioned against the card rather than against whatever ancestor
+ * happens to be positioned — the mistake `ui/tabs.tsx` records, where an escaped span pushed the
+ * page open at 360.
+ */
+.stripGlyph {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
+}
+
+/* Precipitation reported for the day takes the accent; a dry day stays quiet. */
+.stripGlyph[data-level="wet"] {
+  color: var(--color-accent);
+}
+
+.stripGlyph[data-level="possible"] {
+  color: var(--color-text-secondary);
+}
+
+.stripGlyphCaption {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
 .strip {
   display: grid;
   /*

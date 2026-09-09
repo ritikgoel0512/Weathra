@@ -75,6 +75,9 @@
    * different, looser product. Only the display and heading steps move; the body, UI, label and
    * meta roles are already the artifacts' sizes and are left alone.
    */
+  --type-readout-size: 3.25rem;
+  --type-readout-line: 1.05;
+  --type-readout-weight: 600;
   --type-display-size: 1.75rem;
   --type-display-line: 1.15;
   --type-display-weight: 600;

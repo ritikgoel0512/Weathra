@@ -19,6 +19,12 @@
  * the value or Weathra assumed it. `sourceNote` is what puts that on screen, because a value shown
  * identically either way tells somebody they made a decision they never made.
  *
+ * It marks only the values that are *not* the person's. The runtime fidelity audit of 2026-09-08
+ * recorded "Your choice." under every control as finding 7.3, and it was three repetitions of the
+ * unremarkable case crowding out the one that matters. The form states the rule once — an unmarked
+ * control holds the person's own choice — so the distinction survives and only the exception is
+ * printed. `PREFERENCE_SOURCE_RULE` is that sentence, kept here beside the notes it explains.
+ *
  * The horizon bound is the backend's own — `PreferenceUpdate.forecast_horizon_days` is `ge=1, le=16`
  * — restated here so an out-of-range entry is refused before a request is spent on it, not instead
  * of the backend refusing it.
@@ -176,9 +182,21 @@ export function sourceOf(view: PreferenceView, field: string): PreferenceSource 
   return source === "chosen" || source === "default" ? source : null;
 }
 
-/** The sentence a field carries so a default is never mistaken for a decision. */
-export function sourceNote(source: PreferenceSource | null): string {
-  if (source === "chosen") return "Your choice.";
+/**
+ * The rule the form states once, so an unmarked control is not an unexplained one.
+ *
+ * Load-bearing: without it, "no note" would be indistinguishable from "Weathra did not say", and
+ * the guarantee `specs/memory` asks for is precisely that the two are never confused.
+ */
+export const PREFERENCE_SOURCE_RULE =
+  "Each control below holds your own choice unless it says otherwise.";
+
+/**
+ * The sentence a field carries so a default is never mistaken for a decision, or `null` where the
+ * value is the person's own and `PREFERENCE_SOURCE_RULE` has already said so.
+ */
+export function sourceNote(source: PreferenceSource | null): string | null {
+  if (source === "chosen") return null;
   if (source === "default") return "Weathra's documented default — you have not chosen this.";
   return "Weathra did not report whether this is your choice or its default.";
 }

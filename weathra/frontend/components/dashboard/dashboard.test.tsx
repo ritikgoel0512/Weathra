@@ -461,6 +461,40 @@ describe("a person with no saved default location", () => {
   });
 });
 
+/*
+ * The runtime fidelity audit of 2026-09-08, finding 1.7: `01-dashboard.png` opens onto the hero,
+ * and production opened onto a form. Both halves are asserted — that the entry is folded once
+ * there is a briefing, and that it is the same form with the same field one press away — plus the
+ * three states where folding it would hide the thing to do.
+ */
+describe("the place entry, folded (1.7)", () => {
+  it("is closed once there is a briefing, and holds the same field one press away", async () => {
+    renderDashboard();
+    await screen.findByRole("region", { name: "Current conditions" });
+
+    const entry = screen.getByLabelText("Brief me on a place");
+    expect(entry).not.toBeVisible();
+
+    await userEvent.click(screen.getByText("Brief on another place"));
+    expect(entry).toBeVisible();
+    expect(screen.getByRole("button", { name: "Show briefing" })).toBeVisible();
+  });
+
+  it("is open when there is no default location to brief on", async () => {
+    fetchMock = backend({
+      ...POPULATED,
+      "/api/v1/me/preferences": preferences({ default_location: null }),
+    }) as unknown as Mock;
+
+    renderDashboard();
+
+    // The empty state points at this field, and a disclosure it pointed *into* would be finding
+    // 6.5's mistake on Saved Locations.
+    expect(await screen.findByText("No default location saved")).toBeInTheDocument();
+    expect(screen.getByLabelText("Brief me on a place")).toBeVisible();
+  });
+});
+
 describe("What Changed?, through the endpoint that returns it", () => {
   it("renders the comparison the backend produced, and computes no part of it", async () => {
     renderDashboard();

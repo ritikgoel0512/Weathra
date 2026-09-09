@@ -23,6 +23,7 @@ import {
   horizonError,
   horizonLabel,
   isDirty,
+  PREFERENCE_SOURCE_RULE,
   sourceNote,
   sourceOf,
   unitLabel,
@@ -203,7 +204,11 @@ describe("sources", () => {
 
   it("says plainly that a default is not a decision the person made", () => {
     expect(sourceNote("default")).toMatch(/you have not chosen this/i);
-    expect(sourceNote("chosen")).toBe("Your choice.");
+    // A value the person chose carries no note of its own: the form states that rule once, and
+    // repeating it under every control is what finding 7.3 of the runtime fidelity audit was.
+    // The two cases that are *not* their choice still say so, which is the guarantee.
+    expect(sourceNote("chosen")).toBeNull();
+    expect(PREFERENCE_SOURCE_RULE).toMatch(/your own choice unless it says otherwise/i);
     expect(sourceNote(null)).toMatch(/did not report/i);
   });
 });

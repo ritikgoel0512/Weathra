@@ -449,8 +449,30 @@ function LocationChoice({ preferences }: { readonly preferences: PreferenceView 
   const settling = entry.resolution.kind !== "unresolved" && entry.resolution.kind !== "resolved";
   const location = chosen ?? saved;
 
+  /*
+   * The entry is folded away once there is a briefing to read — finding 1.7 of the runtime fidelity
+   * audit of 2026-09-08. `01-dashboard.png` opens straight onto the hero; production opened onto a
+   * form, above the fold, on every visit. It is the same form with the same single field and the
+   * same resolver behind it, one press away.
+   *
+   * It stays open in the three states where it is the thing to do: when there is no default
+   * location to brief on, while an entry is unsettled — a name being resolved, an ambiguous one
+   * waiting on a candidate, or a lookup that failed — and while the briefing is about a place that
+   * was named rather than the default, because "back to my default location" lives inside it and a
+   * way out that is hidden is not a way out. Collapsing under an empty state that says "name a
+   * place above" is finding 6.5's mistake on another screen, and it is not repeated here.
+   */
+  const entryOpen = location === null || settling || chosen !== null;
+
   return (
     <DashboardFrame>
+      <details className={styles.entryDisclosure} open={entryOpen}>
+        {/*
+          One wording in every state. The note under the briefing already says which place is
+          being briefed on and whether it is the default, and a summary that repeated it would put
+          the same sentence on the screen twice — finding 2.3's mistake on the Analyst.
+        */}
+        <summary className={styles.entrySummary}>Brief on another place</summary>
       <form className={styles.entry} onSubmit={submit} aria-label="Choose a place to brief on">
         <div className={styles.entryField}>
           <Input
@@ -480,6 +502,7 @@ function LocationChoice({ preferences }: { readonly preferences: PreferenceView 
         onChoose={choose}
         label="Places matching what you entered"
       />
+      </details>
 
       {/* Nothing location-dependent while the entry has not settled on one place. */}
       {settling ? null : location === null ? (

@@ -59,10 +59,20 @@ const TAB_PREFIX = "settings";
  * advertise nothing while keeping the row the artifact's shape.
  */
 const TABS = [
-  { id: "general", label: "General" },
-  { id: "intelligence", label: "AI Intelligence", unavailable: "not in this release" },
-  { id: "account", label: "Account" },
-  { id: "transparency", label: "Transparency", unavailable: "not in this release" },
+  { id: "general", label: "General", icon: "general" },
+  {
+    id: "intelligence",
+    label: "AI Intelligence",
+    icon: "intelligence",
+    unavailable: "not in this release",
+  },
+  { id: "account", label: "Account", icon: "account" },
+  {
+    id: "transparency",
+    label: "Transparency",
+    icon: "transparency",
+    unavailable: "not in this release",
+  },
 ] as const;
 
 export interface SettingsProps {

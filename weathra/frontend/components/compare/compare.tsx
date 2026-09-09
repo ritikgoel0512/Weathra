@@ -375,7 +375,30 @@ export function CompareCities(): ReactNode {
         </p>
       </header>
 
-      <form className={styles.controls} onSubmit={submit} aria-label="Choose what to compare">
+      {/*
+        The query, folded away once there is a ranking to read — finding 4.5 of the runtime
+        fidelity audit of 2026-09-08. `04-compare-cities.png` opens onto the ranking with a compact
+        toolbar over it; production opened onto a full-height form with a fieldset of place rows, a
+        criterion select and a number field, above every result, on every visit.
+
+        It is the same form with the same rows, the same resolver and the same refusals, one press
+        away — and it stays open in every state where it is the thing to do: before anything has
+        been compared, while a row is blocking the comparison, and while an ambiguous name is
+        waiting on a candidate. Collapsing over an unanswered question is finding 6.5's mistake on
+        another screen and is not repeated here.
+      */}
+      <details
+        className={styles.queryDisclosure}
+        open={enquiry === null || blocked !== null || awaiting}
+      >
+        <summary className={styles.querySummary}>
+          {enquiry === null
+            ? "Choose what to compare"
+            : `${enquiry.locations.length} places · ranked by ${criterionLabel(
+                enquiry.criterion,
+              ).toLowerCase()} · ${enquiry.days} ${enquiry.days === 1 ? "day" : "days"} ahead`}
+        </summary>
+        <form className={styles.controls} onSubmit={submit} aria-label="Choose what to compare">
         <fieldset className={styles.locations}>
           <legend className={styles.legend}>Locations</legend>
           {entries.map((entry, index) => (
@@ -460,7 +483,8 @@ export function CompareCities(): ReactNode {
               : `${unsettled.length} locations match more than one place each. Choose which you meant, then compare again.`}
           </p>
         ) : null}
-      </form>
+        </form>
+      </details>
 
       {enquiry === null ? (
         <EmptyState title="Nothing compared yet">

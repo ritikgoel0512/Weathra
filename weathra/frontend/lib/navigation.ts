@@ -30,7 +30,13 @@ import { MVP_SCREENS, POST_MVP_SCREENS, type Screen } from "@/lib/routes";
  */
 export type DestinationStatus = "mvp" | "planned";
 
-/** The name of an icon in `components/shell/icons.tsx`. */
+/**
+ * The name of an icon in `components/shell/icons.tsx`.
+ *
+ * The registry is wider than the navigation: the last four name the Settings tab glyphs
+ * `07-settings.png` draws, added for the runtime fidelity audit's finding 7.4. They are not
+ * destinations and never appear in `ORDER`.
+ */
 export type IconName =
   | "dashboard"
   | "analyst"
@@ -43,7 +49,11 @@ export type IconName =
   | "watch"
   | "travel"
   | "locations"
-  | "settings";
+  | "settings"
+  | "general"
+  | "intelligence"
+  | "account"
+  | "transparency";
 
 export interface Destination extends Screen {
   readonly status: DestinationStatus;

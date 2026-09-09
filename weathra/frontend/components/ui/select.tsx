@@ -7,6 +7,12 @@
  * platform's own picker, and `specs/web-ui` requires every action to be reachable by keyboard
  * alone — which the native element gives correctly on every platform, for free.
  *
+ * What is *not* native is the button the platform paints on it. The runtime fidelity audit of
+ * 2026-09-08 recorded it as finding 7.2: the operating system's own dropdown chrome, on a screen
+ * where every other control is Weathra's. The element and its behaviour are untouched; the wrapper
+ * below draws the chevron in the palette's own colour, and a forced-colours mode gets the
+ * platform's back.
+ *
  * Options may be passed as data or as children; the data form is what a preference control wants,
  * since a unit or horizon choice is a list, not markup.
  */
@@ -43,15 +49,17 @@ export function Select({
   return (
     <Field label={label} description={description} error={error} id={id}>
       {(control) => (
-        <select className={styles.control} {...control} {...rest}>
-          {options
-            ? options.map((option) => (
-                <option key={option.value} value={option.value} disabled={option.disabled}>
-                  {option.label}
-                </option>
-              ))
-            : children}
-        </select>
+        <span className={styles.controlChevron}>
+          <select className={styles.control} {...control} {...rest}>
+            {options
+              ? options.map((option) => (
+                  <option key={option.value} value={option.value} disabled={option.disabled}>
+                    {option.label}
+                  </option>
+                ))
+              : children}
+          </select>
+        </span>
       )}
     </Field>
   );

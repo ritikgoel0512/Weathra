@@ -336,8 +336,13 @@ describe("the preference form", () => {
     expect(location).toHaveValue("52.5200,13.4050");
     expect(location.selectedOptions[0]?.textContent).toBe("Berlin, Berlin, DE");
 
-    // A default is never shown as though it were a decision the person made.
-    expect(within(form).getAllByText("Your choice.").length).toBeGreaterThan(0);
+    // A default is never shown as though it were a decision the person made. The rule is stated
+    // once and only the exceptions are marked, so "Your choice." no longer appears under every
+    // control — but the distinction it carried is asserted at both of its new locations.
+    expect(
+      within(form).getByText(/Each control below holds your own choice unless it says otherwise\./),
+    ).toBeInTheDocument();
+    expect(within(form).queryByText("Your choice.")).not.toBeInTheDocument();
     expect(
       within(form).getByText(/Weathra's documented default — you have not chosen this\./),
     ).toBeInTheDocument();

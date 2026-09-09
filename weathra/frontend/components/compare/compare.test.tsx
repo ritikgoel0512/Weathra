@@ -529,6 +529,135 @@ describe("ties", () => {
   });
 });
 
+/*
+ * The runtime fidelity audit of 2026-09-08, findings 4.3 to 4.6.
+ *
+ * Every one of the four is a *composition* defect rather than a missing fact, so each assertion
+ * below checks both halves: that the screen says less in the place the audit found it saying too
+ * much, and that whatever was folded or de-duplicated is still reachable and still true.
+ */
+describe("the runtime fidelity audit's compare findings", () => {
+  it("states each candidate's figure once, naming the statistic it is (4.3)", async () => {
+    renderScreen();
+    await compare();
+
+    const ranking = await screen.findByRole("region", { name: "Ranked by warmest" });
+    const first = within(ranking).getAllByRole("article")[0]!;
+
+    // 23.7 was the headline *and* a "mean · Temperature 23.7 °C" row three lines under it.
+    expect(within(first).getAllByText(/23\.7/)).toHaveLength(1);
+    // What the row carried that the headline did not — which statistic of which measure — is now
+    // said by the headline, so nothing was dropped along with the duplicate.
+    expect(first).toHaveTextContent("Mean temperature (mean)");
+    // And the figure's provenance travelled with it rather than staying behind on a removed row.
+    expect(within(first).getByText("Computed by Weathra")).toBeInTheDocument();
+  });
+
+  it("keeps every supporting statistic the headline is not (4.3)", async () => {
+    fetchMock = backend(
+      routes({
+        ...THREE_CITY,
+        candidates: [
+          {
+            ...THREE_CITY.candidates[0],
+            supporting: [
+              statistic({ value: 23.7 }),
+              statistic({ statistic: "max", measure: "temperature_max", value: 29.4 }),
+            ],
+          },
+          THREE_CITY.candidates[1],
+        ],
+      }),
+    ) as unknown as Mock;
+
+    renderScreen();
+    await compare();
+
+    const first = within(
+      await screen.findByRole("region", { name: "Ranked by warmest" }),
+    ).getAllByRole("article")[0]!;
+    expect(first).toHaveTextContent("Mean temperature (mean)");
+    expect(first).toHaveTextContent("max · High");
+    expect(first).toHaveTextContent("29.4");
+  });
+
+  it("draws the bars in the class of the figures they are, not the ranking's (4.4)", async () => {
+    const { container } = renderScreen();
+    await compare();
+    await screen.findByRole("img", { name: /temperature mean by place/i });
+
+    // The result's own `data_class`, which `SharedBasis` badges FORECAST in words beside it — so
+    // the colour repeats a stated fact instead of being the only place the class appears.
+    expect(container.querySelector('[data-chart="comparison"]')).toHaveAttribute(
+      "data-series-class",
+      "forecast",
+    );
+  });
+
+  it("folds the query away once there is a ranking, losing no field (4.5)", async () => {
+    renderScreen();
+
+    // Open while there is nothing to read, which is when naming places is the thing to do.
+    expect(await screen.findByLabelText("Location 1")).toBeVisible();
+
+    await compare();
+    await screen.findByRole("region", { name: "Ranked by warmest" });
+
+    const summary = screen.getByText(/2 places · ranked by warmest · 5 days ahead/);
+    expect(screen.getByLabelText("Location 1")).not.toBeVisible();
+
+    // Every field is one press away, and still the same form: no field was removed to fold it.
+    await userEvent.click(summary);
+    expect(screen.getByLabelText("Location 1")).toBeVisible();
+    expect(screen.getByLabelText("Criterion")).toBeVisible();
+    expect(screen.getByLabelText("Days ahead")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Compare" })).toBeVisible();
+  });
+
+  it("keeps the query open while a row is blocking the comparison (4.5)", async () => {
+    renderScreen();
+    await compare();
+    await screen.findByRole("region", { name: "Ranked by warmest" });
+
+    // Emptying a row blocks the next comparison; a form that folded over that would hide both the
+    // reason and the field to correct.
+    await userEvent.clear(screen.getByLabelText("Location 2"));
+    expect(screen.getByLabelText("Location 1")).toBeVisible();
+  });
+
+  it("says how the comparison was made in a sentence, with its fields behind it (4.6)", async () => {
+    renderScreen();
+    await compare();
+
+    const summary = await screen.findByRole("region", { name: "How this comparison was made" });
+
+    // The face: a sentence, in words, with no raw enum in it.
+    expect(within(summary).getByText(/3 candidates ranked by warmest/)).toBeInTheDocument();
+    expect(within(summary).getByText(/No model interpretation, no confidence score/)).toBeInTheDocument();
+    expect(within(summary).queryByText("locations")).not.toBeInTheDocument();
+
+    // The fields, one press away and said as a person would say them.
+    await userEvent.click(within(summary).getByText("The fields this comparison reported"));
+    expect(within(summary).getByText("Warmest")).toBeInTheDocument();
+    expect(within(summary).getByText("Several places over one window")).toBeInTheDocument();
+    expect(within(summary).getByText("3")).toBeInTheDocument();
+  });
+
+  it("does not repeat the shared basis's own rows in the summary (4.6)", async () => {
+    renderScreen();
+    await compare();
+
+    const basis = await screen.findByRole("region", { name: "The basis every candidate shares" });
+    const summary = screen.getByRole("region", { name: "How this comparison was made" });
+
+    // Stated in full, once, in the panel whose subject they are.
+    expect(within(basis).getByText(/temperature_mean: mean/)).toBeInTheDocument();
+    expect(within(basis).getByText(/Scores within 0.1 share a rank/)).toBeInTheDocument();
+    expect(within(summary).queryByText(/temperature_mean: mean/)).not.toBeInTheDocument();
+    expect(within(summary).queryByText(/share a rank/)).not.toBeInTheDocument();
+  });
+});
+
 describe("data classes and failures", () => {
   it("keeps the ranking in a computed region, with no model-written region at all", async () => {
     const { container } = renderScreen();

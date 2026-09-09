@@ -33,6 +33,7 @@ import { ViewStateSwitch } from "@/components/view-state";
 import type {
   DeletionResponse,
   MeResponse,
+  PreferenceSource,
   PreferenceUpdate,
   PreferenceView,
   SavedLocationsResponse,
@@ -51,6 +52,7 @@ import {
   horizonChoicesFor,
   horizonError,
   horizonLabel,
+  PREFERENCE_SOURCE_RULE,
   sourceNote,
   sourceOf,
   updateFrom,
@@ -61,6 +63,17 @@ import { ConfirmAction } from "./confirm";
 import styles from "./settings.module.css";
 
 /* ---------------------------------------------------------------------- layout */
+
+/**
+ * A field's source, printed only when there is something to say.
+ *
+ * `sourceNote` returns `null` for a value the person chose — the form's opening line already says
+ * that is the ordinary case — so this renders nothing rather than an empty paragraph.
+ */
+export function SourceNote({ source }: { readonly source: PreferenceSource | null }): ReactNode {
+  const note = sourceNote(source);
+  return note === null ? null : <p className={styles.note}>{note}</p>;
+}
 
 /** One titled group of settings: the artifact's two-column row. */
 export function SettingGroup({
@@ -186,6 +199,13 @@ export function PreferenceForm({ view, saved }: PreferenceFormProps): ReactNode 
 
   return (
     <form onSubmit={onSubmit} aria-label="Your Weathra preferences">
+      {/*
+        Stated once, at the top, rather than repeated under every control. See
+        `PREFERENCE_SOURCE_RULE`: it is what makes an unmarked control readable as the person's own
+        choice, and it is the half of finding 7.3's fix that keeps the guarantee intact.
+      */}
+      <p className={styles.note}>{PREFERENCE_SOURCE_RULE}</p>
+
       <SettingGroup
         title="Weather preferences"
         description="How Weathra presents meteorological data across every screen."
@@ -198,7 +218,7 @@ export function PreferenceForm({ view, saved }: PreferenceFormProps): ReactNode 
           />
           <p className={styles.note}>
             Applied to every figure Weathra shows, by asking the backend for that unit system — the
-            browser converts nothing. {sourceNote(sourceOf(view, "unit_system"))}
+            browser converts nothing. {sourceNote(sourceOf(view, "unit_system")) ?? ""}
           </p>
         </div>
 
@@ -220,7 +240,7 @@ export function PreferenceForm({ view, saved }: PreferenceFormProps): ReactNode 
               }
             />
           </div>
-          <p className={styles.note}>{sourceNote(sourceOf(view, "forecast_horizon_days"))}</p>
+          <SourceNote source={sourceOf(view, "forecast_horizon_days")} />
         </div>
       </SettingGroup>
 
@@ -253,7 +273,7 @@ export function PreferenceForm({ view, saved }: PreferenceFormProps): ReactNode 
               ))}
             </Select>
           </div>
-          <p className={styles.note}>{sourceNote(sourceOf(view, "default_location"))}</p>
+          <SourceNote source={sourceOf(view, "default_location")} />
           {locationChoices.length === 0 ? (
             <p className={styles.note}>
               You have saved no locations yet.{" "}

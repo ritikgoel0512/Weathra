@@ -43,6 +43,100 @@
 
 /* --------------------------------------------------------------------- controls */
 
+/* ------------------------------------------------------------------- the toolbar */
+
+/*
+ * The artifact's header row (findings 3.3 and 3.6): the selection folded into one disclosure, the
+ * unit toggle and the export beside it. The form inside keeps every field it had.
+ */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2) var(--space-4);
+  min-width: 0;
+}
+
+.enquiryDisclosure {
+  flex: 1 1 320px;
+  min-width: 0;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
+.enquirySummary {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.enquirySummary:hover {
+  color: var(--color-text-primary);
+}
+
+.enquiryDisclosure[open] .enquirySummary {
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+/* The form no longer carries its own frame — the disclosure around it does. */
+.enquiryDisclosure .controls {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.toolbarActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/*
+ * The °C/°F switch. A radio group rather than a pair of buttons: two mutually exclusive choices are
+ * what radios are, and the native control brings arrow-key movement and the selected state with it.
+ */
+.unitToggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+}
+
+.unitLegend {
+  float: none;
+  padding: 0 var(--space-1) 0 0;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.unitOption {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.unitOption:hover {
+  color: var(--color-text-primary);
+}
+
 .controls {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -343,11 +437,21 @@
  * `2fr 1fr` rather than an even split, because the chart is the screen's subject and an even split
  * makes the two read as a pair of equals.
  */
+/*
+ * The two-column rows. `stretch` rather than `start`, which is finding 3.5: with `start` the
+ * shorter column ended wherever its content did and left a column-tall void beside the other. The
+ * last panel in a column takes the slack instead, so the row closes level — the artifact's own
+ * geometry, where the right-hand card runs the full height of the chart beside it.
+ */
 .mainRow {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   gap: var(--space-4);
-  align-items: start;
+  align-items: stretch;
+}
+
+.mainRow .column > :last-child {
+  flex: 1 1 auto;
 }
 
 @media (max-width: 1023px) {

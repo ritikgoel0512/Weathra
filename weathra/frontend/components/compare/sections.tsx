@@ -96,10 +96,27 @@ export interface CandidateCardProps {
  * The headline figure is the *supporting statistic's* own value, not the raw score: for "driest"
  * and "coolest" the backend negates the score so that higher always means better, and putting
  * a negative rainfall on a card would be reporting a measurement that does not exist.
+ *
+ * **The headline is not repeated in the list below it**, which is finding 4.3 of the runtime
+ * fidelity audit of 2026-09-08. `comparableFigure` takes the *first* supporting statistic, and the
+ * figures list then drew that same statistic again — 18.2 °C as the headline, and "mean ·
+ * Temperature 18.2 °C" three lines under it. The card now states each figure once: the headline
+ * carries the statistic's own name and its method note, and the list holds the statistics the
+ * headline is not. A card whose only supporting statistic *is* the headline renders no list rather
+ * than an empty one.
  */
 export function CandidateCard({ candidate, criterion, sharesRank }: CandidateCardProps): ReactNode {
   const figure = comparableFigure(candidate);
   const composite = isComposite(candidate);
+
+  /*
+   * The same entry `comparableFigure` reads, so the two cannot drift: whatever it promotes to the
+   * headline is exactly what the list leaves out. A composite card has no promoted entry — its
+   * headline is the 0-1 score, which is in no supporting list — so it keeps all of them.
+   */
+  const supporting = candidate.supporting ?? [];
+  const promoted = composite || figure === null ? null : supporting[0];
+  const remaining = promoted === undefined || promoted === null ? supporting : supporting.slice(1);
 
   return (
     <article className={styles.candidate} data-candidate="true" data-rank={candidate.rank}>
@@ -134,8 +151,25 @@ export function CandidateCard({ candidate, criterion, sharesRank }: CandidateCar
             {figure.unit ? <span className={styles.figureUnit}> {figure.unit}</span> : null}
           </span>
           <span className={styles.note}>
-            {figure.label} · ranked by {criterionLabel(criterion).toLowerCase()}
+            {/*
+              The statistic's own name, taken off the entry the list no longer draws — finding
+              3.2's shape on the other screen: "Mean temperature (mean)" rather than a bare measure
+              beside a figure nobody can tell the statistic of.
+            */}
+            {promoted
+              ? `${measureLabel(promoted.measure)} (${promoted.statistic.replace(/_/g, " ")})`
+              : figure.label}{" "}
+            · ranked by {criterionLabel(criterion).toLowerCase()}
           </span>
+          {/* The promoted entry's provenance travels with it, so nothing moved off the card. */}
+          {promoted ? (
+            <MethodNote
+              method={promoted.method}
+              pointsUsed={promoted.points_used}
+              pointsExcluded={promoted.points_excluded}
+              unit={promoted.unit || null}
+            />
+          ) : null}
         </p>
       )}
 
@@ -154,27 +188,27 @@ export function CandidateCard({ candidate, criterion, sharesRank }: CandidateCar
             ))}
           </ul>
         </>
-      ) : (
+      ) : remaining.length === 0 ? null : (
         <ul className={styles.figures}>
-          {(candidate.supporting ?? []).map((supporting, index) => {
-            const value = formatStatistic(supporting);
+          {remaining.map((entry, index) => {
+            const value = formatStatistic(entry);
             return (
-              <li className={styles.figure} key={`${supporting.statistic}-${index}`}>
+              <li className={styles.figure} key={`${entry.statistic}-${index}`}>
                 <span className={styles.figureLabel}>
-                  {supporting.statistic.replace(/_/g, " ")} · {measureLabel(supporting.measure)}
+                  {entry.statistic.replace(/_/g, " ")} · {measureLabel(entry.measure)}
                 </span>
                 {value === null ? (
                   <span className={styles.note}>
-                    Not computable: {supporting.reason ?? "the backend reported no value."}
+                    Not computable: {entry.reason ?? "the backend reported no value."}
                   </span>
                 ) : (
                   <span className={styles.figureValue}>{value}</span>
                 )}
                 <MethodNote
-                  method={supporting.method}
-                  pointsUsed={supporting.points_used}
-                  pointsExcluded={supporting.points_excluded}
-                  unit={supporting.unit || null}
+                  method={entry.method}
+                  pointsUsed={entry.points_used}
+                  pointsExcluded={entry.points_excluded}
+                  unit={entry.unit || null}
                 />
               </li>
             );
@@ -454,8 +488,35 @@ export function DifferentialMatrix({ result }: { readonly result: ComparisonResu
  * window, in whose local time, with which statistics, and how ties were handled. Every one of those
  * is a field of the result. It is the honest form of a synthesis: an account of how the answer was
  * produced rather than a paragraph asserting what it means.
+ *
+ * **What the audit of 2026-09-08 found, and what changed** — finding 4.6: the panel drew six
+ * machinery rows, three of which `SharedBasis` states verbatim higher up the same screen, and two
+ * of which read as raw API enums (`warmest`, `forecast`) in a sentence addressed to a person. That
+ * is finding 2.3's mistake on the Analyst — the same fact twice on one screen — in the other
+ * screen's clothes.
+ *
+ * So: **one sentence on the face**, naming the criterion, the mode and how many places, and the
+ * residual fields behind a disclosure on the same panel. The three rows `SharedBasis` already
+ * carries — statistics applied, tie tolerance, and the local-time basis — are *not* folded away;
+ * they are dropped from here, because they are stated in full a few centimetres above and the
+ * screen loses nothing by not saying them twice. Nothing this panel was the only home of has moved.
  */
+
+/**
+ * What the comparison held constant and what it varied — the API's `mode`, said as a person would.
+ *
+ * An unrecognised mode is reported as it arrives rather than dropped: a backend that grew a third
+ * one should show it, not hide it behind a screen that only knows two.
+ */
+function modeLabel(mode: string): string {
+  if (mode === "locations") return "Several places over one window";
+  if (mode === "days") return "One place over several days";
+  return mode.replace(/_/g, " ");
+}
+
 export function ComparisonSummary({ result }: { readonly result: ComparisonResult }): ReactNode {
+  const compared = (result.candidates ?? []).length;
+
   return (
     <ProvenanceSection
       dataClass="analytics"
@@ -463,51 +524,40 @@ export function ComparisonSummary({ result }: { readonly result: ComparisonResul
       attribution={null}
     >
       <p className={styles.note}>
-        Deterministic. No model interpretation, no confidence score.
+        Deterministic: {compared} {compared === 1 ? "candidate" : "candidates"} ranked by{" "}
+        {criterionLabel(result.criterion).toLowerCase()}, over {periodLabel(result.period)}. No
+        model interpretation, no confidence score.
       </p>
-      <dl className={styles.summaryFacts}>
-        <div className={styles.summaryFact}>
-          <dt>Criterion</dt>
-          <dd>{result.criterion}</dd>
-        </div>
-        <div className={styles.summaryFact}>
-          <dt>Mode</dt>
-          <dd>{result.mode}</dd>
-        </div>
-        <div className={styles.summaryFact}>
-          <dt>Statistics applied</dt>
-          <dd>
-            {(result.statistics_applied ?? []).join(", ") ||
-              [
-                ...new Set(
-                  (result.candidates ?? []).flatMap((candidate) =>
-                    (candidate.supporting ?? []).map((entry) => entry.statistic),
-                  ),
-                ),
-              ].join(", ") ||
-              "Not reported"}
-          </dd>
-        </div>
-        <div className={styles.summaryFact}>
-          <dt>Local time basis</dt>
-          <dd>
-            {result.local_time_basis
-              ? "Each place measured in its own local time"
-              : "Not reported"}
-          </dd>
-        </div>
-        <div className={styles.summaryFact}>
-          <dt>Tie tolerance</dt>
-          <dd>{result.tie_tolerance}</dd>
-        </div>
-        <div className={styles.summaryFact}>
-          <dt>Places compared</dt>
-          <dd>{(result.candidates ?? []).length}</dd>
-        </div>
-      </dl>
-      {result.weighting_disclosure ? (
-        <p className={styles.note}>{result.weighting_disclosure}</p>
-      ) : null}
+
+      {/*
+        The fields themselves, one press away. They are machinery — the sort of thing somebody
+        checking a ranking wants and nobody reading one does — which is what a disclosure is for.
+      */}
+      <details className={styles.summaryDisclosure}>
+        <summary className={styles.summarySummary}>The fields this comparison reported</summary>
+        <dl className={styles.summaryFacts}>
+          <div className={styles.summaryFact}>
+            <dt>Criterion</dt>
+            <dd>{criterionLabel(result.criterion)}</dd>
+          </div>
+          <div className={styles.summaryFact}>
+            <dt>Mode</dt>
+            <dd>{modeLabel(result.mode)}</dd>
+          </div>
+          <div className={styles.summaryFact}>
+            <dt>Candidates compared</dt>
+            <dd>{compared}</dd>
+          </div>
+        </dl>
+        {/*
+          The composite criterion's weighting statement. `SharedBasis` prints it too, and this is
+          the one duplicate kept: whose heuristic the weights are is a disclosure obligation, and an
+          obligation is not something to state once and hope the reader was looking.
+        */}
+        {result.weighting_disclosure ? (
+          <p className={styles.note}>{result.weighting_disclosure}</p>
+        ) : null}
+      </details>
     </ProvenanceSection>
   );
 }

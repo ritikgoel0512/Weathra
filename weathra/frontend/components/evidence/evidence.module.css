@@ -133,7 +133,18 @@
 @media (min-width: 1024px) {
   .body {
     grid-template-columns: minmax(260px, 5fr) minmax(0, 8fr);
-    align-items: start;
+    /*
+     * `stretch` rather than `start`, which is finding 5.5 of the runtime fidelity audit of
+     * 2026-09-08: with `start` the timeline column ended wherever its steps did and left a
+     * column-tall void beside the record, and the row read as one column with something missing
+     * next to it. The last panel in each column takes the slack instead, so the row closes level —
+     * `05-agent-evidence.png`'s own geometry, and the same fix Historical Analytics took for 3.5.
+     */
+    align-items: stretch;
+  }
+
+  .body > .column > :last-child {
+    flex: 1 1 auto;
   }
 }
 

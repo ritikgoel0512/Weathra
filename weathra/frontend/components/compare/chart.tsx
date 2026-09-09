@@ -17,6 +17,19 @@
  *
  * **Every value is also text.** The figure table beneath the chart carries each candidate's number
  * and rank, so nothing here is readable only as a pixel or only through a tooltip.
+ *
+ * **The bars wear the class of the figures they draw**, which is finding 4.4 of the runtime
+ * fidelity audit of 2026-09-08. They were the ANALYTICS violet on every comparison — the colour of
+ * the *ranking*, which is a computation, applied to marks that are not the score. The bar is the
+ * supporting statistic's own measured value, so it takes that data's own class: FORECAST for a
+ * comparison over a forecast window, HISTORICAL for one over the archive, exactly as the two
+ * Historical Analytics charts already colour their observed and computed series. `SharedBasis`
+ * badges the same class in words beside the chart, so the colour repeats a stated fact rather than
+ * carrying one alone.
+ *
+ * Every class colour is measured against `surface-raised` at 3:1 by `lib/design/tokens.test.ts`'s
+ * contrast table, whose stated reason is that a class colour is also a chart series — so this
+ * switches between colours the suite already holds to that floor rather than introducing one.
  */
 
 import { useId, useState, type ReactNode } from "react";
@@ -25,6 +38,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { Button } from "@/components/ui";
 import type { ComparisonResult } from "@/lib/api/schema";
 import { criterionLabel, rankedRows } from "@/lib/comparison/ranking";
+import { dataClassFor } from "@/lib/design/data-class";
 
 import styles from "./compare.module.css";
 
@@ -74,8 +88,15 @@ export function ComparisonChart({ result }: ComparisonChartProps): ReactNode {
 
   const title = `${label.charAt(0).toUpperCase()}${label.slice(1)} by place`;
 
+  /*
+   * The class of the figures the bars draw. ANALYTICS remains the fallback for a result whose class
+   * the backend did not report: the bar is still a figure a computation selected, so the ranking's
+   * own class is the honest answer when the data's is unknown.
+   */
+  const sourceClass = dataClassFor(result.data_class) ?? "analytics";
+
   return (
-    <figure className={styles.chart} data-chart="comparison">
+    <figure className={styles.chart} data-chart="comparison" data-series-class={sourceClass}>
       <figcaption className={styles.chartCaption}>
         <span className={styles.chartTitle}>{title}</span>
         <span className={styles.note}>
@@ -111,7 +132,7 @@ export function ComparisonChart({ result }: ComparisonChartProps): ReactNode {
               <Bar
                 dataKey="value"
                 name={label}
-                fill="var(--color-class-analytics)"
+                fill={`var(--color-class-${sourceClass})`}
                 radius={[4, 4, 0, 0]}
                 isAnimationActive={false}
               />

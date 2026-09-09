@@ -49,10 +49,12 @@ import { hasValues, missingCount, pointsFrom } from "@/lib/historical/analysis";
 import type { ViewState } from "@/lib/query/state";
 import { confidenceLevelFor } from "@/lib/design/data-class";
 import {
+  dayPrecipitationFrom,
   formatReading,
   forecastDaysFrom,
   readingFor,
   readingsFrom,
+  type DayPrecipitation,
   type Reading,
   type WhatChangedReport,
 } from "@/lib/dashboard/briefing";
@@ -219,6 +221,48 @@ export function CurrentConditions({ current, location }: CurrentConditionsProps)
 
 /* ------------------------------------------------------------- forecast strip */
 
+/**
+ * The day card's glyph: a drawing of the precipitation figures, with those figures as its caption.
+ *
+ * Three shapes, one per level `dayPrecipitationFrom` distinguishes, and no fourth for "clear" —
+ * there is no clear-sky figure in the response and inventing one is the whole thing this avoids.
+ * The `<svg>` is `aria-hidden` and the caption carries the words, so a screen reader is read the
+ * figures rather than a shape; `title` gives the same sentence to a pointer.
+ */
+function DayPrecipitationGlyph({
+  outlook,
+}: {
+  readonly outlook: DayPrecipitation | null;
+}): ReactNode {
+  if (outlook === null) return null;
+  return (
+    <p className={styles.stripGlyph} data-level={outlook.level} title={outlook.description}>
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path d="M7.5 16.5a4.5 4.5 0 0 1 .3-9 5.5 5.5 0 0 1 10.3 1.4 3.8 3.8 0 0 1-.6 7.6z" />
+        {outlook.level === "wet" ? (
+          <path d="M9 19l-1 2.5M13 19l-1 2.5M17 19l-1 2.5" />
+        ) : outlook.level === "possible" ? (
+          <path d="M12 19l-1 2.5" />
+        ) : null}
+      </svg>
+      <span className={styles.stripGlyphCaption}>{outlook.caption}</span>
+      {/* The figures the glyph was drawn from, for a reader that never sees the drawing. */}
+      <span className="weathra-visually-hidden">{outlook.description}</span>
+    </p>
+  );
+}
+
 export interface ForecastStripProps {
   readonly forecast: ForecastResponse;
 }
@@ -237,9 +281,11 @@ export interface ForecastStripProps {
  * seven would mean drawing days nobody forecast. Fewer cards in the same card language is the
  * honest form of the same strip.
  *
- * **No condition glyph and no condition word.** The artifact labels each day "LIGHT RAIN", "SUNNY",
- * and so on. Weathra's forecast carries a high and a low; there is no condition field to render, so
- * there is no icon and no caption rather than a guessed one.
+ * **A precipitation glyph, not a condition glyph.** The artifact labels each day "LIGHT RAIN",
+ * "SUNNY", and so on, and this strip carried nothing at all — finding 1.8 of the runtime fidelity
+ * audit of 2026-09-08. Weathra's provider reports no condition, so what the card draws is the day's
+ * own precipitation: the total, the maximum probability, and a glyph that is a picture of those two
+ * figures. See `dayPrecipitationFrom`. A dry day is never drawn as a sunny one.
  */
 export function ForecastStrip({ forecast }: ForecastStripProps): ReactNode {
   const days = forecastDaysFrom(forecast.daily);
@@ -264,6 +310,7 @@ export function ForecastStrip({ forecast }: ForecastStripProps): ReactNode {
           {day ? (
             <>
               <p className={styles.stripDayName}>{day.date}</p>
+              <DayPrecipitationGlyph outlook={dayPrecipitationFrom(day)} />
               <dl className={styles.stripFigures}>
                 <div className={styles.stripFigure}>
                   <dt className={styles.stripFigureTerm}>High</dt>

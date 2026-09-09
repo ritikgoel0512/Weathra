@@ -306,8 +306,95 @@
   color: var(--color-text-muted);
 }
 
+/*
+ * The two native controls the platform draws its own chrome for, and the runtime fidelity audit of
+ * 2026-09-08 recorded as findings 7.2 and 3.3: a `<select>` carrying the operating system's
+ * dropdown button, and an `<input type="date">` carrying its calendar glyph, both against a screen
+ * whose every other control is Weathra's. On one machine that is a grey triangle on a white
+ * rectangle in the middle of a dark panel.
+ *
+ * The element stays native — `specs/web-ui` requires keyboard operation and the platform picker is
+ * what gives it correctly, so nothing here replaces the control, only what is painted on it.
+ */
 select.control {
   cursor: pointer;
+  /*
+   * `appearance: none` removes the platform's own button. The chevron that replaces it is drawn in
+   * `currentColor` through a mask rather than an inline `<svg fill="...">`, so it follows the text
+   * colour into the light appearance and into a disabled control without a second declaration.
+   */
+  appearance: none;
+  padding-right: var(--space-7);
+  background-image: none;
+}
+
+.controlChevron {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+/*
+ * The chevron itself, on the wrapper rather than the `<select>`: a background on the control would
+ * be painted over by the platform in a forced-colours mode, and an element of its own can simply
+ * be hidden there.
+ */
+.controlChevron::after {
+  content: "";
+  position: absolute;
+  right: var(--space-3);
+  top: 50%;
+  width: 10px;
+  height: 6px;
+  transform: translateY(-50%);
+  background: var(--color-text-secondary);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  pointer-events: none;
+}
+
+@media (forced-colors: active) {
+  .controlChevron::after {
+    display: none;
+  }
+
+  select.control {
+    appearance: auto;
+    padding-right: var(--space-3);
+  }
+}
+
+/*
+ * The date field's calendar button. WebKit and Blink expose it as a pseudo-element and paint a
+ * black glyph; Firefox paints nothing and ignores all of this, which is why the field is legible
+ * there already. `filter: invert()` is the only way to recolour a glyph the browser draws itself —
+ * applied under the dark appearance only, since the light one wants the glyph as it comes.
+ */
+input.control[type="date"]::-webkit-calendar-picker-indicator,
+input.controlBare[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+input.control[type="date"]::-webkit-calendar-picker-indicator:hover,
+input.controlBare[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/*
+ * Light is the bare rule above: the browser's own dark glyph is right on a light ground. Only the
+ * dark appearance inverts it, declared the way every other themed token in this project is — the
+ * media query for the system default, the attribute for an explicit choice.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) input.control[type="date"]::-webkit-calendar-picker-indicator,
+  :root:not([data-theme="light"]) input.controlBare[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+  }
+}
+
+:root[data-theme="dark"] input.control[type="date"]::-webkit-calendar-picker-indicator,
+:root[data-theme="dark"] input.controlBare[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
 }
 
 /*
@@ -393,6 +480,10 @@ select.control {
 }
 
 .tab {
+  /* Inline flex so a tab that carries a glyph sets it beside the label on one baseline. */
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   font-family: var(--family-body);
   font-size: var(--type-ui-size);
   line-height: var(--type-ui-line);
@@ -433,9 +524,30 @@ select.control {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+  /*
+   * Wraps, because the row grew a third element. A glyph, an uppercase measure name and a class
+   * badge do not fit across a tile at every width the grid produces — at 900 pixels the badge left
+   * the tile by exactly the glyph's width — and a badge that hangs off the card is a page that
+   * scrolls sideways. The badge drops under the label instead, which is the same information in
+   * the same order.
+   */
+  flex-wrap: wrap;
+}
+
+/*
+ * The measure's glyph. `margin-right: auto` on the label is what keeps the badge at the far edge
+ * once a third element joins the header row.
+ */
+.metricIcon {
+  display: inline-flex;
+  color: var(--color-text-muted);
 }
 
 .metricLabel {
+  margin-right: auto;
+  /* A long measure name breaks rather than setting the row's floor above the tile it sits in. */
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: var(--type-label-size);
   line-height: var(--type-label-line);
   font-weight: var(--type-label-weight);
@@ -462,6 +574,26 @@ select.control {
   line-height: var(--type-meta-line);
   font-weight: var(--type-meta-weight);
   color: var(--color-text-secondary);
+}
+
+/*
+ * The comparison caption. Up and down take the status colours rather than a red/green pair of their
+ * own, and neither is carried by colour alone — the text itself has the sign in it.
+ */
+.metricDelta {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.metricDelta[data-tone="up"] {
+  color: var(--color-status-warning);
+}
+
+.metricDelta[data-tone="down"] {
+  color: var(--color-accent);
 }
 
 .metricNote {

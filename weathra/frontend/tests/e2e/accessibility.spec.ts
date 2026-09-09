@@ -1014,6 +1014,11 @@ test.describe("the candidate chooser's question", () => {
   test("is a level-2 heading on the Dashboard, painted identically", async ({ page }) => {
     await signIn(page);
 
+    // The place entry folds away once there is a briefing to read — finding 1.7 of the runtime
+    // fidelity audit — so this account, which has a default location, opens onto the hero. The
+    // form is one press away and is the same form; the disclosure is opened here rather than the
+    // control being reached some other way, because that is what a person does.
+    await page.getByText("Brief on another place").click();
     await page.getByLabel("Brief me on a place").fill("Springfield");
     await page.getByRole("button", { name: "Show briefing" }).click();
 

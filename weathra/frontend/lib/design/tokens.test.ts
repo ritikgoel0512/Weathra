@@ -123,7 +123,7 @@ describe("the tokens match the recorded design system", () => {
     const recorded = section(2);
     // The record's roles, and the implementation entries that carry each one.
     const mapping: Readonly<Record<string, readonly (keyof typeof TYPE_ROLES)[]>> = {
-      Display: ["display"],
+      Display: ["display", "readout"],
       Heading: ["heading", "section", "card"],
       Body: ["body", "lead"],
       UI: ["ui"],

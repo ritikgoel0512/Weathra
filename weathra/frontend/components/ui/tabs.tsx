@@ -14,6 +14,9 @@
 
 import { useCallback, useId, type KeyboardEvent, type ReactNode } from "react";
 
+import { Icon } from "@/components/shell/icons";
+import type { IconName } from "@/lib/navigation";
+
 import styles from "./primitives.module.css";
 
 export interface TabDescriptor {
@@ -29,6 +32,14 @@ export interface TabDescriptor {
    * So they are drawn, disabled, and say why in words rather than by colour alone.
    */
   readonly unavailable?: string;
+  /**
+   * The glyph the artifact draws on this tab, where it draws one.
+   *
+   * Optional: a tablist with no artifact behind it should not have to invent icons. The icon is
+   * `aria-hidden` — the label beside it is the accessible name — so adding one changes nothing a
+   * screen reader hears. Finding 7.4 of the runtime fidelity audit of 2026-09-08.
+   */
+  readonly icon?: IconName;
 }
 
 export interface TabsProps {
@@ -106,6 +117,7 @@ export function Tabs({ tabs, activeId, onChange, label, idPrefix }: TabsProps): 
               tabIndex={-1}
               disabled
             >
+              {tab.icon ? <Icon name={tab.icon} size={16} /> : null}
               {tab.label}
             </button>
           );
@@ -122,6 +134,7 @@ export function Tabs({ tabs, activeId, onChange, label, idPrefix }: TabsProps): 
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(tab.id)}
           >
+            {tab.icon ? <Icon name={tab.icon} size={16} /> : null}
             {tab.label}
           </button>
         );

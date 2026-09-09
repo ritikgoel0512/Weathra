@@ -115,6 +115,43 @@ const PATHS: Readonly<Record<IconName, ReactNode>> = {
       <path d="M12 3v3M12 18v3M4.2 7.5l2.6 1.5M17.2 15l2.6 1.5M4.2 16.5l2.6-1.5M17.2 9l2.6-1.5" />
     </>
   ),
+
+  /*
+   * The four Settings tabs. `07-settings.png` draws a glyph on each and this build drew none, which
+   * the runtime fidelity audit of 2026-09-08 recorded as finding 7.4. Each is the artifact's own:
+   * a globe, a spark, a person, a shield. `aria-hidden` like every other icon here — the tab's
+   * label is its accessible name, and two of the four already carry a longer one saying the section
+   * is not in this release.
+   */
+  // General — the workspace-wide preferences.
+  general: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18" />
+      <path d="M12 3c2.5 2.6 3.8 5.6 3.8 9S14.5 18.4 12 21c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" />
+    </>
+  ),
+  // AI Intelligence — a spark.
+  intelligence: (
+    <>
+      <path d="M12 3l1.7 4.8L18.5 9.5 13.7 11.2 12 16l-1.7-4.8L5.5 9.5l4.8-1.7z" />
+      <path d="M18 16.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" />
+    </>
+  ),
+  // Account — a person.
+  account: (
+    <>
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5 20a7 7 0 0 1 14 0" />
+    </>
+  ),
+  // Transparency — a shield, for the data-governance section.
+  transparency: (
+    <>
+      <path d="M12 3l7 3v5.5c0 4.3-2.9 8.1-7 9.5-4.1-1.4-7-5.2-7-9.5V6z" />
+      <path d="M9.2 12.2l2 2 3.6-3.9" />
+    </>
+  ),
 };
 
 export interface IconProps {

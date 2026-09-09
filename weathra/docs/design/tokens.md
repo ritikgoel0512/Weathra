@@ -110,6 +110,7 @@ so both are self-hosted — a person opening Weathra makes no request to a font 
 
 | Role | Face | Size | Line height | Weight |
 |---|---|---|---|---|
+| `readout` | Plus Jakarta Sans | 3.25rem | 1.05 | 600 |
 | `display` | Plus Jakarta Sans | 1.75rem | 1.15 | 600 |
 | `heading` | Plus Jakarta Sans | 1.25rem | 1.2 | 600 |
 | `section` | Plus Jakarta Sans | 1.125rem | 1.3 | 600 |
@@ -126,6 +127,11 @@ sentence a person had asked for carried no more weight on the page than the mach
 it was produced. `02-ai-weather-analyst.png` sets its synthesis visibly larger than everything around
 it. It is the body face rather than a heading face, because prose at a heading weight reads as a
 headline; it is used for the prose a screen exists to deliver and nowhere else.
+
+`readout` was added in the same pass, for finding 1.6. The Dashboard's observed temperature was set
+at `display` — the step the place name beside it and every screen title also take — so the hero band
+`01-dashboard.png` builds around one enormous number had nothing dominant in it. One figure per
+screen may take this role; on the Dashboard it is the observed temperature and nothing else.
 
 The display and heading steps were tightened in the pixel-fidelity pass. The product artifacts are
 compact enterprise analytics — `01-dashboard.png`'s page title sits at roughly 1.75rem against a

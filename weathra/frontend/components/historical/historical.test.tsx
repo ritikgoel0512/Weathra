@@ -621,6 +621,78 @@ describe("choosing what to analyse", () => {
   });
 });
 
+/*
+ * The runtime fidelity audit of 2026-09-08, findings 3.3 and 3.6: the artifact's compact header row
+ * where production had six bare date inputs, a select and a number field open above everything.
+ *
+ * Both halves again — that the selection is readable without opening anything, and that every field
+ * is still there behind the summary — plus the two things the toolbar added, and the rule the unit
+ * toggle must not break.
+ */
+describe("the toolbar (3.3, 3.6)", () => {
+  it("states the whole selection in words, with every field one press away", async () => {
+    renderScreen();
+    await screen.findByRole("region", { name: "Recorded observations" });
+
+    // The window opens on a range derived from today, so the shape is what is asserted: the place,
+    // the selected window, the window it is held against, and the baseline length.
+    const summary = screen.getByText(
+      /^Berlin, Germany · \d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2} · against \d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2} · 10-year baseline$/,
+    );
+    expect(screen.getByLabelText("Location")).not.toBeVisible();
+
+    await userEvent.click(summary);
+    expect(screen.getByLabelText("Location")).toBeVisible();
+    expect(screen.getByLabelText("Selected period, from")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Analyse" })).toBeVisible();
+  });
+
+  it("asks the backend for the units the toggle names, and stores no preference", async () => {
+    renderScreen();
+    await screen.findByRole("region", { name: "Recorded observations" });
+
+    await userEvent.click(screen.getByRole("radio", { name: /Imperial/i }));
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls
+          .map(([input]) => new URL(input as string))
+          .some(
+            (url) =>
+              url.pathname === "/api/v1/weather/history" &&
+              url.searchParams.get("units") === "imperial",
+          ),
+      ).toBe(true),
+    );
+
+    // `specs/memory`: a preference is chosen in Settings and never inferred from behaviour.
+    const written = fetchMock.mock.calls.filter(
+      ([input]) => new URL(input as string).pathname === "/api/v1/me/preferences",
+    );
+    expect(written.every(([, init]) => (init as RequestInit | undefined)?.method === undefined)).toBe(true);
+    expect(screen.getByText(/Your saved preference is unchanged/)).toBeInTheDocument();
+  });
+
+  it("opens on the person's own saved unit system", async () => {
+    fetchMock = backend({
+      ...POPULATED,
+      "/api/v1/me/preferences": preferences({ unit_system: "imperial" }),
+    }) as unknown as Mock;
+
+    renderScreen();
+    await screen.findByRole("region", { name: "Recorded observations" });
+
+    expect(screen.getByRole("radio", { name: /Imperial/i })).toBeChecked();
+  });
+
+  it("offers the export only once there is a retrieved window to export", async () => {
+    renderScreen();
+
+    const download = await screen.findByRole("button", { name: /Export the observations/ });
+    await waitFor(() => expect(download).toBeEnabled());
+  });
+});
+
 describe("the session", () => {
   it("routes a 401 to the shared expired-session state rather than to a data error", async () => {
     fetchMock = vi.fn(async () =>

@@ -28,8 +28,16 @@ import Link from "next/link";
 import { useCallback, useMemo, useState, type FormEvent, type ReactNode } from "react";
 
 import { Button, EmptyState, ErrorState, Input, LoadingState, Select } from "@/components/ui";
-import type { Location, PreferenceView, SavedLocationsResponse } from "@/lib/api/schema";
+import type {
+  HistoryResponse,
+  Location,
+  PreferenceView,
+  SavedLocationsResponse,
+  UnitSystem,
+} from "@/lib/api/schema";
 import { measureLabel } from "@/lib/dashboard/briefing";
+import { csvFilenameFor, csvFromHistory } from "@/lib/historical/export";
+import { UNIT_OPTIONS } from "@/lib/settings/preferences";
 import {
   hasValues,
   missingCount,
@@ -66,6 +74,15 @@ interface Enquiry {
   readonly selected: Range;
   readonly earlier: Range;
   readonly years: number;
+  /**
+   * The unit system every figure on the screen is asked for in.
+   *
+   * It opens on the person's saved preference and the toggle changes it *for this reading only* —
+   * `specs/memory` is explicit that a preference is never inferred from behaviour, and switching a
+   * screen to Fahrenheit to look at one window is not a decision to store. Settings is still the
+   * one place a preference is chosen.
+   */
+  readonly units: UnitSystem;
 }
 
 /** The measures the two charts draw, named from the API's own keys. */
@@ -125,9 +142,10 @@ function Controls({
       event.preventDefault();
       const chosen = places.find((candidate) => candidate.display_name === place);
       if (chosen === undefined) return;
-      onSubmit({ location: chosen, selected, earlier, years: Number(years) });
+      // The unit system is the toolbar's, not this form's: it carries through unchanged.
+      onSubmit({ location: chosen, selected, earlier, years: Number(years), units: enquiry.units });
     },
-    [earlier, onSubmit, place, places, selected, years],
+    [earlier, enquiry.units, onSubmit, place, places, selected, years],
   );
 
   return (
@@ -183,11 +201,103 @@ function Controls({
   );
 }
 
+/**
+ * The screen's header row: what is being analysed, in what units, and the way to take it away.
+ *
+ * `03-historical-analytics.png` opens with a compact toolbar — one date-range control, a °C/°F
+ * toggle and EXPORT DATA — over the tiles. Production opened with six bare date inputs, a select
+ * and a number field, all of them expanded, which the runtime fidelity audit of 2026-09-08 called
+ * the largest single remaining source of the screen's console character (findings 3.3 and 3.6).
+ *
+ * **Nothing is removed.** Every field is the same field, behind a disclosure whose summary states
+ * the current selection in words, so what is being analysed is readable without opening anything.
+ * The disclosure opens on demand and stays open while it is being used.
+ */
+function Toolbar({
+  enquiry,
+  controls,
+  onUnits,
+  observed,
+}: {
+  readonly enquiry: Enquiry;
+  readonly controls: ReactNode;
+  readonly onUnits: (units: UnitSystem) => void;
+  /** The retrieved window, for the export. Absent until it has arrived. */
+  readonly observed: HistoryResponse | null;
+}): ReactNode {
+  const download = useCallback(() => {
+    if (observed === null) return;
+    /*
+     * A Blob and an object URL rather than a `data:` link: a window of daily observations runs to
+     * tens of kilobytes and a `data:` URL of that size is refused by more than one browser. The URL
+     * is revoked immediately after the click, so nothing is held.
+     */
+    const blob = new Blob([csvFromHistory(observed)], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = csvFilenameFor(observed);
+    link.click();
+    URL.revokeObjectURL(url);
+  }, [observed]);
+
+  return (
+    <div className={styles.toolbar}>
+      <details className={styles.enquiryDisclosure}>
+        <summary className={styles.enquirySummary}>
+          {enquiry.location.display_name} · {enquiry.selected.start} to {enquiry.selected.end} ·
+          against {enquiry.earlier.start} to {enquiry.earlier.end} · {enquiry.years}-year baseline
+        </summary>
+        {controls}
+      </details>
+
+      <div className={styles.toolbarActions}>
+        <fieldset className={styles.unitToggle}>
+          <legend className={styles.unitLegend}>Units</legend>
+          {UNIT_OPTIONS.map((option) => (
+            <label className={styles.unitOption} key={option.value}>
+              <input
+                type="radio"
+                name="historical-units"
+                value={option.value}
+                checked={enquiry.units === option.value}
+                onChange={() => onUnits(option.value)}
+              />
+              <span>{option.label}</span>
+            </label>
+          ))}
+        </fieldset>
+
+        <Button size="sm" onClick={download} disabled={observed === null}>
+          Export the observations (CSV)
+        </Button>
+      </div>
+
+      {/*
+        Stated, because a toggle that looks like a preference control and is not would be the more
+        confusing of the two. `specs/memory`: a preference is chosen in Settings, never inferred.
+      */}
+      <p className={styles.note}>
+        The unit toggle changes this reading only. Your saved preference is unchanged.
+      </p>
+    </div>
+  );
+}
+
 /** The three requests, and the surfaces they produce. */
-function Analysis({ enquiry }: { readonly enquiry: Enquiry }): ReactNode {
+function Analysis({
+  enquiry,
+  controls,
+  onUnits,
+}: {
+  readonly enquiry: Enquiry;
+  readonly controls: ReactNode;
+  readonly onUnits: (units: UnitSystem) => void;
+}): ReactNode {
   const place = {
     latitude: enquiry.location.latitude,
     longitude: enquiry.location.longitude,
+    units: enquiry.units,
   };
 
   const history = useApiQuery({
@@ -230,6 +340,13 @@ function Analysis({ enquiry }: { readonly enquiry: Enquiry }): ReactNode {
 
   return (
     <div className={styles.analysis}>
+      {/*
+        The artifact's header row, above the tiles: the selection, the units, and the export. It is
+        rendered here rather than by the screen because the export is of the window this component
+        retrieved, and handing the response back up to be exported would mean two owners for it.
+      */}
+      <Toolbar enquiry={enquiry} controls={controls} onUnits={onUnits} observed={observed} />
+
       {comparison.state.kind === "ready" ? (
         <HeadlineFigures comparison={comparison.state.data} />
       ) : null}
@@ -384,6 +501,9 @@ export function HistoricalAnalytics(): ReactNode {
       end: yearsBefore(defaultRange(new Date()).end, 1),
     },
     years: 10,
+    // The person's saved preference is where the screen opens. The toggle moves this reading only.
+    units:
+      preferences.state.kind === "ready" ? preferences.state.data.unit_system : "metric",
   };
 
   return (
@@ -395,9 +515,13 @@ export function HistoricalAnalytics(): ReactNode {
         </p>
       </header>
 
-      <Controls places={places} enquiry={initial} onSubmit={setEnquiry} busy={false} />
-
-      <Analysis enquiry={initial} />
+      <Analysis
+        enquiry={initial}
+        controls={
+          <Controls places={places} enquiry={initial} onSubmit={setEnquiry} busy={false} />
+        }
+        onUnits={(units) => setEnquiry({ ...initial, units })}
+      />
     </section>
   );
 }
