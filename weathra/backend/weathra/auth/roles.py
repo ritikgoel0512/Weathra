@@ -33,7 +33,8 @@ construction: an administrative principal's own session is still an ordinary own
 from __future__ import annotations
 
 import logging
-from typing import Final
+from datetime import datetime
+from typing import Final, TypedDict
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -68,12 +69,23 @@ GRANTABLE_ROLES: Final[frozenset[str]] = frozenset({ADMINISTRATOR_ROLE})
 ROLE_SUBJECT_KIND: Final = "admin_role"
 
 
+class _GrantRow(TypedDict):
+    """One grant as `admin_audit` records it. Four fields, none of them a credential."""
+
+    subject_id: str
+    role: str
+    granted_by: str | None
+    granted_at: str
+
+
 class RoleGrant:
     """One role a subject holds, and where it came from."""
 
     __slots__ = ("granted_at", "granted_by", "role", "user_id")
 
-    def __init__(self, user_id: str, role: str, granted_by: str | None, granted_at: object) -> None:
+    def __init__(
+        self, user_id: str, role: str, granted_by: str | None, granted_at: datetime
+    ) -> None:
         self.user_id = user_id
         self.role = role
         self.granted_by = granted_by
@@ -185,11 +197,13 @@ class RoleStore:
             action=AdminAction.ROLE_GRANT,
             subject_kind=ROLE_SUBJECT_KIND,
             subject_id=f"{user_id}:{role}",
-            before=before,
-            after=after,
+            before=dict(before) if before else None,
+            after=dict(after),
         )
         logger.info("role %s granted to %s", role, user_id)
-        return RoleGrant(user_id, role, acting_principal, after["granted_at"])
+        return RoleGrant(
+            user_id, role, acting_principal, datetime.fromisoformat(after["granted_at"])
+        )
 
     async def revoke(
         self, user_id: str, role: str = ADMINISTRATOR_ROLE, *, acting_principal: str
@@ -218,7 +232,7 @@ class RoleStore:
             action=AdminAction.ROLE_REVOKE,
             subject_kind=ROLE_SUBJECT_KIND,
             subject_id=f"{user_id}:{role}",
-            before=before,
+            before=dict(before),
             after=None,
         )
         logger.info("role %s revoked from %s", role, user_id)
@@ -233,7 +247,7 @@ class RoleStore:
                 details={"field": "role", "known": sorted(GRANTABLE_ROLES)},
             )
 
-    async def _grant_row(self, user_id: str, role: str) -> dict[str, str | None] | None:
+    async def _grant_row(self, user_id: str, role: str) -> _GrantRow | None:
         """The auditable shape of one grant, or ``None`` where there is none.
 
         Four fields, none of them a credential: who, what, who granted it, when. There is nothing
@@ -250,9 +264,9 @@ class RoleStore:
         ).first()
         if found is None:
             return None
-        return {
-            "subject_id": str(found[0]),
-            "role": str(found[1]),
-            "granted_by": str(found[2]) if found[2] else None,
-            "granted_at": found[3].isoformat(),
-        }
+        return _GrantRow(
+            subject_id=str(found[0]),
+            role=str(found[1]),
+            granted_by=str(found[2]) if found[2] else None,
+            granted_at=found[3].isoformat(),
+        )

@@ -27,6 +27,7 @@ from enum import StrEnum
 from typing import NamedTuple
 
 __all__ = [
+    "ADMINISTRATIVE_PATHS",
     "PROTECTED_PATHS",
     "PUBLIC_PATHS",
     "Access",
@@ -44,11 +45,20 @@ class Access(StrEnum):
 
 
 class EndpointClassification(NamedTuple):
-    """One endpoint, its access, and why it is classified that way."""
+    """One endpoint, its access, whether it is administrative, and why.
+
+    ``administrative`` is a second axis rather than a third ``Access``, and the distinction is
+    load-bearing. Every administrative endpoint is *also* protected — it requires a validated token
+    before it requires a role — and collapsing the two into one enum would let a reader believe an
+    "administrative" endpoint might not be protected, or that the 401 and the 403 are the same
+    refusal. `specs/http-api` asks for exactly this pairing: "classified as protected and
+    administrative".
+    """
 
     path: str
     access: Access
     reason: str
+    administrative: bool = False
 
 
 # Paths are relative to the version prefix, which is configuration. Written without it so a
@@ -164,6 +174,109 @@ _CLASSIFICATIONS: tuple[EndpointClassification, ...] = (
         Access.PROTECTED,
         "Deletes the acting user's Weathra application data.",
     ),
+    # ---------------------------------------------------- protected *and* administrative
+    #
+    # Each requires the administrative role held in `admin_roles`, and each says the same thing in
+    # its reason: what it administers, so a reader of the published contract knows what the role
+    # is for without reading the routers.
+    EndpointClassification(
+        "/admin/models",
+        Access.PROTECTED,
+        "Lists and creates model catalog entries.",
+        administrative=True,
+    ),
+    EndpointClassification(
+        "/admin/models/{catalog_key}",
+        Access.PROTECTED,
+        "Edits one model catalog entry.",
+        administrative=True,
+    ),
+    EndpointClassification(
+        "/admin/models/{catalog_key}/enable",
+        Access.PROTECTED,
+        "Returns a model to resolution.",
+        administrative=True,
+    ),
+    EndpointClassification(
+        "/admin/models/{catalog_key}/disable",
+        Access.PROTECTED,
+        "Withdraws a model from resolution, refused for the last one serving a call role.",
+        administrative=True,
+    ),
+    EndpointClassification(
+        "/admin/policies",
+        Access.PROTECTED,
+        "Lists and creates model policies.",
+        administrative=True,
+    ),
+    EndpointClassification(
+        "/admin/policies/{policy_id}/candidates",
+        Access.PROTECTED,
+        "Re-points a policy's ordered candidate list — a model promotion.",
+        administrative=True,
+    ),
+    EndpointClassification(
+        "/admin/policies/{policy_id}/fallback",
+        Access.PROTECTED,
+        "Sets or clears a policy's declared fallback.",
+        administrative=True,
+    ),
+    EndpointClassification(
+        "/admin/plans",
+        Access.PROTECTED,
+        "Lists the subscription plans.",
+        administrative=True,
+    ),
+    EndpointClassification(
+        "/admin/plans/{plan_code}/policies",
+        Access.PROTECTED,
+        "Re-points a plan at different policies, per call role.",
+        administrative=True,
+    ),
+    EndpointClassification(
+        "/admin/plans/{plan_code}/allowances",
+        Access.PROTECTED,
+        "Sets one of a plan's usage allowances.",
+        administrative=True,
+    ),
+    EndpointClassification(
+        "/admin/allowances",
+        Access.PROTECTED,
+        "Lists the usage allowances, per plan and for the internal subject.",
+        administrative=True,
+    ),
+    EndpointClassification(
+        "/admin/allowances/internal",
+        Access.PROTECTED,
+        "Sets one of the internal allowances that lab, evaluation and administrative traffic "
+        "is accounted against.",
+        administrative=True,
+    ),
+    EndpointClassification(
+        "/admin/principals/administrators",
+        Access.PROTECTED,
+        "Lists who holds the administrative role and who granted it.",
+        administrative=True,
+    ),
+    EndpointClassification(
+        "/admin/principals/{subject_id}/plan",
+        Access.PROTECTED,
+        "Assigns a principal to a subscription plan.",
+        administrative=True,
+    ),
+    EndpointClassification(
+        "/admin/principals/{subject_id}/role",
+        Access.PROTECTED,
+        "Grants and revokes the administrative role.",
+        administrative=True,
+    ),
+    EndpointClassification(
+        "/admin/usage",
+        Access.PROTECTED,
+        "Aggregate language model usage by model, policy, plan, call role, status and period, "
+        "with internal usage separated. Measures only — never a row, and never one person's.",
+        administrative=True,
+    ),
     EndpointClassification(
         "/evidence/{evidence_id}",
         Access.PROTECTED,
@@ -186,6 +299,9 @@ PUBLIC_PATHS: tuple[str, ...] = tuple(
 )
 PROTECTED_PATHS: tuple[str, ...] = tuple(
     entry.path for entry in _CLASSIFICATIONS if entry.access is Access.PROTECTED
+)
+ADMINISTRATIVE_PATHS: tuple[str, ...] = tuple(
+    entry.path for entry in _CLASSIFICATIONS if entry.administrative
 )
 
 

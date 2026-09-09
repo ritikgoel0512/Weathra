@@ -91,6 +91,25 @@ reflection vector.
 | `GET` | `/api/v1/me/preferences` | **protected** | 200 | `PreferenceView` |
 | `PUT` | `/api/v1/me/preferences` | **protected** | 200 | `PreferenceView` |
 | `GET` | `/api/v1/me/usage` | **protected** | 200 | `UsageResponse` |
+| `GET` | `/api/v1/admin/allowances` | **protected** | 200 | `AllowanceListResponse` |
+| `PUT` | `/api/v1/admin/allowances/internal` | **protected** | 200 | `AllowanceRecord` |
+| `GET` | `/api/v1/admin/models` | **protected** | 200 | `CatalogListResponse` |
+| `POST` | `/api/v1/admin/models` | **protected** | 201 | `CatalogEntry` |
+| `PATCH` | `/api/v1/admin/models/{catalog_key}` | **protected** | 200 | `CatalogEntry` |
+| `POST` | `/api/v1/admin/models/{catalog_key}/disable` | **protected** | 200 | `CatalogEntry` |
+| `POST` | `/api/v1/admin/models/{catalog_key}/enable` | **protected** | 200 | `CatalogEntry` |
+| `GET` | `/api/v1/admin/plans` | **protected** | 200 | `PlanListResponse` |
+| `PUT` | `/api/v1/admin/plans/{plan_code}/allowances` | **protected** | 200 | `AllowanceRecord` |
+| `PUT` | `/api/v1/admin/plans/{plan_code}/policies` | **protected** | 200 | `no body` |
+| `GET` | `/api/v1/admin/policies` | **protected** | 200 | `PolicyListResponse` |
+| `POST` | `/api/v1/admin/policies` | **protected** | 201 | `PolicyRecord` |
+| `PUT` | `/api/v1/admin/policies/{policy_id}/candidates` | **protected** | 200 | `PolicyRecord` |
+| `PUT` | `/api/v1/admin/policies/{policy_id}/fallback` | **protected** | 200 | `PolicyRecord` |
+| `GET` | `/api/v1/admin/principals/administrators` | **protected** | 200 | `RoleListResponse` |
+| `PUT` | `/api/v1/admin/principals/{subject_id}/plan` | **protected** | 200 | `PlanRecord` |
+| `DELETE` | `/api/v1/admin/principals/{subject_id}/role` | **protected** | 204 | `no body` |
+| `PUT` | `/api/v1/admin/principals/{subject_id}/role` | **protected** | 200 | `RoleGrantResponse` |
+| `GET` | `/api/v1/admin/usage` | **protected** | 200 | `UsageSummaryResponse` |
 | `GET` | `/api/v1/threads` | **protected** | 200 | `ThreadsResponse` |
 | `DELETE` | `/api/v1/threads/{thread_id}` | **protected** | 204 | `no body` |
 | `GET` | `/api/v1/threads/{thread_id}` | **protected** | 200 | `ThreadSummary` |
@@ -114,6 +133,22 @@ reflection vector.
 | `/weather/history/comparison` | public | Compares two supplied past periods. Reads no user-owned row. |
 | `/agent/ask` | **protected** | Uses and writes the acting user's thread memory and stores an owned evidence record. |
 | `/agent/stream` | **protected** | The same run, streamed. Same memory and same owned record. |
+| `/admin/models` | **protected**, administrative | Lists and creates model catalog entries. |
+| `/admin/models/{catalog_key}` | **protected**, administrative | Edits one model catalog entry. |
+| `/admin/models/{catalog_key}/enable` | **protected**, administrative | Returns a model to resolution. |
+| `/admin/models/{catalog_key}/disable` | **protected**, administrative | Withdraws a model from resolution, refused for the last one serving a call role. |
+| `/admin/policies` | **protected**, administrative | Lists and creates model policies. |
+| `/admin/policies/{policy_id}/candidates` | **protected**, administrative | Re-points a policy's ordered candidate list — a model promotion. |
+| `/admin/policies/{policy_id}/fallback` | **protected**, administrative | Sets or clears a policy's declared fallback. |
+| `/admin/plans` | **protected**, administrative | Lists the subscription plans. |
+| `/admin/plans/{plan_code}/policies` | **protected**, administrative | Re-points a plan at different policies, per call role. |
+| `/admin/plans/{plan_code}/allowances` | **protected**, administrative | Sets one of a plan's usage allowances. |
+| `/admin/allowances` | **protected**, administrative | Lists the usage allowances, per plan and for the internal subject. |
+| `/admin/allowances/internal` | **protected**, administrative | Sets one of the internal allowances that lab, evaluation and administrative traffic is accounted against. |
+| `/admin/principals/administrators` | **protected**, administrative | Lists who holds the administrative role and who granted it. |
+| `/admin/principals/{subject_id}/plan` | **protected**, administrative | Assigns a principal to a subscription plan. |
+| `/admin/principals/{subject_id}/role` | **protected**, administrative | Grants and revokes the administrative role. |
+| `/admin/usage` | **protected**, administrative | Aggregate language model usage by model, policy, plan, call role, status and period, with internal usage separated. Measures only — never a row, and never one person's. |
 | `/evidence/{evidence_id}` | **protected** | One of the acting user's stored evidence records. |
 | `/me` | **protected** | The acting user's own profile and effective preferences. |
 | `/me/data` | **protected** | Deletes the acting user's Weathra application data. |

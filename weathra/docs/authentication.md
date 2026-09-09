@@ -136,11 +136,24 @@ Two things about a principal are decided by the backend and by nothing else: whe
 ownership — read from backend-held state keyed by the validated token subject — and both are
 refused the moment a client tries to supply them.
 
-**The administrative role is server-held.** It is backend state keyed by the token subject, read
-only by the backend, and **no client-supplied field grants it**: not a body field, a query
-parameter, a header, a cookie, or an unverified token claim. A request from an ordinary user
-carrying `{"admin": true}`, an `X-Admin` header, or a self-asserted claim is simply a
-non-administrative request.
+**The administrative role is server-held.** It is a row in `admin_roles`, keyed by the validated
+token subject, and **no client-supplied field grants it**: not a body field, a query parameter, a
+header, a cookie, or an unverified token claim. A request from an ordinary user carrying
+`{"admin": true}`, an `X-Admin` header, or a self-asserted claim is simply a non-administrative
+request.
+
+An earlier build read the role from the validated token's `app_metadata`. That was server-controlled
+at Supabase and a defensible stand-in while Weathra held no role state, but it is not what this
+document has always said, so `0011` moved it. The difference is the whole property: a claim travels
+with the caller, so an identity-provider misconfiguration, a project's metadata copied between
+environments, or a token minted by a compromised project each promote somebody. A row promotes
+nobody, because Weathra wrote it. Two tests assert the old shape now grants nothing.
+
+The role is written only on the privileged connection. The request-serving role is granted `SELECT`
+on `admin_roles` under an owner-only policy and no write of any kind — so the predicate can be
+answered on the request path (the quota gate and the model resolver both ask it) without the
+privileged connection appearing there, and a caller can discover whether *they* are an
+administrator and nothing else. Self-promotion is impossible by grant, not by check.
 
 Administrative capabilities — model policy administration, model catalog administration, plan and
 allowance administration, reading aggregate usage, and the internal model lab — are refused for
@@ -153,8 +166,43 @@ Two limits on the role, both deliberate:
   person's threads, memory, preferences, saved locations, or evidence records is refused exactly as
   any other caller is. The role reaches the model layer, not people's rows — which is why it is a
   separate question from ownership rather than a stronger answer to it.
-- **A privileged write is attributed.** The acting principal and the time are recorded with the
-  change, so an administrative action has an author.
+- **A privileged write is attributed.** The acting principal and the time are recorded in
+  `admin_audit` with the change — in the *same transaction* as the change, so there is no
+  committed change with no record and no record of a change that rolled back. Every write across
+  the catalog, the policies, the plans, the allowances, plan assignment and role promotion goes
+  through one recorder, because six recorders would be six chances for the seventh to forget.
+
+### The administrative endpoints
+
+Each is **protected and administrative**: a validated token first, then the role. An
+unauthenticated call is refused 401 by the same dependency every protected route uses; an
+authenticated one without the role is refused 403 by a message that names no capability. The
+privileged connection those routes need is itself a dependency *on* the administrative principal,
+so there is no ordering in which a caller without the role obtains it.
+
+| Endpoint | What it administers |
+|---|---|
+| `/admin/models` | Lists and creates model catalog entries. |
+| `/admin/models/{catalog_key}` | Edits one model catalog entry. |
+| `/admin/models/{catalog_key}/enable` | Returns a model to resolution. |
+| `/admin/models/{catalog_key}/disable` | Withdraws a model from resolution, refused for the last one serving a call role. |
+| `/admin/policies` | Lists and creates model policies. |
+| `/admin/policies/{policy_id}/candidates` | Re-points a policy's ordered candidate list — a model promotion. |
+| `/admin/policies/{policy_id}/fallback` | Sets or clears a policy's declared fallback. |
+| `/admin/plans` | Lists the subscription plans. |
+| `/admin/plans/{plan_code}/policies` | Re-points a plan at different policies, per call role. |
+| `/admin/plans/{plan_code}/allowances` | Sets one of a plan's usage allowances. |
+| `/admin/allowances` | Lists the usage allowances, per plan and for the internal subject. |
+| `/admin/allowances/internal` | Sets one of the internal allowances that lab, evaluation and administrative traffic is accounted against. |
+| `/admin/principals/administrators` | Lists who holds the administrative role and who granted it. |
+| `/admin/principals/{subject_id}/plan` | Assigns a principal to a subscription plan. |
+| `/admin/principals/{subject_id}/role` | Grants and revokes the administrative role. |
+| `/admin/usage` | Aggregate language model usage by model, policy, plan, call role, status and period, with internal usage separated. Measures only — never a row, and never one person's. |
+
+The published classification is the same table the application enforces
+(`api/classification.py`), stamped into the OpenAPI document's operation descriptions and asserted
+against the registered routes by a test — so the documented classification and the enforced one
+cannot drift.
 
 **Plan and model entitlement are derived, never asserted.** The effective plan comes from
 backend-held state keyed by the token subject. A plan, policy identifier, model identifier,

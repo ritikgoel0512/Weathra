@@ -361,15 +361,23 @@ def test_the_documented_access_matches_the_enforced_classification() -> None:
 
     settings = Settings(supabase_url="https://project.supabase.co")
     prefix = settings.api_version_prefix
-    documented = {
-        row[1].strip("`"): row[2].strip("*") for row in _table_rows(_read("api.md"), "Method")
-    }
+    text = _read("api.md")
+    documented = {row[1].strip("`"): row[2].strip("*") for row in _table_rows(text, "Method")}
+    # The second table carries the reason and the administrative marker; the first carries the
+    # operations. Both are checked, because 31.6 asks for the classification to be *recorded*, and
+    # a protected endpoint documented without saying it needs a role is half a record.
+    classified = {row[0].strip("`"): row[1] for row in _table_rows(text, "Path")}
 
     for classification in classifications():
         path = f"{prefix}{classification.path}"
         assert documented.get(path) == classification.access.value, (
             f"docs/api.md classifies {path} as {documented.get(path)!r}, "
             f"the application enforces {classification.access.value!r}"
+        )
+        marked = "administrative" in classified.get(classification.path, "")
+        assert marked == classification.administrative, (
+            f"docs/api.md marks {classification.path} administrative={marked}, "
+            f"the application enforces administrative={classification.administrative}"
         )
 
 

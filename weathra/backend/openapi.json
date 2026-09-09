@@ -125,6 +125,95 @@
         "title": "AgentStep",
         "type": "object"
       },
+      "AllowanceListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "allowances": {
+            "items": {
+              "$ref": "#/components/schemas/AllowanceRecord"
+            },
+            "title": "Allowances",
+            "type": "array"
+          },
+          "count": {
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "allowances"
+        ],
+        "title": "AllowanceListResponse",
+        "type": "object"
+      },
+      "AllowanceRecord": {
+        "additionalProperties": false,
+        "description": "One allowance: a subject, a dimension, a window, a number.",
+        "properties": {
+          "allowance": {
+            "minimum": 0.0,
+            "title": "Allowance",
+            "type": "integer"
+          },
+          "dimension": {
+            "$ref": "#/components/schemas/QuotaDimension"
+          },
+          "internal_subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Internal Subject"
+          },
+          "plan_code": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanCode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "window_kind": {
+            "$ref": "#/components/schemas/QuotaWindow"
+          }
+        },
+        "required": [
+          "dimension",
+          "window_kind",
+          "allowance"
+        ],
+        "title": "AllowanceRecord",
+        "type": "object"
+      },
+      "AllowanceRequest": {
+        "additionalProperties": false,
+        "description": "One allowance, for a plan or for the internal subject.\n\nThe value is bounded above as well as below. A negative allowance is refused because\n`specs/usage-limits` says so; an absurd one is refused because a typo that adds three zeroes to\na monthly token budget is a bill, and there is no legitimate allowance near the ceiling.",
+        "properties": {
+          "allowance": {
+            "maximum": 1000000000000.0,
+            "minimum": 0.0,
+            "title": "Allowance",
+            "type": "integer"
+          },
+          "dimension": {
+            "$ref": "#/components/schemas/QuotaDimension"
+          }
+        },
+        "required": [
+          "dimension",
+          "allowance"
+        ],
+        "title": "AllowanceRequest",
+        "type": "object"
+      },
       "AmbiguousResponse": {
         "additionalProperties": false,
         "description": "Several places matched and no qualifier chose between them.\n\nA 200, not an error: the request was fine and the answer is \"these two\". Each candidate carries\nits region and country so they can actually be told apart.",
@@ -753,6 +842,426 @@
         ],
         "title": "BaselineComparison",
         "type": "object"
+      },
+      "CallRole": {
+        "description": "The role a language model call serves, which is what a policy maps against.\n\nThe role rather than the node (design.md decision 22): a fourth node needing a structured\ndecision reuses ``ROUTING`` and no policy changes. ``LAB`` is separate because a comparison run\nis internal traffic accounted against the internal allowance, never a product plan's.",
+        "enum": [
+          "routing",
+          "synthesis",
+          "lab"
+        ],
+        "title": "CallRole",
+        "type": "string"
+      },
+      "CapabilityTier": {
+        "description": "What a policy orders candidates by. Weathra's own judgement, never a vendor's marketing.",
+        "enum": [
+          "economy",
+          "standard",
+          "frontier"
+        ],
+        "title": "CapabilityTier",
+        "type": "string"
+      },
+      "CatalogCreateRequest": {
+        "additionalProperties": false,
+        "description": "A new catalog entry, with every field the resolver and the cost estimator need.\n\nNo default for pricing or for the date it was read: `specs/llm-telemetry` copies both onto every\nusage event so a re-pricing cannot rewrite history, and a default here would be a made-up price\nquietly attached to real calls.",
+        "properties": {
+          "capability_roles": {
+            "items": {
+              "$ref": "#/components/schemas/CallRole"
+            },
+            "minItems": 1,
+            "title": "Capability Roles",
+            "type": "array"
+          },
+          "capability_tier": {
+            "$ref": "#/components/schemas/CapabilityTier"
+          },
+          "catalog_key": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Catalog Key",
+            "type": "string"
+          },
+          "context_window": {
+            "exclusiveMinimum": 0.0,
+            "title": "Context Window",
+            "type": "integer"
+          },
+          "display_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "gateway_model": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Gateway Model",
+            "type": "string"
+          },
+          "gateway_provider": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Gateway Provider",
+            "type": "string"
+          },
+          "input_price_per_million": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Input Price Per Million"
+          },
+          "is_free_tier": {
+            "title": "Is Free Tier",
+            "type": "boolean"
+          },
+          "output_price_per_million": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Output Price Per Million"
+          },
+          "price_currency": {
+            "default": "USD",
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Price Currency",
+            "type": "string"
+          },
+          "pricing_recorded_on": {
+            "format": "date",
+            "title": "Pricing Recorded On",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CatalogStatus",
+            "default": "enabled"
+          },
+          "supports_structured_output": {
+            "title": "Supports Structured Output",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "catalog_key",
+          "gateway_provider",
+          "gateway_model",
+          "display_name",
+          "capability_roles",
+          "capability_tier",
+          "supports_structured_output",
+          "context_window",
+          "input_price_per_million",
+          "output_price_per_million",
+          "pricing_recorded_on",
+          "is_free_tier"
+        ],
+        "title": "CatalogCreateRequest",
+        "type": "object"
+      },
+      "CatalogEditRequest": {
+        "additionalProperties": false,
+        "description": "The editable half of an entry. ``status`` is deliberately absent.\n\nEnabling and disabling have their own routes because disabling carries a cross-row refusal \u2014\nthe last model serving a call role may not be withdrawn \u2014 and a generic field update would\nskip it.",
+        "properties": {
+          "capability_roles": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CallRole"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capability Roles"
+          },
+          "capability_tier": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CapabilityTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "context_window": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Window"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "gateway_model": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Model"
+          },
+          "gateway_provider": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Provider"
+          },
+          "input_price_per_million": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Price Per Million"
+          },
+          "is_free_tier": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Free Tier"
+          },
+          "output_price_per_million": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Price Per Million"
+          },
+          "price_currency": {
+            "anyOf": [
+              {
+                "maxLength": 3,
+                "minLength": 3,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Currency"
+          },
+          "pricing_recorded_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pricing Recorded On"
+          },
+          "supports_structured_output": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supports Structured Output"
+          }
+        },
+        "title": "CatalogEditRequest",
+        "type": "object"
+      },
+      "CatalogEntry": {
+        "additionalProperties": false,
+        "description": "One model Weathra is allowed to use, as the stores hand it out.",
+        "properties": {
+          "capability_roles": {
+            "items": {
+              "$ref": "#/components/schemas/CallRole"
+            },
+            "minItems": 1,
+            "title": "Capability Roles",
+            "type": "array"
+          },
+          "capability_tier": {
+            "$ref": "#/components/schemas/CapabilityTier"
+          },
+          "catalog_key": {
+            "description": "The stable internal handle. Never a vendor name.",
+            "minLength": 1,
+            "title": "Catalog Key",
+            "type": "string"
+          },
+          "context_window": {
+            "exclusiveMinimum": 0.0,
+            "title": "Context Window",
+            "type": "integer"
+          },
+          "display_name": {
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "gateway_model": {
+            "description": "The vendor string. Mutable; a rename is one row.",
+            "minLength": 1,
+            "title": "Gateway Model",
+            "type": "string"
+          },
+          "gateway_provider": {
+            "minLength": 1,
+            "title": "Gateway Provider",
+            "type": "string"
+          },
+          "input_price_per_million": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Input Price Per Million",
+            "type": "string"
+          },
+          "is_free_tier": {
+            "title": "Is Free Tier",
+            "type": "boolean"
+          },
+          "output_price_per_million": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Output Price Per Million",
+            "type": "string"
+          },
+          "price_currency": {
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Price Currency",
+            "type": "string"
+          },
+          "pricing_recorded_on": {
+            "format": "date",
+            "title": "Pricing Recorded On",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CatalogStatus"
+          },
+          "supports_structured_output": {
+            "title": "Supports Structured Output",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "catalog_key",
+          "gateway_provider",
+          "gateway_model",
+          "display_name",
+          "capability_roles",
+          "capability_tier",
+          "supports_structured_output",
+          "context_window",
+          "input_price_per_million",
+          "output_price_per_million",
+          "price_currency",
+          "pricing_recorded_on",
+          "status",
+          "is_free_tier"
+        ],
+        "title": "CatalogEntry",
+        "type": "object"
+      },
+      "CatalogListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "entries"
+        ],
+        "title": "CatalogListResponse",
+        "type": "object"
+      },
+      "CatalogStatus": {
+        "description": "Whether an entry may be resolved at all.\n\n``specs/model-catalog`` treats a disabled entry as unavailable everywhere \u2014 no policy resolves\nit, no override accepts it, no lab selection offers it \u2014 while its recorded history stays\nreadable and attributed. Disabling is therefore the sanctioned response to a model that has\nstopped working, and is why nothing in this package deletes a catalog row.",
+        "enum": [
+          "enabled",
+          "disabled"
+        ],
+        "title": "CatalogStatus",
+        "type": "string"
       },
       "ComparisonCandidate": {
         "additionalProperties": false,
@@ -2660,6 +3169,124 @@
         "title": "PeriodComparison",
         "type": "object"
       },
+      "PlanAssignmentRequest": {
+        "additionalProperties": false,
+        "description": "Which tier a person is on.\n\n``PlanCode`` and not a string, so a body naming ``plus`` is refused by validation before the\nhandler runs. The retired tier is not a value this enum has and no alias admits it.",
+        "properties": {
+          "plan_code": {
+            "$ref": "#/components/schemas/PlanCode"
+          }
+        },
+        "required": [
+          "plan_code"
+        ],
+        "title": "PlanAssignmentRequest",
+        "type": "object"
+      },
+      "PlanCode": {
+        "description": "The canonical subscription plan codes.\n\nThree tiers, lowercase, stable enough to map to an external billing product later\n(``specs/usage-limits``' \"room left for a later billing integration\"). The display names live\nin ``subscription_plans`` as data, so renaming *Premium* on a pricing page is a row update; the\ncode here is the identifier that must not move, because `user_plans` rows and recorded usage\nevents both carry it.\n\nThere is deliberately **no `plus`**. An earlier draft of the specs named the middle tier that\nway; the product decision of 2026-09-09 settled on Free / Pro / Premium and the specs were\nreconciled to match. No alias is provided in either direction \u2014 this foundation has never\nshipped, so there is no customer contract to be backward-compatible with, and an alias would\nonly make two names for one tier that a later reader has to reconcile again.",
+        "enum": [
+          "free",
+          "pro",
+          "premium"
+        ],
+        "title": "PlanCode",
+        "type": "string"
+      },
+      "PlanListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "plans": {
+            "items": {
+              "$ref": "#/components/schemas/PlanRecord"
+            },
+            "title": "Plans",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "plans"
+        ],
+        "title": "PlanListResponse",
+        "type": "object"
+      },
+      "PlanMappingRequest": {
+        "additionalProperties": false,
+        "description": "Which policy a plan resolves to, per call role.",
+        "properties": {
+          "policy_by_call_role": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "minProperties": 1,
+            "propertyNames": {
+              "$ref": "#/components/schemas/CallRole"
+            },
+            "title": "Policy By Call Role",
+            "type": "object"
+          }
+        },
+        "required": [
+          "policy_by_call_role"
+        ],
+        "title": "PlanMappingRequest",
+        "type": "object"
+      },
+      "PlanRecord": {
+        "additionalProperties": false,
+        "description": "A product tier, its rank, and the policy it maps each call role to.",
+        "properties": {
+          "display_name": {
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "external_subscription_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Unused. Where a billing provider's id would later land.",
+            "title": "External Subscription Ref"
+          },
+          "plan_code": {
+            "$ref": "#/components/schemas/PlanCode"
+          },
+          "policy_by_call_role": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/CallRole"
+            },
+            "title": "Policy By Call Role",
+            "type": "object"
+          },
+          "rank": {
+            "description": "Ascending entitlement. What 'never escalate above' compares.",
+            "minimum": 0.0,
+            "title": "Rank",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_code",
+          "display_name",
+          "rank"
+        ],
+        "title": "PlanRecord",
+        "type": "object"
+      },
       "PointValue": {
         "additionalProperties": false,
         "description": "One timestamped value in a series-shaped result: a per-day total, a rolling mean.",
@@ -2693,6 +3320,208 @@
           "value"
         ],
         "title": "PointValue",
+        "type": "object"
+      },
+      "PolicyCandidatesRequest": {
+        "additionalProperties": false,
+        "description": "A re-pointed candidate list \u2014 a model promotion, in practice.\n\n``cited_comparison_run_ids`` is design.md decision 26's discipline: a promotion names the\ncomparison runs that justified it, so the audit trail carries the evidence rather than a\nrecollection of it.",
+        "properties": {
+          "candidate_catalog_keys": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Candidate Catalog Keys",
+            "type": "array"
+          },
+          "cited_comparison_run_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Cited Comparison Run Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "candidate_catalog_keys"
+        ],
+        "title": "PolicyCandidatesRequest",
+        "type": "object"
+      },
+      "PolicyCreateRequest": {
+        "additionalProperties": false,
+        "description": "A new policy: a name, an ordered candidate list, and who may resolve it.",
+        "properties": {
+          "applicable_call_roles": {
+            "items": {
+              "$ref": "#/components/schemas/CallRole"
+            },
+            "minItems": 1,
+            "title": "Applicable Call Roles",
+            "type": "array"
+          },
+          "candidate_catalog_keys": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Candidate Catalog Keys",
+            "type": "array"
+          },
+          "display_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "eligibility": {
+            "$ref": "#/components/schemas/PolicyEligibility"
+          },
+          "failover_enabled": {
+            "default": true,
+            "title": "Failover Enabled",
+            "type": "boolean"
+          },
+          "fallback_policy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback Policy Id"
+          },
+          "policy_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Policy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "policy_id",
+          "display_name",
+          "candidate_catalog_keys",
+          "applicable_call_roles",
+          "eligibility"
+        ],
+        "title": "PolicyCreateRequest",
+        "type": "object"
+      },
+      "PolicyEligibility": {
+        "description": "Who may resolve a policy at all \u2014 checked before a plan mapping is even consulted.\n\n``ADMINISTRATIVE`` and ``INTERNAL_EVALUATION`` are the two that carry weight: the first is\ngated on the acting principal's role rather than on any plan row, so no plan mapping can grant\nit, and the second keeps the pinned evaluation policy out of every product path so a plan\nchange cannot alter what a run measures.",
+        "enum": [
+          "public",
+          "plan",
+          "administrative",
+          "internal_evaluation"
+        ],
+        "title": "PolicyEligibility",
+        "type": "string"
+      },
+      "PolicyFallbackRequest": {
+        "additionalProperties": false,
+        "description": "The declared fallback, or null to clear it.",
+        "properties": {
+          "fallback_policy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback Policy Id"
+          }
+        },
+        "title": "PolicyFallbackRequest",
+        "type": "object"
+      },
+      "PolicyListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "policies": {
+            "items": {
+              "$ref": "#/components/schemas/PolicyRecord"
+            },
+            "title": "Policies",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "policies"
+        ],
+        "title": "PolicyListResponse",
+        "type": "object"
+      },
+      "PolicyRecord": {
+        "additionalProperties": false,
+        "description": "A named, ordered candidate list, as stored.",
+        "properties": {
+          "applicable_call_roles": {
+            "items": {
+              "$ref": "#/components/schemas/CallRole"
+            },
+            "minItems": 1,
+            "title": "Applicable Call Roles",
+            "type": "array"
+          },
+          "candidate_catalog_keys": {
+            "description": "Ordered. The first enabled catalog entry wins.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Candidate Catalog Keys",
+            "type": "array"
+          },
+          "display_name": {
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "eligibility": {
+            "$ref": "#/components/schemas/PolicyEligibility"
+          },
+          "failover_enabled": {
+            "default": true,
+            "title": "Failover Enabled",
+            "type": "boolean"
+          },
+          "fallback_policy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback Policy Id"
+          },
+          "policy_id": {
+            "title": "Policy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "policy_id",
+          "display_name",
+          "candidate_catalog_keys",
+          "applicable_call_roles",
+          "eligibility"
+        ],
+        "title": "PolicyRecord",
         "type": "object"
       },
       "PreferenceSource": {
@@ -2869,6 +3698,28 @@
         ],
         "title": "Provenance",
         "type": "object"
+      },
+      "QuotaDimension": {
+        "description": "An allowance dimension, each enforceable independently (``specs/usage-limits``).\n\n``ESTIMATED_COST_PER_MONTH`` is declared and deliberately not seeded with an allowance. The\nspec requires the model to *admit* a cost budget \"without restructuring the allowance model\",\nand the honest way to show that is for the dimension to exist and be expressible while nothing\nenforces it \u2014 an estimate is the wrong thing to refuse a request on, and this change ships no\nbilling. A plan that leaves a dimension unset is unlimited in it, so its absence is not a\nlimit of zero.",
+        "enum": [
+          "requests_per_day",
+          "requests_per_month",
+          "tokens_per_month",
+          "concurrent_runs",
+          "estimated_cost_per_month"
+        ],
+        "title": "QuotaDimension",
+        "type": "string"
+      },
+      "QuotaWindow": {
+        "description": "The period an allowance is counted over.\n\n``CONCURRENT`` is not a calendar window and is named so it cannot be mistaken for one: it is a\nlive gauge incremented on run start and decremented in a ``finally``, with no reset boundary\nbecause it has nothing to reset.",
+        "enum": [
+          "day",
+          "month",
+          "concurrent"
+        ],
+        "title": "QuotaWindow",
+        "type": "string"
       },
       "ReadinessResponse": {
         "additionalProperties": false,
@@ -3069,6 +3920,67 @@
           "location"
         ],
         "title": "ResolvedResponse",
+        "type": "object"
+      },
+      "RoleGrantResponse": {
+        "additionalProperties": false,
+        "description": "One role grant, as an administrator sees it. No contact detail, because none is stored.",
+        "properties": {
+          "granted_at": {
+            "format": "date-time",
+            "title": "Granted At",
+            "type": "string"
+          },
+          "granted_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for the bootstrap grant, which has no granter to name.",
+            "title": "Granted By"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "subject_id": {
+            "title": "Subject Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject_id",
+          "role",
+          "granted_at"
+        ],
+        "title": "RoleGrantResponse",
+        "type": "object"
+      },
+      "RoleListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/RoleGrantResponse"
+            },
+            "title": "Grants",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "grants"
+        ],
+        "title": "RoleListResponse",
         "type": "object"
       },
       "SavedLocationRecord": {
@@ -3987,6 +4899,114 @@
         "title": "UnitSystem",
         "type": "string"
       },
+      "UsageAggregate": {
+        "additionalProperties": false,
+        "description": "One group's measures.\n\n``estimated_cost_total`` is a `Decimal` all the way from the column, and is an estimate\nwherever it is shown \u2014 never a billed amount (`specs/usage-limits`).",
+        "properties": {
+          "calls": {
+            "minimum": 0.0,
+            "title": "Calls",
+            "type": "integer"
+          },
+          "completion_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion Tokens"
+          },
+          "estimated_cost_total": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost Total"
+          },
+          "failures": {
+            "minimum": 0.0,
+            "title": "Failures",
+            "type": "integer"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The grouping value. Null where the column was null.",
+            "title": "Group"
+          },
+          "is_internal": {
+            "description": "Internal usage is reported separately and never counted against a plan.",
+            "title": "Is Internal",
+            "type": "boolean"
+          },
+          "latency_p50_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency P50 Ms"
+          },
+          "latency_p95_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency P95 Ms"
+          },
+          "prompt_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Tokens"
+          },
+          "total_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Tokens"
+          }
+        },
+        "required": [
+          "group",
+          "is_internal",
+          "calls",
+          "failures"
+        ],
+        "title": "UsageAggregate",
+        "type": "object"
+      },
       "UsageResponse": {
         "additionalProperties": false,
         "description": "The caller's plan, their standing in every dimension, and a bounded recent summary.",
@@ -4032,6 +5052,57 @@
           "recent"
         ],
         "title": "UsageResponse",
+        "type": "object"
+      },
+      "UsageSummaryResponse": {
+        "additionalProperties": false,
+        "description": "Aggregate usage over one period, grouped one way, split internal from product.",
+        "properties": {
+          "grouped_by": {
+            "description": "The dimension the measures are grouped by.",
+            "title": "Grouped By",
+            "type": "string"
+          },
+          "groups": {
+            "description": "One entry per (group, internal) pair. Never a row, and never a subject.",
+            "items": {
+              "$ref": "#/components/schemas/UsageAggregate"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/UsageWindow"
+          }
+        },
+        "required": [
+          "grouped_by",
+          "window",
+          "groups"
+        ],
+        "title": "UsageSummaryResponse",
+        "type": "object"
+      },
+      "UsageWindow": {
+        "additionalProperties": false,
+        "description": "The period an aggregate covers. Both bounds explicit, because \"recent\" is not a period.",
+        "properties": {
+          "end": {
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "UsageWindow",
         "type": "object"
       },
       "ValidationError": {
@@ -4260,6 +5331,1051 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/admin/allowances": {
+      "get": {
+        "description": "**Protected. Administrative.** Lists the usage allowances, per plan and for the internal subject.\n\nEvery allowance, or one plan's, or the internal subject's.\n\nA dimension with no row is *unlimited*, and it is absent here rather than reported as a large\nnumber \u2014 filling it in would be reporting a limit nobody configured.",
+        "operationId": "list_allowances_api_v1_admin_allowances_get",
+        "parameters": [
+          {
+            "description": "Narrow to one plan.",
+            "in": "query",
+            "name": "plan_code",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/PlanCode"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Narrow to one plan.",
+              "title": "Plan Code"
+            }
+          },
+          {
+            "description": "The internal allowance only.",
+            "in": "query",
+            "name": "internal",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "The internal allowance only.",
+              "title": "Internal",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AllowanceListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "List the allowances",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/allowances/internal": {
+      "put": {
+        "description": "**Protected. Administrative.** Sets one of the internal allowances that lab, evaluation and administrative traffic is accounted against.\n\nThe allowance administrative, lab and evaluation traffic is accounted against.\n\nIts own route rather than a flag on the one above, because the internal subject is not a plan\nand a body field that switched between them would be one typo away from raising Free's\nallowance while meaning to raise the lab's.",
+        "operationId": "set_internal_allowance_api_v1_admin_allowances_internal_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AllowanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AllowanceRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Set one of the internal allowances",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/models": {
+      "get": {
+        "description": "**Protected. Administrative.** Lists and creates model catalog entries.\n\nEvery catalog entry, optionally narrowed by status and by capability role.\n\nIncludes disabled entries, which is the point of the status filter: `specs/model-catalog`\nrequires a withdrawn model to stay auditable rather than disappearing, so an administrator can\nstill see what served last month.",
+        "operationId": "list_catalog_api_v1_admin_models_get",
+        "parameters": [
+          {
+            "description": "Narrow by status.",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CatalogStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Narrow by status.",
+              "title": "Status"
+            }
+          },
+          {
+            "description": "Narrow to entries fit for one call role.",
+            "in": "query",
+            "name": "capability_role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CallRole"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Narrow to entries fit for one call role.",
+              "title": "Capability Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "List the model catalog",
+        "tags": [
+          "administration"
+        ]
+      },
+      "post": {
+        "description": "**Protected. Administrative.** Lists and creates model catalog entries.",
+        "operationId": "create_catalog_entry_api_v1_admin_models_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogEntry"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Add a model to the catalog",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/models/{catalog_key}": {
+      "patch": {
+        "description": "**Protected. Administrative.** Edits one model catalog entry.",
+        "operationId": "edit_catalog_entry_api_v1_admin_models__catalog_key__patch",
+        "parameters": [
+          {
+            "description": "The catalog entry.",
+            "in": "path",
+            "name": "catalog_key",
+            "required": true,
+            "schema": {
+              "description": "The catalog entry.",
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Catalog Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogEditRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogEntry"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Edit a catalog entry",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/models/{catalog_key}/disable": {
+      "post": {
+        "description": "**Protected. Administrative.** Withdraws a model from resolution, refused for the last one serving a call role.\n\nWithdraw a model from resolution.\n\nRefused when it is the last enabled entry serving a call role: `specs/model-catalog` requires\nthe system to keep answering, and a disable that left routing with nothing to resolve would\ntake the agent surface down from an administrative screen.",
+        "operationId": "disable_catalog_entry_api_v1_admin_models__catalog_key__disable_post",
+        "parameters": [
+          {
+            "description": "The catalog entry.",
+            "in": "path",
+            "name": "catalog_key",
+            "required": true,
+            "schema": {
+              "description": "The catalog entry.",
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Catalog Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogEntry"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Disable a catalog entry",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/models/{catalog_key}/enable": {
+      "post": {
+        "description": "**Protected. Administrative.** Returns a model to resolution.",
+        "operationId": "enable_catalog_entry_api_v1_admin_models__catalog_key__enable_post",
+        "parameters": [
+          {
+            "description": "The catalog entry.",
+            "in": "path",
+            "name": "catalog_key",
+            "required": true,
+            "schema": {
+              "description": "The catalog entry.",
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Catalog Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogEntry"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Enable a catalog entry",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/plans": {
+      "get": {
+        "description": "**Protected. Administrative.** Lists the subscription plans.",
+        "operationId": "list_plans_api_v1_admin_plans_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "List the subscription plans",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/plans/{plan_code}/allowances": {
+      "put": {
+        "description": "**Protected. Administrative.** Sets one of a plan's usage allowances.\n\nChange one allowance. Takes effect for the remainder of the current window.\n\nNot cached anywhere: `entitlements/quotas.py` reads `usage_limits` fresh on every admission,\nprecisely so \"an allowance change takes effect without a code change\" means *now* rather than\nwithin a staleness window.",
+        "operationId": "set_plan_allowance_api_v1_admin_plans__plan_code__allowances_put",
+        "parameters": [
+          {
+            "description": "free, pro, or premium.",
+            "in": "path",
+            "name": "plan_code",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/PlanCode",
+              "description": "free, pro, or premium."
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AllowanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AllowanceRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Set one of a plan's allowances",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/plans/{plan_code}/policies": {
+      "put": {
+        "description": "**Protected. Administrative.** Re-points a plan at different policies, per call role.\n\nWhich policy each of a plan's call roles resolves to.\n\nThe plan code is a ``PlanCode``, so a request naming ``plus`` is refused by validation before\nthe handler runs: the retired tier is not a value this enum has, and no alias admits it.",
+        "operationId": "set_plan_policy_mapping_api_v1_admin_plans__plan_code__policies_put",
+        "parameters": [
+          {
+            "description": "free, pro, or premium.",
+            "in": "path",
+            "name": "plan_code",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/PlanCode",
+              "description": "free, pro, or premium."
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanMappingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Re-point a plan at different policies",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/policies": {
+      "get": {
+        "description": "**Protected. Administrative.** Lists and creates model policies.",
+        "operationId": "list_policies_api_v1_admin_policies_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "List the model policies",
+        "tags": [
+          "administration"
+        ]
+      },
+      "post": {
+        "description": "**Protected. Administrative.** Lists and creates model policies.",
+        "operationId": "create_policy_api_v1_admin_policies_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Create a model policy",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/policies/{policy_id}/candidates": {
+      "put": {
+        "description": "**Protected. Administrative.** Re-points a policy's ordered candidate list \u2014 a model promotion.",
+        "operationId": "set_policy_candidates_api_v1_admin_policies__policy_id__candidates_put",
+        "parameters": [
+          {
+            "description": "The policy.",
+            "in": "path",
+            "name": "policy_id",
+            "required": true,
+            "schema": {
+              "description": "The policy.",
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Policy Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyCandidatesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Re-point a policy's candidate list",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/policies/{policy_id}/fallback": {
+      "put": {
+        "description": "**Protected. Administrative.** Sets or clears a policy's declared fallback.",
+        "operationId": "set_policy_fallback_api_v1_admin_policies__policy_id__fallback_put",
+        "parameters": [
+          {
+            "description": "The policy.",
+            "in": "path",
+            "name": "policy_id",
+            "required": true,
+            "schema": {
+              "description": "The policy.",
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Policy Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyFallbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Set or clear a policy's fallback",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/principals/administrators": {
+      "get": {
+        "description": "**Protected. Administrative.** Lists who holds the administrative role and who granted it.\n\nWho holds the administrative role, and who granted it to them.\n\nPrivileged, and only reachable here: the owner policy on `admin_roles` returns a request\nsession exactly its own row, so this list cannot be assembled from the request path however\nthe query is written.",
+        "operationId": "list_administrators_api_v1_admin_principals_administrators_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "List the administrative principals",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/principals/{subject_id}/plan": {
+      "put": {
+        "description": "**Protected. Administrative.** Assigns a principal to a subscription plan.\n\nPut a person on a tier.\n\nThe only way an assignment happens: `user_plans` grants the request role `SELECT` and nothing\nelse, so a caller cannot assign themselves one however the request is shaped.",
+        "operationId": "assign_plan_api_v1_admin_principals__subject_id__plan_put",
+        "parameters": [
+          {
+            "description": "An auth subject.",
+            "in": "path",
+            "name": "subject_id",
+            "required": true,
+            "schema": {
+              "description": "An auth subject.",
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Subject Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanAssignmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Assign a principal to a plan",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/principals/{subject_id}/role": {
+      "delete": {
+        "description": "**Protected. Administrative.** Grants and revokes the administrative role.\n\nDemote a principal \u2014 but never yourself.\n\nThe self-revocation refusal is not paternalism about a mistake. An estate whose last\nadministrator demotes themselves has no way back in except the bootstrap script and a database\ncredential, and the person most likely to do it by accident is the one testing whether the\nendpoint works.",
+        "operationId": "revoke_role_api_v1_admin_principals__subject_id__role_delete",
+        "parameters": [
+          {
+            "description": "An auth subject.",
+            "in": "path",
+            "name": "subject_id",
+            "required": true,
+            "schema": {
+              "description": "An auth subject.",
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Subject Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Revoke a principal's administrative role",
+        "tags": [
+          "administration"
+        ]
+      },
+      "put": {
+        "description": "**Protected. Administrative.** Grants and revokes the administrative role.\n\nPromote a principal. Privileged, recorded, and idempotent.\n\n`specs/authentication` requires an administrative action to be attributed, and this is the\naction that most needs it: it is the one that creates the ability to perform every other one.",
+        "operationId": "grant_role_api_v1_admin_principals__subject_id__role_put",
+        "parameters": [
+          {
+            "description": "An auth subject.",
+            "in": "path",
+            "name": "subject_id",
+            "required": true,
+            "schema": {
+              "description": "An auth subject.",
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Subject Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleGrantResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Grant a principal the administrative role",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/usage": {
+      "get": {
+        "description": "**Protected. Administrative.** Aggregate language model usage by model, policy, plan, call role, status and period, with internal usage separated. Measures only \u2014 never a row, and never one person's.\n\nCall counts, token totals, estimated cost, failure rate and latency, grouped and split.\n\n``by`` is checked against an allowlist rather than interpolated, so a grouping the index does\nnot support is a 400 and an injection through a group-by is impossible by construction.\n\nEstimated cost is exactly that \u2014 an operational estimate, priced from what the catalog said at\nthe time of each call, never a billed amount and never presented as one.",
+        "operationId": "read_usage_api_v1_admin_usage_get",
+        "parameters": [
+          {
+            "description": "model, catalog_key, policy, plan, call_role, status, or provider.",
+            "in": "query",
+            "name": "by",
+            "required": false,
+            "schema": {
+              "default": "model",
+              "description": "model, catalog_key, policy, plan, call_role, status, or provider.",
+              "title": "By",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 400,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Aggregate language model usage",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
     "/api/v1/agent/ask": {
       "post": {
         "description": "**Protected.** Uses and writes the acting user's thread memory and stores an owned evidence record.\n\nAnswer one question, with the evidence for every figure in it.\n\nReturns 503 naming the missing configuration when no inference credential is set, and 429 with\nthe bound dimension when the caller's plan allowance is spent. Every public weather endpoint\nkeeps working in both cases, which is why the client is constructed here rather than at\nstartup and why the quota gate covers this route rather than the application.",

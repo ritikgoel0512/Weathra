@@ -36,6 +36,26 @@ export interface AgentStep {
   readonly status: StepStatus;
 }
 
+export interface AllowanceListResponse {
+  readonly allowances: AllowanceRecord[];
+  readonly count: number;
+}
+
+/** One allowance: a subject, a dimension, a window, a number. */
+export interface AllowanceRecord {
+  readonly allowance: number;
+  readonly dimension: QuotaDimension;
+  readonly internal_subject?: string | null;
+  readonly plan_code?: PlanCode | null;
+  readonly window_kind: QuotaWindow;
+}
+
+/** One allowance, for a plan or for the internal subject. */
+export interface AllowanceRequest {
+  readonly allowance: number;
+  readonly dimension: QuotaDimension;
+}
+
 /** Several places matched and no qualifier chose between them. */
 export interface AmbiguousResponse {
   readonly candidates: Location[];
@@ -174,6 +194,74 @@ export interface BaselineComparison {
   readonly observed_or_forecast_value: number;
   readonly z_score: StatisticResult;
 }
+
+/** The role a language model call serves, which is what a policy maps against. */
+export type CallRole = "routing" | "synthesis" | "lab";
+
+/** What a policy orders candidates by. Weathra's own judgement, never a vendor's marketing. */
+export type CapabilityTier = "economy" | "standard" | "frontier";
+
+/** A new catalog entry, with every field the resolver and the cost estimator need. */
+export interface CatalogCreateRequest {
+  readonly capability_roles: CallRole[];
+  readonly capability_tier: CapabilityTier;
+  readonly catalog_key: string;
+  readonly context_window: number;
+  readonly display_name: string;
+  readonly gateway_model: string;
+  readonly gateway_provider: string;
+  readonly input_price_per_million: number | string;
+  readonly is_free_tier: boolean;
+  readonly output_price_per_million: number | string;
+  readonly price_currency?: string;
+  readonly pricing_recorded_on: string;
+  readonly status?: CatalogStatus;
+  readonly supports_structured_output: boolean;
+}
+
+/** The editable half of an entry. ``status`` is deliberately absent. */
+export interface CatalogEditRequest {
+  readonly capability_roles?: CallRole[] | null;
+  readonly capability_tier?: CapabilityTier | null;
+  readonly context_window?: number | null;
+  readonly display_name?: string | null;
+  readonly gateway_model?: string | null;
+  readonly gateway_provider?: string | null;
+  readonly input_price_per_million?: number | string | null;
+  readonly is_free_tier?: boolean | null;
+  readonly output_price_per_million?: number | string | null;
+  readonly price_currency?: string | null;
+  readonly pricing_recorded_on?: string | null;
+  readonly supports_structured_output?: boolean | null;
+}
+
+/** One model Weathra is allowed to use, as the stores hand it out. */
+export interface CatalogEntry {
+  readonly capability_roles: CallRole[];
+  readonly capability_tier: CapabilityTier;
+  /** The stable internal handle. Never a vendor name. */
+  readonly catalog_key: string;
+  readonly context_window: number;
+  readonly display_name: string;
+  /** The vendor string. Mutable; a rename is one row. */
+  readonly gateway_model: string;
+  readonly gateway_provider: string;
+  readonly input_price_per_million: string;
+  readonly is_free_tier: boolean;
+  readonly output_price_per_million: string;
+  readonly price_currency: string;
+  readonly pricing_recorded_on: string;
+  readonly status: CatalogStatus;
+  readonly supports_structured_output: boolean;
+}
+
+export interface CatalogListResponse {
+  readonly count: number;
+  readonly entries: CatalogEntry[];
+}
+
+/** Whether an entry may be resolved at all. */
+export type CatalogStatus = "enabled" | "disabled";
 
 /** One ranked candidate — a location, or a day at one location — with its evidence. */
 export interface ComparisonCandidate {
@@ -601,12 +689,83 @@ export interface PeriodComparison {
   readonly unit_system: UnitSystem;
 }
 
+/** Which tier a person is on. */
+export interface PlanAssignmentRequest {
+  readonly plan_code: PlanCode;
+}
+
+/** The canonical subscription plan codes. */
+export type PlanCode = "free" | "pro" | "premium";
+
+export interface PlanListResponse {
+  readonly count: number;
+  readonly plans: PlanRecord[];
+}
+
+/** Which policy a plan resolves to, per call role. */
+export interface PlanMappingRequest {
+  readonly policy_by_call_role: Record<string, string>;
+}
+
+/** A product tier, its rank, and the policy it maps each call role to. */
+export interface PlanRecord {
+  readonly display_name: string;
+  /** Unused. Where a billing provider's id would later land. */
+  readonly external_subscription_ref?: string | null;
+  readonly plan_code: PlanCode;
+  readonly policy_by_call_role?: Record<string, string>;
+  /** Ascending entitlement. What 'never escalate above' compares. */
+  readonly rank: number;
+}
+
 /** One timestamped value in a series-shaped result: a per-day total, a rolling mean. */
 export interface PointValue {
   readonly time_local: string;
   readonly time_utc: string;
   /** Null where the window had nothing usable. */
   readonly value: number | null;
+}
+
+/** A re-pointed candidate list — a model promotion, in practice. */
+export interface PolicyCandidatesRequest {
+  readonly candidate_catalog_keys: string[];
+  readonly cited_comparison_run_ids?: string[];
+}
+
+/** A new policy: a name, an ordered candidate list, and who may resolve it. */
+export interface PolicyCreateRequest {
+  readonly applicable_call_roles: CallRole[];
+  readonly candidate_catalog_keys: string[];
+  readonly display_name: string;
+  readonly eligibility: PolicyEligibility;
+  readonly failover_enabled?: boolean;
+  readonly fallback_policy_id?: string | null;
+  readonly policy_id: string;
+}
+
+/** Who may resolve a policy at all — checked before a plan mapping is even consulted. */
+export type PolicyEligibility = "public" | "plan" | "administrative" | "internal_evaluation";
+
+/** The declared fallback, or null to clear it. */
+export interface PolicyFallbackRequest {
+  readonly fallback_policy_id?: string | null;
+}
+
+export interface PolicyListResponse {
+  readonly count: number;
+  readonly policies: PolicyRecord[];
+}
+
+/** A named, ordered candidate list, as stored. */
+export interface PolicyRecord {
+  readonly applicable_call_roles: CallRole[];
+  /** Ordered. The first enabled catalog entry wins. */
+  readonly candidate_catalog_keys: string[];
+  readonly display_name: string;
+  readonly eligibility: PolicyEligibility;
+  readonly failover_enabled?: boolean;
+  readonly fallback_policy_id?: string | null;
+  readonly policy_id: string;
 }
 
 /** Where a reported preference value came from. Half the point of the response. */
@@ -648,6 +807,12 @@ export interface Provenance {
   readonly unit_system: UnitSystem;
 }
 
+/** An allowance dimension, each enforceable independently (``specs/usage-limits``). */
+export type QuotaDimension = "requests_per_day" | "requests_per_month" | "tokens_per_month" | "concurrent_runs" | "estimated_cost_per_month";
+
+/** The period an allowance is counted over. */
+export type QuotaWindow = "day" | "month" | "concurrent";
+
 /** What is configured, what is reachable, and whether the service can serve. */
 export interface ReadinessResponse {
   readonly checked_at: string;
@@ -688,6 +853,20 @@ export interface ResolvedResponse {
   readonly kind?: "resolved";
   readonly location: Location;
   readonly query: string;
+}
+
+/** One role grant, as an administrator sees it. No contact detail, because none is stored. */
+export interface RoleGrantResponse {
+  readonly granted_at: string;
+  /** Null for the bootstrap grant, which has no granter to name. */
+  readonly granted_by?: string | null;
+  readonly role: string;
+  readonly subject_id: string;
+}
+
+export interface RoleListResponse {
+  readonly count: number;
+  readonly grants: RoleGrantResponse[];
 }
 
 /** One saved location as a caller sees it. */
@@ -894,6 +1073,22 @@ export interface UncertaintyStatement {
 /** The unit system a result is expressed in. Metric unless a caller says otherwise. */
 export type UnitSystem = "metric" | "imperial";
 
+/** One group's measures. */
+export interface UsageAggregate {
+  readonly calls: number;
+  readonly completion_tokens?: number | null;
+  readonly estimated_cost_total?: string | null;
+  readonly failures: number;
+  /** The grouping value. Null where the column was null. */
+  readonly group: string | null;
+  /** Internal usage is reported separately and never counted against a plan. */
+  readonly is_internal: boolean;
+  readonly latency_p50_ms?: number | null;
+  readonly latency_p95_ms?: number | null;
+  readonly prompt_tokens?: number | null;
+  readonly total_tokens?: number | null;
+}
+
 /** The caller's plan, their standing in every dimension, and a bounded recent summary. */
 export interface UsageResponse {
   /** Every dimension, unlimited ones too. */
@@ -907,6 +1102,21 @@ export interface UsageResponse {
   readonly recent: RecentUsage;
   /** The token subject. Never a value the request supplied. */
   readonly user_id: string;
+}
+
+/** Aggregate usage over one period, grouped one way, split internal from product. */
+export interface UsageSummaryResponse {
+  /** The dimension the measures are grouped by. */
+  readonly grouped_by: string;
+  /** One entry per (group, internal) pair. Never a row, and never a subject. */
+  readonly groups: UsageAggregate[];
+  readonly window: UsageWindow;
+}
+
+/** The period an aggregate covers. Both bounds explicit, because "recent" is not a period. */
+export interface UsageWindow {
+  readonly end: string;
+  readonly start: string;
 }
 
 export interface ValidationError {
@@ -958,6 +1168,8 @@ export interface ApiOperation {
   readonly path: string;
   /** Whether the call carries the access token as a bearer header. */
   readonly requiresToken: boolean;
+  /** Whether the operation additionally requires the backend-held administrative role. */
+  readonly administrative: boolean;
   /** The request body's schema, or null when the operation takes no body. */
   readonly request: string | null;
   /** The status a successful call returns: 200, 201, or 204 for no content. */
@@ -975,10 +1187,249 @@ export interface ApiOperation {
  */
 export const API_OPERATIONS: readonly ApiOperation[] = [
   {
+    operationId: "list_allowances_api_v1_admin_allowances_get",
+    method: "GET",
+    path: "/api/v1/admin/allowances",
+    requiresToken: true,
+    administrative: true,
+    request: null,
+    successStatus: 200,
+    response: "AllowanceListResponse",
+    parameters: [
+      { name: "plan_code", in: "query", required: false },
+      { name: "internal", in: "query", required: false },
+    ],
+  },
+  {
+    operationId: "set_internal_allowance_api_v1_admin_allowances_internal_put",
+    method: "PUT",
+    path: "/api/v1/admin/allowances/internal",
+    requiresToken: true,
+    administrative: true,
+    request: "AllowanceRequest",
+    successStatus: 200,
+    response: "AllowanceRecord",
+    parameters: [],
+  },
+  {
+    operationId: "list_catalog_api_v1_admin_models_get",
+    method: "GET",
+    path: "/api/v1/admin/models",
+    requiresToken: true,
+    administrative: true,
+    request: null,
+    successStatus: 200,
+    response: "CatalogListResponse",
+    parameters: [
+      { name: "status", in: "query", required: false },
+      { name: "capability_role", in: "query", required: false },
+    ],
+  },
+  {
+    operationId: "create_catalog_entry_api_v1_admin_models_post",
+    method: "POST",
+    path: "/api/v1/admin/models",
+    requiresToken: true,
+    administrative: true,
+    request: "CatalogCreateRequest",
+    successStatus: 201,
+    response: "CatalogEntry",
+    parameters: [],
+  },
+  {
+    operationId: "edit_catalog_entry_api_v1_admin_models__catalog_key__patch",
+    method: "PATCH",
+    path: "/api/v1/admin/models/{catalog_key}",
+    requiresToken: true,
+    administrative: true,
+    request: "CatalogEditRequest",
+    successStatus: 200,
+    response: "CatalogEntry",
+    parameters: [
+      { name: "catalog_key", in: "path", required: true },
+    ],
+  },
+  {
+    operationId: "disable_catalog_entry_api_v1_admin_models__catalog_key__disable_post",
+    method: "POST",
+    path: "/api/v1/admin/models/{catalog_key}/disable",
+    requiresToken: true,
+    administrative: true,
+    request: null,
+    successStatus: 200,
+    response: "CatalogEntry",
+    parameters: [
+      { name: "catalog_key", in: "path", required: true },
+    ],
+  },
+  {
+    operationId: "enable_catalog_entry_api_v1_admin_models__catalog_key__enable_post",
+    method: "POST",
+    path: "/api/v1/admin/models/{catalog_key}/enable",
+    requiresToken: true,
+    administrative: true,
+    request: null,
+    successStatus: 200,
+    response: "CatalogEntry",
+    parameters: [
+      { name: "catalog_key", in: "path", required: true },
+    ],
+  },
+  {
+    operationId: "list_plans_api_v1_admin_plans_get",
+    method: "GET",
+    path: "/api/v1/admin/plans",
+    requiresToken: true,
+    administrative: true,
+    request: null,
+    successStatus: 200,
+    response: "PlanListResponse",
+    parameters: [],
+  },
+  {
+    operationId: "set_plan_allowance_api_v1_admin_plans__plan_code__allowances_put",
+    method: "PUT",
+    path: "/api/v1/admin/plans/{plan_code}/allowances",
+    requiresToken: true,
+    administrative: true,
+    request: "AllowanceRequest",
+    successStatus: 200,
+    response: "AllowanceRecord",
+    parameters: [
+      { name: "plan_code", in: "path", required: true },
+    ],
+  },
+  {
+    operationId: "set_plan_policy_mapping_api_v1_admin_plans__plan_code__policies_put",
+    method: "PUT",
+    path: "/api/v1/admin/plans/{plan_code}/policies",
+    requiresToken: true,
+    administrative: true,
+    request: "PlanMappingRequest",
+    successStatus: 200,
+    response: null,
+    parameters: [
+      { name: "plan_code", in: "path", required: true },
+    ],
+  },
+  {
+    operationId: "list_policies_api_v1_admin_policies_get",
+    method: "GET",
+    path: "/api/v1/admin/policies",
+    requiresToken: true,
+    administrative: true,
+    request: null,
+    successStatus: 200,
+    response: "PolicyListResponse",
+    parameters: [],
+  },
+  {
+    operationId: "create_policy_api_v1_admin_policies_post",
+    method: "POST",
+    path: "/api/v1/admin/policies",
+    requiresToken: true,
+    administrative: true,
+    request: "PolicyCreateRequest",
+    successStatus: 201,
+    response: "PolicyRecord",
+    parameters: [],
+  },
+  {
+    operationId: "set_policy_candidates_api_v1_admin_policies__policy_id__candidates_put",
+    method: "PUT",
+    path: "/api/v1/admin/policies/{policy_id}/candidates",
+    requiresToken: true,
+    administrative: true,
+    request: "PolicyCandidatesRequest",
+    successStatus: 200,
+    response: "PolicyRecord",
+    parameters: [
+      { name: "policy_id", in: "path", required: true },
+    ],
+  },
+  {
+    operationId: "set_policy_fallback_api_v1_admin_policies__policy_id__fallback_put",
+    method: "PUT",
+    path: "/api/v1/admin/policies/{policy_id}/fallback",
+    requiresToken: true,
+    administrative: true,
+    request: "PolicyFallbackRequest",
+    successStatus: 200,
+    response: "PolicyRecord",
+    parameters: [
+      { name: "policy_id", in: "path", required: true },
+    ],
+  },
+  {
+    operationId: "list_administrators_api_v1_admin_principals_administrators_get",
+    method: "GET",
+    path: "/api/v1/admin/principals/administrators",
+    requiresToken: true,
+    administrative: true,
+    request: null,
+    successStatus: 200,
+    response: "RoleListResponse",
+    parameters: [],
+  },
+  {
+    operationId: "assign_plan_api_v1_admin_principals__subject_id__plan_put",
+    method: "PUT",
+    path: "/api/v1/admin/principals/{subject_id}/plan",
+    requiresToken: true,
+    administrative: true,
+    request: "PlanAssignmentRequest",
+    successStatus: 200,
+    response: "PlanRecord",
+    parameters: [
+      { name: "subject_id", in: "path", required: true },
+    ],
+  },
+  {
+    operationId: "grant_role_api_v1_admin_principals__subject_id__role_put",
+    method: "PUT",
+    path: "/api/v1/admin/principals/{subject_id}/role",
+    requiresToken: true,
+    administrative: true,
+    request: null,
+    successStatus: 200,
+    response: "RoleGrantResponse",
+    parameters: [
+      { name: "subject_id", in: "path", required: true },
+    ],
+  },
+  {
+    operationId: "revoke_role_api_v1_admin_principals__subject_id__role_delete",
+    method: "DELETE",
+    path: "/api/v1/admin/principals/{subject_id}/role",
+    requiresToken: true,
+    administrative: true,
+    request: null,
+    successStatus: 204,
+    response: null,
+    parameters: [
+      { name: "subject_id", in: "path", required: true },
+    ],
+  },
+  {
+    operationId: "read_usage_api_v1_admin_usage_get",
+    method: "GET",
+    path: "/api/v1/admin/usage",
+    requiresToken: true,
+    administrative: true,
+    request: null,
+    successStatus: 200,
+    response: "UsageSummaryResponse",
+    parameters: [
+      { name: "by", in: "query", required: false },
+      { name: "days", in: "query", required: false },
+    ],
+  },
+  {
     operationId: "ask_api_v1_agent_ask_post",
     method: "POST",
     path: "/api/v1/agent/ask",
     requiresToken: true,
+    administrative: false,
     request: "AskRequest",
     successStatus: 200,
     response: "AskResponse",
@@ -989,6 +1440,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "POST",
     path: "/api/v1/agent/stream",
     requiresToken: true,
+    administrative: false,
     request: "AskRequest",
     successStatus: 200,
     response: null,
@@ -999,6 +1451,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "GET",
     path: "/api/v1/evidence/{evidence_id}",
     requiresToken: true,
+    administrative: false,
     request: null,
     successStatus: 200,
     response: "EvidenceResponse",
@@ -1011,6 +1464,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "GET",
     path: "/api/v1/health",
     requiresToken: false,
+    administrative: false,
     request: null,
     successStatus: 200,
     response: "HealthResponse",
@@ -1021,6 +1475,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "GET",
     path: "/api/v1/locations/resolve",
     requiresToken: false,
+    administrative: false,
     request: null,
     successStatus: 200,
     response: "ResolvedResponse | AmbiguousResponse",
@@ -1035,6 +1490,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "GET",
     path: "/api/v1/locations/search",
     requiresToken: false,
+    administrative: false,
     request: null,
     successStatus: 200,
     response: "SearchResponse",
@@ -1048,6 +1504,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "GET",
     path: "/api/v1/me",
     requiresToken: true,
+    administrative: false,
     request: null,
     successStatus: 200,
     response: "MeResponse",
@@ -1058,6 +1515,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "DELETE",
     path: "/api/v1/me/data",
     requiresToken: true,
+    administrative: false,
     request: null,
     successStatus: 200,
     response: "DeletionResponse",
@@ -1068,6 +1526,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "GET",
     path: "/api/v1/me/locations",
     requiresToken: true,
+    administrative: false,
     request: null,
     successStatus: 200,
     response: "SavedLocationsResponse",
@@ -1078,6 +1537,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "POST",
     path: "/api/v1/me/locations",
     requiresToken: true,
+    administrative: false,
     request: "SavedLocationRequest",
     successStatus: 201,
     response: "SavedLocationRecord",
@@ -1088,6 +1548,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "DELETE",
     path: "/api/v1/me/locations/{saved_id}",
     requiresToken: true,
+    administrative: false,
     request: null,
     successStatus: 204,
     response: null,
@@ -1100,6 +1561,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "GET",
     path: "/api/v1/me/preferences",
     requiresToken: true,
+    administrative: false,
     request: null,
     successStatus: 200,
     response: "PreferenceView",
@@ -1110,6 +1572,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "PUT",
     path: "/api/v1/me/preferences",
     requiresToken: true,
+    administrative: false,
     request: "PreferenceUpdate",
     successStatus: 200,
     response: "PreferenceView",
@@ -1120,6 +1583,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "DELETE",
     path: "/api/v1/me/preferences",
     requiresToken: true,
+    administrative: false,
     request: null,
     successStatus: 200,
     response: "PreferenceView",
@@ -1130,6 +1594,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "GET",
     path: "/api/v1/me/usage",
     requiresToken: true,
+    administrative: false,
     request: null,
     successStatus: 200,
     response: "UsageResponse",
@@ -1140,6 +1605,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "GET",
     path: "/api/v1/ready",
     requiresToken: false,
+    administrative: false,
     request: null,
     successStatus: 200,
     response: "ReadinessResponse",
@@ -1150,6 +1616,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "GET",
     path: "/api/v1/threads",
     requiresToken: true,
+    administrative: false,
     request: null,
     successStatus: 200,
     response: "ThreadsResponse",
@@ -1160,6 +1627,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "GET",
     path: "/api/v1/threads/{thread_id}",
     requiresToken: true,
+    administrative: false,
     request: null,
     successStatus: 200,
     response: "ThreadSummary",
@@ -1172,6 +1640,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "DELETE",
     path: "/api/v1/threads/{thread_id}",
     requiresToken: true,
+    administrative: false,
     request: null,
     successStatus: 204,
     response: null,
@@ -1184,6 +1653,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "GET",
     path: "/api/v1/weather/analysis",
     requiresToken: false,
+    administrative: false,
     request: null,
     successStatus: 200,
     response: "AnalysisResponse",
@@ -1203,6 +1673,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "GET",
     path: "/api/v1/weather/changes",
     requiresToken: true,
+    administrative: false,
     request: null,
     successStatus: 200,
     response: "WhatChanged",
@@ -1220,6 +1691,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "POST",
     path: "/api/v1/weather/comparison",
     requiresToken: false,
+    administrative: false,
     request: "ComparisonRequest",
     successStatus: 200,
     response: "ComparisonResult",
@@ -1230,6 +1702,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "GET",
     path: "/api/v1/weather/current",
     requiresToken: false,
+    administrative: false,
     request: null,
     successStatus: 200,
     response: "CurrentResponse",
@@ -1246,6 +1719,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "GET",
     path: "/api/v1/weather/forecast",
     requiresToken: false,
+    administrative: false,
     request: null,
     successStatus: 200,
     response: "ForecastResponse",
@@ -1263,6 +1737,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "GET",
     path: "/api/v1/weather/history",
     requiresToken: false,
+    administrative: false,
     request: null,
     successStatus: 200,
     response: "HistoryResponse",
@@ -1281,6 +1756,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "GET",
     path: "/api/v1/weather/history/baseline",
     requiresToken: false,
+    administrative: false,
     request: null,
     successStatus: 200,
     response: "Baseline",
@@ -1301,6 +1777,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "GET",
     path: "/api/v1/weather/history/baseline/comparison",
     requiresToken: false,
+    administrative: false,
     request: null,
     successStatus: 200,
     response: "BaselineComparison",
@@ -1321,6 +1798,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     method: "GET",
     path: "/api/v1/weather/history/comparison",
     requiresToken: false,
+    administrative: false,
     request: null,
     successStatus: 200,
     response: "PeriodComparison",

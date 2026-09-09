@@ -84,10 +84,15 @@ def apply_security_metadata(app: FastAPI, *, prefix: str) -> None:
                         {"description": "No valid access token was presented."},
                     )
 
+                # "**Protected. Administrative.**" — both, in that order, because that is the
+                # order a caller meets them: a validated token first, then the role
+                # (`specs/http-api`). A single label would leave a reader guessing whether an
+                # administrative endpoint also needs authentication.
+                labels = entry.access.value.capitalize()
+                if entry.administrative:
+                    labels = f"{labels}. Administrative"
                 classification = (
-                    f"**{entry.access.value.capitalize()}.** {entry.reason}"
-                    if entry.reason
-                    else f"**{entry.access.value.capitalize()}.**"
+                    f"**{labels}.** {entry.reason}" if entry.reason else f"**{labels}.**"
                 )
                 existing = operation.get("description") or ""
                 operation["description"] = (

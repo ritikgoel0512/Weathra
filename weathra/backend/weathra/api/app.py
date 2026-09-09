@@ -52,6 +52,7 @@ from weathra.api.middleware import REQUEST_ID_HEADER, RequestContextMiddleware, 
 from weathra.api.openapi import apply_security_metadata
 from weathra.api.routers import (
     account,
+    admin,
     agent,
     analysis,
     changes,
@@ -266,6 +267,7 @@ def build_app(settings: Settings | None = None) -> FastAPI:
         account.router,
         usage.router,
         evidence.router,
+        *admin.routers,
     ):
         app.include_router(router, prefix=prefix)
 

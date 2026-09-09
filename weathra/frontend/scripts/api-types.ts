@@ -260,6 +260,10 @@ function renderOperations(document: OpenApiDocument): string {
           `    method: ${JSON.stringify(method.toUpperCase())},`,
           `    path: ${JSON.stringify(path)},`,
           `    requiresToken: ${(operation.security ?? []).length > 0},`,
+          // Read off the classification the backend stamps into the description
+          // ("**Protected. Administrative.** …"), so the frontend's tests know which operations
+          // belong to a surface it does not serve yet without a second list to keep in step.
+          `    administrative: ${(operation.description ?? "").includes("Administrative.")},`,
           `    request: ${JSON.stringify(schemaReference(operation.requestBody?.content))},`,
           `    successStatus: ${success.status},`,
           `    response: ${JSON.stringify(success.schema)},`,
@@ -287,6 +291,8 @@ function renderOperations(document: OpenApiDocument): string {
     "  readonly path: string;",
     "  /** Whether the call carries the access token as a bearer header. */",
     "  readonly requiresToken: boolean;",
+    "  /** Whether the operation additionally requires the backend-held administrative role. */",
+    "  readonly administrative: boolean;",
     "  /** The request body's schema, or null when the operation takes no body. */",
     "  readonly request: string | null;",
     "  /** The status a successful call returns: 200, 201, or 204 for no content. */",

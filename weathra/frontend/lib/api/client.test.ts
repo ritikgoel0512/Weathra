@@ -106,7 +106,11 @@ describe("the request the client makes", () => {
 describe("the access token", () => {
   it("is attached to every operation the contract marks protected", async () => {
     // Driven off the generated table: the assertion covers whatever the backend protects today.
-    const protectedOperations = API_OPERATIONS.filter((operation) => operation.requiresToken);
+    // Administrative operations are protected too, and are excluded here for the same dated
+    // reason as above: there is no client method to invoke, because there is no screen yet.
+    const protectedOperations = API_OPERATIONS.filter(
+      (operation) => operation.requiresToken && !operation.administrative,
+    );
     expect(protectedOperations.length).toBeGreaterThan(8);
 
     for (const operation of protectedOperations) {
@@ -313,13 +317,40 @@ describe("the client's coverage of the contract", () => {
     "utf8",
   );
 
-  it("calls every path the backend serves", () => {
+  it("calls every non-administrative path the backend serves", () => {
     // A screen that needed an endpoint the client had no method for would reach for `fetch`
     // directly, and the token handling and the 401 interception would be missing from that call.
-    for (const { path } of API_OPERATIONS) {
+    //
+    // Administrative operations are excluded, and the exclusion is dated rather than permanent:
+    // the administrative screens are task 33.1–33.4 and are gated on a design that does not exist
+    // yet, so a client method for them would be a method nothing calls. The check below keeps them
+    // from being forgotten — every operation is either covered here or marked administrative, and
+    // there is no third category to hide in.
+    for (const { path, administrative } of API_OPERATIONS) {
+      if (administrative) continue;
       const template = path.replace(/\{[^}]+\}/g, "");
       expect(source, path).toContain(template.replace(/\/$/, ""));
     }
+  });
+
+  it("has an administrative surface the backend declares and this client does not yet serve", () => {
+    // Two assertions, and the second is the one that matters. The first says the backend has an
+    // administrative surface at all; the second says every path this client skips is skipped
+    // *because it is administrative* — so an ordinary endpoint can never quietly join the
+    // exclusion by being left out of the client.
+    const administrative = API_OPERATIONS.filter(({ administrative }) => administrative);
+    expect(administrative.length).toBeGreaterThan(8);
+
+    for (const { path } of administrative) {
+      expect(path, path).toMatch(/^\/api\/v1\/admin\//);
+      expect(source, `${path} reached the client before its screens exist`).not.toContain(path);
+    }
+
+    const uncovered = API_OPERATIONS.filter(({ path, administrative }) => {
+      const template = path.replace(/\{[^}]+\}/g, "").replace(/\/$/, "");
+      return !administrative && !source.includes(template);
+    });
+    expect(uncovered.map(({ path }) => path)).toEqual([]);
   });
 
   it("sends no parameter the contract does not declare", () => {

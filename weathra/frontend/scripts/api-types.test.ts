@@ -141,8 +141,8 @@ describe("the generator", () => {
 
     // Saving a location answers 201 with the record; removing one answers 204 with nothing. A
     // client that parsed the 204 as JSON would throw on an empty body and report a server fault.
-    expect(generated).toContain('path: "/api/v1/me/locations",\n    requiresToken: true,\n    request: "SavedLocationRequest",\n    successStatus: 201,\n    response: "SavedLocationRecord",');
-    expect(generated).toContain('path: "/api/v1/me/locations/{saved_id}",\n    requiresToken: true,\n    request: null,\n    successStatus: 204,\n    response: null,');
+    expect(generated).toContain('path: "/api/v1/me/locations",\n    requiresToken: true,\n    administrative: false,\n    request: "SavedLocationRequest",\n    successStatus: 201,\n    response: "SavedLocationRecord",');
+    expect(generated).toContain('path: "/api/v1/me/locations/{saved_id}",\n    requiresToken: true,\n    administrative: false,\n    request: null,\n    successStatus: 204,\n    response: null,');
   });
 
   it("carries a union response as a union, so the caller must discriminate", () => {
