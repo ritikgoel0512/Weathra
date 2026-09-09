@@ -43,7 +43,7 @@ from weathra.entitlements.quotas import (
     Reservation,
     stores_over,
 )
-from weathra.memory.retention import delete_account_data
+from weathra.memory.retention import delete_account_data, run_retention
 from weathra.telemetry.usage import record_events
 
 pytestmark = pytest.mark.db
@@ -225,6 +225,38 @@ async def test_the_estimated_cost_dimension_is_unseeded_and_therefore_unlimited(
     cost = report.by_dimension(QuotaDimension.ESTIMATED_COST_PER_MONTH)
     assert cost is not None
     assert cost.allowance is None
+
+
+async def test_a_cost_budget_is_enforced_by_the_same_mechanism_as_every_other_dimension(
+    engines: Engines, clean_database: None, seeded_reference_data: None
+) -> None:
+    """`specs/usage-limits` asks the model to *admit* a cost budget without restructuring.
+
+    Nothing seeds one, because this change ships no billing and an estimate is the wrong thing to
+    refuse a request on. But "representable" is a weak claim on its own, so here one is written as
+    an ordinary row and the ordinary gate refuses against it — no new type, no new code path.
+    """
+    user_id = await a_user(engines)
+    await clear_allowances(engines, "free", keep="requests_per_day")
+    async with privileged_session(engines.privileged_sessionmaker) as session:
+        await session.execute(
+            text(
+                "INSERT INTO usage_limits (id, plan_code, dimension, window_kind, allowance) "
+                "VALUES (gen_random_uuid(), 'free', 'estimated_cost_per_month', 'month', 50)"
+            )
+        )
+        await session.execute(
+            text(
+                "INSERT INTO usage_counters (subject, dimension, window_key, consumed) "
+                "VALUES (:u, 'estimated_cost_per_month', :w, 50)"
+            ),
+            {"u": user_id, "w": str(MONTH)},
+        )
+
+    with pytest.raises(QuotaExceeded) as caught:
+        await gate_for(engines, user_id).admit(subject_for(user_id), moment=NOW)
+    assert caught.value.details["dimension"] == "estimated_cost_per_month"
+    assert caught.value.details["allowance"] == 50
 
 
 async def test_a_caller_cannot_raise_their_own_allowance(
@@ -753,6 +785,50 @@ async def test_the_report_is_the_callers_own_and_nobody_elses(
     report = await gate_for(engines, mine).report(subject_for(mine), moment=NOW)
     daily = report.by_dimension(QuotaDimension.REQUESTS_PER_DAY)
     assert daily is not None and daily.consumed == 0
+
+
+async def test_entitlement_and_usage_state_is_not_conversational_memory(
+    engines: Engines, clean_database: None, seeded_reference_data: None
+) -> None:
+    """`specs/memory`: a plan, a policy and a consumption counter are not things a thread holds.
+
+    Two halves, and both matter. The *representation* cannot carry them — `ResolvedEntities`
+    forbids extras, so a field named `plan` is a validation error rather than a quiet addition to
+    what a follow-up can refer to. And the *retention* is separate: a thread ageing out takes the
+    conversation with it and leaves the account's standing alone, which is right, because an
+    allowance is not something a person said.
+    """
+    from pydantic import ValidationError
+
+    from weathra.memory.threads import ResolvedEntities
+
+    with pytest.raises(ValidationError):
+        ResolvedEntities(plan="premium")  # type: ignore[call-arg]
+    with pytest.raises(ValidationError):
+        ResolvedEntities(requests_per_day=25)  # type: ignore[call-arg]
+
+    user_id = await a_user(engines)
+    gate = gate_for(engines, user_id)
+    await gate.finish(await gate.admit(subject_for(user_id), moment=NOW))
+
+    async with privileged_session(engines.privileged_sessionmaker) as session:
+        await session.execute(
+            text(
+                "INSERT INTO threads (id, user_id, title, resolved_entities, expires_at) "
+                "VALUES (gen_random_uuid(), CAST(:u AS uuid), 't', '{}'::jsonb, "
+                "        now() - interval '1 day')"
+            ),
+            {"u": user_id},
+        )
+        report = await run_retention(session, engines.settings)
+
+    assert report.threads_expired == 1
+    assert await consumed(engines, user_id, QuotaDimension.REQUESTS_PER_DAY, str(DAY)) == 1, (
+        "a thread ageing out took the account's consumption with it"
+    )
+    async with privileged_session(engines.privileged_sessionmaker) as session:
+        plans = await session.scalar(text("SELECT count(*) FROM usage_limits"))
+    assert plans and plans > 0, "retention reached the allowance rows"
 
 
 # =========================================================================== 30.8 fail closed

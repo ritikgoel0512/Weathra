@@ -66,6 +66,8 @@ backend/weathra/
                           the catalog, policy and plan stores — data access and administration,
                           deliberately not resolution
                           resolver.py administration.py — the one place a model is chosen
+                          quotas.py — the one place a call is admitted or refused. Runs before
+                          resolution: whether there is to be a call precedes which model serves it
   telemetry/              usage.py cost.py projection.py context.py aggregate.py
                           what each call cost in tokens, money and time. Records what happened;
                           decides nothing
@@ -80,7 +82,7 @@ backend/weathra/
   api/
     app.py errors.py middleware.py dependencies.py classification.py streaming.py openapi.py
     routers/              health.py locations.py weather.py history.py analysis.py
-                          comparison.py agent.py evidence.py account.py support.py
+                          comparison.py agent.py evidence.py account.py usage.py support.py
   evaluation/             cases.py dataset/ fixtures.py harness.py offline_llm.py metrics.py
                           thresholds.py provisioning.py runner.py storage.py
 ```
@@ -283,27 +285,27 @@ Task 22.10's live execution remains outstanding).
 
 | Spec | Requirements | Implemented | Manual | Open | Governing task groups |
 |---|---:|---:|---:|---:|---|
-| `agent-orchestration` | 17 | 15 | 0 | 2 | 13, 14 |
-| `authentication` | 20 | 17 | 0 | 3 | 3, 4, 18 |
+| `agent-orchestration` | 17 | 17 | 0 | 0 | 13, 14 |
+| `authentication` | 20 | 19 | 0 | 1 | 3, 4, 18 |
 | `deterministic-analytics` | 10 | 10 | 0 | 0 | 7 |
 | `evaluation` | 15 | 10 | 0 | 5 | 22 |
 | `forecast-analysis` | 10 | 10 | 0 | 0 | 8 |
 | `historical-weather` | 5 | 5 | 0 | 0 | 8 |
-| `http-api` | 24 | 20 | 0 | 4 | 15, 16 |
+| `http-api` | 24 | 22 | 0 | 2 | 15, 16 |
 | `location-comparison` | 6 | 6 | 0 | 0 | 9 |
 | `location-resolution` | 7 | 7 | 0 | 0 | 6 |
 | `mcp-weather-server` | 7 | 7 | 0 | 0 | 10 |
-| `memory` | 9 | 7 | 0 | 2 | 12 |
+| `memory` | 9 | 9 | 0 | 0 | 12 |
 | `rag-knowledge` | 8 | 8 | 0 | 0 | 11 |
 | `safety-grounding` | 10 | 10 | 0 | 0 | 17 |
 | `weather-providers` | 7 | 7 | 0 | 0 | 5 |
 | `web-ui` | 16 | 11 | 1 | 4 | 19, 20, 21 |
-| `model-policy` | 10 | 0 | 0 | 10 | 28 |
-| `model-catalog` | 7 | 0 | 0 | 7 | 26, 27 |
-| `llm-telemetry` | 7 | 0 | 0 | 7 | 29 |
-| `usage-limits` | 9 | 0 | 0 | 9 | 30 |
+| `model-policy` | 10 | 8 | 0 | 2 | 28 |
+| `model-catalog` | 7 | 5 | 0 | 2 | 26, 27 |
+| `llm-telemetry` | 7 | 7 | 0 | 0 | 29 |
+| `usage-limits` | 9 | 8 | 0 | 1 | 30 |
 | `model-lab` | 6 | 0 | 0 | 6 | 32 |
-| **Total** | **210** | **150** | **1** | **59** | |
+| **Total** | **210** | **186** | **1** | **23** | |
 
 ### `agent-orchestration`
 
@@ -324,7 +326,7 @@ Task 22.10's live execution remains outstanding).
 | Untrusted content is data, not instruction | 14.13 | agents/safety.py | integration/test_safety.py | IMPLEMENTED |
 | Operation without an inference credential | 13.5 | agents/llm/registry.py | integration/test_no_credential.py | IMPLEMENTED |
 | Model selection comes from the policy layer, never from a node or a caller | 28.7 | entitlements/resolver.py, agents/models.py, agents/graph.py | unit/test_policy_resolver.py, integration/test_agent_resolution.py, test_architecture.py | IMPLEMENTED |
-| Orchestration is gated by quota and instrumented per call | 29.3, 30.6 | — not implemented | — none | OPEN |
+| Orchestration is gated by quota and instrumented per call | 29.3, 30.6 | api/routers/agent.py, entitlements/quotas.py, agents/llm/instrumented.py | integration/test_quota_api.py, integration/test_telemetry_persistence.py | IMPLEMENTED |
 | Every language model call attempt is recorded in the evidence record | 22.8 | domain/evidence.py, agents/llm/base.py | unit/test_domain_evidence.py, unit/test_llm.py | IMPLEMENTED |
 
 ### `authentication`
@@ -437,8 +439,8 @@ Task 22.10's live execution remains outstanding).
 | Request correlation and observability | 15.3 | api/middleware.py | integration/test_api.py | IMPLEMENTED |
 | Cross-origin access for the frontend | 15.1, 16.4 | api/app.py | integration/test_api.py | IMPLEMENTED |
 | Model selection is not caller-selectable on product endpoints | 28.2, 31.6 | — not implemented | — none | OPEN |
-| Quota enforcement on the HTTP surface | 30.6 | — not implemented | — none | OPEN |
-| Plan and usage endpoint for the signed-in person | 30.7 | — not implemented | — none | OPEN |
+| Quota enforcement on the HTTP surface | 30.6 | api/routers/agent.py, api/errors.py, domain/errors.py | integration/test_quota_api.py | IMPLEMENTED |
+| Plan and usage endpoint for the signed-in person | 30.7 | api/routers/usage.py, entitlements/quotas.py | integration/test_quota_api.py, integration/test_auth_boundary.py | IMPLEMENTED |
 | Administrative model, usage, and lab endpoints | 31.3–31.6 | — not implemented | — none | OPEN |
 
 ### `location-comparison`
@@ -488,7 +490,7 @@ Task 22.10's live execution remains outstanding).
 | Ownership derived from the authenticated user | 12.2 | memory/, auth/rls.py | integration/test_auth_data_path.py, integration/test_checkpoint_policies.py | IMPLEMENTED |
 | Memory unavailability degrades honestly | 12.6 | memory/degradation.py, memory/availability.py | unit/test_memory_degradation.py | IMPLEMENTED |
 | Both memory tiers are retained unchanged by the model policy layer | 26.5, 28.8 | db/migrations/versions/0006_saas_user_owned_tables.py, agents/graph.py | integration/test_saas_rls.py, integration/test_agent_resolution.py | IMPLEMENTED |
-| Plan, policy, and usage state are not conversational memory | 26.3, 30.1 | — not implemented | — none | OPEN |
+| Plan, policy, and usage state are not conversational memory | 26.3, 30.1 | db/models.py, memory/threads.py, memory/retention.py, entitlements/quotas.py | integration/test_quota_enforcement.py, integration/test_saas_rls.py | IMPLEMENTED |
 
 ### `rag-knowledge`
 
@@ -587,20 +589,20 @@ Task 22.10's live execution remains outstanding).
 | Cost estimation is deterministic and labelled as an estimate | 29.2 | telemetry/cost.py | unit/test_telemetry.py | IMPLEMENTED |
 | Telemetry records metadata, not conversation content | 29.6 | domain/usage.py, telemetry/projection.py | integration/test_telemetry_persistence.py, unit/test_telemetry.py | IMPLEMENTED |
 | Telemetry never degrades or blocks the answer path | 29.5 | telemetry/usage.py, agents/llm/instrumented.py | integration/test_telemetry_persistence.py, integration/test_agent_resolution.py | IMPLEMENTED |
-| Telemetry is owner-scoped and internal usage is separated | 29.1, 30.5 | — not implemented | — none | OPEN |
+| Telemetry is owner-scoped and internal usage is separated | 29.1, 30.5 | telemetry/usage.py, telemetry/aggregate.py, entitlements/quotas.py, db/migrations/versions/0010_internal_quota_accounting.py | integration/test_telemetry_persistence.py, integration/test_quota_enforcement.py | IMPLEMENTED |
 | Telemetry is aggregatable and retained for a bounded period | 29.7, 29.8 | telemetry/aggregate.py, memory/retention.py, db/migrations/versions/0009_usage_counter_delete_grant.py | integration/test_telemetry_persistence.py | IMPLEMENTED |
 
 ### `usage-limits`
 
 | Requirement | Tasks | Implementation | Tests | Status |
 |---|---|---|---|---|
-| Subscription plans are persisted server-side data | 26.2, 26.6, 28.2 | db/models.py, db/migrations/versions/0005_saas_operational_tables.py, db/migrations/versions/0008_seed_model_policy_data.py | integration/test_saas_seed.py, integration/test_saas_rls.py | OPEN |
-| Quotas are enforced in the backend before the call | 30.2, 30.6 | — not implemented | — none | OPEN |
-| Allowances differ by plan and are expressed in stated dimensions | 30.1 | — not implemented | — none | OPEN |
-| Windows are explicit and reset predictably | 30.1 | — not implemented | — none | OPEN |
-| Quota refusal is honest, structured, and non-destructive | 30.6, 30.9 | — not implemented | — none | OPEN |
-| Accounting is consistent with recorded usage and safe under concurrency | 30.2, 30.3, 30.4 | — not implemented | — none | OPEN |
-| Internal and administrative usage is tracked separately | 30.5 | — not implemented | — none | OPEN |
+| Subscription plans are persisted server-side data | 26.2, 26.6, 28.2, 30.1 | db/models.py, db/migrations/versions/0005_saas_operational_tables.py, db/migrations/versions/0008_seed_model_policy_data.py, entitlements/quotas.py | integration/test_saas_seed.py, integration/test_saas_rls.py, integration/test_quota_enforcement.py | IMPLEMENTED |
+| Quotas are enforced in the backend before the call | 30.2, 30.6 | entitlements/quotas.py, api/routers/agent.py | integration/test_quota_api.py, integration/test_quota_enforcement.py | IMPLEMENTED |
+| Allowances differ by plan and are expressed in stated dimensions | 30.1, 30.3, 30.4 | domain/usage.py, entitlements/quotas.py, db/migrations/versions/0008_seed_model_policy_data.py | unit/test_quotas.py, integration/test_quota_enforcement.py | IMPLEMENTED |
+| Windows are explicit and reset predictably | 30.1, 30.9 | domain/usage.py, entitlements/quotas.py, config.py | unit/test_quotas.py, integration/test_quota_enforcement.py | IMPLEMENTED |
+| Quota refusal is honest, structured, and non-destructive | 30.6, 30.9 | domain/errors.py, api/errors.py, entitlements/quotas.py | unit/test_quotas.py, integration/test_quota_api.py | IMPLEMENTED |
+| Accounting is consistent with recorded usage and safe under concurrency | 30.2, 30.3, 30.4, 30.8 | entitlements/quotas.py, api/routers/agent.py | integration/test_quota_enforcement.py, unit/test_quotas.py | IMPLEMENTED |
+| Internal and administrative usage is tracked separately | 30.5 | entitlements/quotas.py, entitlements/administration.py, db/migrations/versions/0010_internal_quota_accounting.py, evaluation/provisioning.py | integration/test_quota_enforcement.py, integration/test_quota_api.py | IMPLEMENTED |
 | Quota administration is privileged and auditable | 31.4 | — not implemented | — none | OPEN |
 | No payment processing in this change | 26.2 | db/models.py, db/migrations/versions/0005_saas_operational_tables.py | test_no_payment_processing.py, integration/test_saas_seed.py | IMPLEMENTED |
 
@@ -626,16 +628,15 @@ repository lands somewhere, in the same way every requirement does. Deployment a
 capability spec by design — they are governed by tasks 23.1–23.7 and recorded in
 [`deployment.md`](deployment.md).
 
-**No capability spec is unimplemented by accident.** Five specs — `model-policy`, `model-catalog`,
-`llm-telemetry`, `usage-limits`, and `model-lab` — are wholly open, and their thirty-nine
-requirements are owned by task groups 26 through 34. Nineteen further requirements inside otherwise
-implemented specs belong to the same layer: model selection and quota in `agent-orchestration` and
-`http-api`, the SaaS-table and role requirements in `authentication`, the model-comparison
-requirements in `evaluation`, the policy-layer guarantees in `memory`, and the administrative and
-plan screens in `web-ui`.
+**No capability spec is unimplemented by accident.** The five specs of the SaaS layer —
+`model-policy`, `model-catalog`, `llm-telemetry`, `usage-limits`, and `model-lab` — were wholly
+open when this table was first written; groups 26 through 30 have closed twenty-seven of their
+thirty-nine requirements. What remains in them is owned by groups 31 through 34: administration of
+the catalog, the policies, the plans and the allowances (31), the model lab (32), the plan and
+administrative screens (33), and the documentation and acceptance pass (34).
 
-Task 34.6 extends this table over the five wholly open specs once group 26–34 work lands. Until
-then their rows stand as written: named, owned, and untested.
+The counts in the table above are the rows below it, recounted rather than remembered — they had
+drifted while groups 27 to 29 filled in their own sections and left the summary alone.
 
 **Three requirements are outstanding for reasons other than Phase B.** `web-ui`'s accessibility
 and responsive layout is `MANUAL` — its automated half passes in two browser engines, and

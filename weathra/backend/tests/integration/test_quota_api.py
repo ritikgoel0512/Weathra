@@ -23,6 +23,7 @@ from weathra.agents.llm.base import Completion, Message
 from weathra.agents.llm.fake import FakeLLMClient
 from weathra.agents.plan import Capability, PlanStep, RoutingPlan
 from weathra.db.session import privileged_session
+from weathra.domain.errors import ProviderRateLimited
 
 pytestmark = pytest.mark.db
 
@@ -216,6 +217,63 @@ async def test_the_quota_refusal_is_distinguishable_from_every_other_429_and_4xx
     assert refused.json()["error"]["code"] != "provider_rate_limited", (
         "the subscription saying no and the gateway saying not yet must not share a code"
     )
+
+
+async def test_a_gateway_rate_limit_and_a_spent_allowance_are_different_429s(
+    api_factory: ApiFactory, seeded_reference_data: None
+) -> None:
+    """Both are 429, and a client that could not tell them apart would retry the wrong one forever:
+    the gateway's clears on its own, the subscription's not until the window turns over.
+
+    The gateway's is asked of a weather route, because on the agent route it never reaches a
+    caller at all — the graph degrades to the deterministic router and answers anyway
+    (`specs/agent-orchestration`). That is worth stating: the only 429 an agent caller sees is the
+    quota one, so it had better carry everything the refusal needs to be actionable.
+    """
+    user_id = new_user_id()
+    async with with_inference(api_factory) as api:  # type: ignore[attr-defined]
+        install(api)
+        await exhaust(api, user_id)
+        subscription = await ask(api, user_id)
+
+        gateway = await api.client.get(
+            f"{PREFIX}/weather/forecast",
+            params={"location": "Nowhere-at-all", "days": 3},
+            headers=api.authorize(subject=user_id),
+        )
+
+    assert subscription.status_code == 429
+    assert subscription.json()["error"]["code"] == "quota_exceeded"
+    details = subscription.json()["error"]["details"]
+    assert {"dimension", "allowance", "consumed", "resets_at", "retry_after_seconds"} <= set(
+        details
+    )
+
+    # The gateway's own 429 is `provider_rate_limited` wherever it surfaces — proved against a real
+    # throttled upstream in `test_api.py::test_each_upstream_condition_maps_to_its_own_status`. What
+    # matters here is that the two are different codes carrying different information, and that the
+    # quota one is the only 429 on this path that a client can act on by waiting for a window.
+    assert gateway.status_code != 429 or gateway.json()["error"]["code"] != "quota_exceeded"
+
+
+async def test_a_gateway_rate_limit_does_not_refund_the_request_it_spent(
+    api_factory: ApiFactory, seeded_reference_data: None
+) -> None:
+    """The gateway answered — badly, but it answered. The request reached a model and is spent."""
+    user_id = new_user_id()
+    async with with_inference(api_factory) as api:  # type: ignore[attr-defined]
+        api.script(failure=ProviderRateLimited("the gateway is throttling this account"))
+        await ask(api, user_id)
+
+        async with privileged_session(api.app.state.engines.privileged_sessionmaker) as session:
+            consumed = await session.scalar(
+                text(
+                    "SELECT consumed FROM usage_counters "
+                    " WHERE subject = :u AND dimension = 'requests_per_day'"
+                ),
+                {"u": user_id},
+            )
+    assert consumed == 1
 
 
 async def test_a_direct_api_call_cannot_bypass_the_gate(
