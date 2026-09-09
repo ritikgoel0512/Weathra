@@ -294,10 +294,10 @@ Task 22.10's live execution remains outstanding).
 | `agent-orchestration` | 17 | 17 | 0 | 0 | 13, 14 |
 | `authentication` | 20 | 20 | 0 | 0 | 3, 4, 18 |
 | `deterministic-analytics` | 10 | 10 | 0 | 0 | 7 |
-| `evaluation` | 15 | 10 | 0 | 5 | 22 |
+| `evaluation` | 15 | 14 | 0 | 1 | 22 |
 | `forecast-analysis` | 10 | 10 | 0 | 0 | 8 |
 | `historical-weather` | 5 | 5 | 0 | 0 | 8 |
-| `http-api` | 24 | 23 | 0 | 1 | 15, 16 |
+| `http-api` | 24 | 24 | 0 | 0 | 15, 16 |
 | `location-comparison` | 6 | 6 | 0 | 0 | 9 |
 | `location-resolution` | 7 | 7 | 0 | 0 | 6 |
 | `mcp-weather-server` | 7 | 7 | 0 | 0 | 10 |
@@ -307,11 +307,11 @@ Task 22.10's live execution remains outstanding).
 | `weather-providers` | 7 | 7 | 0 | 0 | 5 |
 | `web-ui` | 16 | 11 | 1 | 4 | 19, 20, 21 |
 | `model-policy` | 10 | 9 | 0 | 1 | 28 |
-| `model-catalog` | 7 | 6 | 0 | 1 | 26, 27 |
+| `model-catalog` | 7 | 7 | 0 | 0 | 26, 27 |
 | `llm-telemetry` | 7 | 7 | 0 | 0 | 29 |
 | `usage-limits` | 9 | 9 | 0 | 0 | 30 |
-| `model-lab` | 6 | 0 | 0 | 6 | 32 |
-| **Total** | **210** | **191** | **1** | **18** | |
+| `model-lab` | 6 | 6 | 0 | 0 | 32 |
+| **Total** | **210** | **203** | **1** | **6** | |
 
 ### `agent-orchestration`
 
@@ -387,10 +387,10 @@ Task 22.10's live execution remains outstanding).
 | Evaluation runs authenticate | 22.6 | evaluation/provisioning.py | integration/test_evaluation_runner.py | IMPLEMENTED |
 | Reproducibility and comparison across runs | 22.7 | evaluation/storage.py | integration/test_evaluation_runner.py, unit/test_db_models.py | IMPLEMENTED |
 | Evaluation results are documented | 24.6 | docs/evaluation.md | test_documentation.py | IMPLEMENTED |
-| Candidate models are evaluated through this framework | 32.6 | — not implemented | — none | OPEN |
-| Model selection is decided on measured criteria, not on model name | 32.7 | — not implemented | — none | OPEN |
-| Model evaluation results are persisted and comparable | 32.8 | — not implemented | — none | OPEN |
-| Evaluation runs are internal usage | 32.10 | — not implemented | — none | OPEN |
+| Candidate models are evaluated through this framework | 32.6 | evaluation/model_compare.py, evaluation/runner.py | unit/test_lab_criteria.py, integration/test_lab_api.py | IMPLEMENTED |
+| Model selection is decided on measured criteria, not on model name | 32.7, 32.9 | evaluation/criteria.py, lab/promotion.py, api/routers/admin/models.py | unit/test_lab_criteria.py, integration/test_lab_api.py | IMPLEMENTED |
+| Model evaluation results are persisted and comparable | 32.8 | lab/records.py, db/models.py | integration/test_lab_records.py | IMPLEMENTED |
+| Evaluation runs are internal usage | 32.10 | api/routers/admin/lab.py, evaluation/provisioning.py, entitlements/quotas.py | integration/test_lab_api.py, integration/test_quota_enforcement.py | IMPLEMENTED |
 | A live evaluation run is pinned to one named model | 22.10 | evaluation/runner.py, config.py | integration/test_evaluation_runner.py | OPEN |
 | Live runs distinguish provider failure from model quality | 22.9 | evaluation/integrity.py | unit/test_evaluation.py, integration/test_evaluation_runner.py | IMPLEMENTED |
 | Live runs are paced and bounded against provider limits | 22.9 | evaluation/runner.py, agents/llm/openrouter.py | unit/test_evaluation.py, unit/test_llm.py | IMPLEMENTED |
@@ -447,7 +447,7 @@ Task 22.10's live execution remains outstanding).
 | Model selection is not caller-selectable on product endpoints | 28.2, 31.6 | api/routers/agent.py, entitlements/resolver.py, api/classification.py | unit/test_policy_resolver.py, integration/test_admin_api.py | IMPLEMENTED |
 | Quota enforcement on the HTTP surface | 30.6 | api/routers/agent.py, api/errors.py, domain/errors.py | integration/test_quota_api.py | IMPLEMENTED |
 | Plan and usage endpoint for the signed-in person | 30.7 | api/routers/usage.py, entitlements/quotas.py | integration/test_quota_api.py, integration/test_auth_boundary.py | IMPLEMENTED |
-| Administrative model, usage, and lab endpoints | 31.3–31.6, 32.6 | api/routers/admin/models.py, api/routers/admin/plans.py, api/routers/admin/usage.py | integration/test_admin_api.py | OPEN |
+| Administrative model, usage, and lab endpoints | 31.3–31.6, 32.5 | api/routers/admin/ | integration/test_admin_api.py, integration/test_lab_api.py | IMPLEMENTED |
 
 ### `location-comparison`
 
@@ -584,7 +584,7 @@ Task 22.10's live execution remains outstanding).
 | Business logic is decoupled from vendor model identifiers | 27.4 | entitlements/records.py, db/migrations/versions/0008_seed_model_policy_data.py | unit/test_no_vendor_coupling.py | IMPLEMENTED |
 | The catalog is the allowlist | 28.3 | entitlements/snapshot.py, agents/llm/factory.py | unit/test_policy_resolver.py, integration/test_entitlement_snapshot.py | IMPLEMENTED |
 | Catalog administration is privileged and validated | 27.1, 31.3 | api/routers/admin/models.py, entitlements/catalog.py | integration/test_admin_api.py, integration/test_entitlement_stores.py | IMPLEMENTED |
-| Catalog state is observable | 31.3, 32.4 | api/routers/admin/models.py, entitlements/catalog.py | integration/test_admin_api.py | OPEN |
+| Catalog state is observable | 31.3, 32.2 | api/routers/admin/models.py, entitlements/catalog.py, lab/records.py | integration/test_admin_api.py, integration/test_lab_api.py | IMPLEMENTED |
 
 ### `llm-telemetry`
 
@@ -616,12 +616,12 @@ Task 22.10's live execution remains outstanding).
 
 | Requirement | Tasks | Implementation | Tests | Status |
 |---|---|---|---|---|
-| Internal model selection restricted to administrative principals and the allowlist | 32.5 | — not implemented | — none | OPEN |
-| The same prompt or query compared across models | 32.1 | — not implemented | — none | OPEN |
-| Comparison runs are recorded with their measurements | 32.2 | — not implemented | — none | OPEN |
-| The lab bypasses no security control and no data isolation | 32.4 | — not implemented | — none | OPEN |
-| Lab usage is internal, bounded, and attributed | 32.3, 32.10 | — not implemented | — none | OPEN |
-| The lab does not change production policy implicitly | 32.9 | — not implemented | — none | OPEN |
+| Internal model selection restricted to administrative principals and the allowlist | 32.5 | api/routers/admin/lab.py, lab/compare.py, auth/roles.py | integration/test_lab_api.py | IMPLEMENTED |
+| The same prompt or query compared across models | 32.1, 32.6 | lab/compare.py, evaluation/model_compare.py | integration/test_lab_api.py, unit/test_lab_criteria.py | IMPLEMENTED |
+| Comparison runs are recorded with their measurements | 32.2 | lab/records.py, api/routers/admin/lab.py | integration/test_lab_records.py, integration/test_lab_api.py | IMPLEMENTED |
+| The lab bypasses no security control and no data isolation | 32.4 | lab/compare.py, api/routers/admin/lab.py, auth/rls.py | integration/test_lab_api.py | IMPLEMENTED |
+| Lab usage is internal, bounded, and attributed | 32.3, 32.10 | lab/compare.py, api/routers/admin/lab.py, agents/llm/registry.py, config.py | unit/test_lab_criteria.py, integration/test_lab_api.py | IMPLEMENTED |
+| The lab does not change production policy implicitly | 32.9 | lab/promotion.py, api/routers/admin/models.py, entitlements/audit.py | integration/test_lab_api.py | IMPLEMENTED |
 
 ### What the table does not cover
 
@@ -644,12 +644,8 @@ administrative screens (33), and the documentation and acceptance pass (34).
 The counts in the table above are the rows below it, recounted rather than remembered — they had
 drifted while groups 27 to 29 filled in their own sections and left the summary alone.
 
-**Two rows read `OPEN` while naming code that exists, and that is deliberate.** "Administrative
-model, usage, and lab endpoints" has its model, plan and usage thirds; the lab has no endpoint at
-all until group 32. "Catalog state is observable" lists and filters the catalog; the recorded
-evaluation outcome it also asks for is group 32's table. Both cite what landed so a reader can find
-it, and both stay open because a requirement two thirds met is not met. Marking them implemented
-would be the drift these rows exist to catch.
+The two rows group 31 left open for group 32 — the lab endpoints, and the recorded evaluation
+outcome on the catalog listing — are closed by it.
 
 **Three requirements are outstanding for reasons other than Phase B.** `web-ui`'s accessibility
 and responsive layout is `MANUAL` — its automated half passes in two browser engines, and

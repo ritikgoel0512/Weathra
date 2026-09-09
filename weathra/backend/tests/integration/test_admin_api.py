@@ -110,6 +110,17 @@ OPERATIONS: tuple[tuple[str, str, dict[str, Any] | None], ...] = (
     ("PUT", f"/admin/principals/{'11111111-2222-4333-8444-555555555555'}/role", None),
     ("DELETE", f"/admin/principals/{'11111111-2222-4333-8444-555555555555'}/role", None),
     ("GET", "/admin/usage", None),
+    ("GET", "/admin/lab/comparisons", None),
+    (
+        "POST",
+        "/admin/lab/comparisons",
+        {"catalog_keys": ["standard-general"], "question": "What is the forecast for Berlin?"},
+    ),
+    (
+        "GET",
+        f"/admin/lab/comparisons/{'11111111-2222-4333-8444-555555555555'}",
+        None,
+    ),
 )
 
 

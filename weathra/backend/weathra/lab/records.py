@@ -162,7 +162,7 @@ class LabRecords:
                 "VALUES (CAST(:id AS uuid), CAST(:run AS uuid), :key, :model, :case, :policy, "
                 "  :latency, :prompt, :completion, :total, CAST(:cost AS numeric), :ok, "
                 "  :failure, CAST(:evaluation AS uuid), CAST(:events AS text[]), "
-                "  CAST(:agent_run AS uuid), now())"
+                "  CAST(:agent_run AS uuid), clock_timestamp())"
             ),
             {
                 "id": result_id,
@@ -222,7 +222,12 @@ class LabRecords:
                 "  evaluation_run_id, dataset_version, commit_sha, metrics, criteria, passed, "
                 "  recorded_at) "
                 "VALUES (CAST(:id AS uuid), :key, :model, CAST(:run AS uuid), :dataset, :commit, "
-                "  CAST(:metrics AS jsonb), CAST(:criteria AS jsonb), :passed, now())"
+                # clock_timestamp() and not now(): `now()` is *transaction* start time, so two
+                # evaluations recorded in one comparison would share a timestamp and "the most
+                # recent" — which is what the catalog observes and what a promotion gate reads —
+                # would be whichever the planner happened to return first. The audit writer
+                # learned this the same way.
+                "  CAST(:metrics AS jsonb), CAST(:criteria AS jsonb), :passed, clock_timestamp())"
             ),
             {
                 "id": evaluation_id,
