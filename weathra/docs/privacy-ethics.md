@@ -161,6 +161,26 @@ accounts safe, because a table with no content in it cannot disclose content. Wh
 failure needs more than metadata, the row points at the agent run whose evidence record already has
 its own ownership and its own retention, rather than copying anything into telemetry.
 
+**Each event belongs to one subject, and Row Level Security says so.** `llm_usage_events` is a
+user-owned table under an owner-restricting policy, read and written by the request path under the
+restricted `weathra_request` role like every other user-owned table — so one person's events are
+not merely filtered out of another person's query, they are unreachable by it. The same holds for
+the consumption counters. `authentication.md` has the classification and the two gates.
+
+**An administrator sees totals, never rows across people.** The aggregate endpoints report counts,
+tokens, estimated cost, latency and error rates; they disclose no prompt, no completion, no
+question and no retrieved passage, because the table those aggregates are computed from contains
+none. Internal usage is reported separately from every product plan rather than folded into a
+single number, so "how much did the product cost" and "how much did we spend testing it" cannot be
+confused for one another.
+
+**The raw events expire.** They are kept for `LLM_USAGE_RETENTION_DAYS` (default 90) and removed by
+the scheduled retention pass after the window closes; consumption counters are kept until their
+allowance window has closed and then for the same period. What survives a retention pass is
+aggregate and per-subject-free. And a person deleting their account does not wait for the
+window — see [Deleting your data](#deleting-your-data), where the usage records go with everything
+else.
+
 Internal work — evaluation runs, model comparisons, administrative activity — is recorded against a
 reserved internal subject and is never counted against anyone's plan. Estimated cost is exactly
 that: an estimate computed from recorded token counts and the catalog price of the day, labelled as
@@ -191,8 +211,24 @@ Two levels, both available to the person themselves, and both confirmed rather t
 - **A thread** — `DELETE /api/v1/threads/{id}` removes the thread and its checkpoints. Checkpoints
   first: a checkpoint whose thread row is gone is unreachable garbage.
 - **Everything** — `DELETE /api/v1/me/data` removes the profile, preferences, saved locations,
-  threads, checkpoints, and evidence records, and answers with **the count removed per table**, so
-  the person sees what happened instead of being told "done".
+  threads, checkpoints, evidence records, **usage events, consumption counters and the plan
+  assignment**, and answers with **the count removed per table**, so the person sees what happened
+  instead of being told "done".
+
+  The measurement records go with the rest, which is worth stating because a system that kept them
+  would still know how much someone had used it after they left. Three different mechanisms, for
+  three different reasons:
+
+  | What | How it goes | Why that way |
+  |---|---|---|
+  | Usage events | Counted first, then removed by the cascade from `profiles` declared in migration `0006` | The request role deliberately holds no `DELETE` on the event table — an event is a record of something that happened, and the request path may not rewrite history one row at a time. The cascade means no second routine has to remember |
+  | Consumption counters | Deleted explicitly, keyed by subject | They have no foreign key to a profile, so nothing cascades them. Migration `0009` grants the request role `DELETE` on this one table for exactly this |
+  | The plan assignment | Cascade from `profiles` | The plan *definitions* are operational rows and stay; only the person's assignment to one is theirs |
+
+  The reserved internal subject's counters are untouched, because they are nobody's. What is left
+  behind is the shared knowledge corpus and the location-keyed forecast snapshots — keyed by place
+  rather than by person, deliberately, so they hold no browsing trail and sweeping them would
+  remove nothing about the person asking while degrading the service for everyone else.
 
 The Supabase Auth account is deleted in Supabase, which owns it. Retention also runs on a schedule
 (`weathra-retention`, under the privileged connection) against the configured windows, so a thread

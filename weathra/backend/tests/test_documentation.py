@@ -702,6 +702,252 @@ def test_configuration_no_longer_claims_llm_model_chooses_the_serving_model() ->
     assert "model-policy.md" in flat, "the document must point at the resolution order"
 
 
+# ---------------------------------------------------------------- 34.3 telemetry and the boundary
+
+MIGRATIONS = PACKAGE / "db" / "migrations" / "versions"
+
+
+def _migration(prefix: str) -> str:
+    """One migration's source, so a document can be held to the SQL that actually ran."""
+    matches = sorted(MIGRATIONS.glob(f"{prefix}_*.py"))
+    assert len(matches) == 1, f"expected one migration {prefix}_*, found {matches}"
+    return matches[0].read_text()
+
+
+# Every SaaS-ready table, the migration that established its access, and the class
+# `authentication.md` puts it in. The point of the mapping is that all three are asserted against
+# each other: the document, the model's own declared ownership, and the migration's SQL.
+SAAS_TABLE_CLASSES = {
+    "llm_usage_events": ("0006", "user-owned"),
+    "usage_counters": ("0006", "user-owned"),
+    "user_plans": ("0006", "user-owned"),
+    "subscription_plans": ("0005", "operational, read-only to users"),
+    "model_catalog": ("0005", "operational, read-only to users"),
+    "model_policies": ("0005", "operational, read-only to users"),
+    "usage_limits": ("0005", "operational, read-only to users"),
+    "model_evaluations": ("0007", "operational, not user-owned"),
+    "model_comparison_runs": ("0007", "operational, not user-owned"),
+    "model_comparison_results": ("0007", "operational, not user-owned"),
+    "admin_audit": ("0007", "operational, not user-owned"),
+    "admin_roles": ("0011", "operational"),
+}
+
+
+def test_the_documented_saas_classification_names_every_saas_table(authentication: str) -> None:
+    """Task 34.3, first half: the document covers the tables the migrations created.
+
+    Asserted in both directions. A table the migrations created and the document omits is an
+    undocumented boundary; a table the document classifies and no migration created is a claim
+    about enforcement that nothing applies.
+    """
+    documented: set[str] = set()
+    for row in _table_rows(authentication, "What the migration applied"):
+        documented.update(cell.strip().strip("`") for cell in row[0].split(","))
+
+    assert documented == set(SAAS_TABLE_CLASSES), (
+        f"documented but not expected: {sorted(documented - set(SAAS_TABLE_CLASSES))}; "
+        f"expected but not documented: {sorted(set(SAAS_TABLE_CLASSES) - documented)}"
+    )
+
+
+def test_the_documented_saas_classification_matches_the_declared_ownership(
+    authentication: str,
+) -> None:
+    """The document's class and the model's `info["ownership"]` are the same answer, or one lies."""
+    from weathra.db.models import Ownership, ownership_of
+
+    rows = {}
+    for row in _table_rows(authentication, "What the migration applied"):
+        for cell in row[0].split(","):
+            rows[cell.strip().strip("`")] = row[1].strip()
+
+    for table, (_revision, documented_class) in SAAS_TABLE_CLASSES.items():
+        assert rows[table] == documented_class, (
+            f"authentication.md classifies {table} as {rows[table]!r}, this suite expects "
+            f"{documented_class!r}"
+        )
+        expected = Ownership.USER if documented_class == "user-owned" else Ownership.OPERATIONAL
+        assert ownership_of(table) is expected, (
+            f"{table} is documented {documented_class!r} but declares {ownership_of(table).value}"
+        )
+
+
+def test_every_documented_saas_table_has_its_rls_applied_by_the_named_migration(
+    authentication: str,
+) -> None:
+    """Task 34.3's verification proper: the *migration* is what the document is checked against.
+
+    A prose claim about Row Level Security is worth exactly as much as the statement that applied
+    it, so each row's migration is read and asserted to enable RLS on that table.
+    """
+    rows = {}
+    for row in _table_rows(authentication, "What the migration applied"):
+        for cell in row[0].split(","):
+            rows[cell.strip().strip("`")] = row[2]
+
+    for table, (revision, _class) in SAAS_TABLE_CLASSES.items():
+        source = _migration(revision)
+        assert "ENABLE ROW LEVEL SECURITY" in source, f"{revision} enables RLS on nothing"
+        assert f"`{revision}`" in rows[table], (
+            f"authentication.md does not credit {table}'s access to migration {revision}"
+        )
+        # FORCE matters on a managed Postgres, where the migration and request credentials can be
+        # the same database user and a table's owner is otherwise exempt from its own policies. So
+        # a document claiming it must be right about which migrations issued it.
+        forced = "FORCE ROW LEVEL SECURITY" in source
+        assert forced == ("and forced" in rows[table].replace("*", "")), (
+            f"authentication.md {'omits' if forced else 'claims'} FORCE ROW LEVEL SECURITY for "
+            f"{table}, and migration {revision} {'issues' if forced else 'does not issue'} it"
+        )
+
+
+def test_the_operational_not_user_owned_tables_are_revoked_and_policyless(
+    authentication: str,
+) -> None:
+    """The class whose enforcement is two statements, and the document says both.
+
+    `REVOKE ALL` alone would be undone by a later grant finding no policy in the way; RLS with no
+    policy alone would be undone by a later grant. `0007` does both and so does the sentence.
+    """
+    source = _migration("0007")
+    assert "REVOKE ALL" in source
+    assert "ENABLE ROW LEVEL SECURITY" in source
+    assert "CREATE POLICY" not in source, (
+        "0007 now creates a policy, so the documented 'RLS on with no policy' is false"
+    )
+
+    flat = _flat(authentication)
+    assert "`REVOKE ALL`" in flat and "RLS enabled with no policy" in flat
+
+
+def test_the_append_only_usage_event_grant_is_documented_as_applied(authentication: str) -> None:
+    """The narrowest grant in the schema, and the one a reader is most likely to assume wider."""
+    source = _migration("0006")
+    assert "GRANT SELECT, INSERT ON llm_usage_events" in source
+    assert "GRANT SELECT, INSERT, UPDATE, DELETE ON llm_usage_events" not in source
+
+    flat = _flat(authentication)
+    assert "`SELECT, INSERT` to `weathra_request`" in flat
+    assert "No `UPDATE` and no `DELETE` on the request path" in flat
+
+
+def test_the_usage_counter_delete_grant_is_documented_with_its_reason(authentication: str) -> None:
+    """`0009` widened a grant, which is the kind of change a document silently falls behind."""
+    assert "GRANT DELETE ON usage_counters" in _migration("0009")
+    flat = _flat(authentication)
+    assert "`0009` adds `DELETE`" in flat
+    assert "for account deletion alone" in flat
+
+
+def test_the_administrative_role_table_is_readable_and_never_writable(authentication: str) -> None:
+    """The authorization predicate must be answerable without the role being grantable."""
+    source = _migration("0011")
+    assert "GRANT SELECT ON admin_roles" in source
+    for verb in ("INSERT", "UPDATE", "DELETE"):
+        assert f"GRANT {verb}" not in source and f", {verb} ON admin_roles" not in source, (
+            f"0011 grants {verb} on admin_roles, so the role is self-grantable"
+        )
+
+    flat = _flat(authentication)
+    assert "self-promotion is impossible by grant rather than by check" in flat.lower().replace(
+        "self-promotion", "self-promotion"
+    ), "the document must state why a read grant is safe"
+
+
+def test_the_usage_event_table_carries_no_prompt_or_completion_column() -> None:
+    """Task 34.3's telemetry stance, asserted against the schema rather than against intent.
+
+    `privacy-ethics.md` says the usage record holds no prompt, completion or retrieved passage.
+    The strongest form of that claim is that there is nowhere to put one, so the columns are read.
+    """
+    import sqlalchemy as sa
+
+    from weathra.db.models import Base
+
+    table = Base.metadata.tables["llm_usage_events"]
+
+    # A count is not content: `prompt_tokens` and `completion_tokens` are the measurement the row
+    # exists for. What would hold a prompt is an unbounded text column, and there is not one.
+    unbounded = {
+        name
+        for name, column in table.columns.items()
+        if isinstance(column.type, sa.Text)
+        or (isinstance(column.type, sa.String) and column.type.length is None)
+    }
+    assert not unbounded, f"llm_usage_events carries unbounded text columns: {sorted(unbounded)}"
+
+    forbidden = ("prompt", "completion", "response", "content", "message", "passage", "question")
+    offending = {
+        column.name
+        for column in table.columns
+        if any(word in column.name.lower() for word in forbidden)
+        and not column.name.endswith("_tokens")
+    }
+    assert not offending, f"llm_usage_events carries content-shaped columns: {sorted(offending)}"
+
+
+def test_the_telemetry_stance_states_owner_scoping_and_the_retention_window() -> None:
+    """Every clause task 34.3 names, asserted with the retention default from `Settings`."""
+    settings = Settings(supabase_url="https://test.supabase.co")
+    flat = _flat(_read("privacy-ethics.md"))
+
+    assert "no prompt, no completion" in flat
+    assert "owner-restricting policy" in flat or "owner-owned" in flat or "user-owned table" in flat
+    assert "weathra_request" in flat, "the restricted role is the mechanism and must be named"
+    assert "LLM_USAGE_RETENTION_DAYS" in flat
+    assert f"default {settings.llm_usage_retention_days}" in flat, (
+        "the retention window must be documented with its default"
+    )
+    assert "reserved internal subject" in flat
+
+
+def test_the_documented_deletion_matches_what_the_report_actually_counts() -> None:
+    """The other half of 34.3's telemetry stance: what account deletion removes.
+
+    Held to `AccountDeletionReport`'s own fields, because that model is what the endpoint answers
+    with — a document naming fewer tables than the response enumerates would be the response
+    correcting the document.
+    """
+    from weathra.memory.retention import AccountDeletionReport
+
+    flat = _flat(_read("privacy-ethics.md"))
+    counted = set(AccountDeletionReport.model_fields) - {"user_id", "total"}
+
+    documented_phrases = {
+        "threads": "threads",
+        "thread_checkpoints_cleared": "checkpoints",
+        "saved_locations": "saved locations",
+        "preferences": "preferences",
+        "agent_runs": "evidence records",
+        "usage_events": "usage events",
+        "usage_counters": "consumption counters",
+        "profile": "profile",
+    }
+    assert set(documented_phrases) == counted, (
+        "AccountDeletionReport's fields changed; the documented list must change with it: "
+        f"{sorted(counted ^ set(documented_phrases))}"
+    )
+    for field, phrase in documented_phrases.items():
+        assert phrase in flat, f"privacy-ethics.md does not say deletion removes {field}"
+
+    assert "plan assignment" in flat
+
+
+def test_the_documented_deletion_mechanisms_match_the_migrations() -> None:
+    """Three tables, three mechanisms, and the document says which is which.
+
+    The distinction is load-bearing: the request role holds no `DELETE` on the event table, so if
+    the cascade in `0006` were not there, an account deletion would silently leave the events.
+    """
+    assert 'ondelete="CASCADE"' in _migration("0006")
+    assert "GRANT DELETE ON usage_counters" in _migration("0009")
+
+    flat = _flat(_read("privacy-ethics.md"))
+    assert "cascade from `profiles` declared in migration `0006`" in flat
+    assert "Migration `0009` grants the request role `DELETE` on this one table" in flat
+    assert "reserved internal subject's counters are untouched" in flat
+
+
 # ---------------------------------------------------------------- 24.6 evaluation
 
 

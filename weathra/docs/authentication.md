@@ -284,17 +284,32 @@ never existed, because "this exists but is not yours" is itself a disclosure.
 
 ### The SaaS-ready tables
 
-The **SaaS-ready tables** — those carrying subscription plans, model policies, the model catalog,
-language model usage events, usage limits and consumption, and model evaluations — are classified
-in advance, by the same three classes and with the same two gates. They are created by the SaaS
-schema migrations, so they are absent from the table above until they exist; the classification is
-decided here so the migration has something to conform to rather than the other way round.
+The **SaaS-ready tables** were classified in advance, by the same three classes and with the same
+two gates, so that the migrations had something to conform to rather than the other way round.
+They now exist, and this is the classification **as applied** by migrations `0005` to `0011` —
+each row states the grant and the policy the migration actually issued, because a class name is
+not an enforcement.
 
-| Table class | What it holds | Enforcement |
+| Table | Table class | What the migration applied |
 |---|---|---|
-| user-owned | usage events carrying a user identifier, per-principal plan assignment, per-principal consumption counters | Row Level Security enabled with an owner-restricting policy; the request-serving restricted role reads and writes only the owner's rows |
-| operational, read-only to users | subscription plans, model policies, model catalog | readable as needed to serve a request; writable only through the administrative path, never by the request-serving restricted role acting for an ordinary user |
-| operational, not user-owned | model evaluations, comparison runs and their results, internal consumption counters, administrative audit records | not exposed to an ordinary authenticated caller at all |
+| `llm_usage_events` | user-owned | `0006`: RLS enabled and **forced**; `SELECT, INSERT` to `weathra_request`; an owner-only read policy and a separate append policy. No `UPDATE` and no `DELETE` on the request path — an event is a record of something that already happened |
+| `usage_counters` | user-owned | `0006`: RLS enabled and forced; `SELECT, INSERT, UPDATE`; one `FOR ALL` owner policy keyed on `subject` rather than `user_id`. `0009` adds `DELETE`, for account deletion alone |
+| `user_plans` | user-owned | `0006`: RLS enabled and forced; `SELECT` only, and an owner-read policy. The grant and the policy say the same thing twice, deliberately, for the one table where a permissive write would be a self-service upgrade |
+| `subscription_plans`, `model_catalog`, `model_policies`, `usage_limits` | operational, read-only to users | `0005`: `SELECT` to `weathra_request`, RLS enabled, and a read policy `USING (true)`. No `INSERT`, `UPDATE` or `DELETE` is granted at all, so administration cannot happen on the request path even by mistake |
+| `model_evaluations`, `model_comparison_runs`, `model_comparison_results`, `admin_audit` | operational, not user-owned | `0007`: `REVOKE ALL` from `weathra_request`, **and** RLS enabled with no policy. Both, because either alone leaves a way in: a later grant would find no policy, and a later policy would find a grant |
+| `admin_roles` | operational | `0011`: RLS enabled and forced; `SELECT` only, under an owner-read policy. A principal may read *their own* role, which is what makes the authorization predicate answerable on the request path; no write of any kind is granted, so self-promotion is impossible by grant rather than by check |
+
+Two details in that table are the whole reason it names tables rather than classes:
+
+- **`usage_counters` is keyed by `subject`, not `user_id`**, and its policy compares that column.
+  The reserved internal subject's rows therefore belong to nobody and are returned to nobody —
+  internal consumption is accounted separately by construction rather than by a filter somebody
+  has to remember. `0010` adds one further policy admitting the internal subject's rows to an
+  administrative read, and nothing else.
+- **`llm_usage_events`' write policy admits one row shape its read policy does not return**: an
+  anonymous call's event, whose user id is null. `specs/llm-telemetry` requires such a call to be
+  recorded with a null subject and never a placeholder, and a session binding no claims can write
+  exactly that and nothing else — it cannot name another user, because no user id equals null.
 
 Three rules hold across all of them:
 
