@@ -948,6 +948,152 @@ def test_the_documented_deletion_mechanisms_match_the_migrations() -> None:
     assert "reserved internal subject's counters are untouched" in flat
 
 
+# ---------------------------------------------------------------- 34.4 model comparison
+
+
+@pytest.fixture(scope="module")
+def evaluation_doc() -> str:
+    return _read("evaluation.md")
+
+
+def test_all_five_selection_criteria_are_documented_with_a_measurement(
+    evaluation_doc: str,
+) -> None:
+    """Task 34.4's verification: each criterion's *measurement definition*, not just its name.
+
+    Held to `SelectionCriteria`'s own fields, so a sixth criterion cannot be added to the code
+    without the document gaining a row — and a documented criterion the code does not compute
+    fails too.
+    """
+    from weathra.evaluation.criteria import SelectionCriteria
+
+    rows = {
+        row[0].strip().strip("*").lower(): row for row in _table_rows(evaluation_doc, "Definition")
+    }
+
+    computed = set(SelectionCriteria.model_fields) - {
+        "catalog_key",
+        "gateway_model",
+        "numerical_accuracy_intact",
+    }
+    documented = {
+        "structured json reliability": "structured_json_reliability",
+        "groundedness": "groundedness",
+        "latency": "latency",
+        "planning quality": "planning",
+        "cost": "cost",
+    }
+    assert set(documented.values()) == computed, (
+        "SelectionCriteria's fields and the documented criteria disagree: "
+        f"{sorted(computed ^ set(documented.values()))}"
+    )
+
+    for heading, field in documented.items():
+        assert heading in rows, f"evaluation.md omits the {heading} criterion"
+        row = rows[heading]
+        # A measurement definition, not a restatement of the name: the row must name the actual
+        # fields the criterion is computed into, and say something about how.
+        assert len(row[2]) > 80, f"the {heading} row states no measurement definition"
+        model = SelectionCriteria.model_fields[field].annotation
+        subfields = getattr(model, "model_fields", {})
+        named = [name for name in subfields if name in row[1]]
+        assert named, f"the {heading} row names none of {sorted(subfields)}"
+
+
+def test_the_document_says_an_unmeasured_criterion_is_null_and_not_a_default(
+    evaluation_doc: str,
+) -> None:
+    """The property that keeps a promotion from resting on a number nothing measured."""
+    flat = _flat(evaluation_doc)
+    assert "reports null, never a default" in flat
+    assert "has not been asked" in flat
+    assert "null is a finding" in flat
+
+
+def test_the_document_explains_why_numerical_accuracy_is_model_independent(
+    evaluation_doc: str,
+) -> None:
+    """Task 34.4 names this explicitly, and the reason is the part that matters."""
+    flat = _flat(evaluation_doc)
+    assert "100% for every candidate" in flat
+    assert "deterministic analytics" in flat
+    assert "numerical_accuracy_intact" in flat
+    assert "exposed a grounding defect" in flat.replace("**", "")
+
+
+def test_the_pinned_configuration_is_documented_field_for_field(evaluation_doc: str) -> None:
+    """What is pinned across candidates, held to `PinnedConfiguration` itself."""
+    from weathra.evaluation.model_compare import PinnedConfiguration
+
+    flat = _flat(evaluation_doc)
+    for field in PinnedConfiguration.model_fields:
+        if field in {"category_filter", "case_filter"}:
+            continue  # the selection, not part of what is held fixed across candidates
+        assert f"`{field}`" in flat, f"evaluation.md does not say {field} is pinned"
+
+    assert "once for the whole run" in flat, "the record's shape is itself the claim"
+    assert "performed **once** and replayed to every candidate" in flat
+
+
+def test_the_two_gates_are_documented_as_the_gates_the_code_enforces(evaluation_doc: str) -> None:
+    """Task 34.4's rule: reliability and groundedness are not tradeable against cost or latency."""
+    from weathra.evaluation.criteria import GATING_CRITERIA
+
+    flat = _flat(evaluation_doc)
+    for name in GATING_CRITERIA:
+        assert f'"{name}"' in flat, f"evaluation.md does not name {name} as a gate"
+    assert "`GATING_CRITERIA`" in flat
+    assert "never a reason to promote one that does not" in flat
+    assert "among candidates that pass both gates" in flat.replace("**", "")
+
+
+def test_the_documented_gates_are_exactly_two(evaluation_doc: str) -> None:
+    """A third gate added to the code must not leave the document describing two."""
+    from weathra.evaluation.criteria import GATING_CRITERIA
+
+    assert len(GATING_CRITERIA) == 2
+    flat = _flat(evaluation_doc)
+    assert "Two of the five are **gates**; three are not." in flat
+
+
+def test_the_document_says_how_to_run_a_comparison(evaluation_doc: str) -> None:
+    """The other half of 34.4's verification, and it must name a route that exists."""
+    flat = _flat(evaluation_doc)
+
+    assert "POST /api/v1/admin/lab/comparisons" in flat
+    assert "GET /api/v1/admin/lab/comparisons/{run_id}" in flat
+    assert "compare_candidates(" in flat, "the offline entry point is not documented"
+    for bound in (
+        "MODEL_LAB_MAX_MODELS",
+        "MODEL_LAB_MAX_CASES",
+        "MODEL_LAB_TIME_BUDGET_SECONDS",
+    ):
+        assert bound in flat, f"evaluation.md does not name the {bound} bound"
+    assert "__lab_comparison__" in flat
+
+
+def test_the_documented_comparison_routes_are_the_registered_ones(evaluation_doc: str) -> None:
+    """Prose naming a route is worth what the router says, so the router is asked."""
+    from weathra.api.classification import classifications
+
+    paths = {endpoint.path for endpoint in classifications()}
+    for path in ("/admin/lab/comparisons", "/admin/lab/comparisons/{run_id}"):
+        assert path in paths, f"{path} is documented and not registered"
+
+    flat = _flat(evaluation_doc)
+    assert "/admin/policies/{policy_id}/candidates" in flat, (
+        "the promotion write is the thing a comparison leads to and must be named"
+    )
+    assert "/admin/policies/{policy_id}/candidates" in paths
+
+
+def test_the_document_says_a_comparison_alone_changes_no_policy(evaluation_doc: str) -> None:
+    flat = _flat(evaluation_doc)
+    assert "a comparison run alone changes no" in flat.lower()
+    assert "admin_audit" in flat
+    assert "citing the" in flat and "run identifiers" in flat
+
+
 # ---------------------------------------------------------------- 24.6 evaluation
 
 

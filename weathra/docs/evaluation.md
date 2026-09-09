@@ -345,6 +345,117 @@ The product's graceful fallback is untouched. `/agent/ask` still returns 200 wit
 attributed, grounded answer when the gateway is down. The only difference is that the evidence
 record now says so.
 
+## Comparing models
+
+The ten metrics answer "did this run pass". Choosing between two models is a different question,
+and `specs/evaluation` names **five criteria** a promotion decision may rest on. They are computed
+in `evaluation/criteria.py` from what each run already recorded — nothing is measured twice, and
+nothing is measured differently for a comparison than for an ordinary run.
+
+### The five criteria, and how each is measured
+
+| Criterion | Measured by | Definition |
+|---|---|---|
+| **Structured JSON reliability** | `first_attempt_valid_rate`, `mean_attempts_to_valid` | Of the structured routing decisions observed, the proportion whose *first* attempt parsed and validated against the supplied schema; and the mean number of calls spent reaching a valid decision. Counted per decision rather than per call, so a model needing three attempts once scores worse than one needing one attempt three times |
+| **Groundedness** | `groundedness`, `hallucination_rate`, `unsupported_weather_claim_rate` | The groundedness metric as the ten already define it, reported alongside the two rates that say *how* it was lost — a fabricated figure and a weather claim the data does not support are different defects |
+| **Latency** | `overall_median_ms`, `p95`, and `by_call_role` | Median and 95th percentile of the recorded per-call latency, **per call role** as well as overall. Per role because a routing call and a synthesis call have different shapes and a single blended figure hides which one is slow. The same percentile implementation as the latency metric, deliberately: two would eventually disagree about the 95th of an even-length sample |
+| **Planning quality** | `tool_selection_accuracy`, `plan_correctness`, `plan_order_correct/incorrect` | Whether the tools the plan named were the right ones, and for multi-step cases whether the plan was complete *and in a workable order*. The case identifiers are recorded on both sides, so "which multi-step case did it get wrong" is answerable rather than inferable from a rate |
+| **Cost** | `estimated_total`, `estimated_per_case`, token counts | Recorded prompt and completion tokens against the catalog price of the day, in the catalog's currency. `is_estimate` is set and the figure is **labelled an estimate everywhere it appears** — it is computed from a published price, not from an invoice, and it is never presented as an amount owed |
+
+**An unmeasured criterion reports null, never a default.** A candidate evaluated over a subset
+containing no multi-step case has not achieved perfect plan correctness — it has not been asked.
+Filling that in with `1.0` would put a number on a promotion decision that nothing measured, which
+is the failure this layer exists to prevent. Every one of the five is always *present* in the
+record; some of them may be null, and null is a finding.
+
+### Why numerical accuracy is not one of the five
+
+Figures come from the deterministic analytics engine, not from the model. The model receives
+computed values and writes prose over them; it is never asked to add, average, or compare a number.
+So **numerical calculation accuracy is 100% for every candidate over the same fixtures**, and a
+criterion on which every candidate always ties cannot inform a choice between them.
+
+It is checked anyway, as an invariant rather than a criterion. `numerical_accuracy_intact` reports
+a candidate that failed it — and such a candidate has not lost a comparison, it has **exposed a
+grounding defect**: a figure reached an answer without coming from analytics, which is a bug in the
+grounding layer that no model choice fixes. Recording it as a criterion would invite trading it
+away against a cheaper model, which is precisely backwards.
+
+### What is pinned across candidates
+
+The claim a comparison makes is that **only the model varied**. That claim is worth exactly as much
+as the pinning behind it, so the pinned configuration is recorded **once for the whole run** rather
+than per candidate — a record that repeated the fields per candidate could describe an unpinned
+comparison without contradicting itself.
+
+| Pinned | Why |
+|---|---|
+| `dataset_version` and the exact `case_ids`, in order | Two candidates scored over different cases are not comparable. The identifiers are recorded, not just the count |
+| `mode` — offline or live | An offline run and a live run measure different things |
+| `weather_provider` and its fixtures | Every candidate sees the same weather data |
+| `embedding_model` | Retrieval must return the same passages, or a candidate is being judged on a different corpus |
+| The retrieved passages themselves, for an ad-hoc question | Retrieval is performed **once** and replayed to every candidate, so a re-ranking between candidates cannot be mistaken for a difference between models |
+| `commit_sha` | The analytics, the metric definitions and the thresholds are the ones this commit implements |
+
+The deterministic figures, the tool selection and the grounding outcomes are pinned as a
+consequence: they do not depend on the model, and a comparison in which they differ has found a
+defect rather than a preference.
+
+### Reliability and groundedness cannot be traded away
+
+Two of the five are **gates**; three are not. `GATING_CRITERIA` is
+`("structured_json_reliability", "groundedness")`, and the promotion action refuses a candidate
+that failed either — *on those grounds specifically*, naming which one, whatever its cost and
+latency say.
+
+This is a rule and not a preference. A model that returns invalid JSON half the time makes the
+product unreliable in a way no saving compensates for, and a model that fabricates figures makes it
+dishonest. Cost and latency are real considerations **among candidates that pass both gates**, and
+they are never a reason to promote one that does not. The finding lives in
+`criteria.promotion_blockers`; the refusal lives in the promotion action — separated because a
+comparison must be free to *measure* a candidate that would be refused, and the decision has to be
+recorded against the criteria it was made on.
+
+A promotion is also a **separate, separately authorized write**: a comparison run alone changes no
+policy record, no catalog status and no plan mapping. Re-pointing a policy's candidate list is
+`PUT /api/v1/admin/policies/{policy_id}/candidates`, which records an `admin_audit` row citing the
+comparison run identifiers the decision rests on. So "why is this model first in this policy" is
+answerable from the audit trail, and a promotion with no cited run is visible as such.
+
+### How to run a comparison
+
+**Through the administrative API**, which is the supported path — bounded, audited, and accounted
+as internal usage attributed to the initiating administrator rather than to any plan:
+
+```
+POST /api/v1/admin/lab/comparisons
+{"catalog_keys": ["standard-general", "economy-free-primary"], "category": "analysis"}
+```
+
+Exactly one of `question` (one ad-hoc question, its retrieval replayed to every candidate) or a
+dataset selection (`category` or `case_id`). Not both: a run that did an ad-hoc question *and* a
+dataset subset would produce two incomparable halves under one run identifier and a reader could
+not tell which half a figure came from. `GET /api/v1/admin/lab/comparisons/{run_id}` reads the run
+and its per-model results, and stays readable after a compared model is disabled.
+
+Three bounds are refused **before anything runs**, naming the bound: `MODEL_LAB_MAX_MODELS`
+candidates, `MODEL_LAB_MAX_CASES` cases per candidate, and `MODEL_LAB_TIME_BUDGET_SECONDS` of wall
+clock. The time budget stops the run *between* candidates and returns a partial result naming what
+completed — never a truncated candidate scored as though it had finished, which would be a
+fabricated measurement. One candidate failing does not abort the comparison: its outcome carries
+the failure classification and the others still produce results.
+
+**Offline**, for the metric definitions and the plumbing rather than for a model choice:
+`compare_candidates(settings, candidates, mode=EvaluationMode.OFFLINE)` runs every candidate
+against `FakeLLMClient` over the same fixtures. It makes no gateway call, spends no allowance, and
+is recorded as offline — so its numbers are about the harness, not about the models.
+
+Each candidate's run is **pinned to that candidate by catalog key**, validated against the database
+rather than the cached snapshot for the same reason an administrative override is, and its
+resolution is recorded as `__lab_comparison__` rather than as a policy resolution — a pinned
+candidate did not resolve a policy, and an aggregate counting it as one would report a model as
+serving a plan it has never been mapped to.
+
 ## Comparing runs
 
 Run records are persisted (`evaluation_runs`, `evaluation_case_results`) and can be compared. A
