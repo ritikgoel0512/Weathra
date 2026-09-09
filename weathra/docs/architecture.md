@@ -588,7 +588,7 @@ Task 22.10's live execution remains outstanding).
 | Telemetry records metadata, not conversation content | 29.6 | domain/usage.py, telemetry/projection.py | integration/test_telemetry_persistence.py, unit/test_telemetry.py | IMPLEMENTED |
 | Telemetry never degrades or blocks the answer path | 29.5 | telemetry/usage.py, agents/llm/instrumented.py | integration/test_telemetry_persistence.py, integration/test_agent_resolution.py | IMPLEMENTED |
 | Telemetry is owner-scoped and internal usage is separated | 29.1, 30.5 | — not implemented | — none | OPEN |
-| Telemetry is aggregatable and retained for a bounded period | 29.7, 29.8 | telemetry/aggregate.py, memory/retention.py | integration/test_telemetry_persistence.py | IMPLEMENTED |
+| Telemetry is aggregatable and retained for a bounded period | 29.7, 29.8 | telemetry/aggregate.py, memory/retention.py, db/migrations/versions/0009_usage_counter_delete_grant.py | integration/test_telemetry_persistence.py | IMPLEMENTED |
 
 ### `usage-limits`
 

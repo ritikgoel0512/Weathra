@@ -682,7 +682,22 @@ def _module_source(relative: str) -> str:
 # engine modules *are* the connection machinery, and the models merely declare the tables.
 # Administrative assignment and retention are privileged by design and will be added here with the
 # routines that perform them.
-PRIVILEGED_BY_DESIGN = ("db/migrations", "db/session.py", "db/engine.py", "db/models.py")
+PRIVILEGED_BY_DESIGN = (
+    "db/migrations",
+    "db/session.py",
+    "db/engine.py",
+    "db/models.py",
+    # Retention is the scheduled pass that deletes *other people's* expired rows, so it cannot run
+    # under a session bound to one principal's claims — it is one of the legitimate callers this
+    # rule was written around. The module also holds account deletion, which is request path, and a
+    # whole-module exemption would stop watching it; `test_only_the_scheduled_pass_in_retention_...`
+    # below pins which functions here may name the privileged connection so that half stays checked.
+    "memory/retention.py",
+)
+
+# The functions in `memory/retention.py` that are allowed to open the privileged connection: the
+# scheduled pass's entry point and its dry run. `delete_account_data` is deliberately absent.
+RETENTION_PRIVILEGED_FUNCTIONS = frozenset({"retain", "_dry_run"})
 
 
 def privileged_saas_access(sources: dict[str, str]) -> list[str]:
@@ -735,6 +750,36 @@ def test_no_module_below_the_api_reaches_the_saas_tables_privileged() -> None:
     assert not offenders, (
         "these modules touch a user-owned SaaS table through the privileged connection, which is "
         f"exempt from every Row Level Security policy: {offenders}"
+    )
+
+
+def test_only_the_scheduled_pass_in_retention_opens_the_privileged_connection() -> None:
+    """The other half of exempting `memory/retention.py` above.
+
+    Retention deletes every user's expired rows and must be privileged. Account deletion lives in
+    the same module and is the opposite: a caller removing their own data, on the request session,
+    with Row Level Security over it. Exempting the file buys the first and would have quietly given
+    up the second, so the exemption is paid for here — the set of functions that may name the
+    privileged connection is written down, and `delete_account_data` is not in it.
+    """
+    source = (PACKAGE_ROOT / "memory" / "retention.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+
+    opening: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            continue
+        for inner in ast.walk(node):
+            names_it = (isinstance(inner, ast.Name) and inner.id == "privileged_session") or (
+                isinstance(inner, ast.Attribute) and inner.attr == "privileged_sessionmaker"
+            )
+            if names_it:
+                opening.add(node.name)
+                break
+
+    assert opening == set(RETENTION_PRIVILEGED_FUNCTIONS), (
+        "the set of retention functions that open the privileged connection changed; if this is "
+        f"account deletion acquiring it, that is the regression: {sorted(opening)}"
     )
 
 

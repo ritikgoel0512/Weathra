@@ -595,7 +595,14 @@ async def test_retention_is_one_routine_rather_than_a_second_scheduler() -> None
 async def test_deleting_an_account_removes_its_events_and_counters(
     engines: Engines, clean_database: None, seeded_reference_data: None
 ) -> None:
-    """`specs/llm-telemetry`: a user's raw events go with their data."""
+    """`specs/llm-telemetry`: a user's raw events go with their data.
+
+    Deletion runs on the **request** session here, because that is the only session the endpoint
+    has. Written privileged, this test passed while the endpoint returned a 500: the privileged
+    connection is exempt from the grants, so it never noticed that the request role holds no
+    `DELETE` on either table. Events go by `0006`'s cascade from `profiles` and counters by
+    `0009`'s grant, and neither mechanism is visible from a session that can do anything.
+    """
     mine, theirs = new_user_id(), new_user_id()
     await _profile(engines, mine)
     await _profile(engines, theirs)
@@ -612,8 +619,9 @@ async def test_deleting_an_account_removes_its_events_and_counters(
             {"mine": mine, "theirs": theirs},
         )
 
-    async with privileged_session(engines.privileged_sessionmaker) as session:
+    async with session_as(engines, mine) as session:
         report = await delete_account_data(session, Principal.from_claims(claims_for(mine)))
+        await session.commit()
 
     assert report.usage_events == 1
     assert report.usage_counters == 1

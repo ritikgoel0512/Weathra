@@ -29,6 +29,9 @@ EXPECTED_CHAIN = (
     "0006_saas_user_owned_tables",
     "0007_model_lab_and_audit_tables",
     "0008_seed_model_policy_data",
+    # Group 29: the one grant account deletion needs, once telemetry gave the request path rows to
+    # delete. Separate from 0006 because it is a change of mind about privilege, not a table.
+    "0009_usage_counter_delete_grant",
 )
 
 

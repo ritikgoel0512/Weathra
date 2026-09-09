@@ -296,21 +296,27 @@ async def delete_account_data(
         # Agent runs first: they reference threads. The FK is ON DELETE SET NULL rather than
         # CASCADE, so deleting the thread would leave the run behind — which is right for a thread
         # deleted on its own, and wrong here, where the run is the person's data too.
-        # Usage events before agent runs: an event references the run it belonged to. The FK is
-        # ON DELETE SET NULL, so the run's deletion would orphan the event rather than remove it —
-        # and `specs/llm-telemetry` requires a person's raw events to go with their data.
-        usage_events = (
-            await session.execute(
-                delete(LlmUsageEvent)
+        # Usage events are *counted* here and removed by the cascade from `profiles` below.
+        # `specs/llm-telemetry` requires a person's raw events to go with their data, and `0006`
+        # already declares that FK as ON DELETE CASCADE so no second routine has to remember to.
+        # Deleting them here instead would need `DELETE` on `llm_usage_events` granted to the
+        # request role, which would end the append-only guarantee the same migration relies on —
+        # an event is a record of something that happened, and the request path may not rewrite
+        # history one row at a time. Counted before anything else moves, so the figure is what the
+        # cascade is about to take.
+        counts["usage_events"] = int(
+            await session.scalar(
+                select(func.count())
+                .select_from(LlmUsageEvent)
                 .where(LlmUsageEvent.user_id == principal.user_id)
-                .returning(LlmUsageEvent.event_id)
             )
-        ).all()
-        counts["usage_events"] = len(usage_events)
+            or 0
+        )
 
         # Consumption counters are keyed by `subject` and have no foreign key to a profile, so
-        # nothing cascades them. They are the person's data and go here explicitly; the reserved
-        # internal subject's counters are untouched because they are nobody's.
+        # nothing cascades them. They are the person's data and go here explicitly — which is why
+        # `0009` grants the request role `DELETE` on this one table; the reserved internal
+        # subject's counters are untouched because they are nobody's.
         usage_counters = (
             await session.execute(
                 delete(UsageCounter)
