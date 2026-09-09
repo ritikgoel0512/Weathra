@@ -161,6 +161,10 @@ class LLMProvider:
             http=self._http,
             principal=principal,
             override=override,
+            # An explicitly installed client wins over building one. `override()` is how the
+            # offline evaluation harness and the test suite supply a scripted transport, and a
+            # broker that ignored it would quietly reach the real gateway from a test.
+            installed=self._client,
         )
 
     @property

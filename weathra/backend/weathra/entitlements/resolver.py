@@ -60,7 +60,7 @@ from weathra.entitlements.administration import is_administrative
 from weathra.entitlements.records import CatalogEntry, PolicyEligibility, PolicyRecord
 from weathra.entitlements.snapshot import (
     EntitlementSnapshot,
-    SnapshotCache,
+    SnapshotSource,
     validate_override_against_database,
 )
 
@@ -124,7 +124,7 @@ class PolicyResolver:
 
     __slots__ = ("_settings", "_snapshots")
 
-    def __init__(self, settings: Settings, snapshots: SnapshotCache) -> None:
+    def __init__(self, settings: Settings, snapshots: SnapshotSource) -> None:
         self._settings = settings
         self._snapshots = snapshots
 
@@ -176,7 +176,7 @@ class PolicyResolver:
             if selected is not None:
                 return self._resolved(selected, policy, role, trail, snapshot, plan=plan)
 
-        return await self._fall_back(plan, role, policy, snapshot, trail, session)
+        return await self._fall_back(plan, role, policy, snapshot, trail, administrative)
 
     # ---------------------------------------------------------------- step 1: principal to plan
 
@@ -291,26 +291,36 @@ class PolicyResolver:
         policy: PolicyRecord | None,
         snapshot: EntitlementSnapshot,
         trail: list[str],
-        session: AsyncSession,
+        administrative: bool,
     ) -> ResolvedCall:
         """The declared fallback, then the plan's default, then the configured model, then refuse.
 
-        Each rung is tried only downward. `_no_higher_than` is what enforces that: a fallback that
-        a stronger plan maps to is not attempted, because an outage on the Free tier must not hand
-        a Free caller a Premium model.
+        **Every rung is re-checked for eligibility**, and that is not belt-and-braces. Without it
+        the chain undoes step 2: a plan row mapping `admin_experimental` is refused at the mapping
+        and then handed straight back by the plan-default rung, because the plan default *is* the
+        mapping. The same hole would return the pinned evaluation policy to a product caller. The
+        gate has to be applied wherever a policy is chosen, not only the first time.
+
+        Each rung is also tried only downward. `_no_higher_than` enforces that: a fallback a
+        stronger plan maps to is not attempted, because an outage on the Free tier must not hand a
+        Free caller a Premium model.
         """
         ceiling = self._entitlement_ceiling(plan, snapshot)
+        attempted: set[str] = set() if policy is None else {str(policy.policy_id)}
 
         if policy is not None and policy.fallback_policy_id is not None:
             declared = snapshot.policy(policy.fallback_policy_id)
             if declared is None:
                 trail.append(f"declared fallback {policy.fallback_policy_id} does not exist")
+            elif not self._eligible(declared, administrative, trail):
+                pass  # `_eligible` has already said why in the trail.
             elif not self._no_higher_than(declared, ceiling, snapshot):
                 trail.append(
                     f"declared fallback {declared.policy_id} is above {plan.value}; not attempted"
                 )
             else:
                 trail.append(f"falling back to {declared.policy_id}")
+                attempted.add(str(declared.policy_id))
                 selected = self._first_available(declared, role, snapshot, trail)
                 if selected is not None:
                     return self._resolved(
@@ -318,12 +328,33 @@ class PolicyResolver:
                     )
 
         default = self._plan_default_policy(plan, role, snapshot)
-        if default is not None and (policy is None or default.policy_id != policy.policy_id):
+        if (
+            default is not None
+            and str(default.policy_id) not in attempted
+            and self._eligible(default, administrative, trail)
+        ):
             trail.append(f"falling back to the plan default {default.policy_id}")
+            attempted.add(str(default.policy_id))
             selected = self._first_available(default, role, snapshot, trail)
             if selected is not None:
                 return self._resolved(
                     selected, default, role, trail, snapshot, plan=plan, fell_back=True
+                )
+
+        # The documented floor. Every tier is entitled to Free's policy, so a plan whose own
+        # mapping is unusable — misconfigured, or pointing at something it may not resolve — lands
+        # here rather than skipping straight to configuration. Downward, and no further down.
+        floor = snapshot.policy(FREE_DEFAULT_POLICY)
+        if (
+            floor is not None
+            and str(floor.policy_id) not in attempted
+            and self._eligible(floor, administrative, trail)
+        ):
+            trail.append(f"falling back to the {floor.policy_id} floor")
+            selected = self._first_available(floor, role, snapshot, trail)
+            if selected is not None:
+                return self._resolved(
+                    selected, floor, role, trail, snapshot, plan=plan, fell_back=True
                 )
 
         configured = self._configured_entry(snapshot, trail)

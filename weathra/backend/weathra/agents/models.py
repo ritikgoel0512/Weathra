@@ -95,6 +95,7 @@ class ModelBroker:
     __slots__ = (
         "_bindings",
         "_http",
+        "_installed",
         "_override",
         "_principal",
         "_resolver",
@@ -111,7 +112,9 @@ class ModelBroker:
         http: httpx.AsyncClient,
         principal: Principal | None = None,
         override: str | None = None,
+        installed: LLMClient | None = None,
     ) -> None:
+        self._installed = installed
         self._resolver = resolver
         self._session = session
         self._settings = settings
@@ -157,6 +160,14 @@ class ModelBroker:
         `failover_enabled` false and are handed back unwrapped — there is nothing to walk, and
         wrapping them would suggest otherwise to a reader of the evidence record.
         """
+        if self._installed is not None:
+            # A client somebody put in deliberately: the offline evaluation harness, or a test.
+            # Resolution still happens and is still recorded — the plan, the policy and the reason
+            # are real — and only the transport is the installed one. Skipping the resolution
+            # instead would mean the offline suite exercised a different code path from the one it
+            # is meant to be checking.
+            return self._installed
+
         primary = build_for_resolution(
             resolved.resolution, http=self._http, settings=self._settings
         )

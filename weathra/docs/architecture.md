@@ -319,7 +319,7 @@ Task 22.10's live execution remains outstanding).
 | Scope confinement | 14.13 | agents/scope.py | unit/test_agent_state_and_routing.py | IMPLEMENTED |
 | Untrusted content is data, not instruction | 14.13 | agents/safety.py | integration/test_safety.py | IMPLEMENTED |
 | Operation without an inference credential | 13.5 | agents/llm/registry.py | integration/test_no_credential.py | IMPLEMENTED |
-| Model selection comes from the policy layer, never from a node or a caller | 28.7 | — not implemented | — none | OPEN |
+| Model selection comes from the policy layer, never from a node or a caller | 28.7 | entitlements/resolver.py, agents/models.py, agents/graph.py | unit/test_policy_resolver.py, integration/test_agent_resolution.py, test_architecture.py | IMPLEMENTED |
 | Orchestration is gated by quota and instrumented per call | 29.3, 30.6 | — not implemented | — none | OPEN |
 | Every language model call attempt is recorded in the evidence record | 22.8 | domain/evidence.py, agents/llm/base.py | unit/test_domain_evidence.py, unit/test_llm.py | IMPLEMENTED |
 
@@ -345,7 +345,7 @@ Task 22.10's live execution remains outstanding).
 | Authentication in streaming requests | 16.3 | api/streaming.py | integration/test_api.py | IMPLEMENTED |
 | Account and data deletion | 15.5 | api/routers/account.py | integration/test_api.py | IMPLEMENTED |
 | Administrative and internal roles are server-held | 31.1 | — not implemented | — none | OPEN |
-| Plan and model entitlement are derived, never asserted | 28.2 | — not implemented | — none | OPEN |
+| Plan and model entitlement are derived, never asserted | 28.2 | entitlements/resolver.py, entitlements/administration.py | unit/test_policy_resolver.py, integration/test_agent_resolution.py | IMPLEMENTED |
 | Row Level Security on the SaaS-ready tables | 26.3, 26.4 | db/migrations/versions/0006_saas_user_owned_tables.py, db/migrations/versions/0007_model_lab_and_audit_tables.py | integration/test_saas_rls.py, integration/test_saas_schema.py | IMPLEMENTED |
 
 ### `deterministic-analytics`
@@ -483,7 +483,7 @@ Task 22.10's live execution remains outstanding).
 | Saved locations | 12.4 | memory/locations.py | integration/test_memory_saved_locations.py | IMPLEMENTED |
 | Ownership derived from the authenticated user | 12.2 | memory/, auth/rls.py | integration/test_auth_data_path.py, integration/test_checkpoint_policies.py | IMPLEMENTED |
 | Memory unavailability degrades honestly | 12.6 | memory/degradation.py, memory/availability.py | unit/test_memory_degradation.py | IMPLEMENTED |
-| Both memory tiers are retained unchanged by the model policy layer | 26.5, 28.8 | — not implemented | — none | OPEN |
+| Both memory tiers are retained unchanged by the model policy layer | 26.5, 28.8 | db/migrations/versions/0006_saas_user_owned_tables.py, agents/graph.py | integration/test_saas_rls.py, integration/test_agent_resolution.py | IMPLEMENTED |
 | Plan, policy, and usage state are not conversational memory | 26.3, 30.1 | — not implemented | — none | OPEN |
 
 ### `rag-knowledge`
@@ -551,16 +551,16 @@ Task 22.10's live execution remains outstanding).
 
 | Requirement | Tasks | Implementation | Tests | Status |
 |---|---|---|---|---|
-| Model policy layer between orchestration and the language model client | 28.1, 28.6 | — not implemented | — none | OPEN |
+| Model policy layer between orchestration and the language model client | 28.1, 28.6 | entitlements/resolver.py, agents/llm/factory.py, agents/models.py | unit/test_policy_resolver.py, unit/test_llm_failover.py, test_architecture.py | IMPLEMENTED |
 | Subscription-aware named policies | 26.6, 27.2, 28.1 | entitlements/policies.py, entitlements/plans.py, db/migrations/versions/0008_seed_model_policy_data.py | integration/test_entitlement_stores.py, integration/test_saas_seed.py | OPEN |
-| Entitlement is enforced server-side and never trusted from the client | 28.2 | — not implemented | — none | OPEN |
-| Administrative override is bounded by the allowlist | 28.3 | — not implemented | — none | OPEN |
-| Resolution is deterministic, ordered, and degrades honestly | 28.1, 28.5 | — not implemented | — none | OPEN |
-| Configured model remains the development and administrative fallback | 28.4, 28.5 | — not implemented | — none | OPEN |
-| The policy layer stays provider-agnostic | 27.4, 28.6 | — not implemented | — none | OPEN |
-| Model policy never affects deterministic computation or grounding | 28.8 | — not implemented | — none | OPEN |
+| Entitlement is enforced server-side and never trusted from the client | 28.2 | entitlements/resolver.py, entitlements/administration.py | unit/test_policy_resolver.py, integration/test_agent_resolution.py | IMPLEMENTED |
+| Administrative override is bounded by the allowlist | 28.3 | entitlements/resolver.py, entitlements/snapshot.py | unit/test_policy_resolver.py, integration/test_entitlement_snapshot.py | IMPLEMENTED |
+| Resolution is deterministic, ordered, and degrades honestly | 28.1, 28.5 | entitlements/resolver.py, entitlements/snapshot.py | unit/test_policy_resolver.py, integration/test_entitlement_snapshot.py | IMPLEMENTED |
+| Configured model remains the development and administrative fallback | 28.4, 28.5 | entitlements/resolver.py, config.py | unit/test_policy_resolver.py, test_config.py | IMPLEMENTED |
+| The policy layer stays provider-agnostic | 27.4, 28.6 | agents/llm/factory.py, entitlements/records.py | unit/test_no_vendor_coupling.py, unit/test_llm_failover.py | IMPLEMENTED |
+| Model policy never affects deterministic computation or grounding | 28.8 | agents/graph.py, entitlements/records.py | integration/test_agent_resolution.py | IMPLEMENTED |
 | Policy administration is privileged and auditable | 31.2, 31.3 | — not implemented | — none | OPEN |
-| Runtime provider failure fails over within the entitled policy, never on quality | 28.9 | — not implemented | — none | OPEN |
+| Runtime provider failure fails over within the entitled policy, never on quality | 28.9 | agents/llm/failover.py | unit/test_llm_failover.py | IMPLEMENTED |
 
 ### `model-catalog`
 
@@ -568,9 +568,9 @@ Task 22.10's live execution remains outstanding).
 |---|---|---|---|---|
 | Model catalog as persisted data | 26.2, 26.6 | db/models.py, db/migrations/versions/0005_saas_operational_tables.py, db/migrations/versions/0008_seed_model_policy_data.py | integration/test_saas_schema.py, integration/test_saas_seed.py | IMPLEMENTED |
 | Model availability changes without a code change | 27.1, 27.3 | entitlements/catalog.py, entitlements/snapshot.py | integration/test_entitlement_stores.py, integration/test_entitlement_snapshot.py | IMPLEMENTED |
-| Enable and disable status is honoured at resolution time | 27.1, 28.1 | — not implemented | — none | OPEN |
+| Enable and disable status is honoured at resolution time | 27.1, 28.1 | entitlements/catalog.py, entitlements/resolver.py, entitlements/snapshot.py | unit/test_policy_resolver.py, integration/test_entitlement_stores.py, integration/test_entitlement_snapshot.py | IMPLEMENTED |
 | Business logic is decoupled from vendor model identifiers | 27.4 | entitlements/records.py, db/migrations/versions/0008_seed_model_policy_data.py | unit/test_no_vendor_coupling.py | IMPLEMENTED |
-| The catalog is the allowlist | 28.3 | — not implemented | — none | OPEN |
+| The catalog is the allowlist | 28.3 | entitlements/snapshot.py, agents/llm/factory.py | unit/test_policy_resolver.py, integration/test_entitlement_snapshot.py | IMPLEMENTED |
 | Catalog administration is privileged and validated | 27.1, 31.3 | — not implemented | — none | OPEN |
 | Catalog state is observable | 31.5 | — not implemented | — none | OPEN |
 

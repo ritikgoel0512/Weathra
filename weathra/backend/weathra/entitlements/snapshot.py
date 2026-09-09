@@ -31,6 +31,7 @@ import asyncio
 import logging
 import time
 from collections.abc import Mapping
+from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,6 +47,7 @@ from weathra.entitlements.records import CatalogEntry, PlanRecord, PolicyRecord
 __all__ = [
     "EntitlementSnapshot",
     "SnapshotCache",
+    "SnapshotSource",
     "load_snapshot",
     "validate_override_against_database",
 ]
@@ -111,6 +113,19 @@ class EntitlementSnapshot(BaseModel):
         without a second flag to keep consistent with this one.
         """
         return self.age_seconds(now=now) >= ttl_seconds
+
+
+class SnapshotSource(Protocol):
+    """Whatever the resolver reads its snapshot from.
+
+    A Protocol rather than the concrete cache, so the resolver can be exercised over fixture
+    catalog and policy data with no database at all — which is what task 28.1 asks for, and what
+    makes the candidate-walk tests fast enough to be worth writing exhaustively.
+    """
+
+    async def current(self, session: AsyncSession) -> EntitlementSnapshot:
+        """The snapshot to resolve against, refreshed if the implementation thinks it stale."""
+        ...
 
 
 async def load_snapshot(session: AsyncSession) -> EntitlementSnapshot:

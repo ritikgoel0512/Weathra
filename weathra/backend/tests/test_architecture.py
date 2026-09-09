@@ -66,8 +66,14 @@ LAYERS: dict[str, int] = {
 # implementation or a suite that could not authenticate, and both are worse than the rule's letter.
 AUTH_CONSUMERS = frozenset({"auth", "api", "memory", "evaluation"})
 
-# `agents/nodes/` reaches weather data through the MCP tool boundary, never a provider client.
-NODES_FORBIDDEN = frozenset({"providers", "geocoding"})
+# `agents/nodes/` reaches weather data through the MCP tool boundary, never a provider client, and
+# it reaches a model through whatever client the graph hands it — never through the policy layer.
+#
+# `entitlements` is on this list for a reason worth stating. A node that could import it could ask
+# for a different call role's client, or resolve a second time mid-run, or consult the catalog
+# directly — and "no node selects a model" (`specs/model-policy`) would become a convention rather
+# than a fact. The graph resolves both roles and passes each node the client it gets.
+NODES_FORBIDDEN = frozenset({"providers", "geocoding", "entitlements"})
 
 # Task 5.8: no module *above* the provider layer names a concrete provider client. `providers/`
 # and `geocoding/` are the provider layer — they sit at the same level and share both the vendor's
