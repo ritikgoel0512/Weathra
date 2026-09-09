@@ -116,6 +116,70 @@ describe("attribution", () => {
     expect(document.body.textContent ?? "").not.toMatch(/station|WMO|synop/i);
   });
 
+  /*
+   * Finding 2.11 of the runtime fidelity audit of 2026-09-08, and the `specs/web-ui` clarification
+   * of 2026-09-09: a surface bearing no weather value may not display a weather provenance field
+   * that does not apply to it — as a value or as unreported — and must still identify what
+   * produced it. The weather-bearing footer above is unchanged, and the tests above it are the
+   * proof of that: they are the guarantee this narrowing must not reach.
+   */
+  describe("a surface that bears no weather value (2.11)", () => {
+    it("shows what produced it and when, and no weather provenance field at all", () => {
+      const { container } = render(
+        <AttributionFooter
+          scope="model-run"
+          attribution={{
+            provider: "openrouter",
+            model: "nvidia/nemotron-3-super-120b-a12b:free",
+            completedAt: "2026-09-04T06:15:30Z",
+          }}
+        />,
+      );
+
+      expect(screen.getByText("Produced by")).toBeInTheDocument();
+      expect(
+        screen.getByText("openrouter · nvidia/nemotron-3-super-120b-a12b:free"),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Completed")).toBeInTheDocument();
+
+      // The four that do not describe a language-model run — absent, not "not reported".
+      for (const term of ["Source", "Location", "Period", "Retrieved", "Units"]) {
+        expect(screen.queryByText(term), term).not.toBeInTheDocument();
+      }
+      expect(screen.queryByText(NOT_REPORTED)).not.toBeInTheDocument();
+      expect(container.querySelectorAll("dt")).toHaveLength(2);
+    });
+
+    it("omits a row the backend did not report rather than saying it is unreported", () => {
+      // "not reported" about a field that could never apply is the same fabrication, quieter.
+      render(<AttributionFooter scope="model-run" attribution={{}} />);
+
+      expect(screen.queryByText(NOT_REPORTED)).not.toBeInTheDocument();
+      expect(document.querySelectorAll("dt")).toHaveLength(0);
+    });
+
+    it("is marked as its own scope, so the distinction does not depend on which rows a run filled", () => {
+      const { container } = render(
+        <AttributionFooter scope="model-run" attribution={{ provider: "openrouter" }} />,
+      );
+
+      expect(container.querySelector("[data-attribution]")).toHaveAttribute(
+        "data-attribution-scope",
+        "model-run",
+      );
+    });
+
+    it("leaves the weather-bearing footer carrying all four, unreported and all", () => {
+      const { container } = render(<AttributionFooter attribution={{}} />);
+
+      // The default scope is unchanged and is not the narrowed one.
+      expect(container.querySelector("[data-attribution]")).not.toHaveAttribute(
+        "data-attribution-scope",
+      );
+      expect(screen.getAllByText(NOT_REPORTED)).toHaveLength(4);
+    });
+  });
+
   it("treats a blank provider as unreported", () => {
     render(<AttributionFooter attribution={{ ...ATTRIBUTION, provider: "   " }} />);
     expect(screen.getByText(NOT_REPORTED)).toBeInTheDocument();

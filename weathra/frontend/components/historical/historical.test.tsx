@@ -693,6 +693,56 @@ describe("the toolbar (3.3, 3.6)", () => {
   });
 });
 
+/*
+ * The heading outlives the state — finding 1.1's rule, found on this screen by the runtime-state
+ * sweep of 2026-09-09. Three of the four early returns rendered a state with no `h1` above it: an
+ * unnamed page, which is what the audit graded as a defect in its own right on the Dashboard.
+ */
+describe("the screen is named in every state (1.1)", () => {
+  it("is named while its locations are still loading", async () => {
+    fetchMock = vi.fn(() => new Promise<Response>(() => {})) as unknown as Mock;
+    renderScreen();
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Historical Analytics" }),
+    ).toBeInTheDocument();
+  });
+
+  it("is named when the person has saved no location", async () => {
+    fetchMock = backend({
+      ...POPULATED,
+      "/api/v1/me/preferences": preferences({ default_location: null }),
+      "/api/v1/me/locations": { count: 0, limit: 20, locations: [] },
+    }) as unknown as Mock;
+
+    renderScreen();
+
+    expect(await screen.findByText("No location to analyse")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Historical Analytics" }),
+    ).toBeInTheDocument();
+  });
+
+  it("is named when its preferences call fails", async () => {
+    fetchMock = vi.fn(async () =>
+      jsonResponse(503, {
+        error: {
+          code: "provider_unavailable",
+          message: "The provider did not answer in time.",
+          details: null,
+          request_id: "r",
+        },
+      }),
+    ) as unknown as Mock;
+
+    renderScreen();
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Historical Analytics" }),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("the session", () => {
   it("routes a 401 to the shared expired-session state rather than to a data error", async () => {
     fetchMock = vi.fn(async () =>

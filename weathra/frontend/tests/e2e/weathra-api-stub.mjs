@@ -46,6 +46,26 @@ const HOST = process.env.WEATHRA_STUB_HOST ?? "127.0.0.1";
 /** Flipped by `/control/revoke`: the backend stops accepting the token the browser presents. */
 let serving = true;
 
+/**
+ * Which of the runtime states the backend is standing in for — `POST /control/mode?value=…`.
+ *
+ * The runtime fidelity audit of 2026-09-08 produced these four by hand, with a throwaway harness,
+ * and its own §2 records what that cost: a fixture that answered `me/locations` with `{saved: []}`
+ * where the contract says `{locations: []}` crashed all seven signed-in screens, and the finding
+ * looked exactly like a product defect until somebody noticed the seven screenshots were
+ * byte-identical. Driving the states from *this* stub — the one whose shapes the rest of the suite
+ * already holds to the contract — is what stops that from being rediscovered, and is what lets the
+ * sweep run on every push rather than on the day somebody remembers to look.
+ *
+ *   populated  the fixtures, which is every other spec's world
+ *   empty      a new account: no saved location, no default, no threads, no evidence
+ *   failing    every call answered 503 in Weathra's own error envelope
+ *   stalling   every call held open, so a screen is photographed mid-flight
+ */
+let mode = "populated";
+
+const MODES = new Set(["populated", "empty", "failing", "stalling"]);
+
 /** Every `/api/v1` call this boundary has seen, so a spec can assert one genuinely arrived. */
 let seen = [];
 
@@ -747,10 +767,21 @@ const server = createServer((request, response) => {
   }
   if (path === "/control/restore") {
     serving = true;
+    mode = "populated";
     seen = [];
     // Task 21.10: a flow's saved location and preference must not survive into the next flow.
     resetState();
-    send(response, 200, { serving });
+    send(response, 200, { serving, mode });
+    return;
+  }
+  if (path === "/control/mode") {
+    const wanted = url.searchParams.get("value") ?? "populated";
+    if (!MODES.has(wanted)) {
+      envelope(response, 400, "unknown_mode", `No such stub mode: ${wanted}.`);
+      return;
+    }
+    mode = wanted;
+    send(response, 200, { serving, mode });
     return;
   }
   if (path === "/control/requests") {
@@ -775,6 +806,24 @@ const server = createServer((request, response) => {
     // The code Weathra's own token validation returns for a session that is no longer valid, and
     // one of the codes `lib/api/errors.ts` recognises as an authentication failure.
     envelope(response, 401, "token_expired", "The access token has expired.");
+    return;
+  }
+
+  /*
+   * The two states that answer every call the same way, before any route is matched.
+   *
+   * `stalling` deliberately never responds and never closes: a screen photographed mid-flight is
+   * the loading state, and a stub that answered slowly would be a race rather than a state. The
+   * socket is left to the browser and to Playwright's own teardown.
+   */
+  if (mode === "stalling") return;
+  if (mode === "failing") {
+    envelope(
+      response,
+      503,
+      "provider_unavailable",
+      "The weather provider did not answer within the time allowed. Try again shortly.",
+    );
     return;
   }
 
@@ -925,6 +974,38 @@ const server = createServer((request, response) => {
     resetState();
     send(response, 200, preferenceView());
     return;
+  }
+
+  /*
+   * A new account, in the shapes the contract declares.
+   *
+   * Field by field rather than a hand-written literal, because the audit's own throwaway fixture
+   * got `{saved: []}` where the contract says `{locations: []}` and crashed all seven signed-in
+   * screens — §2 of `docs/design/runtime-fidelity-audit.md`. Spreading the served view keeps the
+   * shape correct by construction: only the emptied fields differ from what the app already
+   * handles, so an empty state cannot fail for a reason the product does not have.
+   */
+  if (mode === "empty") {
+    if (path === "/api/v1/me/preferences") {
+      send(response, 200, { ...preferenceView(), default_location: null });
+      return;
+    }
+    if (path === "/api/v1/me/locations") {
+      send(response, 200, { ...savedLocationsView(), count: 0, locations: [] });
+      return;
+    }
+    if (path === "/api/v1/me") {
+      send(response, 200, {
+        ...FIXTURES["/api/v1/me"],
+        created_now: true,
+        preferences: { ...FIXTURES["/api/v1/me"].preferences, default_location: null },
+      });
+      return;
+    }
+    if (path === "/api/v1/threads") {
+      send(response, 200, { ...FIXTURES["/api/v1/threads"], count: 0, threads: [] });
+      return;
+    }
   }
 
   // The reads that must reflect the writes above rather than the seed fixture.

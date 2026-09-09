@@ -13,9 +13,10 @@ compared against the implemented markup and stylesheets for that screen. No arti
 > recorded in [`runtime-fidelity-audit.md`](runtime-fidelity-audit.md). It corrects two findings
 > that turn out to belong to the test harness rather than the product, records twelve drifts this
 > review's source-reading could not have found, and lists what it fixed and what it left. A second
-> pass on 2026-09-09 closed eight of the ten items it left open, recorded in that document's §8;
-> the two that remain are named there. Read that one for the current state of the eight screens;
-> this one remains the record of the structural comparison and of the deliberate divergences.
+> pass on 2026-09-09 closed eight of the ten items it left open (§8) and a third closed the ninth
+> and turned the whole exercise into a check that runs on every push (§9). One item remains, named
+> there. Read that one for the current state of the eight screens; this one remains the record of
+> the structural comparison and of the deliberate divergences.
 
 **What this review is, and is not.** It is a comparison of implemented structure against approved
 artifacts, carried out by reading both. It is **not** a human visual walkthrough of the running

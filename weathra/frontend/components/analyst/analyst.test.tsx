@@ -18,6 +18,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
+import { NOT_REPORTED } from "@/components/ui";
 import { SessionBoundary } from "@/lib/session/provider";
 
 import { Analyst } from "./analyst";
@@ -370,6 +371,39 @@ describe("a streamed answer", () => {
     expect(within(retrieved).getByText("Berlin, Germany")).toBeInTheDocument();
     expect(within(retrieved).getByText(/2026-09-04 00:00 to 2026-09-07 00:00/)).toBeInTheDocument();
     expect(within(retrieved).getByText(/2026-09-04 06:15 UTC/)).toBeInTheDocument();
+  });
+
+  it("attributes the run to what produced it, and to no place or period it never had (2.11)", async () => {
+    const { container } = renderAnalyst();
+    await ask("What should I expect?");
+    await screen.findByRole("region", { name: "AI interpretation" });
+
+    const run = container.querySelector('[data-attribution-scope="model-run"]') as HTMLElement;
+    expect(run).toBeInTheDocument();
+
+    // What applies to a language-model run: the gateway, the model, and when it finished.
+    expect(within(run).getByText("openrouter · a-configured-model")).toBeInTheDocument();
+    expect(within(run).getByText("Completed")).toBeInTheDocument();
+
+    // What does not, and used to print "not reported" under every answer.
+    expect(within(run).queryByText("Location")).not.toBeInTheDocument();
+    expect(within(run).queryByText("Period")).not.toBeInTheDocument();
+    expect(within(run).queryByText(NOT_REPORTED)).not.toBeInTheDocument();
+  });
+
+  it("keeps all four weather fields on the figures inside the answer (2.11)", async () => {
+    // The narrowing is about the run's own footer. Each retrieved figure is its own region with
+    // its own weather footer, and that is where `specs/web-ui`'s requirement lives — untouched.
+    const { container } = renderAnalyst();
+    await ask("What should I expect?");
+    await screen.findByRole("region", { name: "AI interpretation" });
+
+    const retrieved = container.querySelector('[data-tier="retrieved"]') as HTMLElement;
+    const footer = retrieved.querySelector('[data-attribution="true"]') as HTMLElement;
+    expect(footer).not.toHaveAttribute("data-attribution-scope");
+    for (const term of ["Source", "Location", "Period", "Retrieved"]) {
+      expect(within(footer).getByText(term), term).toBeInTheDocument();
+    }
   });
 
   it("carries the forecast's uncertainty with its stated basis, and no invented precision", async () => {

@@ -362,18 +362,34 @@ export function CompareCities(): ReactNode {
     [blocked, client, criterion, days, entries, resolving],
   );
 
+  /*
+   * The heading outlives the state — finding 1.1's rule, applied here on 2026-09-09 after
+   * `tests/e2e/fidelity.spec.ts` photographed this screen mid-flight and found four grey lines
+   * under no title at all. The frame is inline rather than extracted because this screen has
+   * exactly one early return; Historical Analytics has three, which is why that one has a
+   * component.
+   */
+  const heading = (
+    <header className={styles.heading}>
+      <h1 className={styles.title}>Compare Cities</h1>
+      <p className={styles.subtitle}>
+        Ranked against one criterion, over one window, in each place&rsquo;s own local time.
+      </p>
+    </header>
+  );
+
   if (preferences.state.kind === "loading" || saved.state.kind === "loading") {
-    return <LoadingState label="Loading your locations" lines={4} />;
+    return (
+      <section className={styles.screen} aria-label="Compare Cities">
+        {heading}
+        <LoadingState label="Loading your locations" lines={4} />
+      </section>
+    );
   }
 
   return (
     <section className={styles.screen} aria-label="Compare Cities">
-      <header className={styles.heading}>
-        <h1 className={styles.title}>Compare Cities</h1>
-        <p className={styles.subtitle}>
-          Ranked against one criterion, over one window, in each place&rsquo;s own local time.
-        </p>
-      </header>
+      {heading}
 
       {/*
         The query, folded away once there is a ranking to read — finding 4.5 of the runtime

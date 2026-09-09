@@ -103,7 +103,7 @@ which parts of the reply the composition made loud.
 | 2.8 | The observed card shows three "Not reported" rows *and* a sentence saying the run retrieved no observation | B | fixed — the sentence, or the rows, never both |
 | 2.9 | The failure state names no environment variable, no secret, no provider credential and no configuration instruction | A | verified, all three failure shapes |
 | 2.10 | No "History" control, which the artifact carries | D | recorded in `screens.md` §8: the threads endpoint exists, no screen lists them, and a control with nowhere to go is worse than none |
-| 2.11 | The interpretation footer prints "Location: not reported · Period: not reported" for a language-model call, where neither field applies | B | **not done** — see §6 |
+| 2.11 | The interpretation footer prints "Location: not reported · Period: not reported" for a language-model call, where neither field applies | B | fixed (§9.1) |
 
 ### 03 · Historical Analytics — `03-historical-analytics.png`
 
@@ -238,20 +238,12 @@ anywhere was `temperature_mean`, now relabelled.
 
 ## 6. What this audit did not fix
 
-Named plainly, because the brief asked for category B fixed and category C redesigned, and the two
-items below are neither done nor abandoned. Neither is a regression.
+**One item.** The other nine this section carried on 2026-09-08 were closed in the two passes
+recorded in §8 and §9; their per-screen rows above point at the subsection that says what changed.
 
-The other eight entries this section carried on 2026-09-08 were closed in the pass of 2026-09-09,
-recorded in §8. Their per-screen rows above now read `fixed`, each pointing at the subsection that
-says what changed and what it preserved.
-
-1. **The interpretation footer's inapplicable fields** (2.11). Left deliberately, and still:
-   `AttributionFooter` renders provider, location, period and retrieval on every surface because
-   `specs/web-ui` requires it on every weather-bearing surface, and narrowing that primitive on this
-   audit's own judgement is a change to a guarantee rather than to a layout. **It wants a decision,
-   not a patch**, and it is the one open item that cannot be closed by editing a screen.
-2. **A photographed refused-credential sign-in** (8.5) — the auth stub accepts any password, so this
-   state has no browser photograph. Component tests cover it. Stated rather than claimed.
+1. **A photographed refused-credential sign-in** (8.5) — the auth stub accepts any password, so
+   this state has no browser photograph. Component tests cover it. Stated rather than claimed, and
+   it is not a product defect: it is a gap in what this harness can produce.
 
 ## 7. Verification of the changes of 2026-09-08
 
@@ -375,3 +367,99 @@ the candidate chooser's heading now opens the Dashboard's disclosure first, the 
 Every added test for a fold checks **both halves** — that the screen no longer says the thing twice
 or above the fold, *and* that the field or the figure behind the summary is the same one it was — so
 a fold that quietly became a deletion would fail rather than pass more quietly than before.
+
+---
+
+## 9. The third pass — 2026-09-09
+
+Two things: the decision finding 2.11 was waiting on, and the reason this audit stops being a
+document somebody has to remember to repeat.
+
+### 9.1 Finding 2.11 — the decision, and what it changed
+
+The product owner's rule: **never display a weather provenance field that does not actually apply
+to the content being shown.** Weather-bearing content keeps every field the specs require. A
+language-model run's own record shows only what applies to it, fabricates nothing, and still
+identifies the model that produced it.
+
+Checked against the governing requirement first, as the brief required. `specs/web-ui`'s *Data
+classes and attribution are visible* already scopes its obligation to "every screen showing weather
+data", and the design-direction table it sits under says "every weather-bearing surface" — so the
+rule was not a violation of what was written. But the specification was **silent** on what a
+non-weather-bearing surface must do, which is exactly why this sat open as a guarantee question
+rather than a layout one. So the requirement gained one paragraph and one scenario stating the
+distinction, and the code followed it rather than the other way round.
+
+`AttributionFooter` now takes a scope. The default is the weather footer, unchanged in every
+respect — four fields, `not reported` where the backend reported none. The `model-run` scope takes
+a **different type**: `RunAttribution` has no location, no period and no unit field, so the
+narrowed variant cannot be pointed at a weather surface to quietly drop its four fields. That is
+deliberate. A comment saying "don't use this for weather" is a comment; a type that has nothing to
+drop is a guarantee.
+
+The Analyst's run footer now reads *Produced by openrouter · <model> · Completed <time>*, and a row
+whose value the backend did not report is **absent** rather than "not reported" — because "not
+reported" about a field that could never apply is the same fabrication in quieter clothes. Every
+weather figure inside the answer is untouched: each is its own region with its own weather footer,
+which is where the requirement lives.
+
+Agent Evidence was deliberately **not** narrowed. Its record footer describes a run that retrieved
+weather, on the screen `screens.md` §8 records as the one where machinery belongs, and "not
+reported" there is information an operator reading a record wants. The spec paragraph says "and
+nothing else in this change" for exactly this reason.
+
+### 9.2 The sweep — this audit, on every push
+
+`tests/e2e/fidelity.spec.ts`. Every screen, in every runtime state, against the real production
+build with fixtures off, on both engines.
+
+The audit of 2026-09-08 found what it found by photographing the application and *reading* it, and
+the protection against those findings returning was that somebody had done it once. The production
+episode is what that is worth. `weathra-api-stub.mjs` grew a `/control/mode` driving the four
+served states — populated, empty, failing, stalling — from the stub whose shapes the rest of the
+suite already holds to the contract, which is itself a fix: §2 records that this audit's own
+throwaway fixture used `{saved: []}` where the contract says `{locations: []}` and crashed seven
+screens, and the finding looked exactly like a product defect.
+
+What it asserts is **vocabulary**, not pixels. A screenshot diff of eight screens in five states is
+a hundred and twenty files that go stale when a token moves and fail on the wrong things. What
+actually characterises a console is the words: a `SCREAMING_SNAKE_CASE` identifier, a snake_case API
+key printed as prose, invented telemetry language, a stack trace, the framework's error page. Every
+one of those is a real finding from §3, they are readable from the rendered text, and they do not
+move when a colour does. `innerText` rather than `textContent`, deliberately — `textContent` returns
+the contents of a closed `<details>`, which is where this audit *moved* machinery to, so a check
+that read it would fail every one of these fixes while claiming the opposite.
+
+Allowances are named per screen and narrow. Agent Evidence is allowed its record's vocabulary,
+because that is what the screen is; every screen may name an IANA timezone, because that is a real
+identifier a person needs to read a window in the right zone. Nothing else.
+
+### 9.3 What the sweep found on its first run
+
+Four defects, one class, in states the earlier passes never reached on those two screens:
+**Historical Analytics rendered no `h1` in its empty, failing and loading states, and Compare
+Cities rendered none in its loading state.**
+
+That is finding 1.1's own rule — *the heading outlives the state* — which was recorded, fixed and
+verified on the Dashboard on 2026-09-08 and was still untrue of two other screens the next day. An
+unnamed page is a page a person cannot tell from a different unnamed page, and it is the heading
+list most screen-reader users navigate by. Historical Analytics has three early returns and now has
+a frame component; Compare Cities has one and holds its heading in a variable.
+
+It is worth saying plainly what this means about the previous passes: a hand audit of eight screens
+found this defect on the screen it happened to look at first and missed it on two others. That is
+not a criticism of the audit — it is the argument for the sweep.
+
+### 9.4 Verification
+
+- `npx tsc --noEmit` — clean.
+- `npm run lint` — clean.
+- `npm test` — 1 172 passed, 61 files.
+- `npx playwright test` — 196 passed, Chromium and Firefox, including axe, the manual accessibility
+  suite, the responsive overflow sweep, and the new fidelity sweep.
+- `npm run build` — clean production build; the built bundle carries no `SERVICE_ROLE`,
+  `OPENROUTER` or `DATABASE_URL` string.
+- `openspec validate weathra-mvp --strict` — valid. `git diff --check` — clean.
+
+Ten tests added: four on the narrowed footer and its untouched sibling, two on the Analyst's two
+footers, four on the two screens' headings — plus the 34-case sweep, which runs on both engines.

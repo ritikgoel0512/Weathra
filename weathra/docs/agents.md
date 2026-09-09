@@ -178,3 +178,50 @@ findings it was handed.
 
 `/ask` and `/stream` construct the client lazily, which is why the backend starts and serves every
 other capability with no inference credential configured at all.
+
+## The production Analyst failure of 2026-09-08, and what is actually known about it
+
+Recorded because the first diagnosis was wrong, the wrong answer was expensive, and the cost of a
+second wrong one is another rotation of a credential that may never have been at fault.
+
+**What was seen.** A signed-in visitor on the Analyst screen was told: *"The inference provider
+rejected the configured credential. Check OPENROUTER_API_KEY."* Two defects, not one, and neither
+was the key. The message was an operator's checklist read out to a customer, fixed in `e151490`.
+And `401` and `403` were collapsed into a single `AgentNotConfigured`, so a gateway that had
+**accepted** the credential and then refused the request was reported as a credential that was
+rejected — fixed in `eded048`, where a 403 raises `ProviderUnavailable` and records `provider_error`
+in the evidence, because "nobody configured this" is a false statement about a deployment whose key
+the gateway just accepted. `Settings` also normalises the credential's packaging — surrounding
+whitespace and a copied `Bearer ` prefix — at the boundary every consumer reads it from, because
+each of those produces a 401 indistinguishable from a wrong key.
+
+**The classification, as of 2026-09-09: `UNRESOLVED_FROM_AVAILABLE_NON-CREDENTIALLED_EVIDENCE`.**
+
+Not `AUTH_INVALID`. The only reason that word was ever attached to this incident is the error
+mapping that has since been corrected, and a classification inherited from a defect is not evidence.
+
+Two classes are ruled out by direct, non-credentialled probes:
+
+| Class | Evidence |
+|---|---|
+| `AUTH_INVALID` | `GET https://openrouter.ai/api/v1/key` → **200**, no limit, usage 0 |
+| `MODEL_UNAVAILABLE` | the configured model is in the public catalog, and a completion on it → **200** in ~0.5 s |
+
+The configured model is read from the deployed service itself, without a session:
+`GET /api/v1/ready` names it under `inference_provider`. It is **not** set in `render.yaml` —
+production runs the `llm_model` default in `config.py`, which is the same model task 22.10 was run
+against.
+
+**Why it stops there, and why that is the right place to stop.** Production's own outbound call
+cannot be observed from outside: `/agent/ask` and `/agent/stream` are authenticated by design, and
+reading the service's logs or authenticating as any user needs a credential this project will not
+spend on a diagnosis. The remaining classes — `RATE_LIMITED`, `QUOTA_EXHAUSTED`,
+`PROVIDER_CAPACITY`, `TIMEOUT`, `NETWORK_ERROR`, `INVALID_RESPONSE`, `OTHER_PROVIDER_ERROR` — are
+not separable without it.
+
+They do not need to be. Since `eded048` the backend records the class itself: the log line names
+which status arrived, and the evidence record carries `not_configured` or `provider_error`
+accordingly. **The next naturally occurring signed-in Analyst request classifies this**, at no cost
+and with no credential spent. Until one happens, the honest entry is the one above, and this
+unresolved diagnostic blocks nothing: the credential is not to be replaced, the model is not to be
+changed to make a test pass, and no other work waits on it.

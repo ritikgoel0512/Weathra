@@ -441,6 +441,33 @@ function Analysis({
   );
 }
 
+/**
+ * The screen's frame: its landmark, its heading, and whatever state it is in.
+ *
+ * **The heading outlives the state**, which is finding 1.1 of the runtime fidelity audit of
+ * 2026-09-08 — recorded there against the Dashboard, fixed there for the Dashboard, and still true
+ * of this screen on 2026-09-09, where three of the four early returns rendered a state with no
+ * `h1` above it. An unnamed page is a page a person cannot tell apart from a different unnamed
+ * page, and it is the heading list most screen-reader users navigate by.
+ *
+ * Found by `tests/e2e/fidelity.spec.ts`, which sweeps every screen in every runtime state rather
+ * than in the one the fixtures produce — the whole reason that sweep exists.
+ */
+function HistoricalFrame({ children }: { readonly children: ReactNode }): ReactNode {
+  return (
+    <section className={styles.screen} aria-label="Historical Analytics">
+      <header className={styles.heading}>
+        <h1 className={styles.title}>Historical Analytics</h1>
+        <p className={styles.subtitle}>
+          The archive, an earlier window, and the years behind them. Nothing estimated.
+        </p>
+      </header>
+
+      {children}
+    </section>
+  );
+}
+
 export function HistoricalAnalytics(): ReactNode {
   /*
    * Visual-fidelity review only.
@@ -468,27 +495,37 @@ export function HistoricalAnalytics(): ReactNode {
   );
 
   if (preferences.state.kind === "loading" || saved.state.kind === "loading") {
-    return <LoadingState label="Loading your locations" lines={4} />;
+    return (
+      <HistoricalFrame>
+        <LoadingState label="Loading your locations" lines={4} />
+      </HistoricalFrame>
+    );
   }
   if (preferences.state.kind === "error") {
-    return <ErrorState failure={preferences.state.failure} onRetry={preferences.retry} />;
+    return (
+      <HistoricalFrame>
+        <ErrorState failure={preferences.state.failure} onRetry={preferences.retry} />
+      </HistoricalFrame>
+    );
   }
 
   if (places.length === 0) {
     return (
-      <EmptyState
-        title="No location to analyse"
-        action={
-          <Link className={styles.controlsAction} href="/settings">
-            <Button variant="primary" size="sm">
-              Choose a default location
-            </Button>
-          </Link>
-        }
-      >
-        Historical Analytics works on one place at a time. Choose a default location in Settings, or
-        save one from Saved Locations, and it will be selectable here.
-      </EmptyState>
+      <HistoricalFrame>
+        <EmptyState
+          title="No location to analyse"
+          action={
+            <Link className={styles.controlsAction} href="/settings">
+              <Button variant="primary" size="sm">
+                Choose a default location
+              </Button>
+            </Link>
+          }
+        >
+          Historical Analytics works on one place at a time. Choose a default location in Settings,
+          or save one from Saved Locations, and it will be selectable here.
+        </EmptyState>
+      </HistoricalFrame>
     );
   }
 
@@ -507,14 +544,7 @@ export function HistoricalAnalytics(): ReactNode {
   };
 
   return (
-    <section className={styles.screen} aria-label="Historical Analytics">
-      <header className={styles.heading}>
-        <h1 className={styles.title}>Historical Analytics</h1>
-        <p className={styles.subtitle}>
-          The archive, an earlier window, and the years behind them. Nothing estimated.
-        </p>
-      </header>
-
+    <HistoricalFrame>
       <Analysis
         enquiry={initial}
         controls={
@@ -522,6 +552,6 @@ export function HistoricalAnalytics(): ReactNode {
         }
         onUnits={(units) => setEnquiry({ ...initial, units })}
       />
-    </section>
+    </HistoricalFrame>
   );
 }

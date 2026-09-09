@@ -321,6 +321,8 @@ The frontend SHALL reserve navigation and routing structure for the post-MVP scr
 
 Every displayed weather value SHALL carry a visible indication of its data class — current conditions, forecast, historical observation, computed statistic, or AI interpretation — and every screen showing weather data SHALL display the source provider, the location, the period covered, and the retrieval time. AI interpretation SHALL be visually distinguishable from retrieved data.
 
+A surface that bears no weather value — a language-model run's own record, and nothing else in this change — SHALL NOT display a weather provenance field that does not apply to it. A weather provider, a location, a covered period, a retrieval time or a unit system SHALL be displayed on such a surface only where that field genuinely describes the content shown, and SHALL NOT be displayed as unreported, empty, or with a stand-in value merely to complete a footer's shape. Such a surface SHALL still identify the model and gateway that produced it wherever the backend reported them. This narrowing SHALL NOT apply to any surface bearing a weather value, whose four fields remain required above and are stated as unreported when the backend reported none.
+
 #### Scenario: Value shows its data class
 
 - **WHEN** any weather value is displayed
@@ -330,6 +332,12 @@ Every displayed weather value SHALL carry a visible indication of its data class
 
 - **WHEN** a screen shows weather data
 - **THEN** the source provider, location, period, and retrieval time are visible
+
+#### Scenario: A non-weather-bearing surface omits the fields that do not apply
+
+- **WHEN** a surface shows a language-model run's own record and no weather value
+- **THEN** no weather provenance field that does not describe that record is displayed, as a value or as unreported
+- **AND** the model and gateway the backend reported are still identified
 
 #### Scenario: Interpretation visually distinct
 

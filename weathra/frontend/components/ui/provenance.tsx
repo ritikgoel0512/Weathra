@@ -103,11 +103,55 @@ export interface Attribution {
 /** What is shown for a field the backend did not report. Never a plausible-looking stand-in. */
 export const NOT_REPORTED = "not reported";
 
-export interface AttributionFooterProps {
-  readonly attribution: Attribution;
+/**
+ * What a language-model run's own record can be attributed to.
+ *
+ * Deliberately **not** an `Attribution`: it carries no location, no period and no unit system,
+ * because a run has none of those and the type is where that is enforced. Passing one is a
+ * compile error rather than a footer that reads "Location: not reported" about a paragraph.
+ */
+export interface RunAttribution {
+  /** The inference gateway the backend reported. No default. */
+  readonly provider?: string | null;
+  /** The model identifier the backend reported. No default. */
+  readonly model?: string | null;
+  /** When the run finished, as the backend recorded it. */
+  readonly completedAt?: string | null;
+}
+
+export type AttributionFooterProps = {
   /** Extra provenance a screen owns — an analytics method, a knowledge citation count. */
   readonly children?: ReactNode;
-}
+} & (
+  | {
+      /**
+       * The default, and what every weather-bearing surface uses. All four fields are rendered,
+       * `not reported` where the backend reported none — `specs/web-ui`'s standing requirement.
+       */
+      readonly scope?: "weather";
+      readonly attribution: Attribution;
+    }
+  | {
+      /**
+       * A surface that bears no weather value: the language-model run's own record, and in this
+       * change nothing else.
+       *
+       * Finding 2.11 of the runtime fidelity audit of 2026-09-08: the Analyst's run footer printed
+       * "Location: not reported · Period: not reported" under an answer to a question that named
+       * no place and covered no window — four weather provenance fields describing something that
+       * is not weather, two of which could never be anything but unreported.
+       *
+       * `specs/web-ui` now states the distinction: a surface bearing no weather value may not
+       * display a weather provenance field that does not apply to it, as a value *or* as
+       * unreported, and must still identify the model and gateway. The weather-bearing guarantee
+       * is untouched and is not reachable from here — a `RunAttribution` has no location, period
+       * or unit field to omit, so this variant cannot be pointed at a weather surface to quietly
+       * drop its four fields.
+       */
+      readonly scope: "model-run";
+      readonly attribution: RunAttribution;
+    }
+);
 
 /**
  * The attribution footer.
@@ -115,8 +159,14 @@ export interface AttributionFooterProps {
  * A description list, because that is what this is: named provenance fields and their values, which
  * a screen reader can then navigate as pairs rather than as a run-on line of separators.
  */
-export function AttributionFooter({ attribution, children }: AttributionFooterProps): ReactNode {
-  const { provider, location, retrievedAt, period, units, fromCache } = attribution;
+export function AttributionFooter(props: AttributionFooterProps): ReactNode {
+  const { children } = props;
+
+  if (props.scope === "model-run") {
+    return <RunFooter attribution={props.attribution}>{children}</RunFooter>;
+  }
+
+  const { provider, location, retrievedAt, period, units, fromCache } = props.attribution;
 
   const retrieved = formatInstant(retrievedAt);
   const start = formatLocalStamp(period?.start);
@@ -166,6 +216,59 @@ export function AttributionFooter({ attribution, children }: AttributionFooterPr
           <div className={styles.attributionItem}>
             <dt className={styles.attributionTerm}>Units</dt>
             <dd className={styles.attributionValue}>{units}</dd>
+          </div>
+        ) : null}
+      </dl>
+
+      {children ? <div className={styles.attributionExtra}>{children}</div> : null}
+    </footer>
+  );
+}
+
+/**
+ * The run footer: what produced this, and when it finished.
+ *
+ * The same element, the same description list and the same styling as the weather footer, so the
+ * two read as one primitive with two applicable field sets rather than as two components. What
+ * differs is only which rows exist, and a row exists only where the backend reported the thing it
+ * names — a run whose gateway went unreported carries no Produced-by row at all, because "not
+ * reported" here would be the same fabrication in quieter clothes.
+ *
+ * `data-attribution-scope` is on the element so the distinction is assertable without depending on
+ * which rows a particular run happened to fill.
+ */
+function RunFooter({
+  attribution,
+  children,
+}: {
+  readonly attribution: RunAttribution;
+  readonly children?: ReactNode;
+}): ReactNode {
+  const { provider, model, completedAt } = attribution;
+
+  const producedBy = [provider?.trim(), model?.trim()].filter(Boolean).join(" · ");
+  const completed = formatInstant(completedAt);
+
+  return (
+    <footer
+      className={styles.attribution}
+      data-attribution="true"
+      data-attribution-scope="model-run"
+    >
+      <dl className={styles.attributionList}>
+        {producedBy ? (
+          <div className={styles.attributionItem}>
+            <dt className={styles.attributionTerm}>Produced by</dt>
+            <dd className={styles.attributionValue}>{producedBy}</dd>
+          </div>
+        ) : null}
+
+        {completed && completedAt ? (
+          <div className={styles.attributionItem}>
+            <dt className={styles.attributionTerm}>Completed</dt>
+            <dd className={styles.attributionValue}>
+              <time dateTime={completedAt}>{completed}</time>
+            </dd>
           </div>
         ) : null}
       </dl>

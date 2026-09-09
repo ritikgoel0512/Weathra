@@ -658,6 +658,25 @@ describe("the runtime fidelity audit's compare findings", () => {
   });
 });
 
+/*
+ * The heading outlives the state — finding 1.1's rule, found here by the runtime-state sweep of
+ * 2026-09-09: this screen's one early return rendered four grey lines under no title at all.
+ */
+describe("the screen is named in every state (1.1)", () => {
+  it("is named while its locations are still loading", async () => {
+    fetchMock = vi.fn(() => new Promise<Response>(() => {})) as unknown as Mock;
+    render(
+      <SessionBoundary initialStatus="active" accessToken={() => "t"} fetch={(input, init) => fetchMock(input, init)}>
+        <CompareCities />
+      </SessionBoundary>,
+    );
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Compare Cities" }),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("data classes and failures", () => {
   it("keeps the ranking in a computed region, with no model-written region at all", async () => {
     const { container } = renderScreen();

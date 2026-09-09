@@ -385,11 +385,24 @@ function EvidenceSummary({
   const citations = evidence.citations ?? [];
 
   return (
+    /*
+      A run's record is not a weather reading, and is attributed as one — finding 2.11 of the
+      runtime fidelity audit of 2026-09-08, closed by the `specs/web-ui` clarification of
+      2026-09-09.
+
+      This footer used to print "Location: not reported · Period: not reported" beneath every
+      answer: two weather provenance fields that could never be anything else here, because this
+      run had no place and covered no window. It says what produced the answer and when it
+      finished, which is what applies to it. **Every weather figure inside the answer keeps all
+      four fields** — each is its own `ProvenanceSection` with its own weather footer, which is
+      where the requirement lives and where it is unchanged.
+    */
     <AttributionFooter
+      scope="model-run"
       attribution={{
         provider: answer.llm_provider ?? null,
-        location: null,
-        retrievedAt: evidence.completed_at,
+        model: answer.llm_model ?? null,
+        completedAt: evidence.completed_at,
       }}
     >
       <div className={styles.evidence} data-evidence="true">
