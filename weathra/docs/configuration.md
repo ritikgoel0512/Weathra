@@ -75,6 +75,8 @@ bundle — see [`authentication.md`](authentication.md) for why the split is dra
 | `LLM_JSON_MAX_ATTEMPTS` | `3` | behaviour | Attempts at a routing plan before the deterministic router takes over |
 | `LLM_RATE_LIMIT_MAX_WAIT_SECONDS` | `30.0` | behaviour | Ceiling on honouring a gateway 429's `Retry-After`; a longer stated delay stops the retry rather than waiting |
 | `MODEL_CATALOG_CACHE_TTL_SECONDS` | `60` | behaviour | How long a process serves the catalog, policy and plan snapshot before refreshing. The documented staleness window: a disable takes effect within it, not instantly. `0` reads every time |
+| `LLM_SINGLE_MODEL_MODE` | `false` | behaviour | Development only. Every call uses `LLM_MODEL` and is recorded as the configured fallback rather than a resolved policy. Refused at startup in a deployed environment |
+| `LLM_FAILOVER_MAX_MODELS` | `2` | behaviour | How many models one call role may attempt, counting the first. Only a withdrawn model, a gateway error or a timeout advances it — never a rate limit, and never output quality |
 | `DEFAULT_WEATHER_PROVIDER` | `open-meteo` | behaviour | Provider used when a request names none |
 | `DEFAULT_GEOCODER` | `open-meteo` | behaviour | Geocoder used when a request names none |
 | `DEFAULT_UNIT_SYSTEM` | `metric` | behaviour | `metric` or `imperial`, when neither the request nor a preference says |

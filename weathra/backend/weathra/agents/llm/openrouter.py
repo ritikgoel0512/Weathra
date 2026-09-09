@@ -84,7 +84,9 @@ class OpenRouterClient:
 
     provider_id = OPENROUTER_PROVIDER_ID
 
-    def __init__(self, *, client: httpx.AsyncClient, settings: Settings) -> None:
+    def __init__(
+        self, *, client: httpx.AsyncClient, settings: Settings, model_id: str | None = None
+    ) -> None:
         credential = settings.openrouter_api_key
         if credential is None:
             # Constructed only where inference is genuinely required, and this is the guard that
@@ -96,7 +98,11 @@ class OpenRouterClient:
                 details={"missing": "inference_credential", "provider": OPENROUTER_PROVIDER_ID},
             )
 
-        self.model_id = settings.llm_model
+        # Per instance, not per process. The model policy layer builds one client per resolved
+        # model per call role (design.md decision 22), so a single run can hold two clients on the
+        # same gateway with different models. `settings.llm_model` remains the answer when nobody
+        # resolved one — the development and administrative fallback, and nothing more.
+        self.model_id = model_id or settings.llm_model
         self._credential = credential
         self._client = client
         self._settings = settings

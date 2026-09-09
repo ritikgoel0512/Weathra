@@ -22,6 +22,12 @@ RuntimeMode = Literal["request_serving", "privileged"]
 UnitSystemName = Literal["metric", "imperial"]
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
+SINGLE_MODEL_MODE_DEPLOYED_MESSAGE = (
+    "LLM_SINGLE_MODEL_MODE must not be set in a deployed environment. It makes every call use "
+    "LLM_MODEL regardless of the caller's plan, which would leave entitlement reported but not "
+    "enforced. Unset it, or set WEATHRA_ENVIRONMENT to development for a local process."
+)
+
 SERVICE_ROLE_ON_REQUEST_PATH_MESSAGE = (
     "SUPABASE_SERVICE_ROLE_KEY must not be set when WEATHRA_RUNTIME_MODE is 'request_serving'. "
     "The service-role key bypasses Row Level Security; a request-serving process uses the "
@@ -146,6 +152,26 @@ class Settings(BaseSettings):
         description=(
             "Ceiling on honouring a gateway's Retry-After. A stated delay beyond this stops the "
             "retry rather than waiting: bounded patience, never an unbounded sleep."
+        ),
+    )
+
+    llm_single_model_mode: bool = Field(
+        default=False,
+        validation_alias="llm_single_model_mode",
+        description=(
+            "Development only. Every call uses LLM_MODEL and is recorded as the configured "
+            "fallback rather than as a resolved policy. Refused outright in a deployed "
+            "environment: a deployment serving one model regardless of entitlement would make "
+            "every plan identical while the response still named a policy."
+        ),
+    )
+    llm_failover_max_models: Annotated[int, Field(ge=1, le=5)] = Field(
+        default=2,
+        validation_alias="llm_failover_max_models",
+        description=(
+            "How many models one call role may attempt before giving up, counting the first. "
+            "Bounds the cost and the latency of an outage; failover is for infrastructure "
+            "failure and never for a judgement about output quality."
         ),
     )
 
@@ -381,12 +407,35 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def _refuse_single_model_mode_in_a_deployed_environment(self) -> Self:
+        """`specs/model-policy`: the single-model flag is a development affordance.
+
+        A deployed process running it would serve one model to every caller while the response and
+        the evidence record still reported a plan — so entitlement would look enforced and be
+        decorative. Refusing at construction makes that unbootable rather than merely discouraged.
+        """
+        if self.llm_single_model_mode and self.is_deployed:
+            raise ValueError(SINGLE_MODEL_MODE_DEPLOYED_MESSAGE)
+        return self
+
+    @model_validator(mode="after")
     def _refuse_overlapping_chunk_bounds(self) -> Self:
         if self.rag_chunk_overlap_tokens >= self.rag_chunk_max_tokens:
             raise ValueError("RAG_CHUNK_OVERLAP_TOKENS must be smaller than RAG_CHUNK_MAX_TOKENS.")
         return self
 
     # ---------------------------------------------------------------- derived values
+
+    @property
+    def is_deployed(self) -> bool:
+        """Whether this process is serving something other than a developer's own machine.
+
+        An allowlist of non-deployed names rather than a denylist of deployed ones, so a new
+        environment name is treated as deployed until somebody says otherwise. Getting that
+        backwards would make a typo in `WEATHRA_ENVIRONMENT` quietly re-enable a development
+        affordance in production.
+        """
+        return self.environment.strip().lower() not in {"development", "local", "test"}
 
     @property
     def jwt_issuer(self) -> str:

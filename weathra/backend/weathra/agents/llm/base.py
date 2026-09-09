@@ -157,10 +157,23 @@ class Completion(BaseModel):
 
 @runtime_checkable
 class LLMClient(Protocol):
-    """The contract. Two methods, and the identity of whoever is behind them."""
+    """The contract. Two methods, and the identity of whoever is behind them.
 
-    provider_id: str
-    model_id: str
+    The identity is declared read-only. Nothing outside a client ever assigns to it — a caller
+    *reads* which model answered — and requiring settability would exclude an implementation that
+    computes it, which the failover wrapper does: its current model changes as it walks a policy's
+    candidates, so it has to be a property rather than a field set once at construction.
+    """
+
+    @property
+    def provider_id(self) -> str:
+        """The gateway behind this client."""
+        ...
+
+    @property
+    def model_id(self) -> str:
+        """The model this client is bound to."""
+        ...
 
     async def complete(self, *, system: str, messages: Sequence[Message]) -> Completion:
         """One conversation turn, returned as prose."""

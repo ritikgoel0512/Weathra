@@ -36,6 +36,7 @@ from weathra.agents.context import ContextSources, resolve_context
 from weathra.agents.evidence import assemble_envelope, build_record
 from weathra.agents.grounding import check_grounding
 from weathra.agents.llm.base import LLMClient
+from weathra.agents.models import ModelSource
 from weathra.agents.nodes.analytics import run_analytics
 from weathra.agents.nodes.knowledge import KnowledgeRetriever, run_knowledge
 from weathra.agents.nodes.retrieval import run_forecast, run_historical
@@ -48,7 +49,14 @@ from weathra.agents.scope import declined_state
 from weathra.agents.state import GraphState
 from weathra.agents.supervisor import route
 from weathra.config import Settings
-from weathra.domain.evidence import AgentName, AnswerEnvelope, GroundingReport, StepStatus
+from weathra.domain.entitlements import CallRole
+from weathra.domain.evidence import (
+    AgentName,
+    AnswerEnvelope,
+    GroundingReport,
+    InferenceStage,
+    StepStatus,
+)
 from weathra.domain.weather import DataClass, UncertaintyStatement
 from weathra.geocoding.base import Geocoder
 from weathra.mcp.client import McpToolClient
@@ -74,8 +82,29 @@ class RunDependencies:
     tools: McpToolClient
     geocoder: Geocoder
     llm: LLMClient | None = None
+    """A client somebody already bound, used for every call role.
+
+    The offline evaluation harness and the fake-LLM tests supply this. It chooses nothing: whatever
+    is here was decided before the run began. A request-serving process supplies ``models``
+    instead, and a test asserts the agent route always does.
+    """
+    models: ModelSource | None = None
+    """The model policy layer, resolving one client per call role (design.md decision 22).
+
+    When present it wins over ``llm``. Both being set is refused below rather than silently
+    preferred, because "which one is in effect" is not a question a reader should have to answer
+    from the order of two ``if`` statements.
+    """
     knowledge: KnowledgeRetriever | None = None
     context: ContextSources | None = None
+
+    def __post_init__(self) -> None:
+        if self.llm is not None and self.models is not None:
+            raise ValueError(
+                "A run takes either a pre-bound client or the model policy layer, not both. "
+                "Supplying both would leave which model served the run depending on the order "
+                "this class happened to check them in."
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +118,100 @@ class AgentRunResult:
     @property
     def grounding(self) -> GroundingReport:
         return self.envelope.grounding
+
+
+async def _client_for(dependencies: RunDependencies, role: CallRole) -> LLMClient | None:
+    """The client this run uses for one call role.
+
+    The single place the graph obtains a client, so "no node selects a model" holds by there being
+    nowhere else to get one. ``None`` is a real answer and always has been: no inference credential
+    means deterministic routing and code-written prose, and every caller below already handles it.
+    """
+    if dependencies.models is not None:
+        return await dependencies.models.client_for(role)
+    return dependencies.llm
+
+
+def _record_resolutions(state: GraphState, dependencies: RunDependencies) -> GraphState:
+    """Fill each inference attempt's policy fields from the resolution that produced it.
+
+    Done here rather than in the nodes, and that is the point. ``agents/nodes/`` may not import
+    ``entitlements/`` — a node that could reach the policy layer could consult it — so the nodes
+    record what they observed (stage, status, provider, models) and the graph, which did the
+    resolving, annotates each attempt with why that model was the one asked.
+
+    The fields were declared nullable in group 22 for exactly this: the model policy layer
+    *populates an existing record* rather than introducing a second one that can drift from it.
+    """
+    if dependencies.models is None or not state.inference_attempts:
+        return state
+
+    bindings = getattr(dependencies.models, "resolved_roles", None)
+    resolved = bindings() if callable(bindings) else {}
+    if not resolved:
+        return state
+
+    annotated = []
+    for attempt in state.inference_attempts:
+        binding = resolved.get(CallRole(attempt.stage.value))
+        if binding is None:
+            annotated.append(attempt)
+            continue
+        resolution = binding.resolution
+        annotated.append(
+            attempt.model_copy(
+                update={
+                    "catalog_key": resolution.catalog_key,
+                    "policy_id": str(resolution.policy_id),
+                    "plan": binding.resolved.plan.value if binding.resolved.plan else None,
+                    "resolution_reason": resolution.reason,
+                    "fallback_reason": _fallback_reason(binding),
+                }
+            )
+        )
+    return state.model_copy(update={"inference_attempts": tuple(annotated)})
+
+
+def _fallback_reason(binding: object) -> str | None:
+    """Why this call ended up where it did, when it did not end up where it started.
+
+    ``None`` when the mapped policy's first candidate served, which is the ordinary case and needs
+    no narration. A configured fallback, a fallback rung, and a failover each say so plainly,
+    because "the run used a different model than the plan maps to" is exactly the fact a reader of
+    an evidence record should not have to infer.
+    """
+    resolved = getattr(binding, "resolved", None)
+    resolution = getattr(binding, "resolution", None)
+    if resolution is not None and resolution.is_configured_fallback:
+        return "the configured model served this call; no policy was resolved"
+    if getattr(binding, "attempts", ()) and len(binding.attempts) > 1:  # type: ignore[attr-defined]
+        return "an earlier candidate failed for an infrastructure reason and this one served"
+    if resolved is not None and getattr(resolved, "fell_back", False):
+        return "the mapped policy had no available candidate, so a fallback policy served"
+    return None
+
+
+def _served_identity(
+    state: GraphState, dependencies: RunDependencies
+) -> tuple[str | None, str | None]:
+    """The provider and model to report for the run as a whole.
+
+    Read from the *synthesis* attempt where there is one, because that is the call whose output a
+    reader is looking at. Falling back to whatever client was bound would name a model that may
+    never have answered — which is the thing `InferenceAttempt` was added to stop the record doing.
+
+    A run with no attempt at all — no credential, or a declined question — reports nothing rather
+    than the configured model, for the same reason.
+    """
+    for attempt in reversed(state.inference_attempts):
+        if attempt.stage is InferenceStage.SYNTHESIS and attempt.provider:
+            return attempt.provider, attempt.served_model or attempt.selected_model
+    for attempt in reversed(state.inference_attempts):
+        if attempt.provider:
+            return attempt.provider, attempt.served_model or attempt.selected_model
+    if dependencies.llm is not None:
+        return dependencies.llm.provider_id, dependencies.llm.model_id
+    return None, None
 
 
 async def run_agent(
@@ -113,7 +236,8 @@ async def run_agent(
     budget = Budget.from_settings(dependencies.settings)
 
     # ---------------------------------------------------------------- route
-    working = await route(state, client=dependencies.llm, now=started)
+    routing_client = await _client_for(dependencies, CallRole.ROUTING)
+    working = await route(state, client=routing_client, now=started)
     budget.spend()
     plan = working.plan
     if plan is None:  # pragma: no cover - `route` always sets a plan
@@ -162,7 +286,8 @@ async def run_agent(
 
     if observer is not None:
         observer.agent_start(AgentName.SYNTHESIS.value)
-    working = await synthesize(working, client=dependencies.llm, safety=safety)
+    synthesis_client = await _client_for(dependencies, CallRole.SYNTHESIS)
+    working = await synthesize(working, client=synthesis_client, safety=safety)
     if observer is not None:
         _report_last_step(observer, working)
         if working.answer_prose:
@@ -373,8 +498,8 @@ def _finish(
     still carries a report saying so, because an envelope with no grounding report would be an
     answer whose provenance was simply not stated.
     """
-    provider_id = dependencies.llm.provider_id if dependencies.llm else None
-    model_id = dependencies.llm.model_id if dependencies.llm else None
+    state = _record_resolutions(state, dependencies)
+    provider_id, model_id = _served_identity(state, dependencies)
 
     if declined or asked:
         grounded = state

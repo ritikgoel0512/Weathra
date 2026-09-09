@@ -165,7 +165,10 @@ async def _run(
     emitter: StreamEmitter | None = None,
 ) -> AgentRunResult:
     """One agent run, wired to this caller's memory and this request's session."""
-    client = inference.get()
+    # The credential guard first, so "no key configured" is still a 503 naming what is missing
+    # rather than a resolution that succeeds and then cannot build a client.
+    inference.get()
+    broker = inference.broker(session=session, principal=principal)
 
     state = GraphState.begin(
         question=body.question,
@@ -180,7 +183,9 @@ async def _run(
         settings=settings,
         tools=tools,
         geocoder=geocoder,
-        llm=client,
+        # The model policy layer, never a client this route picked: the resolver decides per call
+        # role from the caller's own plan (design.md decision 22).
+        models=broker,
         knowledge=_knowledge_retriever(session, embedder, settings),
         context=ContextSources(
             threads=ThreadStore(session, principal, settings),
@@ -189,15 +194,19 @@ async def _run(
         ),
     )
 
+    result = await run_agent(state, dependencies, observer=emitter)
+
+    # Annotated *after* the run, from what actually served it. Reading a configured client before
+    # the run would name a model whether or not it answered, which is the thing the evidence
+    # record's inference attempts exist to stop.
+    served = result.envelope.evidence
     annotate(
         request,
         acting_user_id=principal.user_id,
         agent_ran=True,
-        llm_provider=client.provider_id,
-        llm_model=client.model_id,
+        llm_provider=served.llm_provider,
+        llm_model=served.llm_model,
     )
-
-    result = await run_agent(state, dependencies, observer=emitter)
 
     annotate(
         request,

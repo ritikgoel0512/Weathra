@@ -109,12 +109,20 @@ def test_the_openrouter_client_satisfies_the_protocol() -> None:
 def test_the_protocol_is_the_two_methods_and_the_identity() -> None:
     """A contract this small is what makes substituting an implementation a settings change.
 
-    Methods and declared attributes are checked separately because a Protocol's annotated-only
-    members do not appear in ``dir``.
+    The identity is declared as read-only properties rather than as settable attributes. Nothing
+    outside a client assigns to them — a caller reads which model answered — and requiring
+    settability would exclude an implementation that computes it, which the failover wrapper does:
+    its current model changes as it walks a policy's candidates.
     """
-    methods = {name for name in vars(LLMClient) if not name.startswith("_")}
+    members = {name for name in vars(LLMClient) if not name.startswith("_")}
+    methods = {name for name in members if not isinstance(vars(LLMClient)[name], property)}
+    identity = {name for name in members if isinstance(vars(LLMClient)[name], property)}
+
     assert methods == {"complete", "complete_json"}
-    assert set(LLMClient.__annotations__) == {"provider_id", "model_id"}
+    assert identity == {"provider_id", "model_id"}
+    assert not LLMClient.__annotations__, (
+        "the identity is declared as properties, so nothing should be an annotated-only member"
+    )
 
 
 def test_messages_are_weathras_own_shape() -> None:

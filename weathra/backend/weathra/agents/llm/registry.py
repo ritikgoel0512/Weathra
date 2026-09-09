@@ -25,11 +25,16 @@ import logging
 from collections.abc import Callable
 
 import httpx
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from weathra.agents.llm.base import LLMClient
 from weathra.agents.llm.openrouter import OPENROUTER_PROVIDER_ID, OpenRouterClient
+from weathra.agents.models import ModelBroker
 from weathra.config import Settings
 from weathra.domain.errors import AGENT_UNAVAILABLE_MESSAGE, AgentNotConfigured, ProviderNotFound
+from weathra.domain.identity import Principal
+from weathra.entitlements.resolver import PolicyResolver
+from weathra.entitlements.snapshot import SnapshotCache
 
 __all__ = ["LLMProvider", "available_providers", "build_client"]
 
@@ -80,12 +85,17 @@ class LLMProvider:
     endpoint rather than merely intended.
     """
 
-    __slots__ = ("_client", "_http", "_settings")
+    __slots__ = ("_client", "_http", "_resolver", "_settings", "_snapshots")
 
     def __init__(self, http: httpx.AsyncClient, settings: Settings) -> None:
         self._http = http
         self._settings = settings
         self._client: LLMClient | None = None
+        # One snapshot per process (design.md decision 23), and one resolver over it. Built here
+        # rather than per request because the TTL is only worth anything if the snapshot outlives
+        # the request that refreshed it.
+        self._snapshots = SnapshotCache(settings)
+        self._resolver = PolicyResolver(settings, self._snapshots)
 
     @property
     def configured(self) -> bool:
@@ -125,6 +135,38 @@ class LLMProvider:
                 self._client.model_id,
             )
         return self._client
+
+    def broker(
+        self,
+        *,
+        session: AsyncSession,
+        principal: Principal | None = None,
+        override: str | None = None,
+    ) -> ModelBroker:
+        """The model policy layer, bound to one request.
+
+        This is how a request-serving process obtains its clients: the route builds a broker and
+        the graph asks it per call role. The credential guard still comes first — ``get()`` is what
+        turns "no key configured" into an ``AgentNotConfigured`` the caller can be told about,
+        before any resolution work happens.
+
+        The session is the request's own restricted one, so reading ``user_plans`` to derive the
+        plan runs under Row Level Security like everything else. Nothing here reaches for the
+        privileged connection, and the group 26 scan proves it.
+        """
+        return ModelBroker(
+            resolver=self._resolver,
+            session=session,
+            settings=self._settings,
+            http=self._http,
+            principal=principal,
+            override=override,
+        )
+
+    @property
+    def snapshots(self) -> SnapshotCache:
+        """The process's entitlement snapshot, for the readiness probe and administration."""
+        return self._snapshots
 
     def override(self, client: LLMClient) -> None:
         """Install a specific client. For tests and offline evaluation, which use the fake."""
