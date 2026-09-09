@@ -281,11 +281,10 @@ code that does not exist. So each names the group 26-34 task that owes it, and t
 that task to being open. Close one of those tasks and the first assertion starts demanding its
 tests. Both directions stay honest without anyone maintaining a list of which spec is which.
 
-Of **210** requirements across twenty specs, **150** are implemented and tested, **1** is
-manual-pending, and **59** are open. **58** requirements have no test, every one of them
-owned by an open task named in its row — 1 open requirement carries tests already
-(a live evaluation run is pinned to one named model, whose harness is tested offline while
-Task 22.10's live execution remains outstanding).
+Of **210** requirements across twenty specs, **205** are implemented and tested, **1** is
+manual-pending, and **4** are open. Exactly **4** requirements have no test, every one of them
+owned by an open task named in its row, and all four are the same open thing: `web-ui`'s model and
+plan screens, which group 33 cannot start until the Visily designs exist.
 
 ### Coverage by spec
 
@@ -294,7 +293,7 @@ Task 22.10's live execution remains outstanding).
 | `agent-orchestration` | 17 | 17 | 0 | 0 | 13, 14 |
 | `authentication` | 20 | 20 | 0 | 0 | 3, 4, 18 |
 | `deterministic-analytics` | 10 | 10 | 0 | 0 | 7 |
-| `evaluation` | 15 | 14 | 0 | 1 | 22 |
+| `evaluation` | 15 | 15 | 0 | 0 | 22, 28 |
 | `forecast-analysis` | 10 | 10 | 0 | 0 | 8 |
 | `historical-weather` | 5 | 5 | 0 | 0 | 8 |
 | `http-api` | 24 | 24 | 0 | 0 | 15, 16 |
@@ -306,12 +305,12 @@ Task 22.10's live execution remains outstanding).
 | `safety-grounding` | 10 | 10 | 0 | 0 | 17 |
 | `weather-providers` | 7 | 7 | 0 | 0 | 5 |
 | `web-ui` | 16 | 11 | 1 | 4 | 19, 20, 21 |
-| `model-policy` | 10 | 9 | 0 | 1 | 28 |
+| `model-policy` | 10 | 10 | 0 | 0 | 28 |
 | `model-catalog` | 7 | 7 | 0 | 0 | 26, 27 |
 | `llm-telemetry` | 7 | 7 | 0 | 0 | 29 |
 | `usage-limits` | 9 | 9 | 0 | 0 | 30 |
 | `model-lab` | 6 | 6 | 0 | 0 | 32 |
-| **Total** | **210** | **203** | **1** | **6** | |
+| **Total** | **210** | **205** | **1** | **4** | |
 
 ### `agent-orchestration`
 
@@ -391,7 +390,7 @@ Task 22.10's live execution remains outstanding).
 | Model selection is decided on measured criteria, not on model name | 32.7, 32.9 | evaluation/criteria.py, lab/promotion.py, api/routers/admin/models.py | unit/test_lab_criteria.py, integration/test_lab_api.py | IMPLEMENTED |
 | Model evaluation results are persisted and comparable | 32.8 | lab/records.py, db/models.py | integration/test_lab_records.py | IMPLEMENTED |
 | Evaluation runs are internal usage | 32.10 | api/routers/admin/lab.py, evaluation/provisioning.py, entitlements/quotas.py | integration/test_lab_api.py, integration/test_quota_enforcement.py | IMPLEMENTED |
-| A live evaluation run is pinned to one named model | 22.10 | evaluation/runner.py, config.py | integration/test_evaluation_runner.py | OPEN |
+| A live evaluation run is pinned to one named model | 22.10, 28.10 | evaluation/runner.py, evaluation/harness.py, entitlements/resolver.py, agents/llm/registry.py | integration/test_evaluation_runner.py, unit/test_policy_resolver.py, unit/test_llm.py | IMPLEMENTED |
 | Live runs distinguish provider failure from model quality | 22.9 | evaluation/integrity.py | unit/test_evaluation.py, integration/test_evaluation_runner.py | IMPLEMENTED |
 | Live runs are paced and bounded against provider limits | 22.9 | evaluation/runner.py, agents/llm/openrouter.py | unit/test_evaluation.py, unit/test_llm.py | IMPLEMENTED |
 
@@ -564,7 +563,7 @@ Task 22.10's live execution remains outstanding).
 | Requirement | Tasks | Implementation | Tests | Status |
 |---|---|---|---|---|
 | Model policy layer between orchestration and the language model client | 28.1, 28.6 | entitlements/resolver.py, agents/llm/factory.py, agents/models.py | unit/test_policy_resolver.py, unit/test_llm_failover.py, test_architecture.py | IMPLEMENTED |
-| Subscription-aware named policies | 26.6, 27.2, 28.1 | entitlements/policies.py, entitlements/plans.py, db/migrations/versions/0008_seed_model_policy_data.py | integration/test_entitlement_stores.py, integration/test_saas_seed.py | OPEN |
+| Subscription-aware named policies | 26.6, 27.2, 28.1 | entitlements/policies.py, entitlements/plans.py, db/migrations/versions/0008_seed_model_policy_data.py | integration/test_entitlement_stores.py, integration/test_saas_seed.py | IMPLEMENTED |
 | Entitlement is enforced server-side and never trusted from the client | 28.2 | entitlements/resolver.py, auth/roles.py | unit/test_policy_resolver.py, integration/test_agent_resolution.py | IMPLEMENTED |
 | Administrative override is bounded by the allowlist | 28.3 | entitlements/resolver.py, entitlements/snapshot.py | unit/test_policy_resolver.py, integration/test_entitlement_snapshot.py | IMPLEMENTED |
 | Resolution is deterministic, ordered, and degrades honestly | 28.1, 28.5 | entitlements/resolver.py, entitlements/snapshot.py | unit/test_policy_resolver.py, integration/test_entitlement_snapshot.py | IMPLEMENTED |
@@ -636,19 +635,27 @@ capability spec by design — they are governed by tasks 23.1–23.7 and recorde
 
 **No capability spec is unimplemented by accident.** The five specs of the SaaS layer —
 `model-policy`, `model-catalog`, `llm-telemetry`, `usage-limits`, and `model-lab` — were wholly
-open when this table was first written; groups 26 through 30 have closed twenty-seven of their
-thirty-nine requirements. What remains in them is owned by groups 31 through 34: administration of
-the catalog, the policies, the plans and the allowances (31), the model lab (32), the plan and
-administrative screens (33), and the documentation and acceptance pass (34).
+open when this table was first written. **All thirty-nine of their requirements are now
+implemented and tested**, closed by groups 26 through 32 and traced above: the schema and its Row
+Level Security (26), the catalog, plan and policy stores (27), the resolver and its failover (28),
+the usage events and cost estimation (29), the allowances and the gate (30), the administrative
+control plane (31), and the lab with its criteria and its promotion action (32). Task 34.6 is the
+check that they *are* all traced, and it is asserted per spec rather than in aggregate, so one
+spec regressing cannot be hidden by the other four.
 
 The counts in the table above are the rows below it, recounted rather than remembered — they had
-drifted while groups 27 to 29 filled in their own sections and left the summary alone.
+drifted while groups 27 to 29 filled in their own sections and left the summary alone, and they
+drifted again in the other direction: two rows stayed `OPEN` after their governing tasks closed.
+`model-policy`'s subscription-aware policies row was written while 27.2 was open and never
+followed the checkbox. `evaluation`'s pinned-model row was honestly open for longer than that —
+the resolution existed and nothing called it, so a live run reached its model through the product
+walk; group 34's wiring is what made the requirement true, and the row cites it. A status
+following the checkbox is now asserted in both directions, which is what would have caught both.
 
-The two rows group 31 left open for group 32 — the lab endpoints, and the recorded evaluation
-outcome on the catalog listing — are closed by it.
-
-**Three requirements are outstanding for reasons other than Phase B.** `web-ui`'s accessibility
-and responsive layout is `MANUAL` — its automated half passes in two browser engines, and
-Task 21.8's recorded human pass is still owed. `evaluation`'s pinned-model requirement carries
-tests but awaits Task 22.10's live run. Neither is a gap in the mapping; both are gaps in the
-work the mapping honestly reports.
+**Two requirements are outstanding, and neither is a gap in the mapping.** `web-ui`'s
+accessibility and responsive layout is `MANUAL` — its automated half passes in two browser
+engines, and Task 21.8's recorded human pass is still owed. The four `OPEN` rows are `web-ui`'s
+Admin Model & AI Usage and Plan & Usage screens, which group 33 may not begin until the Visily
+designs exist (33.1, 33.2) — they are **DESIGN-GATED**, not merely unwritten, and no route
+advertises either screen as working. They name no test on purpose: writing tests for screens
+nobody has designed would make this table claim coverage of code that does not exist.

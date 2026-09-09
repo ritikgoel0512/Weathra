@@ -1586,3 +1586,183 @@ def test_an_untested_requirement_is_owned_by_an_open_task() -> None:
     assert not offences, "the traceability table disagrees with the task list:\n  " + "\n  ".join(
         offences
     )
+
+
+# ---------------------------------------------------------------- 34.6 SaaS-layer traceability
+
+# The five specs task 34.6 names. Asserted per spec rather than in aggregate: a spec whose rows
+# lost their tests would otherwise be hidden by the other four still having theirs.
+SAAS_SPECS = (
+    "model-policy",
+    "model-catalog",
+    "llm-telemetry",
+    "usage-limits",
+    "model-lab",
+)
+
+
+def _rows_by_spec() -> dict[str, list[tuple[str, ...]]]:
+    """The traceability rows, grouped by the `### \\`spec-name\\`` heading they sit under."""
+    section = _read("architecture.md").split("## Traceability", 1)
+    assert len(section) == 2, "architecture.md has no traceability section"
+
+    grouped: dict[str, list[tuple[str, ...]]] = {}
+    spec: str | None = None
+    for line in section[1].splitlines():
+        heading = re.match(r"^### `([a-z-]+)`\s*$", line.strip())
+        if heading:
+            spec = heading.group(1)
+            grouped.setdefault(spec, [])
+            continue
+        stripped = line.strip()
+        if not stripped.startswith("|") or set(stripped) <= set("|-: "):
+            continue
+        cells = tuple(cell.strip() for cell in stripped.strip("|").split("|"))
+        if len(cells) == 5 and cells[4] in {"IMPLEMENTED", "MANUAL", "OPEN"} and spec:
+            grouped[spec].append(cells)
+    return grouped
+
+
+def test_the_traceability_table_has_a_section_for_each_saas_spec() -> None:
+    grouped = _rows_by_spec()
+    for spec in SAAS_SPECS:
+        assert spec in grouped, f"architecture.md has no traceability section for {spec}"
+        assert grouped[spec], f"{spec}'s traceability section states no requirement"
+
+
+def test_every_saas_spec_requirement_has_a_row_in_its_own_section() -> None:
+    """34.6's first half: the five specs' requirements are traced, spec by spec.
+
+    `test_every_requirement_is_traced` already asserts this across all twenty specs at once. This
+    asserts each requirement is under *its own* spec's heading, which the aggregate check cannot
+    see — a row filed under the wrong spec satisfies the aggregate and misdirects the reader.
+    """
+    grouped = _rows_by_spec()
+    for spec in SAAS_SPECS:
+        stated = {
+            match.strip()
+            for match in re.findall(
+                r"^### Requirement:\s*(.+)$",
+                (SPECS_DIR / spec / "spec.md").read_text(),
+                re.MULTILINE,
+            )
+        }
+        traced = {row[0] for row in grouped[spec]}
+        assert stated == traced, (
+            f"{spec}: untraced {sorted(stated - traced)}; "
+            f"traced under this spec but not stated by it {sorted(traced - stated)}"
+        )
+
+
+def test_every_saas_spec_requirement_maps_to_at_least_one_test() -> None:
+    """Task 34.6's verification, literally: every requirement in those five specs names a test.
+
+    Unconditional, unlike the project-wide assertion, which excuses a requirement whose governing
+    task is still open. Groups 26 to 32 are complete, so there is nothing left in these five for
+    that excuse to apply to — and stating it unconditionally is what makes the check mean
+    something rather than restate the checkboxes.
+    """
+    grouped = _rows_by_spec()
+    missing: list[str] = []
+    for spec in SAAS_SPECS:
+        for requirement, _tasks, _implementation, tests, _status in grouped[spec]:
+            if _names_no_test(tests):
+                missing.append(f"{spec}: {requirement}")
+
+    assert not missing, "SaaS requirements naming no test:\n  " + "\n  ".join(missing)
+
+
+def test_every_saas_spec_requirement_is_implemented_and_none_is_still_open() -> None:
+    """The five specs are closed, so a row still marked OPEN is a status that stopped following.
+
+    Kept separate from the assertion above because the two failures mean different things: a row
+    with no test is an untraced requirement, and a row marked OPEN whose work is done is a
+    *summary* that will be read as a gap that no longer exists.
+    """
+    grouped = _rows_by_spec()
+    unclosed = [
+        f"{spec}: {row[0]} ({row[4]})"
+        for spec in SAAS_SPECS
+        for row in grouped[spec]
+        if row[4] != "IMPLEMENTED"
+    ]
+    assert not unclosed, "SaaS requirements not marked implemented:\n  " + "\n  ".join(unclosed)
+
+
+def test_a_row_whose_tasks_are_all_complete_is_not_marked_open() -> None:
+    """The direction the table had drifted in, across every spec rather than only the five.
+
+    `test_an_untested_requirement_is_owned_by_an_open_task` catches a row that claims more than it
+    proves. This catches the opposite — a row that claims *less*, whose governing tasks all closed
+    while the status stayed `OPEN`. Both of the rows group 34 corrected were this shape, and
+    nothing was asserting it.
+    """
+    _open_tasks, complete = _task_states()
+    stale: list[str] = []
+
+    for requirement, tasks, _implementation, tests, status in _traceability_rows():
+        numbers = re.findall(r"\d+\.\d+", tasks)
+        if not numbers or not all(number in complete for number in numbers):
+            continue
+        if status == "OPEN":
+            stale.append(f"{requirement} (tasks {tasks}, tests {tests!r})")
+
+    assert not stale, (
+        "rows marked OPEN whose governing tasks are all complete — the status must follow the "
+        "checkbox:\n  " + "\n  ".join(stale)
+    )
+
+
+def test_the_coverage_summary_is_the_rows_recounted() -> None:
+    """The per-spec summary table, recounted from the rows beneath it.
+
+    The summary is the only part of this document a reader is likely to quote, and it is the part
+    that cannot be checked by reading nearby text. It had drifted twice.
+    """
+    grouped = _rows_by_spec()
+    summary = {
+        row[0].strip("`"): row
+        for row in _table_rows(_read("architecture.md"), "Governing task groups")
+    }
+
+    totals = [0, 0, 0, 0]
+    for spec, rows in grouped.items():
+        assert spec in summary, f"the coverage summary omits {spec}"
+        counted = {
+            "IMPLEMENTED": sum(1 for row in rows if row[4] == "IMPLEMENTED"),
+            "MANUAL": sum(1 for row in rows if row[4] == "MANUAL"),
+            "OPEN": sum(1 for row in rows if row[4] == "OPEN"),
+        }
+        stated = summary[spec]
+        expected = [len(rows), counted["IMPLEMENTED"], counted["MANUAL"], counted["OPEN"]]
+        assert [int(cell) for cell in stated[1:5]] == expected, (
+            f"the summary states {stated[1:5]} for {spec}; the rows count {expected}"
+        )
+        for index, value in enumerate(expected):
+            totals[index] += value
+
+    stated_total = summary.get("**Total**") or summary.get("Total")
+    assert stated_total is not None, "the coverage summary has no total row"
+    assert [int(cell.strip("*")) for cell in stated_total[1:5]] == totals, (
+        f"the summary total states {stated_total[1:5]}; the rows count {totals}"
+    )
+
+
+def test_the_prose_counts_match_the_recounted_totals() -> None:
+    """The sentence above the summary, which is prose and therefore the easiest thing to leave."""
+    grouped = _rows_by_spec()
+    rows = [row for spec_rows in grouped.values() for row in spec_rows]
+    flat = _flat(_read("architecture.md"))
+
+    implemented = sum(1 for row in rows if row[4] == "IMPLEMENTED")
+    manual = sum(1 for row in rows if row[4] == "MANUAL")
+    open_rows = sum(1 for row in rows if row[4] == "OPEN")
+    untested = sum(1 for row in rows if _names_no_test(row[3]))
+
+    assert f"Of **{len(rows)}** requirements across twenty specs" in flat
+    assert f"**{implemented}** are implemented and tested" in flat
+    assert f"**{manual}** is\nmanual-pending".replace("\n", " ") in flat or (
+        f"**{manual}** is manual-pending" in flat
+    )
+    assert f"**{open_rows}** are open" in flat
+    assert f"Exactly **{untested}** requirements have no test" in flat
