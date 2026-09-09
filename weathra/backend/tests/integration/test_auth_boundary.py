@@ -28,7 +28,7 @@ from tests.api_support import ApiFactory, ApiHarness, harness
 from tests.auth_support import USER_A, USER_B, TokenFactory
 from tests.db_support import insert_profile, new_user_id, session_as
 from weathra.agents.plan import Capability, PlanStep, RoutingPlan
-from weathra.api.classification import PROTECTED_PATHS
+from weathra.api.classification import ADMINISTRATIVE_PATHS, PROTECTED_PATHS
 from weathra.api.streaming import StreamEventType
 from weathra.auth.deps import IDENTITY_ASSERTING_HEADERS
 from weathra.db.engine import Engines
@@ -94,20 +94,71 @@ def _route_id(entry: tuple[str, str, dict[str, Any]]) -> str:
 # =========================================================================== coverage
 
 
-def test_the_parameterized_suite_covers_every_protected_route() -> None:
-    """So a protected route added to the app cannot slip past this whole suite untested."""
-    covered = {path for _, path, _ in PROTECTED_REQUESTS}
-    declared = set(PROTECTED_PATHS)
+def test_the_parameterized_suite_covers_every_owner_scoped_protected_route() -> None:
+    """So a protected route added to the app cannot slip past this whole suite untested.
 
-    # The suite's templated paths correspond to the classification table's parameterized ones.
-    normalized = {
-        path.replace("{saved_id}", "{saved_id}")
-        .replace("{thread_id}", "{thread_id}")
-        .replace("{evidence_id}", "{evidence_id}")
-        for path in covered
-    }
-    assert declared - normalized == set(), (
-        f"untested protected routes: {sorted(declared - normalized)}"
+    Administrative routes are covered by `test_admin_api.py` instead, and the split is a real one
+    rather than a convenience: the tests below assert that a valid token *succeeds*, which is the
+    right question for a route a person reaches by owning something and the wrong one for a route
+    that refuses every caller without a role. Asking it here would mean asserting 403 in a suite
+    built to assert 200.
+
+    The exclusion is paid for on the next line. Every path this suite skips must be one the
+    classification marks administrative, so a route cannot escape both suites by being left out of
+    this list — which is the only way the split could go wrong.
+    """
+    covered = {path for _, path, _ in PROTECTED_REQUESTS}
+    administrative = set(ADMINISTRATIVE_PATHS)
+    declared = set(PROTECTED_PATHS) - administrative
+
+    assert declared - covered == set(), f"untested protected routes: {sorted(declared - covered)}"
+    assert administrative, "the classification marks nothing administrative, so this skipped none"
+    assert administrative <= set(PROTECTED_PATHS), (
+        "an administrative route is not also protected, so an anonymous caller reaches it"
+    )
+
+
+@pytest.mark.parametrize("header", IDENTITY_ASSERTING_HEADERS)
+@pytest.mark.parametrize("path", sorted(ADMINISTRATIVE_PATHS))
+async def test_no_header_can_assert_the_administrative_role(
+    api_factory: ApiFactory, header: str, path: str
+) -> None:
+    """The role is backend state, and a header naming a real administrator is still just a header.
+
+    The variant that matters for an administrative route: not "does the header change whose data I
+    see", which the tests above ask of the owner-scoped ones, but "does the header get me in at
+    all". It names a subject who genuinely holds the role, so a backend that trusted it would let
+    an ordinary caller borrow an administrator's authority by knowing their id.
+    """
+    concrete = (
+        path.replace("{catalog_key}", "standard-general")
+        .replace("{policy_id}", "balanced")
+        .replace("{plan_code}", "free")
+        .replace("{subject_id}", new_user_id())
+    )
+
+    async with with_inference(api_factory) as api:
+        real_administrator = new_user_id()
+        async with privileged_session(api.app.state.engines.privileged_sessionmaker) as session:
+            await session.execute(
+                text(
+                    "INSERT INTO admin_roles (subject_id, role) "
+                    "VALUES (CAST(:u AS uuid), 'administrator') ON CONFLICT DO NOTHING"
+                ),
+                {"u": real_administrator},
+            )
+
+        response = await api.client.get(
+            f"{PREFIX}{concrete}",
+            headers={
+                **api.authorize(subject=USER_A),
+                header: real_administrator,
+                "X-Weathra-Role": "administrator",
+            },
+        )
+
+    assert response.status_code in {403, 405}, (
+        f"{header} naming an administrator reached {concrete}"
     )
 
 
