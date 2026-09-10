@@ -409,7 +409,9 @@ class _NamedGeocoder:
         # Name-aware, because a stub that answers every query is a stub that cannot fail the way
         # the real one does — and the fallback path is the one worth testing.
         matched = tuple(
-            place for place in self.candidates if place.display_name.lower() == query.strip().lower()
+            place
+            for place in self.candidates
+            if place.display_name.lower() == query.strip().lower()
         )
         if not matched:
             raise LocationNotFound(f"no such place: {query}")
@@ -426,7 +428,9 @@ class _NamedGeocoder:
             timezone="Europe/Berlin",
         )
 
-    async def search(self, query: str, *, limit: int = DEFAULT_SEARCH_LIMIT) -> tuple[Location, ...]:
+    async def search(
+        self, query: str, *, limit: int = DEFAULT_SEARCH_LIMIT
+    ) -> tuple[Location, ...]:
         return self.candidates[:limit]
 
 

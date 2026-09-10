@@ -446,10 +446,18 @@ describe("the other preferences", () => {
     expect(stored.forecast_horizon_days).toBe(10);
   });
 
-  it("persists the default location by its coordinates, not by its name", async () => {
-    // The regression this guards: a name round trip made every coordinate-labelled place — which
-    // in production is every place saved by coordinates — impossible to set as the default, because
-    // the backend geocoded the label as a city name and found no such city.
+  it("persists the default location by its coordinates and its resolved name", async () => {
+    // Two regressions meet on this line and the fix has to hold both.
+    //
+    // The first: a *name-only* round trip made every coordinate-labelled place impossible to set
+    // as the default, because the backend geocoded the label as a city name and found no such
+    // city. So the coordinates are always sent, and a place whose only name is its coordinates
+    // still sends no name at all — `sendableName` returns null for it, covered in
+    // `lib/locations/place.test.ts`.
+    //
+    // The second: coordinates *alone* left the backend nothing to store but the point, and it
+    // names a point after itself, so a stored default read "48.1374, 11.5755" where
+    // `specs/memory` requires the canonical name. So a named place sends both.
     const person = userEvent.setup();
     renderSettings();
     await screen.findByRole("form", { name: "Your Weathra preferences" });
@@ -462,6 +470,7 @@ describe("the other preferences", () => {
         ([, init]) => init?.method === "PUT",
       );
       expect(JSON.parse(String(put?.[1]?.body))).toEqual({
+        default_location: TOKYO.display_name,
         latitude: TOKYO.latitude,
         longitude: TOKYO.longitude,
       });
