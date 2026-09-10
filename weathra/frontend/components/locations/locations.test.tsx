@@ -158,13 +158,15 @@ describe("the saved list", () => {
     expect(cards).toHaveLength(2);
 
     expect(cards[0]).toHaveAttribute("data-saved-location", "s-berlin");
-    expect(cards[0]).toHaveTextContent("Berlin, Berlin, DE");
+    expect(cards[0]).toHaveTextContent("Berlin, Germany");
     expect(cards[0]).toHaveTextContent("52.5200, 13.4050");
     expect(cards[0]).toHaveTextContent("Europe/Berlin");
 
     // A person's own label leads, with the canonical name still shown beneath it.
     expect(cards[1]).toHaveTextContent("Office");
-    expect(cards[1]).toHaveTextContent("Tokyo, Tokyo, JP");
+    // Under a label, the place is named for a person: "Tokyo, Japan", not the geocoder's
+    // round-trip form.
+    expect(cards[1]).toHaveTextContent("Tokyo, Japan");
 
     expect(within(list).getByText("2 of 20")).toBeInTheDocument();
   });
@@ -264,7 +266,7 @@ describe("adding a location", () => {
     });
 
     // Confirmed by the backend, and the list re-read rather than patched locally.
-    expect(await screen.findByText("Saved Tokyo, Tokyo, JP.")).toBeInTheDocument();
+    expect(await screen.findByText("Saved Tokyo, Japan.")).toBeInTheDocument();
     await waitFor(() =>
       expect(
         within(screen.getByRole("region", { name: "Your saved locations" })).getAllByRole("listitem"),
@@ -518,7 +520,7 @@ describe("saving an ambiguous place", () => {
       longitude: -93.2982,
       label: null,
     });
-    expect(await screen.findByText("Saved Springfield, Missouri, US.")).toBeInTheDocument();
+    expect(await screen.findByText("Saved Springfield, Missouri, United States.")).toBeInTheDocument();
   });
 
   it("keeps the person's own label when they choose a candidate", async () => {

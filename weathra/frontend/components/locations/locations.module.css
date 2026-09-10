@@ -345,3 +345,33 @@
   color: var(--color-text-muted);
   font-size: var(--type-meta-size);
 }
+
+/* ------------------------------------------------------- weather on a card */
+
+/*
+ * `06-saved-locations.png` puts the weather on every card, and it is the reason the screen exists:
+ * a list of names and coordinates answers nothing a person came here to ask. The temperature leads,
+ * the secondary measures follow it quietly, and the coordinates below are the card's smallest print.
+ */
+.cardWeather {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.cardTemp {
+  color: var(--color-text-primary);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+}
+
+.cardMeasures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+}

@@ -13,6 +13,7 @@ import type { Location, SavedLocationRecord } from "@/lib/api/schema";
 
 import {
   coordinatesOf,
+  friendlyName,
   isCoordinateName,
   isSamePlace,
   isUnnamedPlace,
@@ -84,8 +85,9 @@ describe("savedLocationLabel", () => {
   });
 
   it("falls back to the canonical name, never to a blank", () => {
-    expect(savedLocationLabel(record({ label: "   " }))).toBe("Berlin, Berlin, DE");
-    expect(savedLocationLabel(record({ label: null }))).toBe("Berlin, Berlin, DE");
+    // The readable name, not the geocoder's round-trip form.
+    expect(savedLocationLabel(record({ label: "   " }))).toBe("Berlin, Germany");
+    expect(savedLocationLabel(record({ label: null }))).toBe("Berlin, Germany");
   });
 });
 
@@ -206,5 +208,47 @@ describe("a saved place with no name of its own", () => {
     // The display name stops being digits; the coordinates remain available as metadata.
     expect(savedLocationDisplay(record)).toBe(UNNAMED_PLACE);
     expect(coordinatesOf(record.location)).toContain("-33.8688");
+  });
+});
+
+describe("the name a person reads", () => {
+  const place = (overrides: Partial<Location>): Location =>
+    ({
+      display_name: "Berlin",
+      latitude: 52.52,
+      longitude: 13.405,
+      timezone: "Europe/Berlin",
+      ...overrides,
+    }) as Location;
+
+  it("spells the country out and drops a region that repeats the city", () => {
+    expect(friendlyName(place({ region: "Berlin", country: "Germany", country_code: "DE" }))).toBe(
+      "Berlin, Germany",
+    );
+  });
+
+  it("keeps a region that says something the city does not", () => {
+    expect(
+      friendlyName(
+        place({ display_name: "Yamunanagar", region: "Haryana", country: "India", country_code: "IN" }),
+      ),
+    ).toBe("Yamunanagar, Haryana, India");
+  });
+
+  it("works for arbitrary places worldwide, naming no city in the implementation", () => {
+    expect(friendlyName(place({ display_name: "Tokyo", region: "Tokyo", country: "Japan" }))).toBe(
+      "Tokyo, Japan",
+    );
+    expect(
+      friendlyName(place({ display_name: "Dubai", region: "Dubai", country: "United Arab Emirates" })),
+    ).toBe("Dubai, United Arab Emirates");
+  });
+
+  it("falls back to the country code when the provider reported no country name", () => {
+    expect(friendlyName(place({ country_code: "DE" }))).toBe("Berlin, DE");
+  });
+
+  it("is the city alone when the provider reported nothing else", () => {
+    expect(friendlyName(place({}))).toBe("Berlin");
   });
 });

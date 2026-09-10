@@ -33,6 +33,31 @@ export function qualifiedName(location: Location): string {
 }
 
 /**
+ * The name a person reads: `Berlin, Germany`, `Yamunanagar, Haryana, India`.
+ *
+ * Distinct from `qualifiedName`, and the two must not be confused. That one round-trips to the
+ * geocoder, so it uses the country *code* and repeats the region even when the region is the city —
+ * which is why a saved Berlin read "Berlin, Berlin, DE" on screen. This one is for reading: the
+ * country is spelled out, and the region appears only when it says something the city does not.
+ *
+ * Nothing is invented. A place whose provider reported no country is its city, and a place with no
+ * name at all is handled a level up by `savedLocationDisplay`.
+ */
+export function friendlyName(location: Location): string {
+  const city = location.display_name?.trim() ?? "";
+  const region = location.region?.trim() ?? "";
+  const country = location.country?.trim() || location.country_code?.trim() || "";
+
+  const parts = [city];
+  // A region that merely repeats the city adds nothing — Berlin is in Berlin — and a region equal
+  // to the country is the same redundancy one level up.
+  if (region && region !== city && region !== country) parts.push(region);
+  if (country && country !== city) parts.push(country);
+
+  return parts.join(", ");
+}
+
+/**
  * A stable key for a place, from its coordinates.
  *
  * The same distinction the backend's saved-location store de-duplicates on: a place is where it is,
@@ -51,7 +76,7 @@ export function isSamePlace(left: Location | null | undefined, right: Location |
 
 /** What a saved location is called: the person's own label, or the canonical name. */
 export function savedLocationLabel(record: SavedLocationRecord): string {
-  return record.label?.trim() || qualifiedName(record.location);
+  return record.label?.trim() || friendlyName(record.location);
 }
 
 /** What an unnamed place is called on screen, until somebody names it. */

@@ -31,20 +31,37 @@
 import Link from "next/link";
 import { useCallback, useState, type FormEvent, type ReactNode } from "react";
 
-import { Badge, Button, EmptyState, ErrorState, Input, LoadingState, Meter } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  DataClassBadge,
+  EmptyState,
+  ErrorState,
+  Input,
+  LoadingState,
+  Meter,
+  Skeleton,
+} from "@/components/ui";
 import { ViewStateSwitch } from "@/components/view-state";
-import type { Location, SavedLocationRecord, SavedLocationsResponse } from "@/lib/api/schema";
+import type {
+  CurrentResponse,
+  Location,
+  SavedLocationRecord,
+  SavedLocationsResponse,
+} from "@/lib/api/schema";
 import {
   coordinatesOf,
   isUnnamedPlace,
   matchesFilter,
-  qualifiedName,
+  placeKey,
+  friendlyName,
   savedLocationDisplay,
   savedLocationLabel,
   sendableName,
 } from "@/lib/locations/place";
 import { useApiMutation, useApiQuery } from "@/lib/query/hooks";
 import { PREFERENCES_KEY, SAVED_LOCATIONS_KEY } from "@/lib/query/keys";
+import { formatReading, readingFor } from "@/lib/dashboard/briefing";
 import { useLocationResolution } from "@/hooks/use-location-resolution";
 
 import { CandidateChoice } from "./candidate-choice";
@@ -114,6 +131,46 @@ function NamePlace({
 }
 
 
+/**
+ * The current conditions at one saved place.
+ *
+ * `06-saved-locations.png` puts weather on every card, and it is the reason the screen exists: a
+ * list of names and coordinates answers nothing a person came here to ask. This reads
+ * `/weather/current` for the card's own coordinates — the same endpoint the Dashboard uses, so the
+ * two cannot disagree — and the query layer caches it, so opening the screen twice is one request
+ * per place rather than two.
+ *
+ * A place whose provider reports nothing renders nothing rather than a row of dashes. The card is
+ * still a card; it simply has no weather to show yet.
+ */
+function CardWeather({ location }: { readonly location: Location }): ReactNode {
+  const { state } = useApiQuery<CurrentResponse>({
+    key: ["weather", "current", placeKey(location)],
+    request: (client) =>
+      client.current({ latitude: location.latitude, longitude: location.longitude }),
+  });
+
+  if (state.kind === "loading") return <Skeleton height="var(--space-5)" />;
+  if (state.kind !== "ready") return null;
+
+  const temperature = readingFor("temperature", state.data.values, state.data.units);
+  const humidity = readingFor("relative_humidity", state.data.values, state.data.units);
+  const wind = readingFor("wind_speed", state.data.values, state.data.units);
+
+  if (!temperature && !humidity && !wind) return null;
+
+  return (
+    <div className={styles.cardWeather}>
+      <DataClassBadge dataClass="observed" />
+      {temperature ? <span className={styles.cardTemp}>{formatReading(temperature)}</span> : null}
+      <span className={styles.cardMeasures}>
+        {humidity ? <span>{formatReading(humidity)} humidity</span> : null}
+        {wind ? <span>{formatReading(wind)} wind</span> : null}
+      </span>
+    </div>
+  );
+}
+
 function LocationCard({
   record,
   onRemove,
@@ -129,7 +186,10 @@ function LocationCard({
   readonly naming: boolean;
   readonly disabled: boolean;
 }): ReactNode {
-  const canonical = qualifiedName(record.location);
+  // The place's own name, spelled for a person. Shown under the card's title only when the title is
+  // the person's *label* — repeating "Berlin, Germany" under "Berlin, Germany" is noise, and the
+  // qualified form the geocoder round-trips ("Berlin, Berlin, DE") is not for reading.
+  const canonical = friendlyName(record.location);
   const name = savedLocationLabel(record);
   const unnamed = isUnnamedPlace(record);
   const shown = savedLocationDisplay(record);
@@ -149,6 +209,13 @@ function LocationCard({
         <NamePlace record={record} onName={onName} busy={naming} disabled={disabled} />
       ) : null}
 
+      <CardWeather location={record.location} />
+
+      {/*
+        Where the place is, under what it is called and what the weather is doing there. Coordinates
+        are how Weathra identifies a point and are kept visible for that reason — but they are the
+        card's smallest print, not its subject.
+      */}
       <dl className={styles.cardFacts}>
         <div className={styles.cardRow}>
           <dt className={styles.cardTerm}>Coordinates</dt>
@@ -262,7 +329,7 @@ function AddLocation({
   );
 
   const saved = add.state.kind === "saved" ? add.state.data : null;
-  const savedPlaceName = saved?.location ? qualifiedName(saved.location) : null;
+  const savedPlaceName = saved?.location ? friendlyName(saved.location) : null;
 
   return (
     /*
