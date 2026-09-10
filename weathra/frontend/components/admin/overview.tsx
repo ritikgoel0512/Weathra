@@ -105,9 +105,9 @@ function Refusal({ failure, onRetry }: { readonly failure: ViewFailure; readonly
 /**
  * An axis tick a reader can tell apart, for a label that is a gateway string.
  *
- * `nvidia/nemotron-3-super-120b-a12b:free` beside `openai/gpt-oss-120b` on a 700-pixel axis draws
- * one run-on word. The vendor prefix is the part every row shares, so the tick drops it and the
- * tooltip — and the table below — carry the whole string.
+ * Two catalog entries from the same gateway share a vendor prefix and run to forty characters; on a
+ * 700-pixel axis they draw as one run-on word. The prefix is the part every row shares, so the tick
+ * drops it and the tooltip — and the table below — carry the whole string.
  */
 export function tickLabel(label: string): string {
   const tail = label.includes("/") ? label.slice(label.indexOf("/") + 1) : label;
