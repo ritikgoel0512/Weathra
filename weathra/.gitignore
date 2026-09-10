@@ -1,0 +1,4 @@
+
+# Fidelity screenshots. Written by `WEATHRA_CAPTURE=true npx playwright test capture.spec.ts`,
+# read by a person, and never committed — they are evidence for a review, not source.
+weathra/frontend/capture/

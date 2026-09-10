@@ -820,18 +820,32 @@ input.controlBare[type="date"]::-webkit-calendar-picker-indicator:hover {
  * Wraps rather than truncating: `docs/design/design-system.md` §13 is explicit that provenance is
  * not the thing that gets dropped when space runs out.
  */
+/*
+ * Provenance, as a footnote rather than as content.
+ *
+ * `specs/web-ui` requires the provider, the location, the period and the retrieval time on every
+ * screen showing weather data, so all four are here and none is behind a disclosure. What changed
+ * is their weight. A screenshot of the running Dashboard showed eight of these blocks down one
+ * page, each two wrapped lines with bold terms at body size — more vertical space than the figures
+ * they described, and the single largest reason the screen did not read like `01-dashboard.png`,
+ * whose provenance is one quiet rule at the foot of the page.
+ *
+ * So: label size, muted throughout, separated by a middot instead of by a gap wide enough to wrap.
+ * The requirement is unchanged; the hierarchy is corrected.
+ */
 .attribution {
-  padding-top: var(--space-3);
+  padding-top: var(--space-2);
   border-top: 1px solid var(--color-border-subtle);
-  font-size: var(--type-meta-size);
-  line-height: var(--type-meta-line);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
   color: var(--color-text-muted);
 }
 
 .attributionList {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2) var(--space-4);
+  align-items: baseline;
+  gap: 0 var(--space-2);
   margin: 0;
 }
 
@@ -843,9 +857,15 @@ input.controlBare[type="date"]::-webkit-calendar-picker-indicator:hover {
   min-width: 0;
 }
 
+/* A middot between entries, so the row reads as one footnote rather than as five fields. */
+.attributionItem + .attributionItem::before {
+  content: "·";
+  color: var(--color-border-strong);
+}
+
 .attributionTerm {
-  font-weight: var(--type-ui-weight);
-  color: var(--color-text-secondary);
+  font-weight: var(--type-label-weight);
+  color: var(--color-text-muted);
 }
 
 .attributionTerm::after {
