@@ -22,3 +22,12 @@ export const SAVED_LOCATIONS_KEY = ["me", "locations"] as const;
 
 /** The acting user's conversation threads, read by Settings. */
 export const THREADS_KEY = ["me", "threads"] as const;
+
+/**
+ * The acting user, and the one capability the navigation needs from them.
+ *
+ * Shared rather than screen-local because two things read it: the rail decides whether to offer the
+ * administrative section, and any screen that needs the acting subject reads the same answer. A
+ * private key per reader would mean two requests and, on a role change, two different answers.
+ */
+export const ME_KEY = ["me"] as const;

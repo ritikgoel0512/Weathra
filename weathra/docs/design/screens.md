@@ -129,7 +129,7 @@ navigation offers them:
 | Weather Scenario Lab | `/scenarios` | Yes, marked not yet available | `13-weather-scenario-lab.png` | No — roadmap visual reference (§1) |
 | Weather Watch | `/watch` | Yes, marked not yet available | `14-weather-watch.png` | No — roadmap visual reference (§1) |
 | Travel Intelligence | `/travel` | Yes, marked not yet available | `15-travel-intelligence.png` | No — roadmap visual reference (§1) |
-| Admin Model & AI Usage | `/admin/model-usage` | No — reachable by route only | `09-admin-model-ai-usage.png` | **Yes**, 2026-09-09 (§6), with §5's exceptions. One panel implemented 2026-09-10 (§8) |
+| Admin Model & AI Usage | `/admin/model-usage` | Yes for an administrator, from 2026-09-10 — offered from the capability the backend reports, and to nobody else | `09-admin-model-ai-usage.png` | **Yes**, 2026-09-09 (§6), with §5's exceptions. One panel implemented 2026-09-10 (§8) |
 | Plan & Usage | `/plan` | No — reachable by route only | `10-plan-usage.png` | **Yes**, 2026-09-09 (§6), with §5's exceptions |
 
 The last two carry a design obligation the first five do not, and it is the reason they are the

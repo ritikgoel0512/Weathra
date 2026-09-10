@@ -19,7 +19,7 @@
  * supersedes it.
  */
 
-import { MVP_SCREENS, POST_MVP_SCREENS, type Screen } from "@/lib/routes";
+import { ADMIN_SCREENS, MVP_SCREENS, POST_MVP_SCREENS, type Screen } from "@/lib/routes";
 
 /**
  * Whether a destination is built in this change.
@@ -28,7 +28,7 @@ import { MVP_SCREENS, POST_MVP_SCREENS, type Screen } from "@/lib/routes";
  * state plainly that the screen is not yet available, so the status is what the navigation and the
  * route both read to say the same thing.
  */
-export type DestinationStatus = "mvp" | "planned";
+export type DestinationStatus = "mvp" | "planned" | "admin";
 
 /**
  * The name of an icon in `components/shell/icons.tsx`.
@@ -90,6 +90,19 @@ function destination({ path, icon }: { path: string; icon: IconName }): Destinat
 
 /** The twelve entries, in the order the design record fixes. */
 export const NAVIGATION: readonly Destination[] = ORDER.map(destination);
+
+/**
+ * The administrative section, shown only to a principal the backend says holds the role.
+ *
+ * Not part of `NAVIGATION`, and the separation is the point: `NAVIGATION` is what the product *is*,
+ * the same for everybody, and this is what one person may additionally do. Merging them would mean
+ * every assertion about the navigation model had to know who was asking.
+ */
+export const ADMIN_NAVIGATION: readonly Destination[] = ADMIN_SCREENS.map((screen) => ({
+  ...screen,
+  status: "admin" as const,
+  icon: "intelligence" as const,
+}));
 
 /** The destination whose route the given path is on, or null for a path outside the model. */
 export function destinationFor(pathname: string): Destination | null {

@@ -735,6 +735,8 @@ export type Measure = "temperature" | "apparent_temperature" | "precipitation" |
 
 /** Who you are, as far as Weathra is concerned. No credential material. */
 export interface MeResponse {
+  /** Whether you hold Weathra's administrative role, read from backend state keyed by your token subject. Advisory, and only for deciding what to offer you: every administrative endpoint checks the same state itself and refuses regardless of what any client believes. */
+  readonly administrative?: boolean;
   /** True when this request is the one that created your Weathra profile. */
   readonly created_now: boolean;
   /** As reported by your access token. Weathra does not store it — Supabase Auth owns your contact details. */

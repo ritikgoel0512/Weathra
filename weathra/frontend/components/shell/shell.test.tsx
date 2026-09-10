@@ -350,3 +350,87 @@ describe("a route with no screen yet", () => {
     expect(screen.getByText("Weather intelligence along a route.")).toBeInTheDocument();
   });
 });
+
+/* ------------------------------------------------- the administrative section */
+
+/**
+ * The rail offers Admin only to a principal the backend says holds the role — checkpoint B.
+ *
+ * The offer is a presentation convenience and the tests say so both ways: an ordinary person is
+ * offered nothing, an administrator is offered a real link, and neither fact comes from anything
+ * the browser could be told about itself.
+ */
+function renderShellAs(me: Record<string, unknown>) {
+  process.env.NEXT_PUBLIC_API_BASE_URL = "http://backend.test";
+  return render(
+    <SessionBoundary
+      initialStatus="active"
+      accessToken={() => "test-token"}
+      fetch={async (input: string) =>
+        new Response(
+          JSON.stringify(
+            String(input).includes("/me/locations")
+              ? { count: 0, limit: 20, locations: [] }
+              : me,
+          ),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        )
+      }
+    >
+      <AppShell identity={IDENTITY} signOutControl={<button type="submit">Sign out</button>}>
+        <h1>Screen content</h1>
+      </AppShell>
+    </SessionBoundary>,
+  );
+}
+
+const ORDINARY = {
+  user_id: "00000000-0000-4000-8000-000000000001",
+  email_verified: true,
+  profile_created_at: "2026-08-01T09:00:00Z",
+  last_seen_at: "2026-09-10T09:00:00Z",
+  created_now: false,
+  administrative: false,
+  preferences: { unit_system: "metric", forecast_horizon_days: 7, sources: {} },
+};
+
+describe("the administrative section of the rail", () => {
+  it("is not offered to an ordinary authenticated person", async () => {
+    renderShellAs(ORDINARY);
+    // Wait for the rail to have rendered its model — a built entry every person has — so the
+    // absence below is a real absence rather than a render that had not happened yet.
+    await screen.findByRole("link", { name: "Dashboard" });
+
+    expect(screen.queryByRole("heading", { name: "Admin" })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Model & AI Usage/ })).toBeNull();
+  });
+
+  it("is offered to a principal the backend reports as administrative", async () => {
+    renderShellAs({ ...ORDINARY, administrative: true });
+
+    expect(await screen.findByRole("heading", { name: "Admin" })).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: "Model & AI Usage" });
+    // A real link to the real route: openable in a new tab, announced as navigation, and no
+    // hidden URL for an administrator to have to know.
+    expect(link).toHaveAttribute("href", "/admin/model-usage");
+  });
+
+  it("offers nothing when the capability cannot be read", async () => {
+    // The safe direction: an administrator waits a moment, everybody else is never offered it.
+    renderShellAs({});
+    await screen.findByRole("link", { name: "Dashboard" });
+
+    expect(screen.queryByRole("heading", { name: "Admin" })).toBeNull();
+  });
+
+  it("offers only administrative surfaces that are actually implemented", async () => {
+    renderShellAs({ ...ORDINARY, administrative: true });
+    await screen.findByRole("heading", { name: "Admin" });
+
+    // One panel exists. An entry per planned administrative surface would advertise a control
+    // plane Weathra does not have.
+    const section = screen.getByRole("heading", { name: "Admin" }).closest("section");
+    expect(section).not.toBeNull();
+    expect(within(section as HTMLElement).getAllByRole("link")).toHaveLength(1);
+  });
+});

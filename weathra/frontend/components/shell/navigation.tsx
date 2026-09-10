@@ -31,7 +31,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { NAVIGATION, isActive, type Destination } from "@/lib/navigation";
+import { ADMIN_NAVIGATION, NAVIGATION, isActive, type Destination } from "@/lib/navigation";
 
 import { Icon } from "./icons";
 import styles from "./shell.module.css";
@@ -39,9 +39,18 @@ import styles from "./shell.module.css";
 export interface NavigationProps {
   /** Closes the drawer when an entry is followed on a narrow viewport. */
   readonly onNavigate?: () => void;
+  /**
+   * Whether the acting principal holds the administrative role, as the backend reported it.
+   *
+   * A prop rather than a request made here, so this stays what it was: a rail that renders a model
+   * and asks nothing. `AppShell` does the asking, once, where the query layer already is.
+   *
+   * Defaults to false — an absent or failed answer offers nothing, which is the safe direction.
+   */
+  readonly administrative?: boolean;
 }
 
-export function Navigation({ onNavigate }: NavigationProps): ReactNode {
+export function Navigation({ onNavigate, administrative = false }: NavigationProps): ReactNode {
   const pathname = usePathname() ?? "/";
 
   /*
@@ -91,6 +100,16 @@ export function Navigation({ onNavigate }: NavigationProps): ReactNode {
   return (
     <>
       <ul className={styles.list}>{built.map(render)}</ul>
+      {administrative ? (
+        <section className={styles.plannedGroup} aria-labelledby="weathra-admin-heading">
+          <h2 className={styles.plannedHeading} id="weathra-admin-heading">
+            Admin
+          </h2>
+          <ul className={styles.list} data-admin="true">
+            {ADMIN_NAVIGATION.map(render)}
+          </ul>
+        </section>
+      ) : null}
       {planned.length > 0 ? (
         <section className={styles.plannedGroup} aria-labelledby="weathra-planned-heading">
           <h2 className={styles.plannedHeading} id="weathra-planned-heading">

@@ -3449,6 +3449,12 @@
         "additionalProperties": false,
         "description": "Who you are, as far as Weathra is concerned. No credential material.\n\nThere is deliberately no field that could carry one: the model forbids extras, and every field\nhere is either the token's own subject, the email it reported, a timestamp, or a preference.",
         "properties": {
+          "administrative": {
+            "default": false,
+            "description": "Whether you hold Weathra's administrative role, read from backend state keyed by your token subject. Advisory, and only for deciding what to offer you: every administrative endpoint checks the same state itself and refuses regardless of what any client believes.",
+            "title": "Administrative",
+            "type": "boolean"
+          },
           "created_now": {
             "description": "True when this request is the one that created your Weathra profile.",
             "title": "Created Now",

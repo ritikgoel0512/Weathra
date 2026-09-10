@@ -29,6 +29,10 @@ import { FixtureBanner } from "@/components/ui";
 
 import { BrandMark, MenuIcon } from "./icons";
 import { IdentityPanel } from "./identity";
+import type { MeResponse } from "@/lib/api/schema";
+import { useApiQuery } from "@/lib/query/hooks";
+import { ME_KEY } from "@/lib/query/keys";
+
 import { Navigation } from "./navigation";
 import { SavedRail } from "./saved-rail";
 import { TopBar } from "./top-bar";
@@ -44,7 +48,22 @@ export interface AppShellProps {
 }
 
 export function AppShell({ identity, signOutControl, children }: AppShellProps): ReactNode {
+  /*
+   * Whether to offer the administrative section, asked of the backend and asked once.
+   *
+   * The role is a row in `admin_roles` keyed by the validated token subject; `/me` reports it for
+   * the acting principal and for nobody else. Nothing here infers it — not from an email address,
+   * not from a list of subjects, not from an environment variable, and not from anything a browser
+   * could be told, because every one of those would be a second authorization path beside the one
+   * that already exists.
+   *
+   * An absent or failed answer offers nothing. That is the safe direction and it costs an
+   * administrator a moment, not access: the offer is a presentation convenience either way, and
+   * `/admin/*` refuses a caller without the role whether or not the rail linked to it.
+   */
   const pathname = usePathname();
+  const { state: me } = useApiQuery<MeResponse>({ key: ME_KEY, request: (client) => client.me() });
+  const administrative = me.kind === "ready" && me.data.administrative === true;
   const [drawerOpen, setDrawerOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
   const navigation = useRef<HTMLElement>(null);
@@ -147,7 +166,7 @@ export function AppShell({ identity, signOutControl, children }: AppShellProps):
           and the collapsed tier's labels are drawn outside the rail.
         */}
         <div className={styles.navScroll}>
-          <Navigation onNavigate={close} />
+          <Navigation onNavigate={close} administrative={administrative} />
           {/* The artifacts' SAVED LOCATIONS section, under the primary navigation. */}
           <SavedRail onNavigate={close} />
         </div>

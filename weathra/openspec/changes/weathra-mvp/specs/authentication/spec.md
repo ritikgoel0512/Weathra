@@ -446,6 +446,8 @@ An authenticated user SHALL be able to delete their Weathra application data —
 
 The system SHALL support an administrative/internal role distinct from an ordinary authenticated user, held as backend state keyed by the validated token subject. The role SHALL be readable only by the backend and SHALL NOT be granted by any client-supplied field: a body field, query parameter, header, cookie, or unverified token claim asserting the role SHALL be ignored.
 
+The acting principal MAY be told whether they themselves hold the role, so a product surface can offer what they may use rather than requiring them to know an unlinked address. That report SHALL be derived from the same backend state every administrative capability checks, SHALL answer only for the validated token subject, and SHALL be advisory: it grants nothing, and every administrative capability SHALL refuse a principal without the role whatever any client believes. No principal SHALL be told anything about whether anybody else holds it.
+
 Administrative capabilities — model policy administration, model catalog administration, plan and allowance administration, aggregate usage reading, and the internal model lab — SHALL be refused for every principal without the role, and the refusal SHALL disclose nothing about the capability's existence or contents. Holding the role SHALL NOT grant access to another user's own data.
 
 #### Scenario: Role established server-side
@@ -453,6 +455,18 @@ Administrative capabilities — model policy administration, model catalog admin
 - **WHEN** the backend determines whether a request is administrative
 - **THEN** it consults backend-held role state keyed by the token subject
 - **AND** no client-supplied field contributes to the determination
+
+#### Scenario: The acting principal is told their own capability
+
+- **WHEN** a signed-in person asks for their own account
+- **THEN** the response states whether they hold the administrative role, read from backend role state
+- **AND** it says nothing about whether any other principal holds it
+
+#### Scenario: The reported capability grants nothing
+
+- **WHEN** a client presents the reported capability as grounds for an administrative operation
+- **THEN** the operation is authorized from backend role state as it always was
+- **AND** a principal without the role is refused
 
 #### Scenario: Asserted role ignored
 

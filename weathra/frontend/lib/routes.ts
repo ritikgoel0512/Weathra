@@ -153,6 +153,26 @@ export const UNLISTED_SCREENS: readonly Screen[] = [
   { path: PLAN_USAGE_PATH, title: "Plan & Usage" },
 ];
 
+/**
+ * The administrative destinations, offered only to a principal the backend confirms holds the role.
+ *
+ * Separate from every list above because the condition is different in kind: the others are absent
+ * from the navigation because they are *unbuilt*, and this one is absent because most people may
+ * not open it. Which means the two must not share a list — a screen becoming built and a person
+ * becoming an administrator are unrelated events.
+ *
+ * Only what is actually implemented appears here. `/admin/model-usage` is one panel — the audited
+ * policy confirmation — and the route says so itself; an entry per planned administrative surface
+ * would advertise a control plane that does not exist.
+ *
+ * The offer is a presentation convenience and nothing more. `specs/web-ui` states the rule and the
+ * backend keeps it: the role lives in `admin_roles`, every administrative endpoint checks it, and a
+ * person who reaches this path without it is shown a not-permitted state rather than a screen.
+ */
+export const ADMIN_SCREENS: readonly Screen[] = [
+  { path: ADMIN_MODEL_USAGE_PATH, title: "Model & AI Usage" },
+];
+
 /** Where an authenticated person lands when they have asked for no particular screen. */
 export const DEFAULT_PROTECTED_PATH = "/";
 

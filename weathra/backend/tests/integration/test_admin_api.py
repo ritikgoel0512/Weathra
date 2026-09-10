@@ -333,6 +333,63 @@ async def test_every_registered_admin_route_is_covered_by_the_matrix(
     }
 
 
+# ============================================= 34.9 the capability a signed-in person is told
+
+
+async def test_me_reports_the_administrative_capability_from_backend_state(
+    api_factory: ApiFactory, seeded_reference_data: None
+) -> None:
+    """`/me` tells the acting principal whether they hold the role.
+
+    That is what lets the product *offer* the administrative section instead of making an
+    administrator know a URL. It is read from `admin_roles` — the same state every administrative
+    endpoint checks — so the navigation and the boundary cannot disagree about who is one.
+    """
+    async with with_inference(api_factory) as api:
+        ordinary = new_user_id()
+        promoted = await administrator(api)
+
+        as_ordinary = await api.client.get(f"{PREFIX}/me", headers=api.authorize(subject=ordinary))
+        as_admin = await api.client.get(f"{PREFIX}/me", headers=api.authorize(subject=promoted))
+
+    assert as_ordinary.status_code == as_admin.status_code == 200
+    assert as_ordinary.json()["administrative"] is False
+    assert as_admin.json()["administrative"] is True
+
+
+async def test_the_capability_is_never_taken_from_the_token(
+    api_factory: ApiFactory, seeded_reference_data: None
+) -> None:
+    """A token asserting the role is still ignored, here as everywhere.
+
+    Worth its own case now that the answer is *reported* to a client: a field a client can read is
+    a field somebody will try to make the backend say. It says what the row says.
+    """
+    async with with_inference(api_factory) as api:
+        pretender = new_user_id()
+        response = await api.client.get(
+            f"{PREFIX}/me",
+            headers=api.authorize(subject=pretender, **ASSERTED_ROLE_CLAIM),
+        )
+
+    assert response.status_code == 200
+    assert response.json()["administrative"] is False
+
+
+async def test_the_capability_answers_only_for_the_asking_principal(
+    api_factory: ApiFactory, seeded_reference_data: None
+) -> None:
+    """One administrator existing does not make anybody else one, and `/me` takes no argument that
+    could ask about somebody else — the subject comes from the validated token."""
+    async with with_inference(api_factory) as api:
+        await administrator(api)
+        bystander = new_user_id()
+
+        response = await api.client.get(f"{PREFIX}/me", headers=api.authorize(subject=bystander))
+
+    assert response.json()["administrative"] is False
+
+
 # =========================================================================== 31.6 classification
 
 

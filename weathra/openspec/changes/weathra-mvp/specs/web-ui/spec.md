@@ -479,7 +479,21 @@ The frontend SHALL provide, on the administrative route and reachable only by a 
 
 A candidate for which the backend recorded no evaluation SHALL be presented as unevidenced, and SHALL NOT be presented as having failed a criterion. The surface SHALL NOT compute, infer, or display an evaluation outcome the backend did not record, SHALL NOT describe an ordering as evidenced by a comparison run that scored no result for the candidate in question, and SHALL state a candidate ordering it submits unchanged as a confirmation rather than as a reordering.
 
+The administrative route SHALL be offered in the navigation to a principal the backend confirms holds the role, and SHALL NOT be offered to any other visitor. The offer SHALL be decided from the capability the backend reports for the acting principal and from nothing a client could assert about itself — not an address, not a list of identifiers, not a configuration value, not a stored flag — and SHALL default to offering nothing where the capability is unknown. Only administrative surfaces that are implemented SHALL appear. The offer is a presentation convenience: the route SHALL refuse a principal without the role whether or not the navigation linked to it.
+
 The surface SHALL display no access token, no service-role credential, and no configuration value. Its refusals SHALL be distinguishable by a reader: an expired session, an authenticated principal without the role, a validation failure, a refusal by the backend's promotion gate, and a backend or network failure SHALL each be stated as itself, and none SHALL be retried automatically. The surface SHALL show the recorded result of a confirmation it made — the resulting candidate order, the comparison runs cited, and that the change was audited — read back from the backend rather than assumed from the request having succeeded.
+
+#### Scenario: The administrative route is offered to an administrator
+
+- **WHEN** a principal the backend confirms is administrative views the navigation
+- **THEN** an administrative section is offered, naming only the administrative surfaces that are implemented
+- **AND** following it reaches the administrative route without knowing an unlinked address
+
+#### Scenario: It is not offered to anybody else
+
+- **WHEN** an ordinary authenticated person views the navigation
+- **THEN** no administrative section appears
+- **AND** none appears when the capability cannot be read
 
 #### Scenario: Administrator sees the recorded evidence
 

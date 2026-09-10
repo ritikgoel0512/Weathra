@@ -35,6 +35,7 @@ from weathra.api.middleware import annotate
 from weathra.api.routers.support import resolve_for_saving
 from weathra.auth.deps import RequiredPrincipal
 from weathra.auth.profiles import ensure_profile, touch_profile
+from weathra.auth.roles import is_administrative
 from weathra.domain.location import Location
 from weathra.domain.weather import UnitSystem
 from weathra.memory.locations import SavedLocationRecord, SavedLocationStore
@@ -73,6 +74,15 @@ class MeResponse(BaseModel):
     last_seen_at: datetime
     created_now: bool = Field(
         description="True when this request is the one that created your Weathra profile."
+    )
+    administrative: bool = Field(
+        default=False,
+        description=(
+            "Whether you hold Weathra's administrative role, read from backend state keyed by "
+            "your token subject. Advisory, and only for deciding what to offer you: every "
+            "administrative endpoint checks the same state itself and refuses regardless of what "
+            "any client believes."
+        ),
     )
     preferences: PreferenceView
 
@@ -168,6 +178,13 @@ async def me(
 
     preferences = await PreferenceStore(session, principal, settings).read()
 
+    # The one capability a signed-in person needs told to them, and it is told rather than trusted.
+    # `specs/web-ui` already draws the line this sits on: hiding a control is a presentation
+    # convenience and the backend refuses the underlying request regardless — so this decides what
+    # the navigation offers and authorizes nothing. Read from `admin_roles` on the request session,
+    # where the owner policy means the query can only ever see the acting subject's own row.
+    administrative = await is_administrative(session, principal)
+
     return MeResponse(
         user_id=principal.user_id,
         email=principal.email,
@@ -175,6 +192,7 @@ async def me(
         profile_created_at=profile.created_at,
         last_seen_at=profile.last_seen_at,
         created_now=profile.created_now,
+        administrative=administrative,
         preferences=preferences,
     )
 
