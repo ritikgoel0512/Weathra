@@ -484,6 +484,93 @@ resolution is recorded as `__lab_comparison__` rather than as a policy resolutio
 candidate did not resolve a policy, and an aggregate counting it as one would report a model as
 serving a plan it has never been mapped to.
 
+## The first recorded live comparison
+
+Run `9b5849dd-b798-4dc8-b04f-a8e6c0874e1a`, 2026-09-10 09:36:35Z to 09:38:49Z, over the
+`comparison` category of dataset `1.0.0` (five cases: `cp-berlin-munich-warmest`,
+`cp-historical-comparison`, `cp-least-windy`, `cp-one-place-unresolvable`,
+`cp-three-cities-driest`) at commit `db49a7d`. Two candidates, both free, run live and persisted:
+
+```
+weathra-compare --candidates economy-free-primary,economy-free-secondary \
+                --category comparison --mode live --persist
+```
+
+**Status `partial`, and the word is doing real work.** One candidate produced evidence and one did
+not, which is exactly the outcome the status exists to name.
+
+### economy-free-primary — five cases scored, both gates passed
+
+`nvidia/nemotron-3-super-120b-a12b:free`, evaluation `de0d3f67-75d8-45f8-a7e0-53360e7dd553`,
+`promotion_blockers` empty.
+
+| Criterion | Recorded |
+|---|---|
+| Structured JSON reliability | **pass** — first-attempt-valid 1.0 over 5 decisions, mean attempts to valid 1.0 |
+| Groundedness | **pass** — groundedness 1.0, hallucination rate 0.0, unsupported weather claim rate 0.0 |
+| Latency | overall median 15,815 ms / p95 15,815 ms; routing median 6,357 ms / p95 6,370 ms; synthesis median 1,663 ms / p95 1,683 ms |
+| Planning | tool-selection accuracy 1.0; `plan_correctness` **null** — the category has no multi-step case, so nothing measured it |
+| Cost | **null** throughout — the gateway returned no per-call cost for a `:free` model, and the estimate is not filled in from zero |
+
+`numerical_accuracy_intact` is null for the same reason `plan_correctness` is: this category asked
+no deterministic-figure case, so the invariant was not exercised. Neither null is a score, and
+neither may be read as one.
+
+Token counts do exist, in telemetry rather than in the criteria: the run's ten `llm_usage_events`
+record 31,925 total tokens. They are not promoted into `cost` because catalog pricing for a free
+model would make the estimate a statement about the price list, not about the run.
+
+### economy-free-secondary — not measured, and not scored
+
+`nex-agi/nex-n2.5-mini:free` never reached the dataset. Its pre-flight — the single structured call
+the runner makes before spending a dataset on a model — returned HTTP 429 on all three attempts of
+the provider's retry policy, and the runner aborted before any case ran, classified `rate_limited`.
+
+So it has **no `model_evaluations` row**, and appears in the run's `unevidenced` map as
+`no_case_scored`. Its five `model_comparison_results` cells are written with `succeeded = false`
+and no measures. This is the refusal working: a candidate the provider rate-limited has not scored
+badly, and a row of nulls under its name would be indistinguishable from one that had.
+
+**It has not been shown to be worse than the other candidate.** It has not been shown anything. A
+promotion that ordered `economy-free-primary` ahead of it citing this run would be citing evidence
+this run does not contain.
+
+### What the run persisted
+
+One `model_comparison_runs` row, ten `model_comparison_results` cells (five per candidate), and one
+`model_evaluations` row. The five cells belonging to `economy-free-primary` carry
+`evaluation_id = de0d3f67…`, resolving to that candidate's evaluation; the five belonging to
+`economy-free-secondary` carry null, there being no evaluation to point at. Usage was attributed
+`internal` under the `__lab_comparison__` resolution — no plan, no product allowance, no user quota.
+
+### Two honest imprecisions in the record
+
+Worth knowing before reading a future run's rows, because both make a failed candidate look
+tidier than it was:
+
+* **`completed` is true for a candidate that scored nothing.** The pre-flight aborts the run and
+  `execute_run` still returns a result, so the comparison payload reports
+  `economy-free-secondary: completed = true, cases_scored = 0`, and the command exits 0. Only
+  `cases_scored` and the `unevidenced` map distinguish it. The evidence layer reads those and
+  refuses correctly; a reader skimming `completed` would not.
+* **The durable cells lose the failure classification.** The pre-flight classified `rate_limited`,
+  but the persisted `model_comparison_results` rows carry `failure_class = 'unclassified'`. The
+  reason a candidate failed survives in the run log and in this document, not in the table a
+  promotion decision would read.
+
+### No promotion
+
+No policy candidate list, catalog status or plan mapping was changed, and `admin_audit` remains
+empty. `free_default` is still `[economy-free-primary, economy-free-secondary]` as seeded on
+2026-09-09. Task 34.5's promotion half is unexecuted, and on this run's evidence a promotion could
+only be made about one of the two candidates.
+
+One state change did occur, from the provisioning path rather than from the comparison:
+`_ensure_role_row` granted the derived evaluation subject the `administrator` role in
+`admin_roles`, which is how an evaluation run's usage is accounted internal since `0011`. It is
+idempotent, deliberately unaudited — a harness provisioning its own fixture is not an acting
+administrator — and it was not used to promote anything.
+
 ## Comparing runs
 
 Run records are persisted (`evaluation_runs`, `evaluation_case_results`) and can be compared. A
