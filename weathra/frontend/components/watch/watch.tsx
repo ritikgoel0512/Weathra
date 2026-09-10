@@ -86,10 +86,13 @@ function WatchRow({
       </p>
 
       <p className={styles.watchState}>
-        {watch.last_value === null || watch.last_value === undefined
-          ? "No reading at the last check."
-          : `Last reading ${watch.last_value}.`}{" "}
-        Checked {when(watch.last_evaluated_at)}.
+        {watch.last_evaluated_at
+          ? `${
+              watch.last_value === null || watch.last_value === undefined
+                ? "No reading at the last check"
+                : `Last reading ${watch.last_value}`
+            }. Checked ${when(watch.last_evaluated_at)}.`
+          : "Not checked yet. It will be, next time you open this screen."}
       </p>
 
       <div className={styles.watchActions}>

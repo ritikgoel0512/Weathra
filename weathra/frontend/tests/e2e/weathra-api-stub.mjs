@@ -429,6 +429,84 @@ const FIXTURES = {
     ],
   },
 
+  /*
+   * The account surfaces added in task 34.10 and 34.17. Modelled here so the capture harness can
+   * photograph the screens that read them rather than photographing their error states — which is
+   * what the first Plan & Usage capture showed, and what made it useless as fidelity evidence.
+   */
+  "/api/v1/me/usage": {
+    user_id: "00000000-0000-4000-8000-000000000001",
+    plan_code: "free",
+    plan_name: "Free",
+    internal: false,
+    dimensions: [
+      {
+        dimension: "requests_per_day",
+        window: "day",
+        allowance: 30,
+        consumed: 12,
+        remaining: 18,
+        resets_at: "2026-09-11T00:00:00Z",
+      },
+      {
+        dimension: "tokens_per_month",
+        window: "month",
+        allowance: 200000,
+        consumed: 84500,
+        remaining: 115500,
+        resets_at: "2026-10-01T00:00:00Z",
+      },
+      {
+        dimension: "concurrent_runs",
+        window: "concurrent",
+        allowance: 2,
+        consumed: 0,
+        remaining: 2,
+        resets_at: null,
+      },
+    ],
+    recent: { days: 7, calls: 41, failures: 2, total_tokens: 31925 },
+  },
+
+  "/api/v1/me/watches": {
+    count: 2,
+    watchable: ["precipitation", "relative_humidity", "temperature", "wind_gust", "wind_speed"],
+    evaluation_note:
+      "Checked when you open this screen or press refresh. Weathra does not monitor continuously and sends no alerts.",
+    disclaimer:
+      "Weather Watch is analytical assistance, not an official severe-weather or emergency warning service. Always follow your local meteorological agency.",
+    watches: [
+      {
+        id: "w-wind",
+        location: BERLIN,
+        label: null,
+        measure: "wind_speed",
+        comparison: "above",
+        threshold: 40,
+        enabled: true,
+        last_evaluated_at: "2026-09-04T06:15:00Z",
+        last_value: 52.4,
+        last_met: true,
+        created_at: "2026-09-01T00:00:00Z",
+        updated_at: "2026-09-04T06:15:00Z",
+      },
+      {
+        id: "w-frost",
+        location: MUNICH,
+        label: "Office",
+        measure: "temperature",
+        comparison: "below",
+        threshold: 0,
+        enabled: true,
+        last_evaluated_at: null,
+        last_value: null,
+        last_met: null,
+        created_at: "2026-09-02T00:00:00Z",
+        updated_at: "2026-09-02T00:00:00Z",
+      },
+    ],
+  },
+
   "/api/v1/threads": {
     count: 1,
     threads: [

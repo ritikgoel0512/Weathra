@@ -119,10 +119,10 @@ describe("the watch list", () => {
     // what matters is that neither reads as "Not met".
     expect(screen.getAllByText("No reading").length).toBeGreaterThanOrEqual(1);
     const rows = screen.getAllByRole("listitem");
-    const silent = rows.find((row) => /not checked yet/.test(row.textContent ?? ""));
+    const silent = rows.find((row) => /Not checked yet/.test(row.textContent ?? ""));
     expect(within(silent as HTMLElement).getByText("No reading")).toBeInTheDocument();
     expect(within(silent as HTMLElement).queryByText("Not met")).toBeNull();
-    expect(screen.getByText(/not checked yet/)).toBeInTheDocument();
+    expect(screen.getByText(/Not checked yet/)).toBeInTheDocument();
   });
 
   it("checks one watch on request", async () => {

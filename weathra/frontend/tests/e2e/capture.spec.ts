@@ -27,6 +27,11 @@ const SCREENS = [
   { name: "07-settings", path: "/settings" },
   { name: "10-plan", path: "/plan" },
   { name: "11-explorer", path: "/explorer" },
+  { name: "12-report", path: "/report" },
+  { name: "13-scenarios", path: "/scenarios" },
+  { name: "14-watch", path: "/watch" },
+  { name: "15-travel", path: "/travel" },
+  { name: "05-evidence", path: "/evidence" },
 ] as const;
 
 test.describe("capture", () => {
