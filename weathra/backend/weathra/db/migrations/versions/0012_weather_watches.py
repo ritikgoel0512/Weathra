@@ -32,9 +32,12 @@ down_revision: str | None = "0011_administrative_role_state"
 branch_labels: str | None = None
 depends_on: str | None = None
 
-# The role requests run as. Named here rather than imported so this revision keeps working if the
-# constant moves; it is the same name `0002` granted the other user-owned tables to.
-RESTRICTED_ROLE = "weathra_api"
+# The role a request-scoped session *assumes*, which is the one the policies constrain and the one
+# that therefore needs the grant. Must match ``Settings.database_restricted_role`` and the name
+# `0002` granted the other user-owned tables to. It is emphatically **not** ``weathra_api``, which
+# is the LOGIN role `0003` created and which must hold no table privilege at all: the role switch
+# is what grants access, and a grant to the login role would let a request skip it.
+RESTRICTED_ROLE = "weathra_request"
 
 TABLE = "weather_watches"
 

@@ -77,6 +77,27 @@ PROTECTED_REQUESTS: tuple[tuple[str, str, dict[str, Any]], ...] = (
     ("GET", "/me/locations", {}),
     ("POST", "/me/locations", {"json": {"location": "Berlin"}}),
     ("DELETE", "/me/locations/{saved_id}", {}),
+    # The watch routes. `POST /me/watches` names a place rather than reusing the one `_own_ids`
+    # created, because a watch and a saved location are separate records and the boundary questions
+    # here are asked per record.
+    ("GET", "/me/watches", {}),
+    (
+        "POST",
+        "/me/watches",
+        {
+            "json": {
+                "location": "Berlin",
+                "measure": "temperature",
+                "comparison": "above",
+                "threshold": 25.0,
+            }
+        },
+    ),
+    ("PATCH", "/me/watches/{watch_id}", {"json": {"threshold": 30.0}}),
+    ("POST", "/me/watches/{watch_id}/evaluate", {}),
+    # Last of the three paths, and last in this list, because it removes the record the two above
+    # need. The suite runs one entry per test, so the order matters only in being readable.
+    ("DELETE", "/me/watches/{watch_id}", {}),
     ("DELETE", "/me/data", {}),
     ("GET", "/threads", {}),
     ("GET", "/threads/{thread_id}", {}),
@@ -181,10 +202,23 @@ async def _own_ids(api: ApiHarness, subject: str) -> dict[str, str]:
     )
     assert asked.status_code == 200, asked.text[:300]
 
+    watched = await api.client.post(
+        f"{PREFIX}/me/watches",
+        json={
+            "location": "Berlin",
+            "measure": "temperature",
+            "comparison": "above",
+            "threshold": 25.0,
+        },
+        headers=headers,
+    )
+    assert watched.status_code in {200, 201}, watched.text[:300]
+
     return {
         "saved_id": saved.json()["id"],
         "thread_id": asked.json()["thread_id"],
         "evidence_id": asked.json()["evidence_id"],
+        "watch_id": watched.json()["id"],
     }
 
 

@@ -717,6 +717,10 @@ async def test_the_persisted_tables_are_only_the_declared_categories(
         "profiles",
         "preferences",
         "saved_locations",
+        # A place, a measure, a direction and a number, plus what the last evaluation found. No
+        # contact detail, because Weathra notifies nobody — there is no scheduler and no address to
+        # send to, and a watch is checked when its owner looks at it.
+        "weather_watches",
         "threads",
         "agent_runs",
         "forecast_snapshots",

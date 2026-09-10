@@ -500,7 +500,7 @@ model access or an allowance** and **the Visily design gate** are closed outrigh
 | Conversation retention is bounded and non-sensitive by default | 12.5 | memory/retention.py | integration/test_memory_retention.py | IMPLEMENTED |
 | Durable preference store | 12.3 | memory/preferences.py | integration/test_memory_preferences.py, frontend/lib/settings/preferences.test.ts | IMPLEMENTED |
 | Saved locations | 12.4, 34.11 | memory/locations.py, api/routers/support.py, frontend/lib/locations/place.ts, frontend/components/locations/locations.tsx | integration/test_memory_saved_locations.py, unit/test_geocoding.py, frontend/lib/locations/place.test.ts, frontend/components/locations/locations.test.tsx | IMPLEMENTED |
-| Weather watches | 34.17 | memory/watches.py, api/routers/watches.py, db/migrations/versions/0012_weather_watches.py | unit/test_watch_evaluation.py, integration/test_memory_saved_locations.py | IMPLEMENTED |
+| Weather watches | 34.17 | memory/watches.py, api/routers/watches.py, db/migrations/versions/0012_weather_watches.py, db/migrations/versions/0013_weather_watch_grant_repair.py | unit/test_watch_evaluation.py, integration/test_memory_saved_locations.py | IMPLEMENTED |
 | Ownership derived from the authenticated user | 12.2 | memory/, auth/rls.py | integration/test_auth_data_path.py, integration/test_checkpoint_policies.py | IMPLEMENTED |
 | Memory unavailability degrades honestly | 12.6 | memory/degradation.py, memory/availability.py | unit/test_memory_degradation.py | IMPLEMENTED |
 | Both memory tiers are retained unchanged by the model policy layer | 26.5, 28.8 | db/migrations/versions/0006_saas_user_owned_tables.py, agents/graph.py | integration/test_saas_rls.py, integration/test_agent_resolution.py | IMPLEMENTED |

@@ -221,7 +221,7 @@ the policies themselves belong to `docs/model-policy.md`.*
 
 ## Ownership and the table classification
 
-Twenty-one tables, three classes. The classification lives in the models (`ownership_of`), the
+Twenty-three tables, three classes. The classification lives in the models (`ownership_of`), the
 migrations that apply the policies, and the tests — all three agree, and a test asserts it.
 
 | Table | Class | Who may read | Who may write |
