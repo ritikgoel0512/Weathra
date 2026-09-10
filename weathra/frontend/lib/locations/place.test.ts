@@ -13,11 +13,13 @@ import type { Location, SavedLocationRecord } from "@/lib/api/schema";
 
 import {
   coordinatesOf,
+  isCoordinateName,
   isSamePlace,
   matchesFilter,
   placeKey,
   qualifiedName,
   savedLocationLabel,
+  sendableName,
 } from "./place";
 
 function place(overrides: Partial<Location> = {}): Location {
@@ -102,5 +104,42 @@ describe("matchesFilter", () => {
 describe("coordinatesOf", () => {
   it("shows the coordinates the backend resolved, without inventing precision", () => {
     expect(coordinatesOf(place())).toBe("52.5200, 13.4050");
+  });
+});
+
+describe("a place whose only name is its coordinates", () => {
+  const named: Location = {
+    display_name: "Munich",
+    latitude: 48.13743,
+    longitude: 11.57549,
+    timezone: "Europe/Berlin",
+    country: "Germany",
+  };
+  const unnamed: Location = {
+    display_name: "48.1374, 11.5755",
+    latitude: 48.13743,
+    longitude: 11.57549,
+    timezone: "Europe/Berlin",
+  };
+
+  it("is recognised by the shape the backend formats", () => {
+    expect(isCoordinateName("48.1374, 11.5755")).toBe(true);
+    expect(isCoordinateName("-33.8688, 151.2093")).toBe(true);
+    expect(isCoordinateName(" 0, 0 ")).toBe(true);
+    expect(isCoordinateName("Munich")).toBe(false);
+    expect(isCoordinateName("Munich, Germany")).toBe(false);
+    // Not a coordinate pair: a real place name that merely contains a number.
+    expect(isCoordinateName("Kirkjubæjarklaustur 2")).toBe(false);
+  });
+
+  it("sends no name, so the backend is never asked to geocode a coordinate string", () => {
+    // The regression this guards is a bug this line has already had: sending
+    // "48.1374, 11.5755" as a place name failed with "No location matches …", and a place
+    // Weathra had itself resolved could not become the default it was offered as.
+    expect(sendableName(unnamed)).toBeNull();
+  });
+
+  it("sends the name for a place that has one", () => {
+    expect(sendableName(named)).toBe("Munich");
   });
 });

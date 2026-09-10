@@ -19,7 +19,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { ApiError, type ApiClient } from "@/lib/api/client";
+import { ApiError, BackendUnreachable, type ApiClient } from "@/lib/api/client";
 import type { PolicyRecord } from "@/lib/api/schema";
 import { ApiProvider } from "@/lib/api/context";
 import { createQueryClient } from "@/lib/query/provider";
@@ -251,15 +251,20 @@ describe("the confirmation", () => {
   });
 
   it("makes one request per press, however many times the control is pressed", async () => {
+    // Held open by hand rather than by a timer: a timed promise makes this a race between the
+    // second click and React's flush, which is a flake rather than a test of the guard.
+    let release: (policy: typeof FREE_DEFAULT) => void = () => {};
     const confirmPolicyCandidates = vi.fn(
-      () => new Promise<typeof FREE_DEFAULT>((resolve) => setTimeout(() => resolve(FREE_DEFAULT), 20)),
+      () => new Promise<typeof FREE_DEFAULT>((resolve) => (release = resolve)),
     );
     mount(client({ confirmPolicyCandidates }));
 
     const control = await screen.findByRole("button", { name: "Confirm candidate order" });
     await userEvent.click(control);
+    await waitFor(() => expect(confirmPolicyCandidates).toHaveBeenCalledTimes(1));
     await userEvent.click(control);
 
+    release(FREE_DEFAULT);
     await waitFor(() => expect(screen.queryByRole("status")).not.toBeNull());
     expect(confirmPolicyCandidates).toHaveBeenCalledTimes(1);
   });
@@ -328,9 +333,54 @@ describe("the refusals", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: "Confirm candidate order" }));
 
-    expect(await screen.findByText("That change was not made")).toBeInTheDocument();
+    // A 5xx is worth another attempt, so it is titled as one and offers the retry. The two
+    // refusals below are answers, and neither is offered a retry.
+    expect(await screen.findByText("That change did not go through")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
     expect(screen.queryByText("Refused by the promotion gate")).toBeNull();
     expect(screen.queryByText("Not permitted")).toBeNull();
+  });
+});
+
+describe("a transient failure", () => {
+  it("offers a retry, and the retry re-sends the same confirmation", async () => {
+    const confirmPolicyCandidates = vi
+      .fn()
+      .mockRejectedValueOnce(new BackendUnreachable(new Error("connection dropped")))
+      .mockResolvedValueOnce(FREE_DEFAULT);
+    mount(client({ confirmPolicyCandidates }));
+
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm candidate order" }));
+    // Reloading the page was the only way back before this: an unreachable backend is not an
+    // answer, and the one screen a person arrives at having decided to make a change is the worst
+    // place to lose the change to a blip.
+    const again = await screen.findByRole("button", { name: "Try again" });
+    await userEvent.click(again);
+
+    await waitFor(() => expect(confirmPolicyCandidates).toHaveBeenCalledTimes(2));
+    expect(confirmPolicyCandidates.mock.calls[0]).toEqual(confirmPolicyCandidates.mock.calls[1]);
+    expect(await screen.findByText("Candidate order confirmed")).toBeInTheDocument();
+  });
+
+  it("says a failed audit read-back rather than reading it back for ever", async () => {
+    mount(
+      client({
+        // A 4xx, so the query layer treats it as an answer and does not retry — an unreachable
+        // backend would still be retrying while this assertion ran, which is a different state.
+        adminPolicyAudit: vi
+          .fn()
+          .mockRejectedValue(
+            new ApiError(404, { code: "not_found", message: "No such policy." }),
+          ),
+      }),
+    );
+
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm candidate order" }));
+
+    const outcome = within(await screen.findByRole("status"));
+    expect(outcome.getByText("Candidate order confirmed")).toBeInTheDocument();
+    expect(outcome.getByText(/audit entry could not be read back/)).toBeInTheDocument();
+    expect(outcome.queryByText(/Reading the audit record back/)).toBeNull();
   });
 });
 

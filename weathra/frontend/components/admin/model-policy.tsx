@@ -149,9 +149,22 @@ interface ConfirmationProps {
   readonly submittedOrder: readonly string[];
   readonly citedRunIds: readonly string[];
   readonly audit: AuditEntry | null;
+  /**
+   * The audit read-back failed.
+   *
+   * Distinct from "not yet": a write that succeeded and a read that failed is a recorded change
+   * this view cannot show, and rendering it as a pending line for ever says the opposite.
+   */
+  readonly auditFailed: boolean;
 }
 
-function Confirmation({ policy, submittedOrder, citedRunIds, audit }: ConfirmationProps): ReactNode {
+function Confirmation({
+  policy,
+  submittedOrder,
+  citedRunIds,
+  audit,
+  auditFailed,
+}: ConfirmationProps): ReactNode {
   const inPlace = isConfirmationInPlace(submittedOrder, policy.candidate_catalog_keys);
 
   return (
@@ -175,7 +188,12 @@ function Confirmation({ policy, submittedOrder, citedRunIds, audit }: Confirmati
           citedRunIds.map((id) => <code key={id}>{id}</code>)
         )}
       </p>
-      {audit === null ? (
+      {auditFailed ? (
+        <p>
+          The change was recorded. Its audit entry could not be read back just now — nothing about
+          the change is in doubt, only this view of it.
+        </p>
+      ) : audit === null ? (
         <p>Reading the audit record back…</p>
       ) : (
         <p className={styles.auditLine}>
@@ -225,7 +243,20 @@ function Refusal({ failure, onRetry }: { failure: ViewFailure; onRetry?: () => v
     );
   }
 
-  return <ErrorState failure={failure} onRetry={onRetry} title="That change was not made" />;
+  // Everything else, with one distinction that matters more here than anywhere else in the
+  // product: a 4xx is an answer and repeating it gets the same answer, but an unreachable backend
+  // is not an answer at all. The administrative surface is the one place a person arrives having
+  // decided to make a change, so a transient failure that offered no way to try again left
+  // reloading the page as the only route back — which is what `specs/web-ui` requires a retry to
+  // exist instead of.
+  return (
+    <ErrorState
+      failure={failure}
+      onRetry={failure.retryable ? onRetry : undefined}
+      retryLabel="Try again"
+      title={failure.retryable ? "That change did not go through" : "That change was not made"}
+    />
+  );
 }
 
 interface PolicyCardProps {
@@ -470,7 +501,11 @@ export function ModelPolicyPanel(): ReactNode {
 
             let outcome: ReactNode = null;
             if (isAttempted && confirm.state.kind === "error") {
-              outcome = <Refusal failure={confirm.state.failure} />;
+              // Retrying re-sends the same order and the same citation, which is the same
+              // confirmation rather than a second, different change — so offering it is safe.
+              outcome = (
+                <Refusal failure={confirm.state.failure} onRetry={() => onConfirm(policy)} />
+              );
             } else if (isAttempted && confirm.state.kind === "saved") {
               outcome = (
                 <Confirmation
@@ -480,6 +515,7 @@ export function ModelPolicyPanel(): ReactNode {
                   audit={
                     audit.state.kind === "ready" ? (audit.state.data.entries[0] ?? null) : null
                   }
+                  auditFailed={audit.state.kind === "error"}
                 />
               );
             }

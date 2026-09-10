@@ -242,14 +242,21 @@ describe("adding a location", () => {
     await person.type(screen.getByLabelText("Your name for it (optional)"), "Office");
     await person.click(screen.getByRole("button", { name: "Save location" }));
 
-    // Task 21.7: the name is resolved first, and what is saved is the coordinates the backend
-    // returned for it — never the text.
+    // Task 21.7: the name is resolved first, and what is saved is the *resolved* place — the
+    // coordinates the backend returned, and the canonical name it returned with them. Never the
+    // text the person typed: `location` here is the resolution's own `display_name`, and the
+    // coordinates are what choose between that name's candidates server-side.
+    //
+    // The coordinates alone were what this used to send, and `specs/memory` requires a saved
+    // location to list "its canonical name" — which coordinates cannot produce, because
+    // Open-Meteo has no reverse geocoding. A saved Munich read "48.1374, 11.5755".
     await waitFor(() => {
       const post = (fetchMock.mock.calls as [string, RequestInit][]).find(
         ([, init]) => (init?.method ?? "GET") === "POST",
       );
       expect(post).toBeDefined();
       expect(JSON.parse(String(post?.[1]?.body))).toEqual({
+        location: TOKYO.display_name,
         latitude: TOKYO.latitude,
         longitude: TOKYO.longitude,
         label: "Office",
@@ -502,8 +509,11 @@ describe("saving an ambiguous place", () => {
     await person.click(within(chooser).getAllByRole("button")[1]!);
 
     await waitFor(() => expect(posts()).toHaveLength(1));
-    // The chosen candidate's coordinates, from the response — never a name, never the other one.
+    // The chosen candidate's own coordinates, from the response — never the other one. The name
+    // rides along, and it is the ambiguous one on purpose: "Springfield" plus *these* coordinates
+    // names exactly one place server-side, which is what lets an ambiguous name be saved at all.
     expect(JSON.parse(String(posts()[0]![1].body))).toEqual({
+      location: "Springfield",
       latitude: 37.2153,
       longitude: -93.2982,
       label: null,
@@ -530,6 +540,7 @@ describe("saving an ambiguous place", () => {
 
     await waitFor(() => expect(posts()).toHaveLength(1));
     expect(JSON.parse(String(posts()[0]![1].body))).toEqual({
+      location: "Springfield",
       latitude: 39.8017,
       longitude: -89.6437,
       label: "Nan's",

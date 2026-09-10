@@ -32,7 +32,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from weathra.api.dependencies import Configuration, CurrentSession, Memory, Places
 from weathra.api.middleware import annotate
-from weathra.api.routers.support import resolve_one
+from weathra.api.routers.support import resolve_for_saving
 from weathra.auth.deps import RequiredPrincipal
 from weathra.auth.profiles import ensure_profile, touch_profile
 from weathra.domain.location import Location
@@ -233,10 +233,12 @@ async def update_preferences(
         default_location = None
     elif named_location or given_coordinates:
         # Resolved before storing, so what is kept is the canonical location rather than the text
-        # — a saved default must not change meaning when a geocoder's ranking does. Coordinates go
-        # through the same resolution, which is what gives the stored value its timezone and its
-        # identifier; `resolve_one` refuses both-at-once and half a coordinate pair.
-        default_location = await resolve_one(
+        # — a saved default must not change meaning when a geocoder's ranking does. A caller that
+        # already resolved the place sends its name and its coordinates together: the name is what
+        # a stored default is read back as, and the pair says which candidate was meant, so neither
+        # the ambiguity refusal nor a coordinate-shaped name can be the answer. Half a pair, or a
+        # pair alone, still resolves exactly as it did.
+        default_location = await resolve_for_saving(
             geocoder,
             location=body.default_location,
             latitude=body.latitude,
@@ -306,7 +308,12 @@ async def save_location(
     annotate(request, acting_user_id=principal.user_id)
     await ensure_profile(session, principal)
 
-    place = await resolve_one(
+    # `resolve_for_saving`, not `resolve_one`: a saved row is read back by name later, and
+    # `specs/memory` requires that name to be the canonical one. A client that already resolved the
+    # place sends both its name and its coordinates — the name for identity, the pair to say which
+    # candidate it meant — and neither alone would do it. See that function for why accepting both
+    # here is safe when the weather path refuses it.
+    place = await resolve_for_saving(
         geocoder,
         location=body.location,
         latitude=body.latitude,

@@ -83,3 +83,33 @@ export function matchesFilter(record: SavedLocationRecord, query: string): boole
 export function coordinatesOf(location: Location): string {
   return `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`;
 }
+
+/**
+ * Whether a place's only name is its own coordinates.
+ *
+ * The backend names a point after its latitude and longitude when it has nothing else to call it —
+ * Open-Meteo has no reverse-geocoding endpoint, so `resolve_coordinates` produces `48.1374,
+ * 11.5755`. That string is a name in the type and not one in the product, and the difference
+ * decides what a save may send: a real name plus its coordinates lets the backend store the
+ * canonical place, while sending *this* as a name asks it to geocode a city that does not exist.
+ *
+ * Matched on the shape the backend actually formats — two fixed-point numbers, comma-separated —
+ * rather than on a flag, because the flag would have to survive every round trip through the API
+ * and this does not have to survive anything.
+ */
+export function isCoordinateName(name: string): boolean {
+  return /^\s*-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?\s*$/.test(name);
+}
+
+/**
+ * The name a save may send for a place, or null when it has none worth sending.
+ *
+ * `display_name` rather than `qualifiedName`: the backend resolves this through its geocoder's
+ * search, which indexes the plain name, and the coordinates sent alongside are what choose between
+ * that name's candidates. Null for a coordinate-named place, so the save falls back to the
+ * coordinates-only path that has always worked for it.
+ */
+export function sendableName(location: Location): string | null {
+  const name = location.display_name?.trim() ?? "";
+  return name === "" || isCoordinateName(name) ? null : name;
+}

@@ -39,6 +39,7 @@ import {
   matchesFilter,
   qualifiedName,
   savedLocationLabel,
+  sendableName,
 } from "@/lib/locations/place";
 import { useApiMutation, useApiQuery } from "@/lib/query/hooks";
 import { PREFERENCES_KEY, SAVED_LOCATIONS_KEY } from "@/lib/query/keys";
@@ -131,10 +132,20 @@ function AddLocation({
   const entry = useLocationResolution(null);
 
   const add = useApiMutation<{ location: Location; label: string | null }, SavedLocationRecord>({
-    // By coordinates, so the backend stores the place it already resolved rather than resolving a
-    // name a second time — which is the step where an ambiguity could reappear.
+    // The resolved name *and* its coordinates. The coordinates were always sent, so an ambiguity
+    // cannot reappear — they say which candidate this is. The name was not, and without it the
+    // backend had nothing to store but the point: Open-Meteo does no reverse geocoding, so a
+    // coordinates-only save was written as "48.1374, 11.5755" where `specs/memory` requires the
+    // canonical name. The backend re-resolves the name and uses the pair only to choose among what
+    // the provider returned, so nothing here asserts what a place is called.
     run: (client, input) =>
       client.saveLocation({
+        // The name only when the place has one that is not its own coordinates — sending that as a
+        // name asks the backend to geocode a city that does not exist, which is a bug this line
+        // has already had once.
+        ...(sendableName(input.location) === null
+          ? {}
+          : { location: sendableName(input.location) as string }),
         latitude: input.location.latitude,
         longitude: input.location.longitude,
         label: input.label,

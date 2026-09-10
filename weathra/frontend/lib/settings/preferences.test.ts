@@ -99,9 +99,17 @@ describe("updateFrom", () => {
     expect(updateFrom(draft, view())).toEqual({ forecast_horizon_days: 10 });
   });
 
-  it("sends coordinates when the default location changed, never a name", () => {
+  it("sends the resolved name with the coordinates when the default location changed", () => {
+    // Both, and each does a different job: the coordinates say which candidate this is, so no
+    // ambiguity reappears, and the name is what the backend can store — `specs/memory` wants the
+    // canonical name in the row, and coordinates alone cannot produce one because Open-Meteo does
+    // no reverse geocoding. A default saved from coordinates alone read "48.1374, 11.5755".
     const draft = { ...draftFrom(view()), defaultLocation: TOKYO };
-    expect(updateFrom(draft, view())).toEqual({ latitude: 35.6895, longitude: 139.6917 });
+    expect(updateFrom(draft, view())).toEqual({
+      default_location: "Tokyo",
+      latitude: 35.6895,
+      longitude: 139.6917,
+    });
   });
 
   it("saves a place whose only name is its coordinates", () => {
@@ -124,6 +132,7 @@ describe("updateFrom", () => {
     expect(updateFrom(draft, view())).toEqual({
       unit_system: "imperial",
       forecast_horizon_days: 3,
+      default_location: "Tokyo",
       latitude: 35.6895,
       longitude: 139.6917,
     });

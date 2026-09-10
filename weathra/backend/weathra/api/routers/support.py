@@ -7,6 +7,11 @@ either. Accepting both would leave "which wins" to be discovered, and any answer
 somebody. Resolving it in one place also means the not-found and ambiguous cases read identically
 across the five endpoints.
 
+*Saving* a place is the one exception, and it is a different question rather than a loosened rule:
+``resolve_for_saving`` takes a name **and** the coordinates it resolved to, because a stored row is
+read back by name later and coordinates alone cannot produce one. Nothing on a weather path accepts
+both.
+
 **Units come from the request, then the signed-in caller's preference, then the default.** This is
 the one thing a public endpoint reads about a user, and ``specs/authentication`` names it as the
 single exception to "a public endpoint reads no user-owned data". An explicit request wins, because
@@ -34,9 +39,15 @@ from fastapi import Request
 from weathra.api.dependencies import http_client_of
 from weathra.api.middleware import annotate
 from weathra.config import Settings
-from weathra.domain.errors import ValidationFailed
+from weathra.domain.errors import LocationNotFound, ValidationFailed
 from weathra.domain.identity import Principal
-from weathra.domain.location import Ambiguous, Location, Resolved, validate_coordinates
+from weathra.domain.location import (
+    Ambiguous,
+    Location,
+    Resolved,
+    location_identifier,
+    validate_coordinates,
+)
 from weathra.domain.weather import UnitSystem
 from weathra.geocoding.base import Geocoder
 from weathra.memory.degradation import with_memory
@@ -45,7 +56,7 @@ from weathra.providers.base import WeatherProvider
 from weathra.providers.cache import CachedProvider
 from weathra.providers.registry import build_provider
 
-__all__ = ["horizon_for", "provider_for", "resolve_one", "units_for"]
+__all__ = ["horizon_for", "provider_for", "resolve_for_saving", "resolve_one", "units_for"]
 
 logger = logging.getLogger("weathra.api.support")
 
@@ -101,6 +112,72 @@ async def resolve_one(
 
     resolved: Resolved = outcome
     return resolved.location
+
+
+async def resolve_for_saving(
+    geocoder: Geocoder,
+    *,
+    location: str | None,
+    latitude: float | None,
+    longitude: float | None,
+) -> Location:
+    """The place to *store*, which is a stricter thing than the place to fetch weather for.
+
+    ``specs/memory`` requires a saved location to hold "the canonical resolved location rather than
+    the raw query text", and to appear in the list "with its canonical name, coordinates, and
+    timezone". ``resolve_one`` cannot satisfy that from coordinates alone: Open-Meteo has no
+    reverse-geocoding endpoint, so ``resolve_coordinates`` names a point after its own latitude and
+    longitude — a fine answer for "what is the weather here", and a coordinate string where the
+    canonical name should be once it is written to a row somebody reads later.
+
+    So a save may send **both** a name and the coordinates it already resolved to, which
+    ``resolve_one`` refuses and this accepts, because here they mean something together: the name
+    supplies the canonical identity and the coordinates say *which* of its candidates was meant. The
+    name is resolved server-side and the coordinates only select among what the provider returned —
+    a caller cannot name a place something it is not, and cannot smuggle in a place the provider
+    does not know. That is what makes this safe to accept where the weather path is not: the client
+    is pinning a choice, not asserting a fact.
+
+    It also removes the reason the ambiguity refusal used to bite here. "Springfield" saved with the
+    coordinates of the Illinois one is not ambiguous — the pair chose. Without the pair it still is,
+    and is still refused.
+
+    A pair that matches none of the name's candidates falls back to naming the point by its
+    coordinates rather than refusing the save. The pair came from a resolution the client had
+    already been given, so a mismatch is a provider disagreeing with itself between two calls, and
+    losing somebody's saved place over it would be the worse failure. It is logged.
+    """
+    named = bool(location and location.strip())
+    if not (named and latitude is not None and longitude is not None):
+        return await resolve_one(
+            geocoder, location=location, latitude=latitude, longitude=longitude
+        )
+
+    checked_latitude, checked_longitude = validate_coordinates(latitude, longitude)
+    wanted = location_identifier(checked_latitude, checked_longitude)
+
+    try:
+        outcome = await geocoder.resolve(str(location))
+    except LocationNotFound:
+        # The name came from a resolution the caller was already given, so the provider no longer
+        # knowing it is the provider disagreeing with itself. Fall back rather than refuse.
+        candidates: tuple[Location, ...] = ()
+    else:
+        candidates = (
+            (outcome.location,) if isinstance(outcome, Resolved) else tuple(outcome.candidates)
+        )
+
+    for candidate in candidates:
+        if location_identifier(candidate.latitude, candidate.longitude) == wanted:
+            return candidate
+
+    logger.info(
+        "saving %r by coordinates: none of its %d candidate(s) matched %s",
+        location,
+        len(candidates),
+        wanted,
+    )
+    return await geocoder.resolve_coordinates(checked_latitude, checked_longitude)
 
 
 async def units_for(

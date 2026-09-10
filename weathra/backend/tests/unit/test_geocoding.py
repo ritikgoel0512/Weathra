@@ -388,3 +388,134 @@ def test_query_normalization(raw: str, expected: str) -> None:
 )
 def test_qualifier_splitting(raw: str, expected: tuple[str, str | None]) -> None:
     assert split_qualifier(raw) == expected
+
+
+# =================================================== saving a place keeps its canonical name
+
+
+class _NamedGeocoder:
+    """A geocoder whose name search returns candidates and whose coordinate lookup does not name.
+
+    The second half is the real Open-Meteo behaviour, not a convenience: it has no reverse-geocoding
+    endpoint, so ``resolve_coordinates`` names a point after its own latitude and longitude. That is
+    exactly the value a saved row must not end up holding.
+    """
+
+    def __init__(self, *candidates: Location) -> None:
+        self.candidates = candidates
+        self.coordinate_calls = 0
+
+    async def resolve(self, query: str) -> Resolution:
+        # Name-aware, because a stub that answers every query is a stub that cannot fail the way
+        # the real one does — and the fallback path is the one worth testing.
+        matched = tuple(
+            place for place in self.candidates if place.display_name.lower() == query.strip().lower()
+        )
+        if not matched:
+            raise LocationNotFound(f"no such place: {query}")
+        if len(matched) == 1:
+            return Resolved(query=query, location=matched[0])
+        return Ambiguous(query=query, candidates=matched)
+
+    async def resolve_coordinates(self, latitude: float, longitude: float) -> Location:
+        self.coordinate_calls += 1
+        return Location(
+            display_name=f"{latitude:.4f}, {longitude:.4f}",
+            latitude=latitude,
+            longitude=longitude,
+            timezone="Europe/Berlin",
+        )
+
+    async def search(self, query: str, *, limit: int = DEFAULT_SEARCH_LIMIT) -> tuple[Location, ...]:
+        return self.candidates[:limit]
+
+
+def _place(name: str, latitude: float, longitude: float, **extra: Any) -> Location:
+    return Location(
+        display_name=name,
+        latitude=latitude,
+        longitude=longitude,
+        timezone="Europe/Berlin",
+        **extra,
+    )
+
+
+MUNICH = _place("Munich", 48.13743, 11.57549, country="Germany", country_code="DE")
+SPRINGFIELD_IL = _place("Springfield", 39.80172, -89.64371, region="Illinois", country_code="US")
+SPRINGFIELD_MO = _place("Springfield", 37.21533, -93.29824, region="Missouri", country_code="US")
+
+
+async def test_a_name_with_its_coordinates_is_stored_under_its_canonical_name() -> None:
+    """`specs/memory`: a saved location holds the canonical resolved location and lists its
+    canonical name. A coordinates-only save could only ever produce a coordinate string, which is
+    how a saved Munich came to read "48.1374, 11.5755".
+    """
+    from weathra.api.routers.support import resolve_for_saving
+
+    geocoder = _NamedGeocoder(MUNICH)
+    place = await resolve_for_saving(
+        geocoder, location="Munich", latitude=48.13743, longitude=11.57549
+    )
+
+    assert place.display_name == "Munich"
+    assert place.country == "Germany"
+    assert geocoder.coordinate_calls == 0, "the name resolved, so no coordinate naming was needed"
+
+
+async def test_the_coordinates_choose_between_candidates_a_name_alone_could_not() -> None:
+    """The pair is what makes an ambiguous name saveable, and it chooses rather than asserting.
+
+    "Springfield" with the Illinois coordinates is not ambiguous — but the answer still comes from
+    the provider's own candidate, so the caller cannot name a place something it is not.
+    """
+    from weathra.api.routers.support import resolve_for_saving
+
+    geocoder = _NamedGeocoder(SPRINGFIELD_IL, SPRINGFIELD_MO)
+    place = await resolve_for_saving(
+        geocoder, location="Springfield", latitude=39.80172, longitude=-89.64371
+    )
+
+    assert place.region == "Illinois"
+    assert place.display_name == "Springfield"
+
+
+async def test_a_name_the_caller_invented_cannot_reach_the_stored_row() -> None:
+    """The name is resolved server-side; the pair only selects.
+
+    A name the provider does not know names nothing, and the save falls back to the coordinate
+    naming rather than storing the caller's string — the pre-fix behaviour, which is the right
+    floor to fall back to.
+    """
+    from weathra.api.routers.support import resolve_for_saving
+
+    geocoder = _NamedGeocoder(MUNICH)
+    place = await resolve_for_saving(
+        geocoder, location="Totally Made Up", latitude=48.13743, longitude=11.57549
+    )
+
+    assert place.display_name != "Totally Made Up"
+    assert geocoder.coordinate_calls == 1
+
+
+async def test_an_ambiguous_name_with_no_coordinates_is_still_refused() -> None:
+    """The refusal is not loosened. Without a pair there is nothing to choose with, and
+    `specs/location-resolution` forbids substituting one candidate for a genuine ambiguity.
+    """
+    from weathra.api.routers.support import resolve_for_saving
+
+    geocoder = _NamedGeocoder(SPRINGFIELD_IL, SPRINGFIELD_MO)
+    with pytest.raises(ValidationFailed):
+        await resolve_for_saving(geocoder, location="Springfield", latitude=None, longitude=None)
+
+
+async def test_coordinates_alone_resolve_exactly_as_they_did() -> None:
+    """No name, no change: a coordinates-only save is still the point, named after itself. The fix
+    adds a better answer where one is available rather than removing the only one that was.
+    """
+    from weathra.api.routers.support import resolve_for_saving
+
+    geocoder = _NamedGeocoder(MUNICH)
+    place = await resolve_for_saving(geocoder, location=None, latitude=48.13743, longitude=11.57549)
+
+    assert place.display_name == "48.1374, 11.5755"
+    assert geocoder.coordinate_calls == 1

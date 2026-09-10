@@ -31,7 +31,7 @@
  */
 
 import type { Location, PreferenceSource, PreferenceUpdate, PreferenceView, UnitSystem } from "@/lib/api/schema";
-import { isSamePlace, placeKey, qualifiedName } from "@/lib/locations/place";
+import { isSamePlace, placeKey, qualifiedName, sendableName } from "@/lib/locations/place";
 
 /* ---------------------------------------------------------------------- units */
 
@@ -144,6 +144,7 @@ export function updateFrom(draft: PreferenceDraft, view: PreferenceView): Prefer
   const update: {
     unit_system?: UnitSystem;
     forecast_horizon_days?: number;
+    default_location?: string;
     latitude?: number;
     longitude?: number;
     clear_default_location?: boolean;
@@ -155,8 +156,16 @@ export function updateFrom(draft: PreferenceDraft, view: PreferenceView): Prefer
   if (!samePlaceOrBothUnset(draft.defaultLocation, stored.defaultLocation)) {
     if (draft.defaultLocation === null) update.clear_default_location = true;
     else {
-      // By coordinates, never by name. Every choice here is a location the backend already
-      // resolved, so its name is a label to read rather than a query to re-run.
+      // The coordinates always, and the name when the place has one. The coordinates pin which
+      // candidate this is, so no ambiguity reappears; the name is what the backend can then store,
+      // because a stored default is read back as a place name later and coordinates alone cannot
+      // produce one — which is how a default came to read "48.1374, 11.5755".
+      //
+      // A coordinate-named place sends no name at all, which is the earlier fix on this line kept
+      // intact: sending "48.1374, 11.5755" as a name asks the backend to geocode a city that does
+      // not exist.
+      const name = sendableName(draft.defaultLocation);
+      if (name !== null) update.default_location = name;
       update.latitude = draft.defaultLocation.latitude;
       update.longitude = draft.defaultLocation.longitude;
     }
