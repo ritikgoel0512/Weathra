@@ -9,10 +9,12 @@ import pytest
 from tests.db_support import claims_for, insert_profile, new_user_id, session_as
 from weathra.config import Settings
 from weathra.db.engine import Engines
-from weathra.domain.errors import RecordNotFound, SavedLocationLimitReached
+from weathra.domain.errors import NotFound, RecordNotFound, SavedLocationLimitReached
 from weathra.domain.identity import Principal
 from weathra.domain.location import Location
+from weathra.domain.weather import Measure
 from weathra.memory.locations import SavedLocationStore
+from weathra.memory.watches import WatchEvaluation, WatchStore, now
 
 pytestmark = pytest.mark.db
 
@@ -360,3 +362,116 @@ async def test_anothers_saved_locations_do_not_count_against_the_limit(
         store = SavedLocationStore(session, _principal(fresh), limited)
         assert await store.count() == 0
         await store.save(BERLIN)
+
+
+# ================================================================ 34.17 weather watches
+
+
+async def test_a_watch_belongs_to_the_person_who_created_it(
+    engines: Engines, clean_database: None
+) -> None:
+    """The whole isolation claim, exercised: two people, one place, and neither sees the other.
+
+    The policy on `weather_watches` is what makes it true — no query here filters by owner, because
+    no query in the store does either.
+    """
+    mine, theirs = new_user_id(), new_user_id()
+
+    async with session_as(engines, mine) as session:
+        await insert_profile(session, mine)
+        await WatchStore(session, _principal(mine)).create(
+            location=BERLIN, measure=Measure.WIND_SPEED, comparison="above", threshold=40.0
+        )
+    async with session_as(engines, theirs) as session:
+        await insert_profile(session, theirs)
+        await WatchStore(session, _principal(theirs)).create(
+            location=BERLIN, measure=Measure.WIND_SPEED, comparison="above", threshold=10.0
+        )
+
+    async with session_as(engines, mine) as session:
+        ours = await WatchStore(session, _principal(mine)).list()
+
+    assert len(ours) == 1
+    assert ours[0].threshold == 40.0, "the other person's watch on the same place was visible"
+
+
+async def test_asking_the_same_question_twice_updates_it(
+    engines: Engines, clean_database: None
+) -> None:
+    user = new_user_id()
+    async with session_as(engines, user) as session:
+        await insert_profile(session, user)
+        store = WatchStore(session, _principal(user))
+        await store.create(
+            location=BERLIN, measure=Measure.TEMPERATURE, comparison="above", threshold=25.0
+        )
+        await store.create(
+            location=BERLIN, measure=Measure.TEMPERATURE, comparison="above", threshold=30.0
+        )
+        watches = await store.list()
+
+    assert len(watches) == 1, "the same question about the same place is one watch"
+    assert watches[0].threshold == 30.0
+
+
+async def test_a_watch_cannot_be_changed_or_removed_by_anybody_else(
+    engines: Engines, clean_database: None
+) -> None:
+    mine, theirs = new_user_id(), new_user_id()
+
+    async with session_as(engines, mine) as session:
+        await insert_profile(session, mine)
+        created = await WatchStore(session, _principal(mine)).create(
+            location=BERLIN, measure=Measure.TEMPERATURE, comparison="below", threshold=0.0
+        )
+
+    async with session_as(engines, theirs) as session:
+        await insert_profile(session, theirs)
+        store = WatchStore(session, _principal(theirs))
+        # Not found rather than forbidden: telling them it exists would be the disclosure.
+        with pytest.raises(NotFound):
+            await store.update(created.id, threshold=99.0)
+        with pytest.raises(NotFound):
+            await store.delete(created.id)
+
+
+async def test_an_evaluation_is_recorded_with_the_moment_it_happened(
+    engines: Engines, clean_database: None
+) -> None:
+    """There is no scheduler, so the row has to say when it was last looked at."""
+    user = new_user_id()
+    async with session_as(engines, user) as session:
+        await insert_profile(session, user)
+        store = WatchStore(session, _principal(user))
+        created = await store.create(
+            location=BERLIN, measure=Measure.WIND_SPEED, comparison="above", threshold=20.0
+        )
+        assert created.last_evaluated_at is None, "nothing is claimed before the first check"
+
+        updated = await store.record_evaluation(
+            created.id, WatchEvaluation(evaluated_at=now(), value=31.0, met=True, unit="km/h")
+        )
+
+    assert updated.last_evaluated_at is not None
+    assert updated.last_value == 31.0
+    assert updated.last_met is True
+
+
+async def test_a_reading_the_provider_did_not_send_is_recorded_as_no_answer(
+    engines: Engines, clean_database: None
+) -> None:
+    user = new_user_id()
+    async with session_as(engines, user) as session:
+        await insert_profile(session, user)
+        store = WatchStore(session, _principal(user))
+        created = await store.create(
+            location=BERLIN, measure=Measure.WIND_GUST, comparison="above", threshold=60.0
+        )
+        updated = await store.record_evaluation(
+            created.id, WatchEvaluation(evaluated_at=now(), value=None, met=None)
+        )
+
+    # Null, not false: a silent provider is not calm weather.
+    assert updated.last_value is None
+    assert updated.last_met is None
+    assert updated.last_evaluated_at is not None

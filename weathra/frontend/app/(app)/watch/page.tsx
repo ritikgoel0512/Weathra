@@ -1,21 +1,23 @@
 /**
  * `/watch` — Weather Watch.
  *
- * A route, not a screen. Task 20.12 needs every destination in the navigation to resolve to
- * something honest; the screen itself is post-MVP and recorded in `docs/design/roadmap.md`.
+ * Conditions the person asked Weathra to check, stored in `weather_watches` under the same
+ * owner-only policy every user-owned table carries, and evaluated when the screen is opened or a
+ * watch is refreshed. Weathra runs nothing on a timer and sends no alerts, and both the API and the
+ * screen say so.
+ *
+ * The approved composition is `docs/design/screens/14-weather-watch.png`. Its watch engine,
+ * monitoring nodes, model recalibration and sensor telemetry do not exist; recorded in
+ * `docs/design/screens.md` §8.
  */
 
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
-import { RouteStatus } from "@/components/shell/route-status";
+import { WeatherWatch } from "@/components/watch/watch";
 
 export const metadata: Metadata = { title: "Weather Watch" };
 
 export default function Page(): ReactNode {
-  return (
-    <RouteStatus title="Weather Watch" status="planned">
-      A location monitored against conditions, with notification when they change.
-    </RouteStatus>
-  );
+  return <WeatherWatch />;
 }

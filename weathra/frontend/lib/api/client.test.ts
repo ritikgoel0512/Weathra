@@ -328,8 +328,12 @@ describe("the client's coverage of the contract", () => {
     // there is no third category to hide in.
     for (const { path, administrative } of API_OPERATIONS) {
       if (administrative) continue;
-      const template = path.replace(/\{[^}]+\}/g, "");
-      expect(source, path).toContain(template.replace(/\/$/, ""));
+      // Split on the parameters rather than blanking them: a path whose parameter is *followed* by
+      // a segment — `/me/watches/{watch_id}/evaluate` — leaves `//evaluate`, which no source
+      // contains, and the check would fail on a method that is present.
+      for (const literal of path.split(/\{[^}]+\}/).filter((part) => part.length > 1)) {
+        expect(source, `${path} (${literal})`).toContain(literal);
+      }
     }
   });
 
@@ -370,8 +374,11 @@ describe("the client's coverage of the contract", () => {
     expect([...NEEDED].filter((path) => !declared.has(path))).toEqual([]);
 
     const uncovered = API_OPERATIONS.filter(({ path, administrative }) => {
-      const template = path.replace(/\{[^}]+\}/g, "").replace(/\/$/, "");
-      return !administrative && !source.includes(template);
+      if (administrative) return false;
+      return path
+        .split(/\{[^}]+\}/)
+        .filter((part) => part.length > 1)
+        .some((literal) => !source.includes(literal));
     });
     expect(uncovered.map(({ path }) => path)).toEqual([]);
   });
@@ -426,6 +433,14 @@ async function invoke(client: ApiClient, operation: ApiOperation): Promise<unkno
     save_location_api_v1_me_locations_post: () => client.saveLocation({ location: "Berlin" }),
     remove_location_api_v1_me_locations__saved_id__delete: () =>
       client.removeSavedLocation(identifier),
+    list_watches_api_v1_me_watches_get: () => client.watches(),
+    create_watch_api_v1_me_watches_post: () =>
+      client.createWatch({ location: "Berlin", measure: "temperature", comparison: "above", threshold: 20 }),
+    update_watch_api_v1_me_watches__watch_id__patch: () =>
+      client.updateWatch(identifier, { threshold: 25 }),
+    remove_watch_api_v1_me_watches__watch_id__delete: () => client.removeWatch(identifier),
+    evaluate_one_api_v1_me_watches__watch_id__evaluate_post: () =>
+      client.evaluateWatch(identifier),
     delete_my_data_api_v1_me_data_delete: () => client.deleteMyData(),
     threads_api_v1_threads_get: () => client.threads(),
     thread_api_v1_threads__thread_id__get: () => client.thread(identifier),

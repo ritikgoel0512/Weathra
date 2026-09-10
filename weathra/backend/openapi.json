@@ -5988,6 +5988,271 @@
         "title": "ValidationError",
         "type": "object"
       },
+      "WatchEdit": {
+        "additionalProperties": false,
+        "description": "What may be changed about a watch. The place and the measure are its identity.",
+        "properties": {
+          "comparison": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comparison"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          }
+        },
+        "title": "WatchEdit",
+        "type": "object"
+      },
+      "WatchRecord": {
+        "additionalProperties": false,
+        "description": "One watch, as it is read back.",
+        "properties": {
+          "comparison": {
+            "title": "Comparison",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "last_evaluated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Evaluated At"
+          },
+          "last_met": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Met"
+          },
+          "last_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Value"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "measure": {
+            "$ref": "#/components/schemas/Measure"
+          },
+          "threshold": {
+            "title": "Threshold",
+            "type": "number"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "location",
+          "measure",
+          "comparison",
+          "threshold",
+          "enabled",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "WatchRecord",
+        "type": "object"
+      },
+      "WatchRequest": {
+        "additionalProperties": false,
+        "description": "A place, a measure, a direction and a number.",
+        "properties": {
+          "comparison": {
+            "description": "'above' or 'below'.",
+            "title": "Comparison",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "maximum": 90.0,
+                "minimum": -90.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "maximum": 180.0,
+                "minimum": -180.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
+          },
+          "measure": {
+            "$ref": "#/components/schemas/Measure"
+          },
+          "threshold": {
+            "title": "Threshold",
+            "type": "number"
+          }
+        },
+        "required": [
+          "measure",
+          "comparison",
+          "threshold"
+        ],
+        "title": "WatchRequest",
+        "type": "object"
+      },
+      "WatchesResponse": {
+        "additionalProperties": false,
+        "description": "Your watches, and how they came to be evaluated.",
+        "properties": {
+          "count": {
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "disclaimer": {
+            "default": "Weather Watch is analytical assistance, not an official severe-weather or emergency warning service. Always follow your local meteorological agency.",
+            "title": "Disclaimer",
+            "type": "string"
+          },
+          "evaluation_note": {
+            "default": "Checked when you open this screen or press refresh. Weathra does not monitor continuously and sends no alerts.",
+            "title": "Evaluation Note",
+            "type": "string"
+          },
+          "watchable": {
+            "description": "The measures a watch may name \u2014 the ones the provider actually reports.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Watchable",
+            "type": "array"
+          },
+          "watches": {
+            "items": {
+              "$ref": "#/components/schemas/WatchRecord"
+            },
+            "title": "Watches",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "watches",
+          "watchable"
+        ],
+        "title": "WatchesResponse",
+        "type": "object"
+      },
       "WhatChanged": {
         "additionalProperties": false,
         "description": "How the forecast for a location and window has moved since the last earlier snapshot.",
@@ -8094,6 +8359,274 @@
         "summary": "Your plan and your usage",
         "tags": [
           "account"
+        ]
+      }
+    },
+    "/api/v1/me/watches": {
+      "get": {
+        "description": "**Protected.** Lists and creates the acting user's weather watches.\n\nEvery watch you have, optionally checked as it is read.\n\nEvaluation is opt-in rather than automatic because it costs a provider call per watched place,\nand a listing that quietly made ten of them would be a listing nobody could afford to poll.",
+        "operationId": "list_watches_api_v1_me_watches_get",
+        "parameters": [
+          {
+            "description": "Check each enabled watch against the current forecast before returning.",
+            "in": "query",
+            "name": "evaluate",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Check each enabled watch against the current forecast before returning.",
+              "title": "Evaluate",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Your weather watches",
+        "tags": [
+          "watches"
+        ]
+      },
+      "post": {
+        "description": "**Protected.** Lists and creates the acting user's weather watches.\n\nAsk Weathra to check a condition at a place. Asking twice updates the threshold.",
+        "operationId": "create_watch_api_v1_me_watches_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Watch a condition",
+        "tags": [
+          "watches"
+        ]
+      }
+    },
+    "/api/v1/me/watches/{watch_id}": {
+      "delete": {
+        "description": "**Protected.** Changes or removes one of the acting user's watches.",
+        "operationId": "remove_watch_api_v1_me_watches__watch_id__delete",
+        "parameters": [
+          {
+            "description": "One of your watches.",
+            "in": "path",
+            "name": "watch_id",
+            "required": true,
+            "schema": {
+              "description": "One of your watches.",
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Watch Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Remove a watch",
+        "tags": [
+          "watches"
+        ]
+      },
+      "patch": {
+        "description": "**Protected.** Changes or removes one of the acting user's watches.",
+        "operationId": "update_watch_api_v1_me_watches__watch_id__patch",
+        "parameters": [
+          {
+            "description": "One of your watches.",
+            "in": "path",
+            "name": "watch_id",
+            "required": true,
+            "schema": {
+              "description": "One of your watches.",
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Watch Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WatchEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Change a watch",
+        "tags": [
+          "watches"
+        ]
+      }
+    },
+    "/api/v1/me/watches/{watch_id}/evaluate": {
+      "post": {
+        "description": "**Protected.** Checks one of the acting user's watches against the current forecast, on request.\n\nCheck one watch against the current forecast, now, because somebody asked.",
+        "operationId": "evaluate_one_api_v1_me_watches__watch_id__evaluate_post",
+        "parameters": [
+          {
+            "description": "One of your watches.",
+            "in": "path",
+            "name": "watch_id",
+            "required": true,
+            "schema": {
+              "description": "One of your watches.",
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Watch Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Check a watch now",
+        "tags": [
+          "watches"
         ]
       }
     },

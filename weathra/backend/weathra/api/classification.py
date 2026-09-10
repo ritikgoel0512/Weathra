@@ -169,6 +169,21 @@ _CLASSIFICATIONS: tuple[EndpointClassification, ...] = (
         "Removes one of the acting user's saved locations.",
     ),
     EndpointClassification(
+        "/me/watches",
+        Access.PROTECTED,
+        "Lists and creates the acting user's weather watches.",
+    ),
+    EndpointClassification(
+        "/me/watches/{watch_id}",
+        Access.PROTECTED,
+        "Changes or removes one of the acting user's watches.",
+    ),
+    EndpointClassification(
+        "/me/watches/{watch_id}/evaluate",
+        Access.PROTECTED,
+        "Checks one of the acting user's watches against the current forecast, on request.",
+    ),
+    EndpointClassification(
         "/me/usage",
         Access.PROTECTED,
         "The acting user's own plan, allowances and consumption. No other subject's, and no "

@@ -405,6 +405,23 @@ The screen SHALL NOT compute a scenario value itself. It SHALL label the result 
 - **THEN** the result is labelled simulated
 - **AND** it states that it is not a forecast and that no atmosphere was modelled
 
+### Requirement: Weather Watch
+
+The frontend SHALL provide a Weather Watch screen listing the acting person's watches with, for each, its condition, the reading at the last check, whether the condition held, and when it was last checked; and SHALL let them add, check and remove one.
+
+A watch never checked, and a watch whose provider reported no reading, SHALL each be presented as having no answer rather than as the condition not holding. The screen SHALL state the evaluation semantics the backend reports rather than wording of its own, SHALL NOT claim monitoring, alerting or real-time evaluation, and SHALL carry the statement that it is not an official warning service.
+
+#### Scenario: Three outcomes, drawn as three
+
+- **WHEN** the watches are listed
+- **THEN** a met condition, an unmet condition and an absent reading are each shown distinctly
+
+#### Scenario: It does not claim to monitor
+
+- **WHEN** the screen is inspected
+- **THEN** it states how and when watches are evaluated
+- **AND** no monitoring, alerting or real-time claim appears
+
 ### Requirement: The navigation is grouped by what a screen is for
 
 The frontend SHALL group the navigation into the product's core screens, the intelligence screens that analyse Weathra's own data, the account screens, and — for a principal the backend confirms holds the administrative role — the administrative ones. The core group SHALL carry no heading, being the product itself.

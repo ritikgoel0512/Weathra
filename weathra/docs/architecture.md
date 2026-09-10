@@ -281,7 +281,7 @@ code that does not exist. So each names the group 26-34 task that owes it, and t
 that task to being open. Close one of those tasks and the first assertion starts demanding its
 tests. Both directions stay honest without anyone maintaining a list of which spec is which.
 
-Of **217** requirements across twenty specs, **216** are implemented and tested, **1** is
+Of **219** requirements across twenty specs, **218** are implemented and tested, **1** is
 manual-pending, and **0** are open. Exactly **0** requirements have no test. The one that remains
 manual-pending is `web-ui`'s accessibility and responsive layout, which is automatically tested as
 far as automation reaches and still owes a human pass (task 21.8).
@@ -307,17 +307,17 @@ model access or an allowance** and **the Visily design gate** are closed outrigh
 | `location-comparison` | 6 | 6 | 0 | 0 | 9 |
 | `location-resolution` | 7 | 7 | 0 | 0 | 6 |
 | `mcp-weather-server` | 7 | 7 | 0 | 0 | 10 |
-| `memory` | 9 | 9 | 0 | 0 | 12 |
+| `memory` | 10 | 10 | 0 | 0 |12, 34 |
 | `rag-knowledge` | 8 | 8 | 0 | 0 | 11 |
 | `safety-grounding` | 10 | 10 | 0 | 0 | 17 |
 | `weather-providers` | 7 | 7 | 0 | 0 | 5 |
-| `web-ui` | 22 | 21 | 1 | 0 | 19, 20, 21, 33, 34 |
+| `web-ui` | 23 | 22 | 1 | 0 | 19, 20, 21, 33, 34 |
 | `model-policy` | 10 | 10 | 0 | 0 | 28 |
 | `model-catalog` | 7 | 7 | 0 | 0 | 26, 27 |
 | `llm-telemetry` | 7 | 7 | 0 | 0 | 29 |
 | `usage-limits` | 9 | 9 | 0 | 0 | 30 |
 | `model-lab` | 6 | 6 | 0 | 0 | 32 |
-| **Total** | **217** | **216** | **1** | **0** | |
+| **Total** | **219** | **218** | **1** | **0** | |
 
 ### `agent-orchestration`
 
@@ -500,6 +500,7 @@ model access or an allowance** and **the Visily design gate** are closed outrigh
 | Conversation retention is bounded and non-sensitive by default | 12.5 | memory/retention.py | integration/test_memory_retention.py | IMPLEMENTED |
 | Durable preference store | 12.3 | memory/preferences.py | integration/test_memory_preferences.py, frontend/lib/settings/preferences.test.ts | IMPLEMENTED |
 | Saved locations | 12.4, 34.11 | memory/locations.py, api/routers/support.py, frontend/lib/locations/place.ts, frontend/components/locations/locations.tsx | integration/test_memory_saved_locations.py, unit/test_geocoding.py, frontend/lib/locations/place.test.ts, frontend/components/locations/locations.test.tsx | IMPLEMENTED |
+| Weather watches | 34.17 | memory/watches.py, api/routers/watches.py, db/migrations/versions/0012_weather_watches.py | unit/test_watch_evaluation.py, integration/test_memory_saved_locations.py | IMPLEMENTED |
 | Ownership derived from the authenticated user | 12.2 | memory/, auth/rls.py | integration/test_auth_data_path.py, integration/test_checkpoint_policies.py | IMPLEMENTED |
 | Memory unavailability degrades honestly | 12.6 | memory/degradation.py, memory/availability.py | unit/test_memory_degradation.py | IMPLEMENTED |
 | Both memory tiers are retained unchanged by the model policy layer | 26.5, 28.8 | db/migrations/versions/0006_saas_user_owned_tables.py, agents/graph.py | integration/test_saas_rls.py, integration/test_agent_resolution.py | IMPLEMENTED |
@@ -561,6 +562,7 @@ model access or an allowance** and **the Visily design gate** are closed outrigh
 | Weather Intelligence Report | 34.14 | frontend/components/report/report.tsx, frontend/app/(app)/report/page.tsx | frontend/components/report/report.test.tsx | IMPLEMENTED |
 | Travel Intelligence | 34.15 | frontend/components/travel/travel.tsx, frontend/app/(app)/travel/page.tsx | frontend/components/travel/travel.test.tsx | IMPLEMENTED |
 | Weather Scenario Lab | 34.16 | frontend/components/scenarios/scenarios.tsx, frontend/app/(app)/scenarios/page.tsx | frontend/components/scenarios/scenarios.test.tsx | IMPLEMENTED |
+| Weather Watch | 34.17 | frontend/components/watch/watch.tsx, frontend/app/(app)/watch/page.tsx | frontend/components/watch/watch.test.tsx | IMPLEMENTED |
 | Data classes and attribution are visible | 21.4 | frontend/components/ui/provenance.tsx | frontend/components/ui/provenance.test.tsx, frontend/lib/design/data-class.test.ts | IMPLEMENTED |
 | Loading, empty, and error states | 20.9 | frontend/components/view-state.tsx | frontend/components/ui/primitives.test.tsx, frontend/lib/query/query-layer.test.tsx | IMPLEMENTED |
 | Agent unavailability handled gracefully | 21.2 | frontend/components/analyst/, frontend/hooks/use-agent-stream.ts | frontend/components/analyst/analyst.test.tsx, frontend/hooks/use-agent-stream.test.tsx | IMPLEMENTED |

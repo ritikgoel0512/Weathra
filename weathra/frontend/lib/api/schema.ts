@@ -1285,6 +1285,52 @@ export interface ValidationError {
   readonly type: string;
 }
 
+/** What may be changed about a watch. The place and the measure are its identity. */
+export interface WatchEdit {
+  readonly comparison?: string | null;
+  readonly enabled?: boolean | null;
+  readonly label?: string | null;
+  readonly threshold?: number | null;
+}
+
+/** Your watches, and how they came to be evaluated. */
+export interface WatchesResponse {
+  readonly count: number;
+  readonly disclaimer?: string;
+  readonly evaluation_note?: string;
+  /** The measures a watch may name — the ones the provider actually reports. */
+  readonly watchable: string[];
+  readonly watches: WatchRecord[];
+}
+
+/** One watch, as it is read back. */
+export interface WatchRecord {
+  readonly comparison: string;
+  readonly created_at: string;
+  readonly enabled: boolean;
+  readonly id: string;
+  readonly label?: string | null;
+  readonly last_evaluated_at?: string | null;
+  readonly last_met?: boolean | null;
+  readonly last_value?: number | null;
+  readonly location: Location;
+  readonly measure: Measure;
+  readonly threshold: number;
+  readonly updated_at: string;
+}
+
+/** A place, a measure, a direction and a number. */
+export interface WatchRequest {
+  /** 'above' or 'below'. */
+  readonly comparison: string;
+  readonly label?: string | null;
+  readonly latitude?: number | null;
+  readonly location?: string | null;
+  readonly longitude?: number | null;
+  readonly measure: Measure;
+  readonly threshold: number;
+}
+
 /** Where a figure came from, in the structured fields a reader needs. */
 export interface WeatherAttribution {
   readonly data_class: DataClass;
@@ -1808,6 +1854,69 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     successStatus: 200,
     response: "UsageResponse",
     parameters: [],
+  },
+  {
+    operationId: "list_watches_api_v1_me_watches_get",
+    method: "GET",
+    path: "/api/v1/me/watches",
+    requiresToken: true,
+    administrative: false,
+    request: null,
+    successStatus: 200,
+    response: "WatchesResponse",
+    parameters: [
+      { name: "evaluate", in: "query", required: false },
+    ],
+  },
+  {
+    operationId: "create_watch_api_v1_me_watches_post",
+    method: "POST",
+    path: "/api/v1/me/watches",
+    requiresToken: true,
+    administrative: false,
+    request: "WatchRequest",
+    successStatus: 201,
+    response: "WatchRecord",
+    parameters: [],
+  },
+  {
+    operationId: "update_watch_api_v1_me_watches__watch_id__patch",
+    method: "PATCH",
+    path: "/api/v1/me/watches/{watch_id}",
+    requiresToken: true,
+    administrative: false,
+    request: "WatchEdit",
+    successStatus: 200,
+    response: "WatchRecord",
+    parameters: [
+      { name: "watch_id", in: "path", required: true },
+    ],
+  },
+  {
+    operationId: "remove_watch_api_v1_me_watches__watch_id__delete",
+    method: "DELETE",
+    path: "/api/v1/me/watches/{watch_id}",
+    requiresToken: true,
+    administrative: false,
+    request: null,
+    successStatus: 204,
+    response: null,
+    parameters: [
+      { name: "watch_id", in: "path", required: true },
+    ],
+  },
+  {
+    operationId: "evaluate_one_api_v1_me_watches__watch_id__evaluate_post",
+    method: "POST",
+    path: "/api/v1/me/watches/{watch_id}/evaluate",
+    requiresToken: true,
+    administrative: false,
+    request: null,
+    successStatus: 200,
+    response: "WatchRecord",
+    parameters: [
+      { name: "watch_id", in: "path", required: true },
+    ],
   },
   {
     operationId: "ready_api_v1_ready_get",

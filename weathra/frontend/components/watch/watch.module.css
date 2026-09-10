@@ -1,0 +1,142 @@
+/*
+ * Weather Watch — from the task 20.3 tokens against `docs/design/screens/14-weather-watch.png`.
+ *
+ * The artifact's watch engine, monitoring nodes, model recalibration, sensor telemetry, push alerts
+ * and live status light are absent from the markup. Weathra runs nothing on a timer and sends
+ * nothing to anybody, and a status light implying otherwise about severe weather would be the most
+ * harmful decoration in the product.
+ */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.lede {
+  margin: 0;
+  color: var(--color-text-secondary);
+  max-width: 72ch;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-3);
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.tileLabel {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+}
+
+.tileValue {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line);
+  font-variant-numeric: tabular-nums;
+}
+
+.note {
+  margin: 0;
+  color: var(--color-text-muted);
+  max-width: 78ch;
+}
+
+.body {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+  min-width: 0;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.watches {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.watch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.watchHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.watchPlace {
+  color: var(--color-text-primary);
+  font-weight: var(--type-card-weight);
+}
+
+.watchRule {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.watchState {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.watchActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+@media (max-width: 1023px) {
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

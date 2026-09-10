@@ -140,6 +140,39 @@ Where the resolved location carries no name of its own — a point identified on
 - **WHEN** a person saves more locations than the limit allows
 - **THEN** the request fails with an error stating the limit
 
+### Requirement: Weather watches
+
+The system SHALL let a person record conditions to be checked at a place — a measure, a direction and a threshold — list them, change them, remove them, and ask for one to be checked. A watch SHALL be owned by the authenticated user who created it, and no caller SHALL read or modify another user's watch by any identifier they supply.
+
+A watch SHALL only name a measure the weather provider reports. Recording the same measure at the same place twice SHALL update that watch rather than creating a second.
+
+Evaluation SHALL be deterministic and SHALL NOT involve a language model. The system SHALL record, with each evaluation, the moment it happened, the reading, and whether the condition held. Where the provider reported no reading, the outcome SHALL be recorded as no answer rather than as the condition not holding.
+
+The system SHALL NOT claim continuous monitoring, background evaluation or alerting unless it performs them, and SHALL state the evaluation semantics it does perform. Any surface presenting watches SHALL state that they are analytical assistance rather than an official severe-weather or emergency warning service.
+
+#### Scenario: A watch is owned by its creator
+
+- **WHEN** two people record a watch on the same place
+- **THEN** each sees only their own
+- **AND** neither can change or remove the other's by its identifier
+
+#### Scenario: An evaluation is recorded with its moment
+
+- **WHEN** a watch is checked
+- **THEN** the reading, whether the condition held, and the moment of the check are recorded
+
+#### Scenario: No reading is not a negative result
+
+- **WHEN** the provider reported no value for the watched measure
+- **THEN** the outcome is recorded as no answer
+- **AND** it is not recorded or presented as the condition failing to hold
+
+#### Scenario: The semantics are stated
+
+- **WHEN** watches are presented
+- **THEN** how and when they are evaluated is stated
+- **AND** they are stated not to be an official warning service
+
 ### Requirement: Ownership derived from the authenticated user
 
 Every persisted preference, saved location, thread, and stored agent run SHALL be owned by the authenticated user identified by the request's validated token, and the owning identifier SHALL be that user's authentication subject. A caller SHALL never read or modify another user's data, and an identifier supplied by the caller SHALL NOT override the token's subject as the ownership scope.

@@ -63,6 +63,10 @@ import type {
   ThreadsResponse,
   UnitSystem,
   UsageResponse,
+  WatchEdit,
+  WatchRecord,
+  WatchRequest,
+  WatchesResponse,
   WhatChanged,
 } from "./schema";
 
@@ -260,6 +264,18 @@ export interface ApiClient {
   threads(): Promise<ThreadsResponse>;
   thread(threadId: string): Promise<ThreadSummary>;
   deleteThread(threadId: string): Promise<void>;
+
+  /**
+   * Your weather watches.
+   *
+   * `evaluate` checks each enabled watch against the current forecast before returning, which costs
+   * a provider call per watched place — so it is opt-in rather than what a listing does by default.
+   */
+  watches(evaluate?: boolean): Promise<WatchesResponse>;
+  createWatch(request: WatchRequest): Promise<WatchRecord>;
+  updateWatch(watchId: string, edit: WatchEdit): Promise<WatchRecord>;
+  removeWatch(watchId: string): Promise<void>;
+  evaluateWatch(watchId: string): Promise<WatchRecord>;
 
   deleteMyData(): Promise<DeletionResponse>;
 
@@ -519,6 +535,34 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
         {},
         NO_BODY,
         false,
+      ),
+
+    watches: (evaluate) => get<WatchesResponse>("/api/v1/me/watches", { evaluate }),
+    createWatch: (request) =>
+      call<WatchRecord>("POST", "/api/v1/me/watches", {}, request, true),
+    updateWatch: (watchId, edit) =>
+      call<WatchRecord>(
+        "PATCH",
+        `/api/v1/me/watches/${encodeURIComponent(watchId)}`,
+        {},
+        edit,
+        true,
+      ),
+    removeWatch: (watchId) =>
+      call<void>(
+        "DELETE",
+        `/api/v1/me/watches/${encodeURIComponent(watchId)}`,
+        {},
+        NO_BODY,
+        false,
+      ),
+    evaluateWatch: (watchId) =>
+      call<WatchRecord>(
+        "POST",
+        `/api/v1/me/watches/${encodeURIComponent(watchId)}/evaluate`,
+        {},
+        NO_BODY,
+        true,
       ),
 
     deleteMyData: () => call<DeletionResponse>("DELETE", "/api/v1/me/data", {}, NO_BODY, true),

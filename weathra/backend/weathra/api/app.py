@@ -62,6 +62,7 @@ from weathra.api.routers import (
     history,
     locations,
     usage,
+    watches,
     weather,
 )
 from weathra.auth.jwks import JwksCache
@@ -265,6 +266,7 @@ def build_app(settings: Settings | None = None) -> FastAPI:
         comparison.router,
         agent.router,
         account.router,
+        watches.router,
         usage.router,
         evidence.router,
         *admin.routers,

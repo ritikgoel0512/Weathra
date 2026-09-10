@@ -91,6 +91,11 @@ reflection vector.
 | `DELETE` | `/api/v1/me/preferences` | **protected** | 200 | `PreferenceView` |
 | `GET` | `/api/v1/me/preferences` | **protected** | 200 | `PreferenceView` |
 | `PUT` | `/api/v1/me/preferences` | **protected** | 200 | `PreferenceView` |
+| `GET` | `/api/v1/me/watches` | **protected** | 200 | `WatchesResponse` |
+| `POST` | `/api/v1/me/watches` | **protected** | 201 | `WatchRecord` |
+| `PATCH` | `/api/v1/me/watches/{watch_id}` | **protected** | 200 | `WatchRecord` |
+| `DELETE` | `/api/v1/me/watches/{watch_id}` | **protected** | 204 | — |
+| `POST` | `/api/v1/me/watches/{watch_id}/evaluate` | **protected** | 200 | `WatchRecord` |
 | `GET` | `/api/v1/me/usage` | **protected** | 200 | `UsageResponse` |
 | `GET` | `/api/v1/admin/allowances` | **protected** | 200 | `AllowanceListResponse` |
 | `PUT` | `/api/v1/admin/allowances/internal` | **protected** | 200 | `AllowanceRecord` |
@@ -164,6 +169,9 @@ reflection vector.
 | `/me/locations` | **protected** | Lists and adds the acting user's saved locations. |
 | `/me/locations/{saved_id}` | **protected** | Removes one of the acting user's saved locations. |
 | `/me/preferences` | **protected** | Reads, updates, and deletes the acting user's preferences. |
+| `/me/watches` | **protected** | Lists and creates the acting user's weather watches. |
+| `/me/watches/{watch_id}` | **protected** | Changes or removes one of the acting user's watches. |
+| `/me/watches/{watch_id}/evaluate` | **protected** | Checks one watch against the current forecast, on request. |
 | `/me/usage` | **protected** | The acting user's own plan, allowances and consumption. No other subject's, and no internal usage. |
 | `/threads` | **protected** | The acting user's conversation threads. |
 | `/threads/{thread_id}` | **protected** | One of the acting user's threads, and its deletion. |

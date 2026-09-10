@@ -134,6 +134,7 @@ entirely confident answer about the wrong city.
 | Profile (`profiles`) | Something for Weathra's own tables to hang ownership from | Until the person deletes their data |
 | Preferences | Unit system, forecast horizon, default location — explicitly chosen, non-sensitive | Until deleted or reset |
 | Saved locations | Places the person chose to save, bounded by `SAVED_LOCATIONS_LIMIT` | Until removed |
+| Weather watches | A condition somebody asked Weathra to check at a place, and the result of the last time it was checked | Until removed |
 | Threads and checkpoints | Bounded conversational context, so a follow-up can say "there" | `THREAD_RETENTION_DAYS` (30 by default) after last activity |
 | Evidence records (`agent_runs`) | The record behind each answer, which is the product's central promise | Until the person deletes their data |
 | Forecast snapshots | *What changed?* needs the previous snapshot. Location-keyed, no user reference | `SNAPSHOT_RETENTION_DAYS` (90 by default) |

@@ -32,6 +32,7 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     JSON,
     BigInteger,
+    Boolean,
     CheckConstraint,
     Computed,
     Date,
@@ -178,6 +179,9 @@ class Profile(Base):
     saved_locations: Mapped[list[SavedLocation]] = relationship(
         back_populates="profile", cascade="all, delete-orphan"
     )
+    weather_watches: Mapped[list[WeatherWatch]] = relationship(
+        back_populates="profile", cascade="all, delete-orphan"
+    )
     threads: Mapped[list[Thread]] = relationship(
         back_populates="profile", cascade="all, delete-orphan"
     )
@@ -249,6 +253,72 @@ class SavedLocation(Base):
     created_at: Mapped[datetime] = _timestamp_column(server_default=func.now(), nullable=False)
 
     profile: Mapped[Profile] = relationship(back_populates="saved_locations")
+
+
+class WeatherWatch(Base):
+    """A condition somebody asked Weathra to check at a place they saved.
+
+    **Evaluated when it is looked at, and the row says when.** There is no scheduler in this
+    system, so there is nothing that could notice a threshold being crossed at three in the
+    morning. `last_evaluated_at` is therefore not decoration: it is the difference between "the wind
+    is above your threshold" and "the wind was above your threshold when you last looked", and a
+    surface that showed the first while meaning the second would be the failure this whole feature
+    has to avoid.
+
+    Unique per (user, location, measure) so the same question about the same place is one row that
+    gets updated rather than a list that accumulates duplicates.
+    """
+
+    __tablename__ = "weather_watches"
+    __table_args__ = (
+        UniqueConstraint(
+            USER_ID_COLUMN, "location_id", "measure", name="uq_weather_watches_user_place_measure"
+        ),
+        Index("ix_weather_watches_user", USER_ID_COLUMN),
+        {"info": {"ownership": Ownership.USER}},
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("profiles.user_id", ondelete="CASCADE"), nullable=False
+    )
+    location_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, doc="The stable coordinate-derived Location.identifier."
+    )
+    location: Mapped[dict[str, Any]] = mapped_column(
+        JsonB, nullable=False, doc="The canonical resolved location, as saved locations store it."
+    )
+    label: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    measure: Mapped[str] = mapped_column(
+        String(64), nullable=False, doc="The measure watched. Only measures the provider reports."
+    )
+    comparison: Mapped[str] = mapped_column(
+        String(8), nullable=False, doc="'above' or 'below'. The direction that counts as met."
+    )
+    threshold: Mapped[float] = mapped_column(Float, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+
+    last_evaluated_at: Mapped[datetime | None] = _timestamp_column(nullable=True)
+    last_value: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        doc="The reading at the last evaluation. Null where none was reported.",
+    )
+    last_met: Mapped[bool | None] = mapped_column(
+        Boolean,
+        nullable=True,
+        doc="Whether the condition was met at the last evaluation. Null before the first one, and "
+        "null again where the provider reported nothing — which is not the same as 'not met'.",
+    )
+
+    created_at: Mapped[datetime] = _timestamp_column(server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = _timestamp_column(
+        server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    profile: Mapped[Profile] = relationship(back_populates="weather_watches")
 
 
 class Thread(Base):

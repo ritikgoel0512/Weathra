@@ -172,20 +172,18 @@ describe("every MVP product screen is reachable", () => {
     renderShell();
     const navigation = screen.getByRole("navigation", { name: "Weathra" });
 
-    // Only the ones still unbuilt. `INTELLIGENCE_BUILT` grows per checkpoint, and an entry that
-    // has become a screen must stop being caveated on the same day.
-    const unbuilt = POST_MVP_SCREENS.filter(
-      (screenRecord) => !INTELLIGENCE_BUILT.includes(screenRecord.path),
-    );
-    expect(unbuilt.length).toBeGreaterThan(0);
-
-    for (const planned of unbuilt) {
-      // The accessible name carries the marking, so it is not colour-and-chip only.
+    // `INTELLIGENCE_BUILT` grew one entry per checkpoint until all five screens existed. The
+    // assertion holds in both directions and therefore keeps working if a sixth is ever added
+    // ahead of its screen: what is built is offered plainly, and what is not is caveated.
+    for (const entry of POST_MVP_SCREENS) {
+      const built = INTELLIGENCE_BUILT.includes(entry.path);
       const link = within(navigation).getByRole("link", {
-        name: `${planned.title} — coming soon`,
+        name: built ? entry.title : `${entry.title} — coming soon`,
       });
-      expect(link).toHaveAttribute("href", planned.path);
-      expect(link).toHaveAttribute("data-status", "planned");
+      expect(link).toHaveAttribute("href", entry.path);
+      expect(link).toHaveAttribute("data-status", built ? "intelligence" : "planned");
+      // Never a badge, either way.
+      expect(within(link).queryByText("Planned")).toBeNull();
     }
   });
 

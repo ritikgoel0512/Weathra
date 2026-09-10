@@ -229,6 +229,7 @@ migrations that apply the policies, and the tests — all three agree, and a tes
 | `profiles` | user-owned | its owner | its owner |
 | `preferences` | user-owned | its owner | its owner |
 | `saved_locations` | user-owned | its owner | its owner |
+| `weather_watches` | user-owned | its owner | its owner |
 | `threads` | user-owned | its owner | its owner |
 | `agent_runs` | user-owned | its owner | its owner |
 | `forecast_snapshots` | shared | anyone | the request path appends |
@@ -314,7 +315,7 @@ Two details in that table are the whole reason it names tables rather than class
 Three rules hold across all of them:
 
 1. **No existing policy is weakened, removed, or bypassed** to accommodate a new table. The
-   policies on `profiles`, `preferences`, `saved_locations`, `threads`, checkpoints, and
+   policies on `profiles`, `preferences`, `saved_locations`, `weather_watches`, `threads`, checkpoints, and
    `agent_runs` are the same before and after, and a test compares them.
 2. **No request path reaches a user-owned row through the privileged connection.** A new
    user-owned table is read and written under `weathra_request`, like every other one — otherwise
