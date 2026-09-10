@@ -39,6 +39,7 @@ import {
   ErrorState,
   Input,
   LoadingState,
+  LocationImage,
   Meter,
   Skeleton,
 } from "@/components/ui";
@@ -199,6 +200,19 @@ function LocationCard({
 
   return (
     <li className={styles.card} data-saved-location={record.id}>
+      {/*
+        `06-saved-locations.png` gives every card a photograph of its place, and the production card
+        was a name over a dark rectangle. `LocationImage` holds the frame whether a photograph is
+        found or not — provider, then a committed local file, then generated artwork — so the card
+        never has a hole in it and never shows a broken image.
+      */}
+      <LocationImage
+        displayName={shown}
+        latitude={record.location.latitude}
+        longitude={record.location.longitude}
+        variant="banner"
+        scrim="soft"
+      />
       <span className={styles.cardName}>{shown}</span>
       {/*
         The person's label never replaces the canonical name — it sits above it. Except where the

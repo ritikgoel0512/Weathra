@@ -32,6 +32,7 @@ import {
   ErrorState,
   Input,
   LoadingState,
+  LocationImage,
   Meter,
   Select,
 } from "@/components/ui";
@@ -139,6 +140,22 @@ function TravelFor({ location }: { readonly location: Location }): ReactNode {
           </p>
         </div>
       </header>
+
+      {/*
+        The destination, photographed. `15-travel-intelligence.png` leads with imagery of the place
+        and the production screen led with a read-only text field; the frame is the same whether a
+        photograph is found or not, so nothing here can break or shift.
+      */}
+      <LocationImage
+        displayName={friendlyName(location)}
+        latitude={location.latitude}
+        longitude={location.longitude}
+        variant="hero"
+        scrim="strong"
+      >
+        <span className={styles.heroPlace}>{friendlyName(location)}</span>
+        <span className={styles.heroZone}>{location.timezone}</span>
+      </LocationImage>
 
       <Card aria-labelledby="travel-controls">
         <CardHeader title="Your trip" titleId="travel-controls" />

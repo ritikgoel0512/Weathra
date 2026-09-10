@@ -134,7 +134,9 @@ describe("the explorer", () => {
   it("opens on the person's default location, named for a person", async () => {
     mount(client());
     expect(await screen.findByRole("heading", { name: "Forecast Explorer" })).toBeInTheDocument();
-    expect(screen.getByText(/Berlin, Germany/)).toBeInTheDocument();
+    // Named twice now — in the lede and over the location band the screen leads with — so what is
+    // asserted is that the place is named for a person at all, not that it appears exactly once.
+    expect(screen.getAllByText(/Berlin, Germany/).length).toBeGreaterThan(0);
   });
 
   it("shows the current measurements the provider reported", async () => {

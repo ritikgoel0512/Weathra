@@ -169,3 +169,11 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* The place's name over its photograph. */
+.heroPlace {
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-primary);
+}

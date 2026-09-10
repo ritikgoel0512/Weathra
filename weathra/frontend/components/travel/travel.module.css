@@ -121,3 +121,16 @@
   color: var(--color-text-muted);
   max-width: 72ch;
 }
+
+/* The name and time zone over the destination photograph. */
+.heroPlace {
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-primary);
+}
+
+.heroZone {
+  color: var(--color-text-secondary);
+  font-size: var(--type-ui-size);
+}

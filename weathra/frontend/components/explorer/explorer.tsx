@@ -36,6 +36,7 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
+  LocationImage,
   ScrollRegion,
   Select,
 } from "@/components/ui";
@@ -311,6 +312,20 @@ function ExplorerFor({ location }: ExplorerForProps): ReactNode {
           />
         </div>
       </header>
+
+      {/*
+        The place, photographed. `11-forecast-explorer.png` opens on imagery of the location; the
+        frame holds whether a photograph is found or not, so the band never has a hole in it.
+      */}
+      <LocationImage
+        displayName={friendlyName(location)}
+        latitude={location.latitude}
+        longitude={location.longitude}
+        variant="banner"
+        scrim="strong"
+      >
+        <span className={styles.heroPlace}>{friendlyName(location)}</span>
+      </LocationImage>
 
       {current.state.kind === "ready" ? <MetricRow current={current.state.data} /> : null}
 
