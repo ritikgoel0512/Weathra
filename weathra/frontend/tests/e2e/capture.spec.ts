@@ -46,15 +46,22 @@ const ALL_SCREENS = [
   { name: "01-dashboard", path: "/" },
   { name: "02-analyst", path: "/analyst" },
   { name: "03-historical", path: "/historical" },
-  { name: "04-compare", path: "/compare" },
+  { name: "04-compare", path: "/compare", prepare: "Compare" },
   { name: "06-locations", path: "/locations" },
   { name: "07-settings", path: "/settings" },
   { name: "10-plan", path: "/plan" },
   { name: "11-explorer", path: "/explorer" },
   { name: "12-report", path: "/report" },
-  { name: "13-scenarios", path: "/scenarios" },
+  { name: "13-scenarios", path: "/scenarios", prepare: "Run this scenario" },
   { name: "14-watch", path: "/watch" },
-  { name: "15-travel", path: "/travel" },
+  {
+    name: "15-travel",
+    path: "/travel",
+    // The ranking is on demand, so an unprepared capture photographs the empty state and says
+    // nothing about the screen. Pressing the control the screen exists for is what the picture is
+    // supposed to show; the figures behind it are the stub's, shaped as the endpoint returns them.
+    prepare: "Rank these days",
+  },
   { name: "05-evidence", path: "/evidence" },
   // Task 34.18 built it, and the stub now models the administrative reads, so it is photographed
   // rather than judged from source as it was in the first fidelity review.
@@ -120,6 +127,16 @@ test.describe("capture", () => {
         await expect(page.getByRole("main")).toBeAttached();
         // Give the screen's own reads a moment to settle into their populated or empty states.
         await page.waitForLoadState("networkidle").catch(() => {});
+
+        // A screen whose content is behind a control is photographed with the control pressed.
+        const prepare = "prepare" in screen ? (screen as { prepare?: string }).prepare : undefined;
+        if (prepare !== undefined) {
+          const control = page.getByRole("button", { name: prepare, exact: true }).first();
+          if (await control.isVisible().catch(() => false)) {
+            await control.click();
+            await page.waitForLoadState("networkidle").catch(() => {});
+          }
+        }
 
         // A horizontal scrollbar on the document is the defect this pass exists to find: a screen
         // that pushes the page sideways rather than scrolling its own wide table. Recorded beside

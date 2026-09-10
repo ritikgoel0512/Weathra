@@ -502,6 +502,9 @@
 .planCard {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  /* The plan cards are this stylesheet's first grid, and a long allowance line must shrink inside
+     one rather than widening the row. `tests/design-rules.test.ts` requires the declaration. */
+  min-width: 0;
   gap: var(--space-2);
   align-content: start;
   padding: var(--space-4);

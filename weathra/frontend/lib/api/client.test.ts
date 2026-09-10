@@ -355,6 +355,14 @@ describe("the client's coverage of the contract", () => {
       "/api/v1/admin/policies/{}/candidates",
       "/api/v1/admin/lab/comparisons",
       "/api/v1/admin/lab/comparisons/{}",
+      // Task 34.22: the two management surfaces that previously needed a script. The plans and
+      // principals the administrative screen lists, the audited assignment, and the two mappings
+      // the routing panel changes — a plan's policy per call role, and a policy's fallback.
+      "/api/v1/admin/plans",
+      "/api/v1/admin/plans/{}/policies",
+      "/api/v1/admin/principals",
+      "/api/v1/admin/principals/{}/plan",
+      "/api/v1/admin/policies/{}/fallback",
     ]);
 
     const administrative = API_OPERATIONS.filter(({ administrative }) => administrative);

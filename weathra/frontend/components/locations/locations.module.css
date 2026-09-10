@@ -375,3 +375,42 @@
   color: var(--color-text-secondary);
   font-size: var(--type-meta-size);
 }
+
+/* The artifact's three labelled chips under the temperature: measure above figure, not after it. */
+.cardReadout {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.cardChips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+}
+
+.cardChip {
+  padding: var(--space-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+  min-width: 0;
+}
+
+.cardChip dt {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+}
+
+.cardChip dd {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-ui-size);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}

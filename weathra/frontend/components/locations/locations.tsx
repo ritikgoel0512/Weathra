@@ -39,7 +39,6 @@ import {
   ErrorState,
   Input,
   LoadingState,
-  LocationImage,
   Meter,
   Skeleton,
 } from "@/components/ui";
@@ -160,17 +159,39 @@ function CardWeather({ location }: { readonly location: Location }): ReactNode {
   const temperature = readingFor("temperature", state.data.values, state.data.units);
   const humidity = readingFor("relative_humidity", state.data.values, state.data.units);
   const wind = readingFor("wind_speed", state.data.values, state.data.units);
+  const precipitation = readingFor("precipitation", state.data.values, state.data.units);
 
-  if (!temperature && !humidity && !wind) return null;
+  if (!temperature && !humidity && !wind && !precipitation) return null;
+
+  /*
+   * `06-saved-locations.png` puts three labelled chips under the temperature — PRECIP, HUMIDITY,
+   * WIND — rather than a run-on line of "68 % humidity · 14 km/h wind", which is what this card
+   * had. The chips are the artifact's density and they are also easier to read: the measure is a
+   * label above its figure instead of a word after it. A measure the provider did not report has
+   * no chip, so the row is as wide as the reading was.
+   */
+  const chips = [
+    { key: "precipitation", label: "Precip", reading: precipitation },
+    { key: "humidity", label: "Humidity", reading: humidity },
+    { key: "wind", label: "Wind", reading: wind },
+  ].filter((chip) => chip.reading);
 
   return (
     <div className={styles.cardWeather}>
-      <DataClassBadge dataClass="observed" />
-      {temperature ? <span className={styles.cardTemp}>{formatReading(temperature)}</span> : null}
-      <span className={styles.cardMeasures}>
-        {humidity ? <span>{formatReading(humidity)} humidity</span> : null}
-        {wind ? <span>{formatReading(wind)} wind</span> : null}
-      </span>
+      <div className={styles.cardReadout}>
+        <DataClassBadge dataClass="observed" />
+        {temperature ? <span className={styles.cardTemp}>{formatReading(temperature)}</span> : null}
+      </div>
+      {chips.length === 0 ? null : (
+        <dl className={styles.cardChips}>
+          {chips.map((chip) => (
+            <div className={styles.cardChip} key={chip.key}>
+              <dt>{chip.label}</dt>
+              <dd>{formatReading(chip.reading!)}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
     </div>
   );
 }
@@ -200,19 +221,6 @@ function LocationCard({
 
   return (
     <li className={styles.card} data-saved-location={record.id}>
-      {/*
-        `06-saved-locations.png` gives every card a photograph of its place, and the production card
-        was a name over a dark rectangle. `LocationImage` holds the frame whether a photograph is
-        found or not — provider, then a committed local file, then generated artwork — so the card
-        never has a hole in it and never shows a broken image.
-      */}
-      <LocationImage
-        displayName={shown}
-        latitude={record.location.latitude}
-        longitude={record.location.longitude}
-        variant="banner"
-        scrim="soft"
-      />
       <span className={styles.cardName}>{shown}</span>
       {/*
         The person's label never replaces the canonical name — it sits above it. Except where the

@@ -300,11 +300,104 @@ const FIXTURES = {
     values: { temperature: 15.3, relative_humidity: 68 },
   },
 
+  /*
+   * The scenario, so the Scenario Lab can be photographed with a result rather than with a stub
+   * error. Both series carry the same instants and the same units — that is the contract — and the
+   * scenario one is the baseline with the assumptions applied, exactly as `analytics/scenario.py`
+   * would produce them. Everything here is labelled simulated, which is what the screen requires.
+   */
+  "/api/v1/weather/scenario": {
+    simulated: true,
+    disclaimer:
+      "A hypothetical: your assumptions applied to a real forecast by arithmetic. It is not a forecast of what will happen, and no model was consulted.",
+    attribution: ATTRIBUTION,
+    period: PERIOD,
+    horizon_days: 3,
+    assumptions: {
+      temperature_offset: 2.5,
+      precipitation_scale: 1.15,
+      relative_humidity_offset: null,
+      wind_speed_offset: null,
+    },
+    baseline: {
+      granularity: "hourly",
+      units: { temperature: "°C", precipitation: "mm" },
+      entries: [
+        { time_local: "2026-09-04T06:00:00+02:00", time_utc: "2026-09-04T04:00:00Z", values: { temperature: 12.4, precipitation: 0 } },
+        { time_local: "2026-09-04T12:00:00+02:00", time_utc: "2026-09-04T10:00:00Z", values: { temperature: 17.8, precipitation: 0.4 } },
+        { time_local: "2026-09-04T18:00:00+02:00", time_utc: "2026-09-04T16:00:00Z", values: { temperature: 16.1, precipitation: 1.2 } },
+        { time_local: "2026-09-05T06:00:00+02:00", time_utc: "2026-09-05T04:00:00Z", values: { temperature: 11.9, precipitation: 0 } },
+        { time_local: "2026-09-05T12:00:00+02:00", time_utc: "2026-09-05T10:00:00Z", values: { temperature: 18.6, precipitation: 0 } },
+        { time_local: "2026-09-05T18:00:00+02:00", time_utc: "2026-09-05T16:00:00Z", values: { temperature: 15.4, precipitation: 2.1 } },
+      ],
+    },
+    scenario: {
+      granularity: "hourly",
+      units: { temperature: "°C", precipitation: "mm" },
+      entries: [
+        { time_local: "2026-09-04T06:00:00+02:00", time_utc: "2026-09-04T04:00:00Z", values: { temperature: 14.9, precipitation: 0 } },
+        { time_local: "2026-09-04T12:00:00+02:00", time_utc: "2026-09-04T10:00:00Z", values: { temperature: 20.3, precipitation: 0.46 } },
+        { time_local: "2026-09-04T18:00:00+02:00", time_utc: "2026-09-04T16:00:00Z", values: { temperature: 18.6, precipitation: 1.38 } },
+        { time_local: "2026-09-05T06:00:00+02:00", time_utc: "2026-09-05T04:00:00Z", values: { temperature: 14.4, precipitation: 0 } },
+        { time_local: "2026-09-05T12:00:00+02:00", time_utc: "2026-09-05T10:00:00Z", values: { temperature: 21.1, precipitation: 0 } },
+        { time_local: "2026-09-05T18:00:00+02:00", time_utc: "2026-09-05T16:00:00Z", values: { temperature: 17.9, precipitation: 2.42 } },
+      ],
+    },
+    measures: [
+      {
+        measure: "temperature",
+        assumption: 2.5,
+        method: "Each reported hour plus 2.5 °C.",
+        baseline_mean: 15.4,
+        scenario_mean: 17.9,
+        difference: 2.5,
+        unit: "°C",
+        points_used: 6,
+        points_excluded: 0,
+        clipped: 0,
+      },
+      {
+        measure: "precipitation",
+        assumption: 1.15,
+        method: "Each reported hour scaled by 1.15, floored at zero.",
+        baseline_mean: 0.62,
+        scenario_mean: 0.71,
+        difference: 0.09,
+        unit: "mm",
+        points_used: 6,
+        points_excluded: 0,
+        clipped: 0,
+      },
+    ],
+  },
+
   "/api/v1/weather/forecast": {
     attribution: ATTRIBUTION,
     period: PERIOD,
     horizon_days: 3,
-    hourly: { granularity: "hourly", units: {}, entries: [] },
+    /*
+     * A real hourly series, because an empty one is not a neutral fixture.
+     *
+     * Three screens draw their main chart from this — the Dashboard's climate pulse and
+     * precipitation outlook, and Forecast Explorer's window and hour-by-hour matrix — and with no
+     * entries all four photographed as empty frames. The frames were correct and the pictures were
+     * evidence of nothing. Two days at six-hour resolution, with one hour reporting no temperature
+     * so the gap behaviour stays visible in the capture.
+     */
+    hourly: {
+      granularity: "hourly",
+      units: { temperature: "°C", precipitation: "mm", relative_humidity: "%" },
+      entries: [
+        { time_local: "2026-09-04T00:00:00+02:00", time_utc: "2026-09-03T22:00:00Z", values: { temperature: 11.8, precipitation: 0, relative_humidity: 82 } },
+        { time_local: "2026-09-04T06:00:00+02:00", time_utc: "2026-09-04T04:00:00Z", values: { temperature: 12.4, precipitation: 0, relative_humidity: 79 } },
+        { time_local: "2026-09-04T12:00:00+02:00", time_utc: "2026-09-04T10:00:00Z", values: { temperature: 17.8, precipitation: 0.4, relative_humidity: 61 } },
+        { time_local: "2026-09-04T18:00:00+02:00", time_utc: "2026-09-04T16:00:00Z", values: { temperature: 16.1, precipitation: 1.2, relative_humidity: 68 } },
+        { time_local: "2026-09-05T00:00:00+02:00", time_utc: "2026-09-04T22:00:00Z", values: { temperature: null, precipitation: 0.2, relative_humidity: 74 } },
+        { time_local: "2026-09-05T06:00:00+02:00", time_utc: "2026-09-05T04:00:00Z", values: { temperature: 11.9, precipitation: 0, relative_humidity: 80 } },
+        { time_local: "2026-09-05T12:00:00+02:00", time_utc: "2026-09-05T10:00:00Z", values: { temperature: 18.6, precipitation: 0, relative_humidity: 58 } },
+        { time_local: "2026-09-05T18:00:00+02:00", time_utc: "2026-09-05T16:00:00Z", values: { temperature: 15.4, precipitation: 2.1, relative_humidity: 71 } },
+      ],
+    },
     daily: {
       granularity: "daily",
       units: { temperature_max: "°C", temperature_min: "°C" },
