@@ -38,6 +38,9 @@ EXPECTED_CHAIN = (
     # Group 31: the administrative role as a row rather than a token claim, and the accessor
     # rewritten to read it.
     "0011_administrative_role_state",
+    # Task 34.17: user-owned weather watches, under the same forced owner-only policy as every
+    # other user-owned table. Additive — it adds a table and touches none.
+    "0012_weather_watches",
 )
 
 
