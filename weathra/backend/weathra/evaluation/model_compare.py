@@ -26,16 +26,22 @@ it adds is the three things a comparison needs and a single run does not:
 
 from __future__ import annotations
 
+import argparse
 import asyncio
+import json
 import logging
+import sys
 import time
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from weathra.config import Settings
+from weathra.db.engine import Engines
+from weathra.db.session import privileged_session
 from weathra.domain.errors import ValidationFailed
 from weathra.entitlements.records import CatalogEntry
 from weathra.evaluation.cases import DATASET_VERSION, EvaluationCase
@@ -43,9 +49,11 @@ from weathra.evaluation.criteria import SelectionCriteria, compute_criteria
 from weathra.evaluation.metrics import CaseOutcome
 from weathra.evaluation.provisioning import EvaluationMode
 from weathra.evaluation.runner import RunResult, execute_run, select_cases
-from weathra.lab.compare import resolve_candidates
+from weathra.lab.compare import LabRunner, resolve_candidates
+from weathra.lab.evidence import ComparisonEvidence, record_comparison
 
 __all__ = [
+    "CandidateCase",
     "CandidateOutcome",
     "ModelComparison",
     "PinnedConfiguration",
@@ -80,6 +88,25 @@ class PinnedConfiguration(BaseModel):
     )
 
 
+class CandidateCase(BaseModel):
+    """What one candidate did on one case, as the comparison measured it.
+
+    Carried so a persisted comparison can name a real per-case measurement instead of a null. The
+    fields are only the ones the runner actually recorded per case: no token counts, because the
+    evaluation runner does not attribute them per case, and a zero there would make the least
+    forthcoming provider look like the cheapest one.
+
+    The failure is a *classification*, never the recorded error text — that string can carry a
+    provider's payload, and a comparison record is read by people and archived by CI.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    case_id: str
+    succeeded: bool
+    latency_ms: float | None = None
+
+
 class CandidateOutcome(BaseModel):
     """One candidate's whole showing: its run, its criteria, or the failure that stopped it."""
 
@@ -89,6 +116,9 @@ class CandidateOutcome(BaseModel):
     gateway_model: str
     completed: bool
     criteria: SelectionCriteria | None = None
+    cases: tuple[CandidateCase, ...] = Field(
+        default=(), description="Per case, what this candidate did. Empty where it never ran one."
+    )
     metrics: dict[str, float | None] = Field(default_factory=dict)
     cases_scored: int = Field(default=0, ge=0)
     passed: bool | None = None
@@ -108,6 +138,12 @@ class ModelComparison(BaseModel):
     candidates: tuple[CandidateOutcome, ...]
     started_at: datetime
     completed_at: datetime
+    identity_subject: str | None = Field(
+        default=None,
+        description="The subject every candidate's run authenticated as — the derived evaluation "
+        "user. Recorded because `specs/model-lab` asks a run to name its initiating principal, "
+        "and a comparison run persisted without one could not say who executed it.",
+    )
     budget_exhausted: bool = Field(
         default=False,
         description="Whether the wall-clock budget stopped the comparison before every candidate "
@@ -188,6 +224,7 @@ async def compare_candidates(
     outcomes: list[CandidateOutcome] = []
     exhausted = False
     pinned: PinnedConfiguration | None = None
+    subject: str | None = None
 
     for entry in candidates:
         if deadline is not None and time.monotonic() >= deadline:
@@ -195,7 +232,7 @@ async def compare_candidates(
             logger.info("comparison budget reached; %d candidate(s) ran", len(outcomes))
             break
 
-        outcome, configuration = await _run_candidate(
+        outcome, configuration, identity = await _run_candidate(
             settings,
             entry,
             mode=mode,
@@ -205,6 +242,7 @@ async def compare_candidates(
         )
         outcomes.append(outcome)
         pinned = pinned or configuration
+        subject = subject or identity
 
     return ModelComparison(
         configuration=pinned
@@ -221,6 +259,7 @@ async def compare_candidates(
         started_at=started,
         completed_at=datetime.now(UTC),
         budget_exhausted=exhausted,
+        identity_subject=subject,
     )
 
 
@@ -232,7 +271,7 @@ async def _run_candidate(
     category: str | None,
     case_id: str | None,
     cases: Sequence[EvaluationCase],
-) -> tuple[CandidateOutcome, PinnedConfiguration | None]:
+) -> tuple[CandidateOutcome, PinnedConfiguration | None, str | None]:
     """One candidate's run, with its failure caught rather than propagated.
 
     `specs/evaluation`: a model that fails or times out does not abort the comparison. Caught
@@ -269,17 +308,29 @@ async def _run_candidate(
                 failure=type(failure).__name__,
             ),
             None,
+            None,
         )
 
+    outcomes = _outcomes_of(result)
     return (
         CandidateOutcome(
             catalog_key=entry.catalog_key,
             gateway_model=entry.gateway_model,
             completed=True,
+            cases=tuple(
+                CandidateCase(
+                    case_id=outcome.case_id,
+                    # The runner records a case's failure in ``error``; a case that carries one
+                    # did not succeed. Only the fact is copied, never the text.
+                    succeeded=outcome.error is None,
+                    latency_ms=outcome.latency_ms,
+                )
+                for outcome in outcomes
+            ),
             criteria=compute_criteria(
                 catalog_key=entry.catalog_key,
                 gateway_model=result.configuration.llm_model or entry.gateway_model,
-                outcomes=_outcomes_of(result),
+                outcomes=outcomes,
                 cases=cases,
                 metrics=result.metrics,
                 input_price_per_million=Decimal(str(entry.input_price_per_million)),
@@ -300,6 +351,9 @@ async def _run_candidate(
             case_filter=case_id,
             case_ids=tuple(case.case_id for case in cases),
         ),
+        # The subject only, exactly as `evaluation/storage.py` records it: ``TestIdentity``
+        # keeps the token out of serialization, so there is nothing here that could authenticate.
+        str(result.configuration.test_user.get("user_id") or "") or None,
     )
 
 
@@ -327,3 +381,183 @@ def _outcomes_of(result: RunResult) -> tuple[CaseOutcome, ...]:
         )
         for record in result.cases
     )
+
+
+# =========================================================================== the command
+
+
+def main(argv: list[str] | None = None) -> int:
+    """``weathra-compare``. Run one comparison and, with ``--persist``, record its evidence.
+
+    A command rather than a route, and not by preference: `api/` may not reach this package,
+    because the evaluation runner builds an application and a request must not. So the shipped path
+    that runs a comparison is this, alongside ``weathra-evaluate`` which runs a single model.
+
+    The bounds are not re-implemented here. ``LabRunner.plan`` is the one place that reads
+    ``MODEL_LAB_MAX_MODELS``, ``MODEL_LAB_MAX_CASES`` and the selection rule, so it is asked before
+    anything runs — and because it requires a dataset selection, a bare invocation cannot silently
+    become a full forty-case comparison across four models.
+
+    Exit codes follow ``weathra-evaluate``: 0 when every candidate completed, 1 when some did, 2 on
+    a misconfiguration or a refused selection, and 3 when no candidate completed at all.
+    """
+    parser = argparse.ArgumentParser(
+        prog="weathra-compare",
+        description=(
+            "Run Weathra's evaluation dataset across several catalog candidates, holding "
+            "everything but the model fixed, and report the five selection criteria for each. "
+            "Offline by default, which measures the harness rather than the models; --mode live "
+            "measures the models. --persist records the evidence a promotion may cite."
+        ),
+    )
+    parser.add_argument(
+        "--candidates",
+        required=True,
+        help="Comma-separated catalog keys, which must be enabled in the catalog.",
+    )
+    selection = parser.add_mutually_exclusive_group(required=True)
+    selection.add_argument("--category", help="Compare over one category of the dataset.")
+    selection.add_argument("--case", dest="case_id", help="Compare over one case, by identifier.")
+    parser.add_argument(
+        "--mode",
+        choices=[entry.value for entry in EvaluationMode],
+        default=EvaluationMode.OFFLINE.value,
+        help="'offline' uses the scripted model; 'live' uses the real ones over the gateway.",
+    )
+    parser.add_argument(
+        "--persist",
+        action="store_true",
+        help=(
+            "Record the comparison run and each candidate's five criteria. Live runs only: "
+            "offline numbers describe the stand-in, and the promotion gate reads these rows."
+        ),
+    )
+    parser.add_argument(
+        "--json", dest="as_json", action="store_true", help="Emit the comparison as JSON."
+    )
+    parser.add_argument("--output", type=Path, help="Write the comparison as JSON to this path.")
+    args = parser.parse_args(argv)
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
+    settings = Settings()
+    mode = EvaluationMode(args.mode)
+    keys = [key.strip() for key in args.candidates.split(",") if key.strip()]
+    if not keys:
+        print("--candidates named no catalog key.", file=sys.stderr)
+        return 2
+    if mode is EvaluationMode.LIVE and not settings.inference_configured:
+        print(
+            "A live comparison needs an inference credential. Set OPENROUTER_API_KEY, or run "
+            "with --mode offline, which exercises the plumbing without one.",
+            file=sys.stderr,
+        )
+        return 2
+    if args.persist and mode is not EvaluationMode.LIVE:
+        print(
+            f"--persist records evidence a promotion may cite, and a {mode.value} comparison "
+            "measures the harness rather than the candidates. Re-run with --mode live to record.",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        comparison, evidence = asyncio.run(
+            _run_command(
+                settings,
+                keys=keys,
+                mode=mode,
+                category=args.category,
+                case_id=args.case_id,
+                persist=args.persist,
+            )
+        )
+    except (ValidationFailed, ValueError) as refused:
+        print(str(refused), file=sys.stderr)
+        return 2
+
+    payload = comparison.model_dump(mode="json")
+    if evidence is not None:
+        payload["evidence"] = evidence.model_dump(mode="json")
+    if args.output:
+        args.output.write_text(json.dumps(payload, indent=2, sort_keys=True))
+    print(json.dumps(payload, indent=2, sort_keys=True) if args.as_json else _report(comparison))
+
+    if evidence is not None:
+        print(
+            f"\nRecorded comparison run {evidence.run_id} "
+            f"({evidence.status}); evidence for {', '.join(evidence.evidenced_keys) or 'nothing'}.",
+            file=sys.stderr,
+        )
+        for key, reason in sorted(evidence.unevidenced.items()):
+            print(f"  no evidence for {key}: {reason}", file=sys.stderr)
+
+    completed = len(comparison.completed_keys())
+    if completed == 0:
+        print("\nNo candidate completed, so the comparison produced no evidence.", file=sys.stderr)
+        return 3
+    return 0 if completed == len(comparison.candidates) and not comparison.budget_exhausted else 1
+
+
+async def _run_command(
+    settings: Settings,
+    *,
+    keys: Sequence[str],
+    mode: EvaluationMode,
+    category: str | None,
+    case_id: str | None,
+    persist: bool,
+) -> tuple[ModelComparison, ComparisonEvidence | None]:
+    """Resolve the candidates against the catalog, check the bounds, run, and record.
+
+    The catalog is read on the privileged connection because these are operational tables, the
+    same reason `evaluation/storage.py` gives for the run tables. Nothing here serves a request.
+    """
+    engines = Engines.create(settings)
+    try:
+        async with privileged_session(engines.privileged_sessionmaker) as session:
+            candidates = await resolve_candidates(session, catalog_keys=keys)
+            # The canonical bounds, asked before a single model is called.
+            LabRunner(settings).plan(candidates=candidates, category=category, case_id=case_id)
+
+        comparison = await compare_candidates(
+            settings,
+            candidates,
+            mode=mode,
+            category=category,
+            case_id=case_id,
+            time_budget_seconds=settings.model_lab_time_budget_seconds,
+        )
+
+        if not persist:
+            return comparison, None
+        async with privileged_session(engines.privileged_sessionmaker) as session:
+            return comparison, await record_comparison(session, comparison)
+    finally:
+        await engines.dispose()
+
+
+def _report(comparison: ModelComparison) -> str:
+    """One line per candidate: what it scored, or why it has no score."""
+    configuration = comparison.configuration
+    lines = [
+        f"Comparison over dataset {configuration.dataset_version} "
+        f"({configuration.mode.value}), {len(configuration.case_ids)} case(s), "
+        f"{len(comparison.candidates)} candidate(s)",
+    ]
+    for candidate in comparison.candidates:
+        if not candidate.completed:
+            lines.append(f"  {candidate.catalog_key}: did not complete ({candidate.failure})")
+            continue
+        criteria = candidate.criteria
+        blockers = criteria.promotion_blockers() if criteria is not None else ()
+        lines.append(
+            f"  {candidate.catalog_key}: {candidate.cases_scored} case(s) scored, "
+            f"gates {'failed: ' + ', '.join(blockers) if blockers else 'passed'}"
+        )
+    if comparison.budget_exhausted:
+        lines.append("  the wall-clock budget stopped the comparison; the result is partial")
+    return "\n".join(lines)
+
+
+if __name__ == "__main__":  # pragma: no cover - exercised through the console script
+    raise SystemExit(main())

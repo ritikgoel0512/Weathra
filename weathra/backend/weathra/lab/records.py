@@ -117,12 +117,18 @@ class LabRecords:
         dataset_version: str | None = None,
         question: str | None = None,
         commit_sha: str | None = None,
+        started_at: datetime | None = None,
     ) -> str:
         """Record a run as ``running`` before any model is called, and return its identifier.
 
         Before, deliberately. A run recorded only on success would leave a comparison that crashed
         halfway with no trace of having happened, and "did anyone run this last week" is exactly
         the question an audit trail exists to answer.
+
+        *started_at* exists for the one caller that legitimately cannot open the run first: a
+        comparison executed out of process and persisted afterwards knows when it actually began,
+        and defaulting to the insert time would misdate it by however long it took to run. Omit it
+        and the row is stamped ``now()`` as before.
         """
         if dataset_version is None and question is None:
             raise ValueError(
@@ -136,7 +142,8 @@ class LabRecords:
                 "INSERT INTO model_comparison_runs (id, initiated_by, candidate_catalog_keys, "
                 "  dataset_version, question, catalog_state, commit_sha, status, started_at) "
                 "VALUES (CAST(:id AS uuid), CAST(:by AS uuid), CAST(:keys AS text[]), "
-                "  :dataset, :question, CAST(:catalog AS jsonb), :commit, 'running', now())"
+                "  :dataset, :question, CAST(:catalog AS jsonb), :commit, 'running', "
+                "  coalesce(:started, now()))"
             ),
             {
                 "id": run_id,
@@ -146,6 +153,7 @@ class LabRecords:
                 "question": question,
                 "catalog": json.dumps(dict(catalog_state)),
                 "commit": commit_sha,
+                "started": started_at,
             },
         )
         return run_id
@@ -185,16 +193,23 @@ class LabRecords:
         )
         return result_id
 
-    async def close_run(self, run_id: str, *, status: str) -> None:
-        """Mark a run finished. ``partial`` is a real outcome, not a failure."""
+    async def close_run(
+        self, run_id: str, *, status: str, completed_at: datetime | None = None
+    ) -> None:
+        """Mark a run finished. ``partial`` is a real outcome, not a failure.
+
+        *completed_at* for the same reason ``open_run`` takes *started_at*: a comparison persisted
+        after the fact finished when it finished, not when its rows were written.
+        """
         if status not in RUN_STATUSES:
             raise ValueError(f"{status!r} is not a comparison status. Known: {RUN_STATUSES}.")
         await self._session.execute(
             text(
-                "UPDATE model_comparison_runs SET status = :status, completed_at = now() "
+                "UPDATE model_comparison_runs "
+                "   SET status = :status, completed_at = coalesce(:completed, now()) "
                 " WHERE id = CAST(:id AS uuid)"
             ),
-            {"status": status, "id": run_id},
+            {"status": status, "id": run_id, "completed": completed_at},
         )
 
     async def record_evaluation(

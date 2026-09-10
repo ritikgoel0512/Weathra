@@ -394,8 +394,8 @@ model access or an allowance** and **the Visily design gate** are closed outrigh
 | Reproducibility and comparison across runs | 22.7 | evaluation/storage.py | integration/test_evaluation_runner.py, unit/test_db_models.py | IMPLEMENTED |
 | Evaluation results are documented | 24.6 | docs/evaluation.md | test_documentation.py | IMPLEMENTED |
 | Candidate models are evaluated through this framework | 32.6 | evaluation/model_compare.py, evaluation/runner.py | unit/test_lab_criteria.py, integration/test_lab_api.py | IMPLEMENTED |
-| Model selection is decided on measured criteria, not on model name | 32.7, 32.9 | evaluation/criteria.py, lab/promotion.py, api/routers/admin/models.py | unit/test_lab_criteria.py, integration/test_lab_api.py | IMPLEMENTED |
-| Model evaluation results are persisted and comparable | 32.8 | lab/records.py, db/models.py | integration/test_lab_records.py | IMPLEMENTED |
+| Model selection is decided on measured criteria, not on model name | 32.7, 32.9 | evaluation/criteria.py, lab/promotion.py, lab/evidence.py, api/routers/admin/models.py | unit/test_lab_criteria.py, unit/test_lab_evidence.py, integration/test_lab_api.py, integration/test_lab_evidence.py | IMPLEMENTED |
+| Model evaluation results are persisted and comparable | 32.8 | lab/records.py, lab/evidence.py, evaluation/model_compare.py, db/models.py | integration/test_lab_records.py, integration/test_lab_evidence.py | IMPLEMENTED |
 | Evaluation runs are internal usage | 32.10 | api/routers/admin/lab.py, evaluation/provisioning.py, entitlements/quotas.py | integration/test_lab_api.py, integration/test_quota_enforcement.py | IMPLEMENTED |
 | A live evaluation run is pinned to one named model | 22.10, 28.10 | evaluation/runner.py, evaluation/harness.py, entitlements/resolver.py, agents/llm/registry.py | integration/test_evaluation_runner.py, unit/test_policy_resolver.py, unit/test_llm.py | IMPLEMENTED |
 | Live runs distinguish provider failure from model quality | 22.9 | evaluation/integrity.py | unit/test_evaluation.py, integration/test_evaluation_runner.py | IMPLEMENTED |
@@ -623,11 +623,11 @@ model access or an allowance** and **the Visily design gate** are closed outrigh
 | Requirement | Tasks | Implementation | Tests | Status |
 |---|---|---|---|---|
 | Internal model selection restricted to administrative principals and the allowlist | 32.5 | api/routers/admin/lab.py, lab/compare.py, auth/roles.py | integration/test_lab_api.py | IMPLEMENTED |
-| The same prompt or query compared across models | 32.1, 32.6 | lab/compare.py, evaluation/model_compare.py | integration/test_lab_api.py, unit/test_lab_criteria.py | IMPLEMENTED |
-| Comparison runs are recorded with their measurements | 32.2 | lab/records.py, api/routers/admin/lab.py | integration/test_lab_records.py, integration/test_lab_api.py | IMPLEMENTED |
+| The same prompt or query compared across models | 32.1, 32.6 | lab/compare.py, evaluation/model_compare.py | integration/test_lab_api.py, unit/test_lab_criteria.py, integration/test_lab_evidence.py | IMPLEMENTED |
+| Comparison runs are recorded with their measurements | 32.2 | lab/records.py, lab/evidence.py, api/routers/admin/lab.py | integration/test_lab_records.py, integration/test_lab_api.py, integration/test_lab_evidence.py | IMPLEMENTED |
 | The lab bypasses no security control and no data isolation | 32.4 | lab/compare.py, api/routers/admin/lab.py, auth/rls.py | integration/test_lab_api.py | IMPLEMENTED |
 | Lab usage is internal, bounded, and attributed | 32.3, 32.10 | lab/compare.py, api/routers/admin/lab.py, agents/llm/registry.py, config.py | unit/test_lab_criteria.py, integration/test_lab_api.py | IMPLEMENTED |
-| The lab does not change production policy implicitly | 32.9 | lab/promotion.py, api/routers/admin/models.py, entitlements/audit.py | integration/test_lab_api.py | IMPLEMENTED |
+| The lab does not change production policy implicitly | 32.9 | lab/promotion.py, api/routers/admin/models.py, entitlements/audit.py | integration/test_lab_api.py, integration/test_lab_evidence.py | IMPLEMENTED |
 
 ### What the table does not cover
 

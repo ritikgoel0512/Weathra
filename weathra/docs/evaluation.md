@@ -450,6 +450,34 @@ the failure classification and the others still produce results.
 against `FakeLLMClient` over the same fixtures. It makes no gateway call, spends no allowance, and
 is recorded as offline — so its numbers are about the harness, not about the models.
 
+**Scored against the dataset, and recorded as evidence**, which is the comparison a promotion may
+cite:
+
+```
+weathra-compare --candidates economy-free-primary,economy-free-secondary \
+                --category analysis --mode live --persist
+```
+
+A command rather than a route, and not by preference: the evaluation runner builds an application,
+and a request must not, so `api/` may not reach that package. The administrative route above runs
+the *agent path* per model and records latency, tokens, cost and success; this runs the **evaluation
+runner** per model and is therefore the path that produces the five criteria at all. It asks
+`LabRunner.plan` for the same three bounds first, and requires a `--category` or `--case`, so a bare
+invocation cannot become a full forty-case comparison across four candidates by accident.
+
+`--persist` writes one `model_comparison_runs` row, one `model_evaluations` row per candidate
+carrying that candidate's five criteria, and one `model_comparison_results` cell per candidate and
+case whose `evaluation_id` points at that candidate's evaluation. That chain — run, cell, evaluation
+— is how a policy's cited comparison run is followed back to the measurements it rested on, and it
+is what `criteria.promotion_blockers` is read from when the promotion gate refuses a candidate.
+
+Two refusals are deliberate. **An offline comparison is not persisted**: its gates describe
+`FakeLLMClient`, which always returns valid JSON, so recording them would let a stand-in promote a
+model. And **a candidate that scored no case gets no evaluation row** rather than a row of nulls —
+a candidate stopped by the pre-flight has not scored badly, it has not been measured, and the
+difference is the whole point of recording criteria in the first place. Both appear in the run's
+`unevidenced` map, naming which candidate and why.
+
 Each candidate's run is **pinned to that candidate by catalog key**, validated against the database
 rather than the cached snapshot for the same reason an administrative override is, and its
 resolution is recorded as `__lab_comparison__` rather than as a policy resolution — a pinned

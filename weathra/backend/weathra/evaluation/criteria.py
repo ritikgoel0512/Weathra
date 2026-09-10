@@ -34,6 +34,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from decimal import Decimal
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -188,6 +189,39 @@ class SelectionCriteria(BaseModel):
             failed.append("groundedness")
 
         return tuple(failed)
+
+    def recorded(
+        self, *, minimum_reliability: float = 0.95, maximum_hallucination: float = 0.0
+    ) -> dict[str, Any]:
+        """The shape `model_evaluations.criteria` stores, and the promotion gate reads.
+
+        There are two readers of a persisted criteria document and they want different things, so
+        the shape serves both explicitly rather than serving one and quietly failing the other.
+
+        `lab/promotion.py` asks ``criteria.get(name) is False`` for each of ``GATING_CRITERIA``, so
+        **each gating criterion appears as its verdict**, computed here by ``promotion_blockers``
+        rather than by a second reading of the same numbers. A dump that left the measurement
+        objects at those keys would satisfy the schema and disable the gate — ``{...} is False`` is
+        never true, so every candidate would pass every gate, and nothing would look wrong.
+
+        A person, and `docs/evaluation.md`, want the measurements. So the three criteria that never
+        gate keep theirs at their own names, and ``measured`` carries the whole canonical document
+        including the two gates' own figures. Nothing is lost and nothing is computed twice.
+        """
+        blockers = self.promotion_blockers(
+            minimum_reliability=minimum_reliability,
+            maximum_hallucination=maximum_hallucination,
+        )
+        recorded: dict[str, Any] = {name: name not in blockers for name in GATING_CRITERIA}
+        recorded.update(
+            latency=self.latency.model_dump(mode="json"),
+            planning=self.planning.model_dump(mode="json"),
+            cost=self.cost.model_dump(mode="json"),
+            numerical_accuracy_intact=self.numerical_accuracy_intact,
+            promotion_blockers=list(blockers),
+            measured=self.model_dump(mode="json"),
+        )
+        return recorded
 
 
 def compute_criteria(
