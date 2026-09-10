@@ -138,3 +138,7 @@ invented, it is absent rather than styled out of sight.
 * **Chromium only.** The suite runs Firefox too; the captures are one engine.
 * **The 375 captures are a phone width, not a phone.** No touch target was measured, and no gesture
   was tested.
+* **The navigation drawer is not in any photograph.** Below 768 the rail only exists once its Menu
+  control is pressed, and the captures are taken unopened. That the drawer carries each entry's
+  complete name follows from its width — the full 272px — and from the rule that labels wrap rather
+  than clip, which `tests/design-rules.test.ts` holds; it is not evidenced by an image here.
