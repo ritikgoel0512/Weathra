@@ -396,6 +396,19 @@ def test_no_shipped_frontend_source_is_excluded_as_a_test() -> None:
 def test_a_gateway_model_identifier_appears_only_where_it_is_confined() -> None:
     """Task 27.4. The identifier may live in catalog data, configuration, and the outbound request.
 
+    **This test scans the frontend and cannot be triggered by a frontend change.** The backend
+    workflow's path filter is `weathra/backend/**`, deliberately — `tests/test_ci_workflows.py`
+    asserts it, because a frontend change must not wait on a Postgres service — so a commit that
+    puts a vendor model string in a frontend file runs the frontend job and not this one. That
+    happened on 2026-09-10: a comment in `components/admin/overview.tsx` named two catalog entries,
+    and the rule went unenforced until an unrelated backend commit tripped it two commits later.
+
+    The rule still holds on `main`, because every backend commit re-runs it and nothing ships
+    without one for long. What is lost is *when* the failure is attributed, and the honest reading
+    of a green frontend job is therefore "the frontend's own checks passed", not "the confinement
+    rule was checked". Closing this properly means moving the cross-boundary scans into a job that
+    needs no database, which is a change to the CI layout rather than to this file.
+
     Not in a policy record, a plan mapping, a quota rule, an agent, a node, a route, an evaluation
     case, or a user-facing string — because each of those would be behaviour selected by a vendor's
     model name, and the whole point of the catalog key is that behaviour never is.
