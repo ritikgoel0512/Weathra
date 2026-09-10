@@ -354,6 +354,15 @@ export interface MethodNoteProps {
   readonly unit?: string | null;
   /** Why the statistic was not computable. Shown instead of a figure, never alongside a made-up one. */
   readonly reason?: string | null;
+  /**
+   * Drop the "Computed by Weathra" lead from the summary, keeping the method.
+   *
+   * For a list of figures that already sits under one ANALYTICS badge: four figures repeating the
+   * same sentence is the composition §9's disclosure exists to avoid, and the sentence itself is
+   * still one press away inside the disclosure. Never for a lone figure, where the badge may be the
+   * only thing saying who computed it.
+   */
+  readonly compact?: boolean;
 }
 
 /**
@@ -379,12 +388,13 @@ export function MethodNote({
   pointsExcluded,
   unit,
   reason,
+  compact = false,
 }: MethodNoteProps): ReactNode {
   return (
     <div className={styles.methodNote} data-method-note="true">
       <details className={styles.methodDetails}>
         <summary className={styles.methodSummary}>
-          <span className={styles.methodStatement}>Computed by Weathra</span>
+          {compact ? null : <span className={styles.methodStatement}>Computed by Weathra</span>}
           <span className={styles.methodMethod}>Method: {method}.</span>
         </summary>
 

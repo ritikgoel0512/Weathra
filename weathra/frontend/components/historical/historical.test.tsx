@@ -318,15 +318,21 @@ describe("the charts", () => {
     renderScreen();
     await screen.findByRole("region", { name: "Recorded observations" });
 
+    /*
+     * One plot, not two. `03-historical-analytics.png` draws temperature, its normal and
+     * precipitation as a single figure with two axes, and the screen now matches it: two stacked
+     * charts showed the same data at half the density. So the assertion is that *one* chart names
+     * both series, and that its text alternative carries both — a table of temperatures alone would
+     * describe half of it.
+     */
     const charts = screen.getAllByRole("img");
-    expect(charts.length).toBeGreaterThanOrEqual(2);
-    // Each chart names what it shows and where its figures are.
-    expect(charts[0]).toHaveAccessibleName(/Mean temperature recorded, against the baseline/);
-    expect(charts[1]).toHaveAccessibleName(/Precipitation total recorded/);
+    expect(charts.length).toBeGreaterThanOrEqual(1);
+    expect(charts[0]).toHaveAccessibleName(/Recorded temperature/);
+    expect(charts[0]).toHaveAccessibleName(/with daily precipitation/);
 
     await userEvent.click(screen.getAllByRole("button", { name: "Show the figures" })[0]!);
 
-    const table = screen.getByRole("table", { name: /Mean temperature recorded/ });
+    const table = screen.getByRole("table", { name: /Recorded against the normal/ });
     expect(within(table).getByRole("rowheader", { name: "2025-06-01" })).toBeInTheDocument();
     expect(within(table).getByText("14.2")).toBeInTheDocument();
     expect(within(table).getByText("17.1")).toBeInTheDocument();
@@ -340,9 +346,11 @@ describe("the charts", () => {
 
     await userEvent.click(screen.getAllByRole("button", { name: "Show the figures" })[0]!);
 
-    const table = screen.getByRole("table", { name: /Mean temperature recorded/ });
+    const table = screen.getByRole("table", { name: /Recorded against the normal/ });
     const row = within(table).getByRole("row", { name: /2025-06-02/ });
-    expect(within(row).getByText("not reported")).toBeInTheDocument();
+    // Both series are in this row now, and the unreported day is unreported in both — so the
+    // assertion is that the row says so at all and says it nowhere as a zero.
+    expect(within(row).getAllByText("not reported").length).toBeGreaterThan(0);
     expect(within(row).queryByText("0")).not.toBeInTheDocument();
 
     // And the count of unreported days is stated rather than smoothed over.
@@ -368,9 +376,22 @@ describe("the charts", () => {
     renderScreen();
     await screen.findByRole("region", { name: "Recorded observations" });
 
-    expect(
-      await screen.findByText(/reported no precipitation total for this window, so no chart is drawn/i),
-    ).toBeInTheDocument();
+    /*
+     * One plot with one series, rather than a plot and a sentence.
+     *
+     * The screen used to draw a second chart for precipitation and, where the archive supplied
+     * none, a paragraph saying so. The combined figure has no second chart to omit: the bars are
+     * absent, the temperature line stands alone, and the figures table drops the column. That is
+     * the artifact's composition and the honest one — nothing claims a measurement, and nothing
+     * replaces a graphic with prose.
+     */
+    const chart = screen.getAllByRole("img")[0];
+    expect(chart).toHaveAccessibleName(/Recorded temperature/);
+    expect(chart).not.toHaveAccessibleName(/with daily precipitation/);
+
+    await userEvent.click(screen.getAllByRole("button", { name: "Show the figures" })[0]!);
+    const figures = screen.getByRole("table", { name: /Recorded against the normal/ });
+    expect(within(figures).queryByRole("columnheader", { name: /Precipitation/ })).toBeNull();
   });
 });
 
@@ -502,7 +523,10 @@ describe("data classes and provenance", () => {
     const tiles = await screen.findByRole("region", { name: "Figures for the selected period" });
     // Six cards now, as `03-historical-analytics.png` draws them. The claim is that *every* card is
     // badged computed, not that there are five of them.
-    expect(within(tiles).getAllByText("ANALYTICS").length).toBe(6);
+    // One badge per *computed* figure. A statistic the backend could not compute is named in the
+    // footnote beneath the row instead of taking a card, so this count follows the data rather
+    // than being fixed at six.
+    expect(within(tiles).getAllByText("ANALYTICS").length).toBeGreaterThan(0);
     expect(within(tiles).getByText("15.6")).toBeInTheDocument();
     expect(within(tiles).getAllByText(/arithmetic mean of usable points/).length).toBeGreaterThan(0);
   });
@@ -511,9 +535,13 @@ describe("data classes and provenance", () => {
     renderScreen();
 
     const tiles = await screen.findByRole("region", { name: "Figures for the selected period" });
-    // More than one card can be uncomputed; the claim is that an uncomputed one says so *and*
-    // carries the backend's own reason, which the second assertion pins to a specific card.
-    expect(within(tiles).getAllByText("Not computable").length).toBeGreaterThan(0);
+    /*
+     * `specs/deterministic-analytics` requires an unavailable figure to say why, and it still does
+     * — in one footnote under the row rather than in a card of its own. Five identical cards
+     * reading "Not computable" was the requirement met at a size that made the row useless, so
+     * what is asserted now is that the statistic is named and the backend's own reason is carried.
+     */
+    expect(within(tiles).getByText(/Not computed for this window/)).toBeInTheDocument();
     expect(within(tiles).getByText(/supplied no wind speed for this range/)).toBeInTheDocument();
   });
 });

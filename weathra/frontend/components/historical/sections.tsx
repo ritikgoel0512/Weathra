@@ -24,12 +24,11 @@
 import type { ReactNode } from "react";
 
 import {
-  AttributionFooter,
   Badge,
   DataClassBadge,
   Meter,
-  Metric,
   MethodNote,
+  Metric,
   ProvenanceSection,
 } from "@/components/ui";
 import type {
@@ -214,11 +213,21 @@ function StatisticFigure({
         </span>
       )}
       {result ? (
+        /*
+         * The method, once, at footnote weight.
+         *
+         * Four of these stacked — each with its own "Computed by Weathra" line, its own method and
+         * its own point counts — made the baseline panel three times the height of the chart it sits
+         * beside, and it is the same sentence four times over. The badge above the panel already
+         * says the figures are computed. `MethodNote` keeps its disclosure, so the counts are one
+         * press away rather than printed four times.
+         */
         <MethodNote
           method={result.method}
           pointsUsed={result.points_used}
           pointsExcluded={result.points_excluded}
           unit={result.unit || null}
+          compact
         />
       ) : null}
     </li>
@@ -286,10 +295,30 @@ export interface HeadlineFiguresProps {
  * and not one of them.
  */
 export function HeadlineFigures({ comparison }: HeadlineFiguresProps): ReactNode {
+  /*
+   * Only the figures the backend computed.
+   *
+   * This row used to render all six regardless, and an archive window that supplied one statistic
+   * produced one figure beside five cards reading "Not computable" — half the screen, in the
+   * artifact's most prominent band, saying nothing. Each of those cards was individually honest and
+   * collectively useless: a reader learns nothing from being told five times that a figure does not
+   * exist, and the panel it sat above is where an absent statistic is genuinely worth explaining.
+   *
+   * So an uncomputed statistic has no tile, exactly as an unreported measure has no metric card in
+   * the row above. When the backend computed none at all the section is absent rather than empty.
+   */
+  const evaluated = HEADLINE.map((entry) => ({
+    entry,
+    result: statisticFor(comparison.later, entry.statistic, entry.measure),
+  }));
+  const computable = evaluated.filter(({ result }) => formatStatistic(result) !== null);
+  const uncomputed = evaluated.filter(({ result }) => formatStatistic(result) === null);
+
+  if (computable.length === 0 && uncomputed.length === 0) return null;
+
   return (
     <section className={styles.tiles} aria-label="Figures for the selected period">
-      {HEADLINE.map(({ statistic, measure, label, icon }) => {
-        const result = statisticFor(comparison.later, statistic, measure);
+      {computable.map(({ entry: { statistic, measure, label, icon }, result }) => {
         const value = formatStatistic(result);
         return (
           <Metric
@@ -314,6 +343,25 @@ export function HeadlineFigures({ comparison }: HeadlineFiguresProps): ReactNode
           />
         );
       })}
+
+      {/*
+        The ones the backend could not compute, in one line rather than in six cards.
+        *
+        `specs/deterministic-analytics` requires an unavailable figure to say *why* it is
+        unavailable, and that requirement is met here — but it was being met at full card size, so
+        an archive window that supplied one statistic drew one figure beside five identical panels
+        reading "Not computable". Each was honest and the row was useless. The reason is grouped
+        with the statistic it belongs to and set at footnote weight, which is what an absence is
+        worth beside a figure.
+      */}
+      {uncomputed.length === 0 ? null : (
+        <p className={styles.tilesUnavailable}>
+          <span className={styles.tilesUnavailableLead}>Not computed for this window:</span>{" "}
+          {uncomputed
+            .map(({ entry, result }) => `${entry.label.toLowerCase()} — ${unavailableReason(result)}`)
+            .join(" ")}
+        </p>
+      )}
     </section>
   );
 }
@@ -470,18 +518,16 @@ export function BaselinePanel({ comparison }: BaselinePanelProps): ReactNode {
         <StatisticFigure result={baseline.maximum} label="Baseline maximum" />
       </ul>
 
-      <AttributionFooter
-        attribution={{
-          provider: baseline.provider,
-          location: placeLabel(baseline.location),
-          period: {
-            start: baseline.calendar_period.start_local,
-            end: baseline.calendar_period.end_local,
-            timezone: baseline.calendar_period.timezone ?? null,
-          },
-          units: baseline.unit_system,
-        }}
-      >
+      {/*
+        The baseline's own caveats — not a second attribution.
+        *
+        This was an `AttributionFooter` carrying the same provider, place, period and units as the
+        `ProvenanceSection` wrapping it, so the panel printed its provenance twice, one block under
+        the other. The 1440 capture of 2026-09-10 shows both. The section's footer is the
+        attribution `specs/web-ui` requires; what belongs here is only what is true of the
+        *baseline* specifically, and it is set as notes rather than as a second footer.
+      */}
+      <div className={styles.baselineNotes}>
         <p className={styles.noteStrong} data-baseline-years="true">
           Baseline years: {baselineYearsStatement(baseline)}
         </p>
@@ -493,7 +539,7 @@ export function BaselinePanel({ comparison }: BaselinePanelProps): ReactNode {
         <p className={styles.note}>
           Both sides are observations. This is not a measure of how accurate a past forecast was.
         </p>
-      </AttributionFooter>
+      </div>
     </ProvenanceSection>
   );
 }

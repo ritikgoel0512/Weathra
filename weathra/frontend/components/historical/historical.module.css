@@ -558,3 +558,113 @@
   color: var(--color-text-primary);
   font-variant-numeric: tabular-nums;
 }
+
+/* The combined archive plot is the screen's centrepiece and is taller than a single-series chart:
+   two axes and a bar series need the room to read as one figure rather than a strip. */
+.chartPlotTall {
+  min-width: 320px;
+  height: 340px;
+}
+
+.legendSwatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.legendSwatch[data-series="precipitation"] {
+  background: var(--color-class-forecast);
+}
+
+/* --------------------------------------------------------------- the metric row */
+
+/*
+ * Six cards across, as `03-historical-analytics.png` opens. `auto-fit` rather than a fixed six
+ * because the row is as wide as the window was answered: a thin archive window supplies four, and
+ * four cards stretched across six columns would read as two that failed to load.
+ */
+.metricRow {
+  display: grid;
+  /*
+   * `auto-fill`, not `auto-fit`. A window the archive answered thinly supplies two cards, and
+   * `auto-fit` collapses the empty tracks and stretches those two across the whole row — two
+   * enormous panels where the artifact has six compact ones. `auto-fill` keeps the tracks, so two
+   * cards stay card-sized and the row reads as partly filled, which is what it is.
+   */
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.metricCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  min-width: 0;
+}
+
+.metricLabel {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+}
+
+.metricValue {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line);
+  font-weight: var(--type-display-weight);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* The unit rides with the figure at label size, as the artifact sets it — never the same weight as
+   the number, which would make "°C" read as part of the value. */
+.metricUnit {
+  margin-left: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--type-ui-size);
+  font-weight: 400;
+}
+
+.metricNote {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  line-height: 1.4;
+}
+
+/*
+ * The uncomputed statistics, as a footnote under the row rather than as cards in it.
+ * Spans the grid so it reads as one line about the row, not as another cell in it.
+ */
+.tilesUnavailable {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  line-height: 1.5;
+}
+
+.tilesUnavailableLead {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+/* The baseline's own caveats. Notes, not a second attribution footer. */
+.baselineNotes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-1);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+}

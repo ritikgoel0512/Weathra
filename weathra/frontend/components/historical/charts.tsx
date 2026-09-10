@@ -28,6 +28,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  ComposedChart,
   Line,
   LineChart,
   ReferenceLine,
@@ -160,6 +161,300 @@ export interface TemperatureChartProps extends HistoricalChartProps {
  * Two series, so a legend is present; the baseline is also direct-labelled on its own line, which
  * is where the years behind it belong.
  */
+/**
+ * Both series as text, behind one control.
+ *
+ * The combined plot has one accessible name and two series, so its text alternative has to carry
+ * both — a table of temperatures alone would describe half the figure. Same control, same wording
+ * and same behaviour as the single-series table above; a `—` is a day the archive did not report,
+ * which is not the same fact as a zero and is not written as one.
+ */
+function OverviewFigureTable({
+  rows,
+  temperatureUnit,
+  precipitationUnit,
+  caption,
+  hasPrecipitation,
+}: {
+  readonly rows: readonly {
+    readonly date: string;
+    readonly temperature: number | null;
+    readonly precipitation: number | null;
+  }[];
+  readonly temperatureUnit: string | null;
+  readonly precipitationUnit: string | null;
+  readonly caption: string;
+  readonly hasPrecipitation: boolean;
+}): ReactNode {
+  const [shown, setShown] = useState(false);
+
+  return (
+    <div className={styles.figures}>
+      <Button size="sm" onClick={() => setShown((open) => !open)} aria-expanded={shown}>
+        {shown ? "Hide the figures" : "Show the figures"}
+      </Button>
+      {shown ? (
+        <div className={styles.tableScroll}>
+          <table className={styles.table}>
+            <caption className={styles.tableCaption}>{caption}</caption>
+            <thead>
+              <tr>
+                <th scope="col">Date</th>
+                <th scope="col">
+                  Mean temperature{temperatureUnit ? ` (${temperatureUnit})` : null}
+                </th>
+                {hasPrecipitation ? (
+                  <th scope="col">
+                    Precipitation total{precipitationUnit ? ` (${precipitationUnit})` : null}
+                  </th>
+                ) : null}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.date}>
+                  <th scope="row">{row.date}</th>
+                  {/* "not reported", not a dash and never a zero: a day the archive did not
+                      answer for is a different fact from a day it measured as nothing. */}
+                  <td>{row.temperature === null ? "not reported" : row.temperature}</td>
+                  {hasPrecipitation ? (
+                    <td>{row.precipitation === null ? "not reported" : row.precipitation}</td>
+                  ) : null}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The artifact's centrepiece: temperature against its baseline, with precipitation beneath it.
+ *
+ * `03-historical-analytics.png` draws one plot, not two — a temperature line, a dashed normal, and
+ * precipitation bars on their own right-hand axis. Weathra was drawing the line and the bars as two
+ * separate figures stacked down the page, which is the same data in half the density and loses the
+ * one thing a combined plot is *for*: seeing that the wet days were the cold ones.
+ *
+ * Both series are the archive's own. The baseline is a reference line at the mean the backend
+ * computed over the years it actually used, and it is absent rather than guessed when no baseline
+ * was returned. A day the archive did not report breaks the line rather than being bridged, and
+ * contributes no bar.
+ */
+export function ArchiveOverviewChart({
+  points,
+  temperature,
+  precipitation,
+  temperatureUnit,
+  precipitationUnit,
+  baselineValue,
+  baselineLabel,
+  title,
+  missing,
+}: {
+  readonly points: readonly HistoricalPoint[];
+  readonly temperature: string;
+  readonly precipitation: string | null;
+  readonly temperatureUnit: string | null;
+  readonly precipitationUnit: string | null;
+  readonly baselineValue: number | null;
+  readonly baselineLabel: string | null;
+  readonly title: string;
+  readonly missing: number;
+}): ReactNode {
+  const described = useId();
+  const rows = points.map((point) => ({
+    // `point.date` is already the local calendar date, read as text so no timezone is re-applied.
+    date: point.date,
+    temperature: point.values[temperature] ?? null,
+    precipitation: precipitation === null ? null : (point.values[precipitation] ?? null),
+  }));
+
+  return (
+    <figure className={styles.chart} data-chart="archive-overview">
+      <figcaption className={styles.chartCaption}>
+        <span className={styles.chartTitle}>{title}</span>
+        <span className={styles.legend}>
+          <span className={styles.legendItem}>
+            <span className={styles.legendLine} data-series="recorded" /> Recorded
+          </span>
+          {baselineValue === null ? null : (
+            <span className={styles.legendItem}>
+              <span className={styles.legendLine} data-series="baseline" /> Normal
+            </span>
+          )}
+          {precipitation === null ? null : (
+            <span className={styles.legendItem}>
+              <span className={styles.legendSwatch} data-series="precipitation" /> Precipitation
+            </span>
+          )}
+        </span>
+      </figcaption>
+
+      <ScrollRegion label={`${title} chart`} className={styles.chartScroll}>
+        <div
+          className={styles.chartPlotTall}
+          role="img"
+          aria-label={`${title}. Recorded temperature${
+            temperatureUnit ? ` in ${temperatureUnit}` : ""
+          }${baselineLabel ? `, against ${baselineLabel}` : ""}${
+            precipitation === null ? "" : ", with daily precipitation"
+          }. The figures are in the table below.`}
+          aria-describedby={described}
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={rows} margin={{ top: 8, right: 8, bottom: 4, left: 0 }}>
+              <CartesianGrid stroke="var(--color-border-subtle)" strokeDasharray="0" vertical={false} />
+              <XAxis dataKey="date" {...AXIS} minTickGap={24} />
+              <YAxis
+                yAxisId="temperature"
+                {...AXIS}
+                width={52}
+                label={
+                  temperatureUnit
+                    ? {
+                        value: temperatureUnit,
+                        angle: -90,
+                        position: "insideLeft",
+                        fill: "var(--color-text-muted)",
+                        fontSize: 11,
+                      }
+                    : undefined
+                }
+              />
+              {precipitation === null ? null : (
+                <YAxis
+                  yAxisId="precipitation"
+                  orientation="right"
+                  {...AXIS}
+                  width={44}
+                  label={
+                    precipitationUnit
+                      ? {
+                          value: precipitationUnit,
+                          angle: 90,
+                          position: "insideRight",
+                          fill: "var(--color-text-muted)",
+                          fontSize: 11,
+                        }
+                      : undefined
+                  }
+                />
+              )}
+              <Tooltip
+                cursor={{ stroke: "var(--color-border-strong)" }}
+                content={<OverviewTooltip temperatureUnit={temperatureUnit} precipitationUnit={precipitationUnit} />}
+              />
+              {baselineValue === null ? null : (
+                <ReferenceLine
+                  yAxisId="temperature"
+                  y={baselineValue}
+                  stroke="var(--color-class-analytics)"
+                  strokeDasharray="6 4"
+                  strokeWidth={2}
+                  label={{
+                    value: baselineLabel ?? "Normal",
+                    position: "insideTopRight",
+                    fill: "var(--color-text-muted)",
+                    fontSize: 11,
+                  }}
+                />
+              )}
+              {precipitation === null ? null : (
+                <Bar
+                  yAxisId="precipitation"
+                  dataKey="precipitation"
+                  name="Precipitation"
+                  fill="var(--color-class-forecast)"
+                  radius={[3, 3, 0, 0]}
+                  isAnimationActive={false}
+                />
+              )}
+              <Line
+                yAxisId="temperature"
+                type="monotone"
+                dataKey="temperature"
+                name="Recorded"
+                stroke="var(--color-class-historical)"
+                strokeWidth={2}
+                /*
+                 * Dots, not a bare line. A day the archive did not report breaks the series, and a
+                 * broken series is drawn as isolated points — which `dot={false}` renders as
+                 * nothing at all. The 1440 capture of 2026-09-10 showed a chart with no temperature
+                 * on it for exactly that reason: two reported days either side of one gap.
+                 */
+                dot={{ r: 2, strokeWidth: 0, fill: "var(--color-class-historical)" }}
+                activeDot={{ r: 4 }}
+                connectNulls={false}
+                isAnimationActive={false}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </ScrollRegion>
+
+      <p className={styles.chartNote} id={described}>
+        {missing === 0
+          ? "Every day in this window was reported by the archive."
+          : `${missing} ${missing === 1 ? "day" : "days"} in this window ${
+              missing === 1 ? "was" : "were"
+            } not reported by the archive and ${missing === 1 ? "is" : "are"} left as a gap.`}
+      </p>
+
+      <OverviewFigureTable
+        rows={rows}
+        temperatureUnit={temperatureUnit}
+        precipitationUnit={precipitationUnit}
+        caption={title}
+        hasPrecipitation={precipitation !== null}
+      />
+    </figure>
+  );
+}
+
+/** Both series at one date, each named and each with its own unit. */
+function OverviewTooltip({
+  active,
+  payload,
+  label,
+  temperatureUnit,
+  precipitationUnit,
+}: {
+  active?: boolean;
+  payload?: readonly { dataKey?: string | number; value?: number | null }[];
+  label?: string | number;
+  temperatureUnit: string | null;
+  precipitationUnit: string | null;
+}): ReactNode {
+  if (!active || !payload?.length) return null;
+  const at = (key: string): number | null | undefined =>
+    payload.find((entry) => entry.dataKey === key)?.value;
+  const temperature = at("temperature");
+  const rain = at("precipitation");
+
+  return (
+    <div className={styles.tooltip}>
+      <p className={styles.tooltipName}>{String(label)}</p>
+      <p className={styles.tooltipValue}>
+        Recorded:{" "}
+        {typeof temperature === "number"
+          ? `${temperature}${temperatureUnit ? ` ${temperatureUnit}` : ""}`
+          : "not reported"}
+      </p>
+      {rain === undefined ? null : (
+        <p className={styles.tooltipValue}>
+          Precipitation:{" "}
+          {typeof rain === "number"
+            ? `${rain}${precipitationUnit ? ` ${precipitationUnit}` : ""}`
+            : "not reported"}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function RecordedAgainstBaselineChart({
   points,
   measure,

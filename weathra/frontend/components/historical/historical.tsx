@@ -27,7 +27,15 @@
 import Link from "next/link";
 import { useCallback, useMemo, useState, type FormEvent, type ReactNode } from "react";
 
-import { Button, EmptyState, ErrorState, Input, LoadingState, Select } from "@/components/ui";
+import {
+  Button,
+  EmptyChart,
+  EmptyState,
+  ErrorState,
+  Input,
+  LoadingState,
+  Select,
+} from "@/components/ui";
 import type {
   HistoryResponse,
   Location,
@@ -48,7 +56,7 @@ import {
 import { useApiQuery } from "@/lib/query/hooks";
 import { PREFERENCES_KEY, SAVED_LOCATIONS_KEY } from "@/lib/query/keys";
 
-import { PrecipitationChart, RecordedAgainstBaselineChart } from "./charts";
+import { ArchiveOverviewChart, PrecipitationChart } from "./charts";
 import {
   AnomalyIntelligence,
   DeviationAnalysis,
@@ -368,6 +376,17 @@ function Analysis({
       */}
       <Toolbar enquiry={enquiry} controls={controls} onUnits={onUnits} observed={observed} />
 
+      {/*
+        The artifact's metric row: `HeadlineFigures`, which is the backend's own statistics for the
+        selected period — mean temperature, the extremes, precipitation, wind and humidity, each
+        with the method that produced it.
+        *
+        A second row folded from the daily series was briefly added above this one and then removed:
+        it drew a `MEAN TEMPERATURE` card reading 16 °C directly above this row's `MEAN TEMPERATURE`
+        reading 17.9 °C, because one averaged the daily means and the other is the backend's
+        statistic over every hourly point. Both were correct and the pair was indefensible. One row,
+        one arithmetic, one authority for a figure.
+      */}
       {comparison.state.kind === "ready" ? (
         <HeadlineFigures comparison={comparison.state.data} />
       ) : null}
@@ -389,25 +408,26 @@ function Analysis({
         <ErrorState failure={history.state.failure} onRetry={history.retry} />
       ) : observed ? (
         <Observations history={observed}>
+          {/*
+            One plot, not two. The artifact draws temperature, its normal and precipitation as a
+            single figure with two axes, and that is the composition worth having: two stacked
+            charts show the same data at half the density and lose the thing a combined plot is for
+            — seeing that the wet days were the cold ones. Where the archive reported temperature
+            but no precipitation the bars are simply absent and the line stands alone.
+          */}
           {hasValues(points, TEMPERATURE) ? (
-            <RecordedAgainstBaselineChart
+            <ArchiveOverviewChart
               points={points}
-              measure={TEMPERATURE}
-              unit={unitFor(observed.daily, TEMPERATURE)}
-              seriesLabel={measureLabel(TEMPERATURE)}
-              title={`${measureLabel(TEMPERATURE)} recorded, against the baseline`}
-              missing={missingCount(points, TEMPERATURE)}
+              temperature={TEMPERATURE}
+              precipitation={hasValues(points, PRECIPITATION) ? PRECIPITATION : null}
+              temperatureUnit={unitFor(observed.daily, TEMPERATURE)}
+              precipitationUnit={unitFor(observed.daily, PRECIPITATION)}
               baselineValue={baselineMean}
               baselineLabel={baselineYears}
+              title="Recorded against the normal, with precipitation"
+              missing={missingCount(points, TEMPERATURE)}
             />
-          ) : (
-            <p className={styles.note}>
-              The archive reported no {measureLabel(TEMPERATURE).toLowerCase()} for this window, so
-              no chart is drawn for it.
-            </p>
-          )}
-
-          {hasValues(points, PRECIPITATION) ? (
+          ) : hasValues(points, PRECIPITATION) ? (
             <PrecipitationChart
               points={points}
               measure={PRECIPITATION}
@@ -417,10 +437,11 @@ function Analysis({
               missing={missingCount(points, PRECIPITATION)}
             />
           ) : (
-            <p className={styles.note}>
-              The archive reported no {measureLabel(PRECIPITATION).toLowerCase()} for this window,
-              so no chart is drawn for it.
-            </p>
+            <EmptyChart
+              title="Recorded against the normal"
+              reason="The archive reported neither temperature nor precipitation for this window."
+              height={340}
+            />
           )}
         </Observations>
       ) : null}
