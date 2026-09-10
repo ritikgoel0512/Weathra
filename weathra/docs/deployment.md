@@ -115,6 +115,27 @@ after the migrations — it needs `weathra_current_user_id()` from `0002` and re
 without it — and treat a failure as a failed deploy rather than a warning: it raises instead of
 reporting memory ready over tables nothing can reach. Re-running is safe and changes nothing.
 
+### Assigning a subscription plan
+
+Plans are administered through the product: `PUT /api/v1/admin/principals/{subject}/plan`, which the
+administrative screen calls, and which writes `admin_audit` in the same transaction.
+`scripts/assign_plan.py` is the escape hatch for the case that screen cannot cover — nobody signed in
+as an administrator to press it — and it uses the same `PlanStore.assign`, so the audit row is
+identical whichever way the change happened.
+
+```
+python scripts/assign_plan.py --list
+python scripts/assign_plan.py --subject <auth-subject-uuid> --plan premium
+python scripts/assign_plan.py --subject-for-email <address>     # prints the subject, writes nothing
+```
+
+It needs `DATABASE_URL_PRIVILEGED`: `user_plans` grants the request-serving role `SELECT` and
+nothing else, so an assignment is a privileged write however it is made.
+
+**A plan is not a role.** Premium grants no administrative capability and the administrative role
+entitles nobody to a tier. `--subject-for-email` reads Supabase's own `auth.users` to turn an
+address into a subject and prints nothing else; Weathra still stores no email of its own.
+
 ### Provisioning the `weathra_api` credential
 
 Migration `0003` creates `weathra_api` with **no password**, so under SCRAM the role cannot
