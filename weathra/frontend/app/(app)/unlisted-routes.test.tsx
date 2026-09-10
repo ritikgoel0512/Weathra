@@ -51,7 +51,12 @@ const ADMIN_FILES = [
   "./admin/model-usage/page.tsx",
   "../../components/admin/model-policy.tsx",
   "../../components/admin/overview.tsx",
+  "../../components/admin/principals.tsx",
+  "../../components/admin/routing.tsx",
 ] as const;
+
+/** The components the route renders. Every one is scanned; adding a file to the screen adds it here. */
+const ADMIN_COMPONENTS = ADMIN_FILES.filter((path) => path.includes("components/admin/"));
 
 /**
  * The path that would carry somebody's *own* plan and consumption.
@@ -82,6 +87,11 @@ const FICTIONAL_MODELS = [
 /** Everything the two administrative panels are permitted to reach, and nothing else. */
 const PERMITTED_ADMIN_METHODS = [
   "adminUsage",
+  "adminPlans",
+  "adminPrincipals",
+  "assignPlan",
+  "setPolicyFallback",
+  "setPlanPolicies",
   "adminPolicies",
   "adminCatalog",
   "adminComparisons",
@@ -170,7 +180,7 @@ describe("Admin Model & AI Usage: built from what Weathra records, refused to ev
   });
 
   it("reaches the backend only through the typed client, and only for the permitted reads", () => {
-    const components = ["../../components/admin/model-policy.tsx", "../../components/admin/overview.tsx"];
+    const components = ADMIN_COMPONENTS;
 
     // No second way in: no raw fetch, no Supabase client, no hand-built Authorization header. The
     // token is the API client's business and is added there, once, per request.

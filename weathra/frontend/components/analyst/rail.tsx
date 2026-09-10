@@ -37,6 +37,7 @@ import type { ReactNode } from "react";
 
 import { Badge, Card, CardBody, CardHeader } from "@/components/ui";
 import type { AnswerEnvelope } from "@/lib/api/schema";
+import { placeLabel } from "@/lib/locations/place";
 import type { AgentStreamState } from "@/hooks/use-agent-stream";
 
 import styles from "./analyst.module.css";
@@ -140,7 +141,7 @@ export function AnalystRail({ live, answer, evidenceId, memory }: AnalystRailPro
               {sources.map((source, index) => (
                 <li className={styles.railRow} key={`${source.provider}-${index}`}>
                   <span className={styles.railName}>{source.provider}</span>
-                  <span className={styles.railMeta}>{source.location.display_name}</span>
+                  <span className={styles.railMeta}>{placeLabel(source.location)}</span>
                   <span className={styles.railMeta}>Retrieved {source.retrieved_at}</span>
                 </li>
               ))}
@@ -159,7 +160,7 @@ export function AnalystRail({ live, answer, evidenceId, memory }: AnalystRailPro
               <div className={styles.railFact}>
                 <dt>Location</dt>
                 <dd>
-                  {resolved.locations?.[0]?.display_name ?? "Not resolved"}
+                  {placeLabel(resolved.locations?.[0]) ?? "Not resolved"}
                   {resolved.location_source ? ` (from the ${resolved.location_source})` : ""}
                 </dd>
               </div>

@@ -29,6 +29,16 @@ export interface Screen {
  * that can be renamed once. `SIGN_IN_PATH` is further down, beside the redirect it belongs to.
  */
 export const CREATE_ACCOUNT_PATH = "/create-account";
+/**
+ * The plan step, between creating an account and verifying it.
+ *
+ * Unauthenticated by necessity and by design: it is reached the moment an account is created, when
+ * there is no session yet, and everything on it is public — the tiers Weathra offers and what each
+ * allows. It writes nothing, because there is nothing a caller may write: Free is what every new
+ * account is already on, and the tiers above it are administrative assignments rather than
+ * purchases. The screen is where that is said plainly rather than discovered later.
+ */
+export const CHOOSE_PLAN_PATH = "/choose-plan";
 export const VERIFY_EMAIL_PATH = "/verify-email";
 export const FORGOT_PASSWORD_PATH = "/forgot-password";
 export const RESET_PASSWORD_PATH = "/reset-password";
@@ -37,6 +47,7 @@ export const RESET_PASSWORD_PATH = "/reset-password";
 export const AUTH_SCREENS: readonly Screen[] = [
   { path: "/sign-in", title: "Sign In" },
   { path: CREATE_ACCOUNT_PATH, title: "Create Account" },
+  { path: CHOOSE_PLAN_PATH, title: "Choose Your Plan" },
   { path: VERIFY_EMAIL_PATH, title: "Verify Email" },
   { path: FORGOT_PASSWORD_PATH, title: "Forgot Password" },
   { path: RESET_PASSWORD_PATH, title: "Reset Password" },

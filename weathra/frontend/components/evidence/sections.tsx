@@ -66,6 +66,7 @@ import {
 } from "@/lib/evidence/record";
 import { formatStatistic, unavailableReason } from "@/lib/historical/analysis";
 import { inferenceMetadataFrom } from "@/lib/inference/served";
+import { placeLabel } from "@/lib/locations/place";
 
 import styles from "./evidence.module.css";
 
@@ -325,7 +326,7 @@ function ToolEntry({ activity }: { readonly activity: ToolActivity }): ReactNode
           </p>
           {result.attribution ? (
             <p className={styles.note}>
-              {result.attribution.provider} · {result.attribution.location?.display_name ?? NOT_REPORTED} ·
+              {result.attribution.provider} · {placeLabel(result.attribution.location) ?? NOT_REPORTED} ·
               retrieved {formatInstant(result.attribution.retrieved_at) ?? NOT_REPORTED}
             </p>
           ) : null}
@@ -425,7 +426,7 @@ export function GroundedSources({
                     data-source-class={source.data_class}
                   >
                     <td>{source.provider}</td>
-                    <td>{source.location?.display_name ?? NOT_REPORTED}</td>
+                    <td>{placeLabel(source.location) ?? NOT_REPORTED}</td>
                     <td>{coverageOf(source)}</td>
                     <td>{formatInstant(source.retrieved_at) ?? NOT_REPORTED}</td>
                     <td>{dataClass ? <DataClassBadge dataClass={dataClass} /> : NOT_REPORTED}</td>
@@ -651,7 +652,7 @@ export function ResolvedContextPanel({ record }: { readonly record: RunRecord })
               <dt className={styles.fieldName}>Resolved location</dt>
               <dd className={styles.fieldValue} data-resolved-location="true">
                 {locations.length > 0
-                  ? locations.map((place) => place.display_name).join(", ")
+                  ? locations.map((place) => placeLabel(place)).join(", ")
                   : NOT_REPORTED}
                 {resolved.location_source ? ` (from the ${resolved.location_source})` : null}
               </dd>
@@ -821,7 +822,7 @@ export function RecordProvenance({ record }: { readonly record: RunRecord }): Re
     <AttributionFooter
       attribution={{
         provider: record.weatherProvider,
-        location: record.answer?.resolved?.locations?.[0]?.display_name ?? null,
+        location: placeLabel(record.answer?.resolved?.locations?.[0]),
         retrievedAt: record.timing.completedAt,
       }}
     >

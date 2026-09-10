@@ -3680,6 +3680,38 @@
         "title": "PeriodComparison",
         "type": "object"
       },
+      "PlanAllowanceView": {
+        "additionalProperties": false,
+        "description": "One allowance, as a customer reads it rather than as the limiter stores it.",
+        "properties": {
+          "allowance": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null is unlimited. A dimension with no row is not capped.",
+            "title": "Allowance"
+          },
+          "dimension": {
+            "title": "Dimension",
+            "type": "string"
+          },
+          "window": {
+            "title": "Window",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dimension",
+          "window"
+        ],
+        "title": "PlanAllowanceView",
+        "type": "object"
+      },
       "PlanAssignmentRequest": {
         "additionalProperties": false,
         "description": "Which tier a person is on.\n\n``PlanCode`` and not a string, so a body naming ``plus`` is refused by validation before the\nhandler runs. The retired tier is not a value this enum has and no alias admits it.",
@@ -3749,6 +3781,40 @@
         "title": "PlanMappingRequest",
         "type": "object"
       },
+      "PlanOfferView": {
+        "additionalProperties": false,
+        "description": "A tier, its standing, and what it allows.",
+        "properties": {
+          "allowances": {
+            "items": {
+              "$ref": "#/components/schemas/PlanAllowanceView"
+            },
+            "title": "Allowances",
+            "type": "array"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "plan_code": {
+            "title": "Plan Code",
+            "type": "string"
+          },
+          "rank": {
+            "description": "Ascending entitlement. Free is the lowest.",
+            "title": "Rank",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_code",
+          "display_name",
+          "rank",
+          "allowances"
+        ],
+        "title": "PlanOfferView",
+        "type": "object"
+      },
       "PlanRecord": {
         "additionalProperties": false,
         "description": "A product tier, its rank, and the policy it maps each call role to.",
@@ -3796,6 +3862,47 @@
           "rank"
         ],
         "title": "PlanRecord",
+        "type": "object"
+      },
+      "PlansResponse": {
+        "additionalProperties": false,
+        "description": "The tiers Weathra offers, and how somebody moves between them.\n\n``self_service`` is the field that keeps this page honest. Weathra bills nobody: there is no\npayment integration, no checkout and no self-service upgrade, and a tier above Free is an\nadministrative assignment. A pricing surface that offered a Buy button would be describing a\ncommercial relationship this product does not have.",
+        "properties": {
+          "assignment_note": {
+            "title": "Assignment Note",
+            "type": "string"
+          },
+          "count": {
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "default_plan": {
+            "description": "What a new account is on before anybody assigns a tier.",
+            "title": "Default Plan",
+            "type": "string"
+          },
+          "plans": {
+            "items": {
+              "$ref": "#/components/schemas/PlanOfferView"
+            },
+            "title": "Plans",
+            "type": "array"
+          },
+          "self_service": {
+            "default": false,
+            "description": "Whether a caller can move themselves between tiers. False: no payment exists.",
+            "title": "Self Service",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "count",
+          "plans",
+          "default_plan",
+          "assignment_note"
+        ],
+        "title": "PlansResponse",
         "type": "object"
       },
       "PointValue": {
@@ -4203,6 +4310,96 @@
           "sources"
         ],
         "title": "PreferenceView",
+        "type": "object"
+      },
+      "PrincipalListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "principals": {
+            "items": {
+              "$ref": "#/components/schemas/PrincipalRecord"
+            },
+            "title": "Principals",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "principals"
+        ],
+        "title": "PrincipalListResponse",
+        "type": "object"
+      },
+      "PrincipalRecord": {
+        "additionalProperties": false,
+        "description": "One principal, as an administrator needs to see them.\n\n**A subject and a tier, and nothing else.** Weathra stores no email, no name and no contact\ndetail of any kind \u2014 `specs/authentication` keeps all of it in Supabase Auth and references a\nperson only by their authentication subject \u2014 so this is not a list that has been stripped of\npersonal data. There is none to strip, and adding a lookup to fetch some would undo a decision\nthe whole schema is built around.",
+        "properties": {
+          "administrative": {
+            "default": false,
+            "description": "Whether this principal holds the administrative role. A role, not a tier.",
+            "title": "Administrative",
+            "type": "boolean"
+          },
+          "assigned_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned At"
+          },
+          "assigned_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned By"
+          },
+          "plan_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null where nobody has assigned one.",
+            "title": "Plan Code"
+          },
+          "plan_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Name"
+          },
+          "subject_id": {
+            "title": "Subject Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject_id"
+        ],
+        "title": "PrincipalRecord",
         "type": "object"
       },
       "Provenance": {
@@ -7448,6 +7645,60 @@
         ]
       }
     },
+    "/api/v1/admin/principals": {
+      "get": {
+        "description": "**Protected. Administrative.** Lists the principals and the plan each is on. A subject and a tier; Weathra holds no contact detail to list.\n\nEveryone Weathra holds a profile for, with their tier and whether they administer.\n\nPrivileged: `user_plans` grants the request-serving role `SELECT` on its own row only, so this\nlist cannot be assembled from the request path. It carries a subject and a tier \u2014 there is no\ncontact detail in this database to carry.\n\nOrdered by assignment, most recent first, then by subject so the page is stable. A principal\nwith no row in `user_plans` appears with a null plan rather than being left out: somebody who\nhas never been assigned a tier is exactly who an administrator is looking for.",
+        "operationId": "list_principals_api_v1_admin_principals_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrincipalListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "List the principals and the plan each is on",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
     "/api/v1/admin/principals/administrators": {
       "get": {
         "description": "**Protected. Administrative.** Lists who holds the administrative role and who granted it.\n\nWho holds the administrative role, and who granted it to them.\n\nPrivileged, and only reachable here: the owner policy on `admin_roles` returns a request\nsession exactly its own row, so this list cannot be assembled from the request path however\nthe query is written.",
@@ -8627,6 +8878,29 @@
         "summary": "Check a watch now",
         "tags": [
           "watches"
+        ]
+      }
+    },
+    "/api/v1/plans": {
+      "get": {
+        "description": "**Public.** The subscription tiers and what each allows. A pricing question, not a per-caller one: no subject is read and the answer is the same signed in or out.\n\nWhat the tiers are and what each allows. Public, because it is a pricing question.\n\nNothing here is per-caller: no subject is read and no usage is counted, so it answers the same\nway signed in or not. The caller's *own* standing is `/me/usage`, which is protected.",
+        "operationId": "list_offered_plans_api_v1_plans_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlansResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [],
+        "summary": "The subscription tiers",
+        "tags": [
+          "account"
         ]
       }
     },

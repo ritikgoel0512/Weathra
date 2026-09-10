@@ -62,6 +62,7 @@ import styles from "./historical.module.css";
 
 import { FixtureHistorical } from "./fixture-historical";
 import { usingVisilyFixtures } from "@/lib/fixtures/visily";
+import { placeLabel } from "@/lib/locations/place";
 
 /** What the window is asked for, before it is asked for. */
 interface Range {
@@ -155,8 +156,10 @@ function Controls({
         value={place}
         onChange={(event) => setPlace(event.target.value)}
         options={places.map((candidate) => ({
+          // The value stays the geocoder's own name because it is what `places.find` matches on
+          // below; only what a person reads changes.
           value: candidate.display_name,
-          label: candidate.display_name,
+          label: placeLabel(candidate) ?? candidate.display_name,
         }))}
       />
       <Input
@@ -245,7 +248,7 @@ function Toolbar({
     <div className={styles.toolbar}>
       <details className={styles.enquiryDisclosure}>
         <summary className={styles.enquirySummary}>
-          {enquiry.location.display_name} · {enquiry.selected.start} to {enquiry.selected.end} ·
+          {placeLabel(enquiry.location)} · {enquiry.selected.start} to {enquiry.selected.end} ·
           against {enquiry.earlier.start} to {enquiry.earlier.end} · {enquiry.years}-year baseline
         </summary>
         {controls}
@@ -300,13 +303,29 @@ function Analysis({
     units: enquiry.units,
   };
 
+  /*
+   * The three reads run in sequence, not at once, and that is a fix rather than a preference.
+   *
+   * Each is a separate archive request upstream, and two of them fan out further: the comparison
+   * fetches two periods and the baseline fetches one per year. Fired together at the default ten
+   * years, a single page load asked Open-Meteo for the same place twelve times inside a second and
+   * was rate-limited, which is what put two red panels on this screen in production.
+   *
+   * Waiting for the first read has three effects. The archive sees a paced sequence rather than a
+   * burst. The selected period is fetched once and served from the provider cache to the two reads
+   * that also need it, instead of three simultaneous misses racing each other. And when the first
+   * read is refused, the other two are never sent — the screen reports one limit instead of three.
+   */
   const history = useApiQuery({
     key: ["historical", "history", place, enquiry.selected],
     request: (client) => client.history({ ...place, ...enquiry.selected }),
   });
 
+  const observedReady = history.state.kind === "ready";
+
   const comparison = useApiQuery({
     key: ["historical", "comparison", place, enquiry.selected, enquiry.earlier],
+    enabled: observedReady,
     request: (client) =>
       client.periodComparison({
         ...place,
@@ -319,6 +338,8 @@ function Analysis({
 
   const baseline = useApiQuery({
     key: ["historical", "baseline", place, enquiry.selected, enquiry.years],
+    // Last, because it is the widest: one upstream request per year of baseline.
+    enabled: comparison.state.kind === "ready" || comparison.state.kind === "error",
     request: (client) =>
       client.baselineComparison({
         ...place,
@@ -537,7 +558,11 @@ export function HistoricalAnalytics(): ReactNode {
       start: yearsBefore(defaultRange(new Date()).start, 1),
       end: yearsBefore(defaultRange(new Date()).end, 1),
     },
-    years: 10,
+    // Five, not ten. Each year of baseline is one archive request, so the number a page *opens*
+    // with is a decision about how much upstream traffic a visit costs — ten made a first view of
+    // this screen the most expensive page in the product. Five is still a baseline anybody would
+    // recognise, and the control above raises it for somebody who wants more.
+    years: 5,
     // The person's saved preference is where the screen opens. The toggle moves this reading only.
     units:
       preferences.state.kind === "ready" ? preferences.state.data.unit_system : "metric",

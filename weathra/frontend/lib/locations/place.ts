@@ -48,11 +48,17 @@ export function friendlyName(location: Location): string {
   const region = location.region?.trim() ?? "";
   const country = location.country?.trim() || location.country_code?.trim() || "";
 
+  // A part the name already contains is not added again. Three redundancies are possible and all
+  // three have been seen: a region that repeats the city (Berlin is in Berlin), a region equal to
+  // the country, and a `display_name` that is already qualified — some geocoders return
+  // "Berlin, Germany" where others return "Berlin", and appending the country to the first gives
+  // "Berlin, Germany, Germany". Comparing against the parts already assembled covers all three.
   const parts = [city];
-  // A region that merely repeats the city adds nothing — Berlin is in Berlin — and a region equal
-  // to the country is the same redundancy one level up.
-  if (region && region !== city && region !== country) parts.push(region);
-  if (country && country !== city) parts.push(country);
+  const carries = (part: string): boolean =>
+    parts.some((existing) => existing.toLowerCase().split(/,\s*/).includes(part.toLowerCase()));
+
+  if (region && region !== country && !carries(region)) parts.push(region);
+  if (country && !carries(country)) parts.push(country);
 
   return parts.join(", ");
 }

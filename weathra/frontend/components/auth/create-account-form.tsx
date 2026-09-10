@@ -38,7 +38,7 @@ import { EyeIcon } from "@/components/shell/icons";
 import { Button, Input } from "@/components/ui";
 import { looksLikeAnAddress } from "@/lib/auth/email";
 import { PASSWORD_MINIMUM_LENGTH, passwordFailureMessage } from "@/lib/auth/password";
-import { VERIFY_EMAIL_PATH } from "@/lib/routes";
+import { CHOOSE_PLAN_PATH } from "@/lib/routes";
 import { supabaseBrowserClient } from "@/lib/supabase/browser";
 
 import styles from "./auth.module.css";
@@ -117,7 +117,10 @@ export function CreateAccountForm(): ReactNode {
 
         // The same destination for a new address, an existing one, and an obfuscated look-alike
         // response — which is what makes the three indistinguishable.
-        router.replace(`${VERIFY_EMAIL_PATH}?email=${encodeURIComponent(trimmed)}`);
+        // The plan step, then verification. It is between the two because it needs no session —
+        // everything on it is public — and because a tier is the thing somebody wants to know
+        // about while they are still deciding, not after they have been sent to their inbox.
+        router.replace(`${CHOOSE_PLAN_PATH}?email=${encodeURIComponent(trimmed)}`);
       } catch {
         // A transport failure, and still not a place to say anything about the address.
         setFailure(SIGN_UP_FAILED);

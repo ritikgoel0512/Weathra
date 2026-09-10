@@ -52,6 +52,7 @@ import {
 } from "@/lib/analyst/run";
 import { inferenceMetadataFrom } from "@/lib/inference/served";
 import { evidencePath } from "@/lib/routes";
+import { placeLabel } from "@/lib/locations/place";
 import styles from "./analyst.module.css";
 
 /* --------------------------------------------------------------------- progress */
@@ -157,7 +158,7 @@ export function RunProgress({ steps, streaming, gap = false }: RunProgressProps)
 function attributionOf(attribution: EvidenceAttribution) {
   return {
     provider: attribution.provider,
-    location: attribution.location?.display_name ?? null,
+    location: placeLabel(attribution.location),
     retrievedAt: attribution.retrieved_at,
     period: attribution.period
       ? {
@@ -346,7 +347,7 @@ export function AnswerView({ answer, evidenceId = null }: AnswerViewProps): Reac
               <div className={styles.resolvedItem}>
                 <dt>Location</dt>
                 <dd>
-                  {(resolved.locations ?? []).map((place) => place.display_name).join(", ")}
+                  {(resolved.locations ?? []).map((place) => placeLabel(place)).join(", ")}
                   {resolved.location_source ? ` (from the ${resolved.location_source})` : null}
                 </dd>
               </div>
@@ -588,7 +589,7 @@ export function RunFacts({ answer }: RunFactsProps): ReactNode {
   const observedFacts: readonly (readonly [string, string | null])[] = [
     [
       "Location",
-      observed?.location.display_name ?? resolved?.locations?.[0]?.display_name ?? null,
+      placeLabel(observed?.location) ?? placeLabel(resolved?.locations?.[0]),
     ],
     ["Provider", observed?.provider ?? null],
     ["Retrieved", observed?.retrieved_at ?? null],

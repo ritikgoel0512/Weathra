@@ -15,7 +15,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_PROTECTED_PATH, VERIFY_EMAIL_PATH } from "@/lib/routes";
+import { CHOOSE_PLAN_PATH, DEFAULT_PROTECTED_PATH } from "@/lib/routes";
 
 import { AuthShell } from "./auth-shell";
 import { CreateAccountForm } from "./create-account-form";
@@ -65,7 +65,15 @@ async function submit() {
   await userEvent.click(screen.getByRole("button", { name: "Create account" }));
 }
 
-const VERIFICATION_DESTINATION = `${VERIFY_EMAIL_PATH}?email=${encodeURIComponent(EMAIL)}`;
+/*
+ * Where creating an account goes next.
+ *
+ * The plan step, and verification after it. What these assertions are about has not changed and is
+ * still what they check: the person does not enter the product, no session is kept, and the address
+ * is carried forward rather than retyped. The plan screen needs no session — every tier it shows is
+ * public — and its own control continues to verification.
+ */
+const NEXT_STEP = `${CHOOSE_PLAN_PATH}?email=${encodeURIComponent(EMAIL)}`;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -243,12 +251,18 @@ describe("a successful submission", () => {
 });
 
 describe("mandatory verification", () => {
-  it("sends the person to verify their email, not into the product", async () => {
+  /*
+   * The step after creating an account is the plan step, and verification is the step after that.
+   * What these tests are actually about is unchanged and still asserted below: no session is kept,
+   * nothing enters the product, and the address is carried forward rather than retyped. The plan
+   * screen needs no session — every tier it shows is public — and it continues to verification.
+   */
+  it("sends the person to choose a plan, not into the product", async () => {
     render(<CreateAccountForm />);
     await fill();
     await submit();
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith(VERIFICATION_DESTINATION));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(NEXT_STEP));
     expect(replace).not.toHaveBeenCalledWith(DEFAULT_PROTECTED_PATH);
     // Nothing to refresh: `signUp` with confirmations required returns no session.
     expect(refresh).not.toHaveBeenCalled();
@@ -267,7 +281,7 @@ describe("mandatory verification", () => {
     await submit();
 
     await waitFor(() => expect(signOutOfSupabase).toHaveBeenCalledOnce());
-    expect(replace).toHaveBeenCalledWith(VERIFICATION_DESTINATION);
+    expect(replace).toHaveBeenCalledWith(NEXT_STEP);
     expect(replace).not.toHaveBeenCalledWith(DEFAULT_PROTECTED_PATH);
   });
 
@@ -295,7 +309,7 @@ describe("an address that already has an account", () => {
     await fill();
     await submit();
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith(VERIFICATION_DESTINATION));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(NEXT_STEP));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
@@ -308,7 +322,7 @@ describe("an address that already has an account", () => {
     await fill();
     await submit();
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith(VERIFICATION_DESTINATION));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(NEXT_STEP));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.queryByText(/already/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/taken|exists|registered/i)).not.toBeInTheDocument();
@@ -321,7 +335,7 @@ describe("an address that already has an account", () => {
     await fill();
     await submit();
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith(VERIFICATION_DESTINATION));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(NEXT_STEP));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

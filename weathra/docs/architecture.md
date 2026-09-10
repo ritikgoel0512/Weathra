@@ -499,7 +499,7 @@ model access or an allowance** and **the Visily design gate** are closed outrigh
 | Follow-up reference resolution | 14.11 | agents/context.py, memory/threads.py | integration/test_agent_memory.py | IMPLEMENTED |
 | Conversation retention is bounded and non-sensitive by default | 12.5 | memory/retention.py | integration/test_memory_retention.py | IMPLEMENTED |
 | Durable preference store | 12.3 | memory/preferences.py | integration/test_memory_preferences.py, frontend/lib/settings/preferences.test.ts | IMPLEMENTED |
-| Saved locations | 12.4, 34.11 | memory/locations.py, api/routers/support.py, frontend/lib/locations/place.ts, frontend/components/locations/locations.tsx | integration/test_memory_saved_locations.py, unit/test_geocoding.py, frontend/lib/locations/place.test.ts, frontend/components/locations/locations.test.tsx | IMPLEMENTED |
+| Saved locations | 12.4, 34.11, 34.24 | memory/locations.py, api/routers/support.py, frontend/lib/locations/place.ts, frontend/components/locations/locations.tsx | integration/test_memory_saved_locations.py, unit/test_geocoding.py, frontend/lib/locations/place.test.ts, frontend/components/locations/locations.test.tsx | IMPLEMENTED |
 | Weather watches | 34.17 | memory/watches.py, api/routers/watches.py, db/migrations/versions/0012_weather_watches.py, db/migrations/versions/0013_weather_watch_grant_repair.py | unit/test_watch_evaluation.py, integration/test_memory_saved_locations.py | IMPLEMENTED |
 | Ownership derived from the authenticated user | 12.2 | memory/, auth/rls.py | integration/test_auth_data_path.py, integration/test_checkpoint_policies.py | IMPLEMENTED |
 | Memory unavailability degrades honestly | 12.6 | memory/degradation.py, memory/availability.py | unit/test_memory_degradation.py | IMPLEMENTED |
@@ -544,7 +544,7 @@ model access or an allowance** and **the Visily design gate** are closed outrigh
 | Forecast horizon bounds | 5.6 | weather/windows.py, providers/validation.py | unit/test_weather_services.py | IMPLEMENTED |
 | Historical range bounds | 5.6 | weather/windows.py, providers/validation.py | unit/test_weather_services.py | IMPLEMENTED |
 | Response caching | 5.3 | providers/cache.py | unit/test_providers.py | IMPLEMENTED |
-| Upstream failure handling | 5.7 | providers/http.py, providers/validation.py | unit/test_providers.py | IMPLEMENTED |
+| Upstream failure handling | 5.7, 34.23 | providers/http.py, providers/validation.py, weather/history_service.py, frontend/components/historical/historical.tsx | unit/test_providers.py | IMPLEMENTED |
 
 ### `web-ui`
 
@@ -617,7 +617,7 @@ model access or an allowance** and **the Visily design gate** are closed outrigh
 
 | Requirement | Tasks | Implementation | Tests | Status |
 |---|---|---|---|---|
-| Subscription plans are persisted server-side data | 26.2, 26.6, 28.2, 30.1 | db/models.py, db/migrations/versions/0005_saas_operational_tables.py, db/migrations/versions/0008_seed_model_policy_data.py, entitlements/quotas.py | integration/test_saas_seed.py, integration/test_saas_rls.py, integration/test_quota_enforcement.py | IMPLEMENTED |
+| Subscription plans are persisted server-side data | 26.2, 26.6, 28.2, 30.1, 34.21, 34.22 | db/models.py, db/migrations/versions/0005_saas_operational_tables.py, db/migrations/versions/0008_seed_model_policy_data.py, entitlements/quotas.py, api/routers/usage.py, api/routers/admin/plans.py, frontend/components/auth/plan-choice.tsx, frontend/components/admin/principals.tsx, frontend/components/admin/routing.tsx | integration/test_saas_seed.py, integration/test_saas_rls.py, integration/test_quota_enforcement.py, frontend/components/auth/plan-choice.test.tsx | IMPLEMENTED |
 | Quotas are enforced in the backend before the call | 30.2, 30.6 | entitlements/quotas.py, api/routers/agent.py | integration/test_quota_api.py, integration/test_quota_enforcement.py | IMPLEMENTED |
 | Allowances differ by plan and are expressed in stated dimensions | 30.1, 30.3, 30.4 | domain/usage.py, entitlements/quotas.py, db/migrations/versions/0008_seed_model_policy_data.py | unit/test_quotas.py, integration/test_quota_enforcement.py | IMPLEMENTED |
 | Windows are explicit and reset predictably | 30.1, 30.9 | domain/usage.py, entitlements/quotas.py, config.py | unit/test_quotas.py, integration/test_quota_enforcement.py | IMPLEMENTED |

@@ -209,6 +209,42 @@ async def test_a_429_is_rate_limiting_and_is_distinguishable() -> None:
     assert caught.value.code != ProviderUnavailable.code
 
 
+async def test_a_rate_limited_provider_request_is_not_retried() -> None:
+    """The weather path has no budget for waiting out a limit, so it must not spend one retrying.
+
+    Open-Meteo answers 429 with a JSON body and no ``Retry-After``, so the header-led refusal below
+    never applied to it and every rate-limited archive call was sent three times. A Historical page
+    load makes one archive call per baseline year; at the old default that was ten calls becoming
+    thirty against a limiter that had already said no. One attempt, one report.
+    """
+    attempts = 0
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        return httpx.Response(429, json={"error": True, "reason": "Minutely limit exceeded"})
+
+    with pytest.raises(ProviderRateLimited):
+        await _request(httpx.AsyncClient(transport=httpx.MockTransport(handler)), http_max_retries=2)
+    assert attempts == 1, f"a 429 was sent {attempts} times with no budget to wait"
+
+
+async def test_a_retryable_status_that_is_not_a_rate_limit_is_still_retried() -> None:
+    """The narrowing above is about 429 alone. A 503 is a server having a moment, not a refusal."""
+    attempts = 0
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        return httpx.Response(503) if attempts == 1 else httpx.Response(200, json={"ok": True})
+
+    payload = await _request(
+        httpx.AsyncClient(transport=httpx.MockTransport(handler)), http_max_retries=2
+    )
+    assert payload == {"ok": True}
+    assert attempts == 2
+
+
 async def test_a_500_that_succeeds_on_retry_returns_the_result() -> None:
     """specs/weather-providers: a transient failure that recovers surfaces no error at all."""
     attempts = 0

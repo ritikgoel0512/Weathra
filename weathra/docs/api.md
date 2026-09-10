@@ -69,6 +69,7 @@ reflection vector.
 | `GET` | `/api/v1/health` | public | 200 | `HealthResponse` |
 | `GET` | `/api/v1/locations/resolve` | public | 200 | `ResolvedResponse or AmbiguousResponse` |
 | `GET` | `/api/v1/locations/search` | public | 200 | `SearchResponse` |
+| `GET` | `/api/v1/plans` | public | 200 | `PlansResponse` |
 | `GET` | `/api/v1/ready` | public | 200 | `ReadinessResponse` |
 | `GET` | `/api/v1/weather/analysis` | public | 200 | `AnalysisResponse` |
 | `GET` | `/api/v1/weather/changes` | **protected** | 200 | `WhatChanged` |
@@ -115,6 +116,7 @@ reflection vector.
 | `GET` | `/api/v1/admin/policies/{policy_id}/audit` | **protected** | 200 | `PolicyAuditResponse` |
 | `PUT` | `/api/v1/admin/policies/{policy_id}/candidates` | **protected** | 200 | `PolicyRecord` |
 | `PUT` | `/api/v1/admin/policies/{policy_id}/fallback` | **protected** | 200 | `PolicyRecord` |
+| `GET` | `/api/v1/admin/principals` | **protected** | 200 | `PrincipalListResponse` |
 | `GET` | `/api/v1/admin/principals/administrators` | **protected** | 200 | `RoleListResponse` |
 | `PUT` | `/api/v1/admin/principals/{subject_id}/plan` | **protected** | 200 | `PlanRecord` |
 | `DELETE` | `/api/v1/admin/principals/{subject_id}/role` | **protected** | 204 | `no body` |
@@ -129,6 +131,7 @@ reflection vector.
 | Path | Access | Reason |
 |---|---|---|
 | `/health` | public | Liveness. A load balancer cannot present a token. |
+| `/plans` | public | The subscription tiers and what each allows. A pricing question, not a per-caller one: no subject is read and the answer is the same signed in or out. |
 | `/locations/resolve` | public | Resolving one place from a name or coordinates. Reads no user-owned row. |
 | `/locations/search` | public | Geocoding a free-text query. Reads no user-owned row. |
 | `/ready` | public | Readiness. Reports what is configured and reachable, and no credential material. |
@@ -159,6 +162,7 @@ reflection vector.
 | `/admin/plans/{plan_code}/allowances` | **protected**, administrative | Sets one of a plan's usage allowances. |
 | `/admin/allowances` | **protected**, administrative | Lists the usage allowances, per plan and for the internal subject. |
 | `/admin/allowances/internal` | **protected**, administrative | Sets one of the internal allowances that lab, evaluation and administrative traffic is accounted against. |
+| `/admin/principals` | **protected**, administrative | Lists the principals and the plan each is on. A subject and a tier; Weathra holds no contact detail to list. |
 | `/admin/principals/administrators` | **protected**, administrative | Lists who holds the administrative role and who granted it. |
 | `/admin/principals/{subject_id}/plan` | **protected**, administrative | Assigns a principal to a subscription plan. |
 | `/admin/principals/{subject_id}/role` | **protected**, administrative | Grants and revokes the administrative role. |

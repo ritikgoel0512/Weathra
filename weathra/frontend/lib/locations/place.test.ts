@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import type { Location, SavedLocationRecord } from "@/lib/api/schema";
 
 import {
+  UNNAMED_PLACE,
   coordinatesOf,
   friendlyName,
   isCoordinateName,
@@ -19,11 +20,11 @@ import {
   isUnnamedPlace,
   matchesFilter,
   placeKey,
+  placeLabel,
   qualifiedName,
   savedLocationDisplay,
   savedLocationLabel,
   sendableName,
-  UNNAMED_PLACE,
 } from "./place";
 
 function place(overrides: Partial<Location> = {}): Location {
@@ -250,5 +251,75 @@ describe("the name a person reads", () => {
 
   it("is the city alone when the provider reported nothing else", () => {
     expect(friendlyName(place({}))).toBe("Berlin");
+  });
+});
+
+describe("a name that already carries its own qualifiers", () => {
+  /*
+   * Geocoders disagree about what `display_name` holds. Open-Meteo's search returns the plain city
+   * and puts the country in its own field; other sources — and our own older saved rows — return
+   * "Berlin, Germany" in the name. Appending the country to the second produced
+   * "Berlin, Germany, Germany" on three screens before this was fixed.
+   */
+  it("does not repeat a country the name already states", () => {
+    expect(
+      friendlyName({
+        display_name: "Berlin, Germany",
+        latitude: 52.52,
+        longitude: 13.405,
+        timezone: "Europe/Berlin",
+        country: "Germany",
+      }),
+    ).toBe("Berlin, Germany");
+  });
+
+  it("still composes a name from the fields when the name is the city alone", () => {
+    expect(
+      friendlyName({
+        display_name: "Berlin",
+        latitude: 52.52,
+        longitude: 13.405,
+        timezone: "Europe/Berlin",
+        region: "Berlin",
+        country: "Germany",
+      }),
+    ).toBe("Berlin, Germany");
+  });
+
+  it("compares case-insensitively, because a provider's casing is not a fact", () => {
+    expect(
+      friendlyName({
+        display_name: "Munich, GERMANY",
+        latitude: 48.14,
+        longitude: 11.58,
+        timezone: "Europe/Berlin",
+        country: "Germany",
+      }),
+    ).toBe("Munich, GERMANY");
+  });
+});
+
+describe("placeLabel", () => {
+  const point = {
+    display_name: "48.1374, 11.5755",
+    latitude: 48.1374,
+    longitude: 11.5755,
+    timezone: "Europe/Berlin",
+  };
+
+  it("never shows a coordinate pair as a place name", () => {
+    // The production bug this exists for: Historical Analytics titled its screen "48.1374, 11.5755".
+    expect(placeLabel(point)).toBe(UNNAMED_PLACE);
+  });
+
+  it("names a place that has a name", () => {
+    expect(
+      placeLabel({ ...point, display_name: "Munich", country: "Germany" }),
+    ).toBe("Munich, Germany");
+  });
+
+  it("is null for no place at all, so a caller can fall back to its own words", () => {
+    expect(placeLabel(null)).toBeNull();
+    expect(placeLabel(undefined)).toBeNull();
   });
 });

@@ -777,6 +777,14 @@ export interface PeriodComparison {
   readonly unit_system: UnitSystem;
 }
 
+/** One allowance, as a customer reads it rather than as the limiter stores it. */
+export interface PlanAllowanceView {
+  /** Null is unlimited. A dimension with no row is not capped. */
+  readonly allowance?: number | null;
+  readonly dimension: string;
+  readonly window: string;
+}
+
 /** Which tier a person is on. */
 export interface PlanAssignmentRequest {
   readonly plan_code: PlanCode;
@@ -795,6 +803,15 @@ export interface PlanMappingRequest {
   readonly policy_by_call_role: Record<string, string>;
 }
 
+/** A tier, its standing, and what it allows. */
+export interface PlanOfferView {
+  readonly allowances: PlanAllowanceView[];
+  readonly display_name: string;
+  readonly plan_code: string;
+  /** Ascending entitlement. Free is the lowest. */
+  readonly rank: number;
+}
+
 /** A product tier, its rank, and the policy it maps each call role to. */
 export interface PlanRecord {
   readonly display_name: string;
@@ -804,6 +821,17 @@ export interface PlanRecord {
   readonly policy_by_call_role?: Record<string, string>;
   /** Ascending entitlement. What 'never escalate above' compares. */
   readonly rank: number;
+}
+
+/** The tiers Weathra offers, and how somebody moves between them. */
+export interface PlansResponse {
+  readonly assignment_note: string;
+  readonly count: number;
+  /** What a new account is on before anybody assigns a tier. */
+  readonly default_plan: string;
+  readonly plans: PlanOfferView[];
+  /** Whether a caller can move themselves between tiers. False: no payment exists. */
+  readonly self_service?: boolean;
 }
 
 /** One timestamped value in a series-shaped result: a per-day total, a rolling mean. */
@@ -890,6 +918,23 @@ export interface PreferenceView {
   /** Per field: whether the person chose this value or Weathra assumed it. */
   readonly sources: Record<string, PreferenceSource>;
   readonly unit_system: UnitSystem;
+}
+
+export interface PrincipalListResponse {
+  readonly count: number;
+  readonly principals: PrincipalRecord[];
+}
+
+/** One principal, as an administrator needs to see them. */
+export interface PrincipalRecord {
+  /** Whether this principal holds the administrative role. A role, not a tier. */
+  readonly administrative?: boolean;
+  readonly assigned_at?: string | null;
+  readonly assigned_by?: string | null;
+  /** Null where nobody has assigned one. */
+  readonly plan_code?: string | null;
+  readonly plan_name?: string | null;
+  readonly subject_id: string;
 }
 
 /** Where the numbers behind a result came from. */
@@ -1616,6 +1661,19 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     ],
   },
   {
+    operationId: "list_principals_api_v1_admin_principals_get",
+    method: "GET",
+    path: "/api/v1/admin/principals",
+    requiresToken: true,
+    administrative: true,
+    request: null,
+    successStatus: 200,
+    response: "PrincipalListResponse",
+    parameters: [
+      { name: "limit", in: "query", required: false },
+    ],
+  },
+  {
     operationId: "list_administrators_api_v1_admin_principals_administrators_get",
     method: "GET",
     path: "/api/v1/admin/principals/administrators",
@@ -1917,6 +1975,17 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     parameters: [
       { name: "watch_id", in: "path", required: true },
     ],
+  },
+  {
+    operationId: "list_offered_plans_api_v1_plans_get",
+    method: "GET",
+    path: "/api/v1/plans",
+    requiresToken: false,
+    administrative: false,
+    request: null,
+    successStatus: 200,
+    response: "PlansResponse",
+    parameters: [],
   },
   {
     operationId: "ready_api_v1_ready_get",

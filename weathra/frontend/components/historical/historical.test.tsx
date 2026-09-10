@@ -637,7 +637,7 @@ describe("the toolbar (3.3, 3.6)", () => {
     // The window opens on a range derived from today, so the shape is what is asserted: the place,
     // the selected window, the window it is held against, and the baseline length.
     const summary = screen.getByText(
-      /^Berlin, Germany · \d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2} · against \d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2} · 10-year baseline$/,
+      /^Berlin, Germany · \d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2} · against \d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2} · 5-year baseline$/,
     );
     expect(screen.getByLabelText("Location")).not.toBeVisible();
 

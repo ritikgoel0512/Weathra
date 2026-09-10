@@ -29,7 +29,12 @@ from weathra.analytics.rolling import delta, percentage_change
 from weathra.analytics.support import require_usable
 from weathra.config import Settings
 from weathra.domain.analytics import Provenance, StatisticResult
-from weathra.domain.errors import NoDataForRange, RangeOutsideCoverage, ValidationFailed
+from weathra.domain.errors import (
+    NoDataForRange,
+    ProviderRateLimited,
+    RangeOutsideCoverage,
+    ValidationFailed,
+)
 from weathra.domain.location import Location
 from weathra.domain.weather import (
     DAILY_AGGREGATES,
@@ -389,6 +394,10 @@ class HistoryService:
         )
 
         collected: list[tuple[int, HistoricalObservations]] = []
+        # Set when the archive rate-limits us part-way through. The years already collected are a
+        # real baseline over fewer years, which the result states — so the screen shows the
+        # statistic it could compute rather than an error, and says what it is short of.
+        rate_limited: ProviderRateLimited | None = None
         for year, period in candidates:
             try:
                 observations = await self.observations(
@@ -399,10 +408,20 @@ class HistoryService:
                 )
             except (NoDataForRange, RangeOutsideCoverage):
                 continue
+            except ProviderRateLimited as limited:
+                # One request per candidate year, and the limiter has just refused one of them.
+                # Continuing the loop would send the remaining requests into the same limit — the
+                # behaviour that made a ten-year baseline cost ten refusals. Stop here.
+                rate_limited = limited
+                break
             if observations.daily.supplies(measure):
                 collected.append((year, observations))
 
         if not collected:
+            # Nothing was collected *and* we were refused: the refusal is the honest answer, since
+            # "the archive holds none" would be a claim about the data rather than about the limit.
+            if rate_limited is not None:
+                raise rate_limited
             raise NoDataForRange(
                 f"The archive holds no {measure.value} observations for this calendar period in "
                 f"any of the {years} year(s) requested.",
@@ -421,6 +440,12 @@ class HistoryService:
                 f"{len(years_used)} of the {years} requested years were available in the archive: "
                 f"{', '.join(str(year) for year in years_used)}."
             )
+            if rate_limited is not None:
+                note = (
+                    f"Computed from {len(years_used)} of the {years} requested years "
+                    f"({', '.join(str(year) for year in years_used)}). The archive rate-limited "
+                    "the remaining years, so they are not in this baseline."
+                )
 
         return Baseline(
             location=location,

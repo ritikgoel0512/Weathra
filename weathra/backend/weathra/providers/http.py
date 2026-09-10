@@ -196,6 +196,23 @@ async def _send_json(
 
         if response.status_code in RETRYABLE_STATUSES and attempt < policy.attempts:
             stated = _retry_after_seconds(response) if response.status_code == 429 else None
+            # A ceiling of zero means this caller is not willing to wait out a rate limit at all,
+            # and retrying immediately is not a way of not waiting — it is the same request, sent
+            # again, to a limiter that has just refused it. Open-Meteo returns 429 with no
+            # `Retry-After`, so the `stated is not None` test below never fired for it and the
+            # weather path retried every rate-limited call twice more: a Historical page load that
+            # made twelve archive calls could send thirty-six. Reported instead, once.
+            if response.status_code == 429 and policy.rate_limit_max_wait_seconds <= 0:
+                logger.info("%s rate-limited the request; not retrying (no wait budget)", provider)
+                raise ProviderRateLimited(
+                    f"{provider} rate-limited the request.",
+                    details={
+                        "provider": provider,
+                        "status": 429,
+                        "attempts": attempt,
+                        **({"retry_after_seconds": stated} if stated is not None else {}),
+                    },
+                )
             if stated is not None and stated > policy.rate_limit_max_wait_seconds:
                 # The gateway has told us how long it wants, and it is longer than we are willing
                 # to make a caller wait. Retrying sooner would be a request we already know will

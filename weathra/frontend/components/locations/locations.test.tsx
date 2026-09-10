@@ -636,12 +636,12 @@ describe("a saved place the backend could only describe by its coordinates", () 
     renderScreen();
     await screen.findByText("Unnamed place");
 
-    expect(screen.getByText("Weathra has no name for this place.")).toBeInTheDocument();
+    expect(screen.getByText(/Weathra has no name for this place\./)).toBeInTheDocument();
     await person.click(screen.getByRole("button", { name: "Name this place" }));
-    expect(screen.getByLabelText("Name for this place")).toBeInTheDocument();
+    expect(screen.getByLabelText("What is this place called?")).toBeInTheDocument();
   });
 
-  it("saves the name against the same coordinates, and sends no name for the place itself", async () => {
+  it("repairs the row: the typed name goes with the stored coordinates, so the place is re-resolved", async () => {
     const person = userEvent.setup();
     let listing = WITH_UNNAMED;
     fetchMock = backend({
@@ -659,14 +659,23 @@ describe("a saved place the backend could only describe by its coordinates", () 
     renderScreen();
     await screen.findByText("Unnamed place");
     await person.click(screen.getByRole("button", { name: "Name this place" }));
-    await person.type(screen.getByLabelText("Name for this place"), "Office");
+    await person.type(screen.getByLabelText("What is this place called?"), "Office");
     await person.click(screen.getByRole("button", { name: "Save name" }));
 
     await waitFor(() => expect(posts()).toHaveLength(1));
-    // The coordinates exactly as stored — naming a place must not be able to move it — and no
-    // `location`, because the only name the backend holds for this row is the coordinates, and
-    // sending those as a name asks it to geocode a city that does not exist.
+    /*
+     * The coordinates exactly as stored — naming a place must never be able to move it — *and* the
+     * typed text as the place name.
+     *
+     * This used to send the label alone, which left the row's stored location untouched: it got a
+     * label and kept `48.1374, 11.5755` as its name underneath. Sending both makes the save a
+     * repair. `resolve_for_saving` uses the name to search and the coordinates to pick the right
+     * candidate, so "Munich" restores the canonical city, region and country; text that resolves to
+     * nothing falls back to these coordinates and the label stands alone; and text naming a
+     * different place is refused by the backend rather than silently moving the row.
+     */
     expect(JSON.parse(String(posts()[0]![1].body))).toEqual({
+      location: "Office",
       latitude: UNNAMED.latitude,
       longitude: UNNAMED.longitude,
       label: "Office",

@@ -53,6 +53,7 @@ import {
 import { measureLabel } from "@/lib/dashboard/briefing";
 import { unavailableReason } from "@/lib/historical/analysis";
 import { periodLabel } from "@/lib/historical/analysis";
+import { placeLabel } from "@/lib/locations/place";
 
 import styles from "./compare.module.css";
 
@@ -126,7 +127,7 @@ export function CandidateCard({ candidate, criterion, sharesRank }: CandidateCar
         `public/locations/README.md`.
       */}
       <LocationImage
-        displayName={candidate.location.display_name}
+        displayName={placeLabel(candidate.location) ?? candidate.label}
         latitude={candidate.location.latitude}
         longitude={candidate.location.longitude}
         variant="banner"

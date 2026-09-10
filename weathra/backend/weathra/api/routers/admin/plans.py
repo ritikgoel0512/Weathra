@@ -26,6 +26,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import text
 
 from weathra.api.middleware import annotate
 from weathra.api.routers.admin.deps import AdministrativeSession
@@ -100,6 +101,36 @@ class AllowanceListResponse(BaseModel):
 
     count: int = Field(ge=0)
     allowances: tuple[AllowanceRecord, ...]
+
+
+class PrincipalRecord(BaseModel):
+    """One principal, as an administrator needs to see them.
+
+    **A subject and a tier, and nothing else.** Weathra stores no email, no name and no contact
+    detail of any kind — `specs/authentication` keeps all of it in Supabase Auth and references a
+    person only by their authentication subject — so this is not a list that has been stripped of
+    personal data. There is none to strip, and adding a lookup to fetch some would undo a decision
+    the whole schema is built around.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    subject_id: str
+    plan_code: str | None = Field(default=None, description="Null where nobody has assigned one.")
+    plan_name: str | None = None
+    assigned_at: datetime | None = None
+    assigned_by: str | None = None
+    administrative: bool = Field(
+        default=False,
+        description="Whether this principal holds the administrative role. A role, not a tier.",
+    )
+
+
+class PrincipalListResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    count: int = Field(ge=0)
+    principals: tuple[PrincipalRecord, ...]
 
 
 class RoleListResponse(BaseModel):
@@ -218,6 +249,62 @@ async def assign_plan(
     return await PlanStore(session).assign(
         subject_id, body.plan_code, acting_principal=principal.user_id
     )
+
+
+@router.get(
+    "/principals",
+    response_model=PrincipalListResponse,
+    summary="List the principals and the plan each is on",
+)
+async def list_principals(
+    request: Request,
+    principal: AdministrativePrincipal,
+    session: AdministrativeSession,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> PrincipalListResponse:
+    """Everyone Weathra holds a profile for, with their tier and whether they administer.
+
+    Privileged: `user_plans` grants the request-serving role `SELECT` on its own row only, so this
+    list cannot be assembled from the request path. It carries a subject and a tier — there is no
+    contact detail in this database to carry.
+
+    Ordered by assignment, most recent first, then by subject so the page is stable. A principal
+    with no row in `user_plans` appears with a null plan rather than being left out: somebody who
+    has never been assigned a tier is exactly who an administrator is looking for.
+    """
+    annotate(request, acting_user_id=principal.user_id)
+    rows = await session.execute(
+        text(
+            """
+            SELECT p.user_id::text          AS subject_id,
+                   up.plan_code             AS plan_code,
+                   sp.display_name          AS plan_name,
+                   up.assigned_at           AS assigned_at,
+                   up.assigned_by::text     AS assigned_by,
+                   (ar.subject_id IS NOT NULL) AS administrative
+              FROM profiles p
+              LEFT JOIN user_plans up ON up.user_id = p.user_id
+              LEFT JOIN subscription_plans sp ON sp.plan_code = up.plan_code
+              LEFT JOIN admin_roles ar
+                     ON ar.subject_id = p.user_id AND ar.role = :role
+             ORDER BY up.assigned_at DESC NULLS LAST, p.user_id
+             LIMIT :limit
+            """
+        ),
+        {"role": ADMINISTRATOR_ROLE, "limit": limit},
+    )
+    principals = tuple(
+        PrincipalRecord(
+            subject_id=row.subject_id,
+            plan_code=row.plan_code,
+            plan_name=row.plan_name,
+            assigned_at=row.assigned_at,
+            assigned_by=row.assigned_by,
+            administrative=bool(row.administrative),
+        )
+        for row in rows
+    )
+    return PrincipalListResponse(count=len(principals), principals=principals)
 
 
 @router.get(

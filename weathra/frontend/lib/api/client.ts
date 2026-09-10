@@ -45,19 +45,26 @@ import type {
   MeResponse,
   Measure,
   PeriodComparison,
+  PlanAssignmentRequest,
+  PlanListResponse,
+  PlanMappingRequest,
+  PlanRecord,
+  PlansResponse,
   PolicyAuditResponse,
   PolicyCandidatesRequest,
+  PolicyFallbackRequest,
   PolicyListResponse,
   PolicyRecord,
   PreferenceUpdate,
   PreferenceView,
+  PrincipalListResponse,
   ReadinessResponse,
   ResolvedResponse,
-  ScenarioRequest,
-  ScenarioResponse,
   SavedLocationRecord,
   SavedLocationRequest,
   SavedLocationsResponse,
+  ScenarioRequest,
+  ScenarioResponse,
   SearchResponse,
   ThreadSummary,
   ThreadsResponse,
@@ -197,6 +204,9 @@ export interface ApiClient {
   health(): Promise<HealthResponse>;
   readiness(): Promise<ReadinessResponse>;
 
+  /** The subscription tiers and what each allows. Public: a pricing question, not a per-caller one. */
+  plans(): Promise<PlansResponse>;
+
   searchLocations(query: string, limit?: number): Promise<SearchResponse>;
   resolveLocation(query: PlaceQuery & { query?: string }): Promise<
     ResolvedResponse | AmbiguousResponse
@@ -317,6 +327,21 @@ export interface ApiClient {
   ): Promise<PolicyRecord>;
   /** One policy's audit trail, newest first, with the comparison runs each change cited. */
   adminPolicyAudit(policyId: string, limit?: number): Promise<PolicyAuditResponse>;
+  /** The subscription plans, with the policy each maps to per call role. */
+  adminPlans(): Promise<PlanListResponse>;
+  /**
+   * The principals and the tier each is on.
+   *
+   * A subject and a tier. Weathra holds no email, name or contact detail for anybody — all of it
+   * stays in Supabase Auth — so this is not a personal-data listing with the personal data removed.
+   */
+  adminPrincipals(limit?: number): Promise<PrincipalListResponse>;
+  /** Put a principal on a tier. Privileged and audited by the backend. */
+  assignPlan(subjectId: string, request: PlanAssignmentRequest): Promise<PlanRecord>;
+  /** Set or clear the policy a policy falls back to. */
+  setPolicyFallback(policyId: string, request: PolicyFallbackRequest): Promise<PolicyRecord>;
+  /** Re-point a plan at different policies, per call role. */
+  setPlanPolicies(planCode: string, request: PlanMappingRequest): Promise<PlanRecord>;
 }
 
 /** The base URL with any trailing slash removed, so path joining is unambiguous. */
@@ -575,6 +600,8 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
 
     deleteMyData: () => call<DeletionResponse>("DELETE", "/api/v1/me/data", {}, NO_BODY, true),
 
+    plans: () => get<PlansResponse>("/api/v1/plans"),
+
     adminUsage: (by, days) => get<UsageSummaryResponse>("/api/v1/admin/usage", { by, days }),
     adminPolicies: () => get<PolicyListResponse>("/api/v1/admin/policies"),
     adminCatalog: () => get<CatalogListResponse>("/api/v1/admin/models"),
@@ -593,6 +620,32 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
       get<PolicyAuditResponse>(
         `/api/v1/admin/policies/${encodeURIComponent(policyId)}/audit`,
         { limit },
+      ),
+    adminPlans: () => get<PlanListResponse>("/api/v1/admin/plans"),
+    adminPrincipals: (limit) => get<PrincipalListResponse>("/api/v1/admin/principals", { limit }),
+    assignPlan: (subjectId, request) =>
+      call<PlanRecord>(
+        "PUT",
+        `/api/v1/admin/principals/${encodeURIComponent(subjectId)}/plan`,
+        {},
+        request,
+        true,
+      ),
+    setPolicyFallback: (policyId, request) =>
+      call<PolicyRecord>(
+        "PUT",
+        `/api/v1/admin/policies/${encodeURIComponent(policyId)}/fallback`,
+        {},
+        request,
+        true,
+      ),
+    setPlanPolicies: (planCode, request) =>
+      call<PlanRecord>(
+        "PUT",
+        `/api/v1/admin/plans/${encodeURIComponent(planCode)}/policies`,
+        {},
+        request,
+        true,
       ),
   };
 }

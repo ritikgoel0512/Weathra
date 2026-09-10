@@ -36,6 +36,7 @@ from weathra.auth.deps import IsAdministrative, RequiredPrincipal
 from weathra.auth.profiles import ensure_profile
 from weathra.entitlements.plans import PlanStore
 from weathra.entitlements.quotas import QuotaSubject, UsageReport
+from weathra.entitlements.resolver import DEFAULT_PLAN
 
 __all__ = ["router"]
 
@@ -166,4 +167,99 @@ async def read_usage(
             failures=failures,
             total_tokens=int(tokens) if tokens is not None else None,
         ),
+    )
+
+
+# =========================================================================== the tiers on offer
+
+
+class PlanAllowanceView(BaseModel):
+    """One allowance, as a customer reads it rather than as the limiter stores it."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    dimension: str
+    window: str
+    allowance: int | None = Field(
+        default=None, description="Null is unlimited. A dimension with no row is not capped."
+    )
+
+
+class PlanOfferView(BaseModel):
+    """A tier, its standing, and what it allows."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    plan_code: str
+    display_name: str
+    rank: int = Field(description="Ascending entitlement. Free is the lowest.")
+    allowances: tuple[PlanAllowanceView, ...]
+
+
+class PlansResponse(BaseModel):
+    """The tiers Weathra offers, and how somebody moves between them.
+
+    ``self_service`` is the field that keeps this page honest. Weathra bills nobody: there is no
+    payment integration, no checkout and no self-service upgrade, and a tier above Free is an
+    administrative assignment. A pricing surface that offered a Buy button would be describing a
+    commercial relationship this product does not have.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    count: int = Field(ge=0)
+    plans: tuple[PlanOfferView, ...]
+    default_plan: str = Field(description="What a new account is on before anybody assigns a tier.")
+    self_service: bool = Field(
+        default=False,
+        description="Whether a caller can move themselves between tiers. False: no payment exists.",
+    )
+    assignment_note: str
+
+
+ASSIGNMENT_NOTE = (
+    "Free is what every new account is on. Pro and Premium are assigned by Weathra rather than "
+    "bought here — there is no payment integration in this product — so choosing one records "
+    "nothing and charges nothing."
+)
+
+
+@router.get("/plans", response_model=PlansResponse, summary="The subscription tiers")
+async def list_offered_plans(request: Request, session: CurrentSession) -> PlansResponse:
+    """What the tiers are and what each allows. Public, because it is a pricing question.
+
+    Nothing here is per-caller: no subject is read and no usage is counted, so it answers the same
+    way signed in or not. The caller's *own* standing is `/me/usage`, which is protected.
+    """
+    annotate(request)
+    store = PlanStore(session)
+    plans = await store.list()
+    allowances = await store.allowances()
+
+    by_plan: dict[str, list[PlanAllowanceView]] = {}
+    for record in allowances:
+        if record.plan_code is None:
+            continue  # An internal-subject allowance is not a customer tier's business.
+        by_plan.setdefault(str(record.plan_code), []).append(
+            PlanAllowanceView(
+                dimension=record.dimension.value,
+                window=record.window_kind.value,
+                allowance=record.allowance,
+            )
+        )
+
+    return PlansResponse(
+        count=len(plans),
+        plans=tuple(
+            PlanOfferView(
+                plan_code=str(plan.plan_code),
+                display_name=plan.display_name,
+                rank=plan.rank,
+                allowances=tuple(by_plan.get(str(plan.plan_code), ())),
+            )
+            for plan in sorted(plans, key=lambda plan: plan.rank)
+        ),
+        default_plan=str(DEFAULT_PLAN),
+        self_service=False,
+        assignment_note=ASSIGNMENT_NOTE,
     )

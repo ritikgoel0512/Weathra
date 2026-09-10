@@ -42,6 +42,7 @@ import type {
   StatisticResult,
 } from "@/lib/api/schema";
 import { measureLabel } from "@/lib/dashboard/briefing";
+import { placeLabel } from "@/lib/locations/place";
 import {
   baselineYearsStatement,
   formatSigned,
@@ -245,7 +246,7 @@ export function Observations({ history, children }: ObservationsProps): ReactNod
       title="Recorded observations"
       attribution={{
         provider: history.provider,
-        location: history.location?.display_name ?? null,
+        location: placeLabel(history.location),
         retrievedAt: history.retrieved_at,
         period: {
           start: history.covered_period.start_local,
@@ -340,7 +341,7 @@ export function PeriodComparisonPanel({ comparison }: PeriodComparisonPanelProps
       title="Period against period"
       attribution={{
         provider: comparison.provider,
-        location: comparison.location?.display_name ?? null,
+        location: placeLabel(comparison.location),
         period: {
           start: comparison.later_period.start_local,
           end: comparison.later_period.end_local,
@@ -427,7 +428,7 @@ export function BaselinePanel({ comparison }: BaselinePanelProps): ReactNode {
       title="Selected period against its baseline"
       attribution={{
         provider: baseline.provider,
-        location: baseline.location?.display_name ?? null,
+        location: placeLabel(baseline.location),
         period: {
           start: baseline.calendar_period.start_local,
           end: baseline.calendar_period.end_local,
@@ -472,7 +473,7 @@ export function BaselinePanel({ comparison }: BaselinePanelProps): ReactNode {
       <AttributionFooter
         attribution={{
           provider: baseline.provider,
-          location: baseline.location?.display_name ?? null,
+          location: placeLabel(baseline.location),
           period: {
             start: baseline.calendar_period.start_local,
             end: baseline.calendar_period.end_local,

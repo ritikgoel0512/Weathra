@@ -31,6 +31,8 @@ import type { ReactNode } from "react";
 
 import { ModelPolicyPanel } from "@/components/admin/model-policy";
 import { AdminOverview } from "@/components/admin/overview";
+import { PrincipalPlans } from "@/components/admin/principals";
+import { ModelRouting } from "@/components/admin/routing";
 
 import styles from "@/components/admin/admin.module.css";
 
@@ -48,6 +50,8 @@ export default function Page(): ReactNode {
         a billed amount.
       </p>
       <AdminOverview />
+      <ModelRouting />
+      <PrincipalPlans />
       <ModelPolicyPanel />
     </div>
   );

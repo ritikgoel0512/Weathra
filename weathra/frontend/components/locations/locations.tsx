@@ -97,7 +97,10 @@ function NamePlace({
   if (!open) {
     return (
       <div className={styles.nameRow}>
-        <p className={styles.nameHint}>Weathra has no name for this place.</p>
+        <p className={styles.nameHint}>
+          Weathra has no name for this place. Enter the town or city and its details are restored;
+          enter anything else and it becomes your own name for it.
+        </p>
         <Button size="sm" onClick={() => setOpen(true)} disabled={disabled}>
           Name this place
         </Button>
@@ -117,10 +120,10 @@ function NamePlace({
     >
       <Input
         id={inputId}
-        label="Name for this place"
+        label="What is this place called?"
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
-        placeholder="What do you call it?"
+        placeholder="A town or city, or your own name for it"
         maxLength={200}
       />
       <Button type="submit" variant="primary" size="sm" busy={busy} disabled={draft.trim() === ""}>
@@ -471,9 +474,27 @@ function SavedList({ response }: { readonly response: SavedLocationsResponse }):
    * back exactly as they were stored — naming a place must not be able to move it — and no name is
    * sent, because for one of these rows the only name the backend holds is the coordinates.
    */
+  /*
+   * Naming an unnamed place *repairs* it where it can, and labels it where it cannot.
+   *
+   * The typed text is sent as the place name as well as the label. `POST /me/locations` resolves a
+   * name against the coordinates already stored — the pair is what picks the right candidate — and
+   * the save replaces the stored location with the canonical one, so a row that has been reading
+   * "48.1374, 11.5755" since it was created comes back as Munich, Germany, with its region and
+   * country, from the geocoder rather than from anything typed here.
+   *
+   * Text that resolves to nothing is not an error: the backend falls back to the coordinates it was
+   * given and the label stands on its own, which is what somebody naming a cabin wants. Text that
+   * resolves to a *different* place is refused by the backend, and that refusal is shown, because
+   * quietly moving a saved point to another city is the one outcome nobody could want.
+   *
+   * This is the recovery for old rows. Nothing is hardcoded to a city and running it twice changes
+   * nothing the second time.
+   */
   const name = useApiMutation<{ record: SavedLocationRecord; label: string }, SavedLocationRecord>({
     run: (client, input) =>
       client.saveLocation({
+        location: input.label,
         latitude: input.record.location.latitude,
         longitude: input.record.location.longitude,
         label: input.label,

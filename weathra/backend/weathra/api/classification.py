@@ -248,6 +248,12 @@ _CLASSIFICATIONS: tuple[EndpointClassification, ...] = (
         administrative=True,
     ),
     EndpointClassification(
+        "/plans",
+        Access.PUBLIC,
+        "The subscription tiers and what each allows. A pricing question, not a per-caller one: "
+        "no subject is read and the answer is the same signed in or out.",
+    ),
+    EndpointClassification(
         "/admin/plans",
         Access.PROTECTED,
         "Lists the subscription plans.",
@@ -276,6 +282,13 @@ _CLASSIFICATIONS: tuple[EndpointClassification, ...] = (
         Access.PROTECTED,
         "Sets one of the internal allowances that lab, evaluation and administrative traffic "
         "is accounted against.",
+        administrative=True,
+    ),
+    EndpointClassification(
+        "/admin/principals",
+        Access.PROTECTED,
+        "Lists the principals and the plan each is on. A subject and a tier; Weathra holds no "
+        "contact detail to list.",
         administrative=True,
     ),
     EndpointClassification(

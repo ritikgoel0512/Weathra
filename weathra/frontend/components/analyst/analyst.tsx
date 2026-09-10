@@ -52,6 +52,7 @@ import styles from "./analyst.module.css";
 
 import { FixtureAnalyst } from "./fixture-analyst";
 import { usingVisilyFixtures } from "@/lib/fixtures/visily";
+import { placeLabel } from "@/lib/locations/place";
 
 /**
  * Starter questions, as the artifact's chip row.
@@ -418,7 +419,7 @@ export function Analyst(): ReactNode {
           <span className={styles.composerContextItem}>
             <span className={styles.composerContextTerm}>Focus</span>
             <span className={styles.composerContextValue}>
-              {answer?.resolved?.locations?.[0]?.display_name ?? "Your default location"}
+              {placeLabel(answer?.resolved?.locations?.[0]) ?? "Your default location"}
             </span>
           </span>
           <span className={styles.composerContextItem}>
