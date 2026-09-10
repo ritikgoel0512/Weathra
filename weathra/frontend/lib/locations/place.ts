@@ -54,6 +54,39 @@ export function savedLocationLabel(record: SavedLocationRecord): string {
   return record.label?.trim() || qualifiedName(record.location);
 }
 
+/** What an unnamed place is called on screen, until somebody names it. */
+export const UNNAMED_PLACE = "Unnamed place";
+
+/**
+ * Whether a saved place has no name a person would recognise.
+ *
+ * True only for a row with no label of its own *and* a canonical name that is its own coordinates.
+ * Those rows exist because a save used to send coordinates alone and the backend names a point
+ * after itself — Open-Meteo has no reverse-geocoding endpoint, so there was nothing else to call
+ * it. New saves carry the resolved name; these are the ones already stored.
+ *
+ * They are not repaired automatically, and the reason is worth stating rather than leaving as an
+ * omission: naming a point requires knowing what is near it, the geocoder resolves names to
+ * coordinates and not the reverse, and the only name-shaped field a coordinate lookup returns is a
+ * timezone — whose city can be a thousand kilometres away. Deriving "Kolkata" for a place in
+ * Gurugram would be the confident wrong answer this refuses to give. So the person names it, and
+ * the product asks rather than leaving a coordinate string as the name of somewhere they saved.
+ */
+export function isUnnamedPlace(record: SavedLocationRecord): boolean {
+  const own = record.label?.trim() ?? "";
+  return own === "" && isCoordinateName(record.location.display_name ?? "");
+}
+
+/**
+ * What to show as a saved place's name, with an unnamed one said rather than shown as digits.
+ *
+ * The coordinates do not disappear — they stay on the card as what they are, which is metadata
+ * about where the place is rather than what it is called.
+ */
+export function savedLocationDisplay(record: SavedLocationRecord): string {
+  return isUnnamedPlace(record) ? UNNAMED_PLACE : savedLocationLabel(record);
+}
+
 /**
  * Whether a saved location matches what somebody typed into the filter.
  *

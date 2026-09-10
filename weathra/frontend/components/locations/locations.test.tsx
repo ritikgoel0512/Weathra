@@ -600,3 +600,85 @@ describe("saving an ambiguous place", () => {
     expect(posts()).toHaveLength(0);
   });
 });
+
+describe("a saved place the backend could only describe by its coordinates", () => {
+  /** An arbitrary point, deliberately nowhere near the fixtures' cities. */
+  const UNNAMED = {
+    display_name: "28.4595, 77.0266",
+    latitude: 28.4595,
+    longitude: 77.0266,
+    timezone: "Asia/Kolkata",
+  };
+
+  const WITH_UNNAMED = {
+    count: 1,
+    limit: 20,
+    locations: [{ id: "s-unnamed", location: UNNAMED, label: null as string | null }],
+  };
+
+  it("is not presented as though its coordinates were its name", async () => {
+    fetchMock = backend({ "GET /api/v1/me/locations": () => jsonResponse(200, WITH_UNNAMED) });
+    renderScreen();
+
+    expect(await screen.findByText("Unnamed place")).toBeInTheDocument();
+    // The coordinates stay on the card as metadata — under "Coordinates", where they belong.
+    const card = screen.getByText("Unnamed place").closest("li");
+    expect(within(card as HTMLElement).getByText(/28\.4595/)).toBeInTheDocument();
+    // And not as the heading.
+    expect(screen.getByText("Unnamed place").textContent).not.toMatch(/\d/);
+  });
+
+  it("offers to name it, rather than asking the person to remove and re-add it", async () => {
+    const person = userEvent.setup();
+    fetchMock = backend({ "GET /api/v1/me/locations": () => jsonResponse(200, WITH_UNNAMED) });
+    renderScreen();
+    await screen.findByText("Unnamed place");
+
+    expect(screen.getByText("Weathra has no name for this place.")).toBeInTheDocument();
+    await person.click(screen.getByRole("button", { name: "Name this place" }));
+    expect(screen.getByLabelText("Name for this place")).toBeInTheDocument();
+  });
+
+  it("saves the name against the same coordinates, and sends no name for the place itself", async () => {
+    const person = userEvent.setup();
+    let listing = WITH_UNNAMED;
+    fetchMock = backend({
+      "GET /api/v1/me/locations": () => jsonResponse(200, listing),
+      "POST /api/v1/me/locations": () => {
+        listing = {
+          count: 1,
+          limit: 20,
+          locations: [{ id: "s-unnamed", location: UNNAMED, label: "Office" as string | null }],
+        };
+        return jsonResponse(201, { id: "s-unnamed", location: UNNAMED, label: "Office" });
+      },
+    });
+
+    renderScreen();
+    await screen.findByText("Unnamed place");
+    await person.click(screen.getByRole("button", { name: "Name this place" }));
+    await person.type(screen.getByLabelText("Name for this place"), "Office");
+    await person.click(screen.getByRole("button", { name: "Save name" }));
+
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    // The coordinates exactly as stored — naming a place must not be able to move it — and no
+    // `location`, because the only name the backend holds for this row is the coordinates, and
+    // sending those as a name asks it to geocode a city that does not exist.
+    expect(JSON.parse(String(posts()[0]![1].body))).toEqual({
+      latitude: UNNAMED.latitude,
+      longitude: UNNAMED.longitude,
+      label: "Office",
+    });
+    // The list is re-read, and the place now has its name.
+    expect(await screen.findByText("Office")).toBeInTheDocument();
+    expect(screen.queryByText("Unnamed place")).toBeNull();
+  });
+
+  it("does not offer to name a place that already has a canonical name", async () => {
+    fetchMock = backend({ "GET /api/v1/me/locations": () => jsonResponse(200, SAVED_ONE) });
+    renderScreen();
+    await screen.findByRole("region", { name: "Your saved locations" });
+
+    expect(screen.queryByRole("button", { name: "Name this place" })).toBeNull();
+  });
+});

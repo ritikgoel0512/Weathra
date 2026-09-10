@@ -112,6 +112,8 @@ The system SHALL NOT infer and persist preferences from behavior without an expl
 
 The system SHALL let a person save named locations to their profile, list them, and remove them. A saved location SHALL store the canonical resolved location rather than the raw query text, so it does not need re-resolving. Saving the same location twice SHALL NOT create a duplicate. A saved-location limit SHALL be enforced with the limit stated in the error.
 
+Where the resolved location carries no name of its own — a point identified only by its coordinates, which is what a coordinate lookup returns where the provider offers no reverse geocoding — the system SHALL NOT present those coordinates as the place's name, and SHALL let the person supply one without removing and re-adding the place. Saving the same coordinates again with a label SHALL update that label rather than duplicating the place or moving it. The system SHALL NOT substitute a nearby named place for such a point unless it can establish that place's identity unambiguously.
+
 #### Scenario: Location saved and listed
 
 - **WHEN** a person saves a resolved location
@@ -121,6 +123,12 @@ The system SHALL let a person save named locations to their profile, list them, 
 
 - **WHEN** a person saves a location already in their list
 - **THEN** the list still contains one entry for it
+
+#### Scenario: A place with no canonical name is named by its owner
+
+- **WHEN** a saved location's only name is its own coordinates
+- **THEN** it is presented as unnamed rather than as its coordinates, with the coordinates kept as where it is
+- **AND** the person can give it a name, which updates the existing place rather than duplicating or moving it
 
 #### Scenario: Saved location removed
 

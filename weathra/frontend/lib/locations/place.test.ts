@@ -15,11 +15,14 @@ import {
   coordinatesOf,
   isCoordinateName,
   isSamePlace,
+  isUnnamedPlace,
   matchesFilter,
   placeKey,
   qualifiedName,
+  savedLocationDisplay,
   savedLocationLabel,
   sendableName,
+  UNNAMED_PLACE,
 } from "./place";
 
 function place(overrides: Partial<Location> = {}): Location {
@@ -141,5 +144,67 @@ describe("a place whose only name is its coordinates", () => {
 
   it("sends the name for a place that has one", () => {
     expect(sendableName(named)).toBe("Munich");
+  });
+});
+
+describe("a saved place with no name of its own", () => {
+  function saved(location: Partial<Location>, label: string | null = null): SavedLocationRecord {
+    return {
+      id: "s-1",
+      label,
+      location: {
+        display_name: "x",
+        latitude: 0,
+        longitude: 0,
+        timezone: "UTC",
+        ...location,
+      },
+    } as SavedLocationRecord;
+  }
+
+  it("is recognised wherever in the world it is, from the shape of its name", () => {
+    // Deliberately three unrelated points on three continents: the rule is about the *shape* of
+    // the stored name, so nothing here depends on which city it happens to be near.
+    for (const { lat, lon } of [
+      { lat: 48.1374, lon: 11.5755 },
+      { lat: 28.4595, lon: 77.0266 },
+      { lat: -33.8688, lon: 151.2093 },
+    ]) {
+      const record = saved({
+        display_name: `${lat.toFixed(4)}, ${lon.toFixed(4)}`,
+        latitude: lat,
+        longitude: lon,
+      });
+      expect(isUnnamedPlace(record)).toBe(true);
+      expect(savedLocationDisplay(record)).toBe(UNNAMED_PLACE);
+    }
+  });
+
+  it("is named once the person has labelled it, without the coordinates coming back", () => {
+    const record = saved(
+      { display_name: "28.4595, 77.0266", latitude: 28.4595, longitude: 77.0266 },
+      "Office",
+    );
+    expect(isUnnamedPlace(record)).toBe(false);
+    expect(savedLocationDisplay(record)).toBe("Office");
+  });
+
+  it("leaves a properly named place alone, whatever it is called", () => {
+    for (const name of ["Gurugram", "Munich", "Reykjavík", "São Paulo", "Ōsaka"]) {
+      const record = saved({ display_name: name, country_code: "XX" });
+      expect(isUnnamedPlace(record), name).toBe(false);
+      expect(savedLocationDisplay(record)).toContain(name);
+    }
+  });
+
+  it("keeps the coordinates as what they are: where the place is, not what it is called", () => {
+    const record = saved({
+      display_name: "-33.8688, 151.2093",
+      latitude: -33.8688,
+      longitude: 151.2093,
+    });
+    // The display name stops being digits; the coordinates remain available as metadata.
+    expect(savedLocationDisplay(record)).toBe(UNNAMED_PLACE);
+    expect(coordinatesOf(record.location)).toContain("-33.8688");
   });
 });

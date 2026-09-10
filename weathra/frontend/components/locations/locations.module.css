@@ -323,3 +323,25 @@
 .addSummary .panelTitle {
   display: inline;
 }
+
+/* ------------------------------------------------- naming an unnamed place */
+
+/*
+ * A place saved before the canonical name was stored has only its coordinates, and no reverse
+ * geocoding exists to recover a name from a point. So the card asks, quietly: a hint and a small
+ * control, in the per-card corner treatment `06-saved-locations.png` establishes.
+ */
+.nameRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  min-width: 0;
+}
+
+.nameHint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+}

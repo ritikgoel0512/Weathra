@@ -36,8 +36,10 @@ import { ViewStateSwitch } from "@/components/view-state";
 import type { Location, SavedLocationRecord, SavedLocationsResponse } from "@/lib/api/schema";
 import {
   coordinatesOf,
+  isUnnamedPlace,
   matchesFilter,
   qualifiedName,
+  savedLocationDisplay,
   savedLocationLabel,
   sendableName,
 } from "@/lib/locations/place";
@@ -52,25 +54,100 @@ import { FixtureLocations } from "./fixture-locations";
 import { usingVisilyFixtures } from "@/lib/fixtures/visily";
 
 /** One saved place: what it is called, where it is, and how to remove it. */
+/**
+ * Naming a place the backend could only describe by its coordinates.
+ *
+ * It writes through the ordinary save: `POST /me/locations` with the same coordinates updates the
+ * label rather than duplicating the place (`specs/memory`), so naming one is idempotent and nobody
+ * has to remove and re-add anything. The coordinates go back exactly as they came, so this cannot
+ * move a place while renaming it.
+ */
+function NamePlace({
+  record,
+  onName,
+  busy,
+  disabled,
+}: {
+  readonly record: SavedLocationRecord;
+  readonly onName: (record: SavedLocationRecord, label: string) => void;
+  readonly busy: boolean;
+  readonly disabled: boolean;
+}): ReactNode {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  const inputId = `name-place-${record.id}`;
+
+  if (!open) {
+    return (
+      <div className={styles.nameRow}>
+        <p className={styles.nameHint}>Weathra has no name for this place.</p>
+        <Button size="sm" onClick={() => setOpen(true)} disabled={disabled}>
+          Name this place
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      className={styles.nameRow}
+      onSubmit={(event) => {
+        event.preventDefault();
+        const label = draft.trim();
+        if (label === "") return;
+        onName(record, label);
+      }}
+    >
+      <Input
+        id={inputId}
+        label="Name for this place"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        placeholder="What do you call it?"
+        maxLength={200}
+      />
+      <Button type="submit" variant="primary" size="sm" busy={busy} disabled={draft.trim() === ""}>
+        Save name
+      </Button>
+    </form>
+  );
+}
+
+
 function LocationCard({
   record,
   onRemove,
+  onName,
   removing,
+  naming,
   disabled,
 }: {
   readonly record: SavedLocationRecord;
   readonly onRemove: (record: SavedLocationRecord) => void;
+  readonly onName: (record: SavedLocationRecord, label: string) => void;
   readonly removing: boolean;
+  readonly naming: boolean;
   readonly disabled: boolean;
 }): ReactNode {
   const canonical = qualifiedName(record.location);
   const name = savedLocationLabel(record);
+  const unnamed = isUnnamedPlace(record);
+  const shown = savedLocationDisplay(record);
 
   return (
     <li className={styles.card} data-saved-location={record.id}>
-      <span className={styles.cardName}>{name}</span>
-      {/* The person's label never replaces the canonical name — it sits above it. */}
-      {name === canonical ? null : <span className={styles.cardCanonical}>{canonical}</span>}
+      <span className={styles.cardName}>{shown}</span>
+      {/*
+        The person's label never replaces the canonical name — it sits above it. Except where the
+        canonical name *is* the coordinates: repeating them under "Unnamed place" would present a
+        coordinate string as the thing this place is called, which is the whole defect.
+      */}
+      {unnamed || name === canonical ? null : (
+        <span className={styles.cardCanonical}>{canonical}</span>
+      )}
+      {unnamed ? (
+        <NamePlace record={record} onName={onName} busy={naming} disabled={disabled} />
+      ) : null}
 
       <dl className={styles.cardFacts}>
         <div className={styles.cardRow}>
@@ -317,6 +394,36 @@ function SavedList({ response }: { readonly response: SavedLocationsResponse }):
     [remove],
   );
 
+  const [namingId, setNamingId] = useState<string | null>(null);
+
+  /*
+   * Naming an unnamed place, through the ordinary save.
+   *
+   * `POST /me/locations` with the same coordinates updates the label rather than duplicating the
+   * place, so this is idempotent and nobody removes and re-adds anything. The coordinates are sent
+   * back exactly as they were stored — naming a place must not be able to move it — and no name is
+   * sent, because for one of these rows the only name the backend holds is the coordinates.
+   */
+  const name = useApiMutation<{ record: SavedLocationRecord; label: string }, SavedLocationRecord>({
+    run: (client, input) =>
+      client.saveLocation({
+        latitude: input.record.location.latitude,
+        longitude: input.record.location.longitude,
+        label: input.label,
+      }),
+    invalidates: [SAVED_LOCATIONS_KEY, PREFERENCES_KEY],
+    onDone: () => setNamingId(null),
+  });
+
+  const onName = useCallback(
+    (record: SavedLocationRecord, label: string) => {
+      if (name.busy) return;
+      setNamingId(record.id);
+      name.submit({ record, label });
+    },
+    [name],
+  );
+
   const shown = response.locations.filter((record) => matchesFilter(record, filter));
 
   return (
@@ -346,6 +453,10 @@ function SavedList({ response }: { readonly response: SavedLocationsResponse }):
         <ErrorState failure={remove.state.failure} title="That location was not removed" />
       ) : null}
 
+      {name.state.kind === "error" ? (
+        <ErrorState failure={name.state.failure} title="That name was not saved" />
+      ) : null}
+
       {shown.length === 0 ? (
         <p className={styles.note} role="status">
           {response.count === 0
@@ -359,8 +470,10 @@ function SavedList({ response }: { readonly response: SavedLocationsResponse }):
               key={record.id}
               record={record}
               onRemove={onRemove}
+              onName={onName}
               removing={remove.busy && removingId === record.id}
-              disabled={remove.busy}
+              naming={name.busy && namingId === record.id}
+              disabled={remove.busy || name.busy}
             />
           ))}
         </ul>
