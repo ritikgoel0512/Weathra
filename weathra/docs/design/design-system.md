@@ -328,6 +328,21 @@ comparison tables, historical charts, evidence rows — scrolls **inside its own
 reflow rather than shrinking their type below the body size, and an attribution footer wraps rather
 than truncating: provenance is not the thing that gets dropped when space runs out.
 
+**Two rules make "inside its own container" actually hold**, and the responsive pass of 2026-09-10
+found a screen breaking both while every `min-width: 0` in its stylesheet was correct.
+
+1. **`ScrollRegion` supplies no box.** It measures its container and adds the keyboard tab stop when
+   there is something to reach; the *screen* supplies the `overflow-x: auto` container. A caller
+   that passes no `className` gets a plain `div`, and its table widens the page.
+2. **A single-column grid needs `grid-template-columns: minmax(0, 1fr)` written out.** The implicit
+   track a bare `display: grid` creates is sized `auto`, which means max-content — so the band grows
+   to the widest thing inside it and overflows its own container. No amount of `min-width: 0` on the
+   items corrects this, because each item is already exactly the size the track told it to be. The
+   track is what has to be capped.
+
+The capture harness logs any screen whose document is wider than its viewport, at each of the four
+widths, which is how both were found and how a third would be.
+
 A container that scrolls is **reachable from the keyboard while it has something to scroll**, and
 not otherwise. `ScrollRegion` is the primitive: it measures its own overflow and becomes a named,
 focusable group only when there is content past an edge. Both halves of that are the requirement.

@@ -22,7 +22,7 @@ import { ApiProvider } from "@/lib/api/context";
 import type { CatalogListResponse, UsageSummaryResponse } from "@/lib/api/schema";
 import { createQueryClient } from "@/lib/query/provider";
 
-import { AdminOverview } from "./overview";
+import { AdminOverview, tickLabel } from "./overview";
 
 const USAGE: UsageSummaryResponse = {
   grouped_by: "model",
@@ -132,7 +132,10 @@ describe("the estate's figures", () => {
 
   it("names the period the figures cover", async () => {
     mount();
-    expect(await screen.findByText(/11 Aug\s*–\s*10 Sep/)).toBeInTheDocument();
+    // Twice on purpose: under the call count it qualifies the KPI, and over the figures table it
+    // says what the rows are of. Both read the window off the response, not off the control.
+    const stated = await screen.findAllByText(/11 Aug\s*–\s*10 Sep/);
+    expect(stated.length).toBeGreaterThan(0);
   });
 
   it("calls the highest per-group p50 what it is, and not the estate's median", async () => {
@@ -202,5 +205,21 @@ describe("a caller without the role", () => {
     expect(screen.queryByRole("button", { name: /try again/i })).toBeNull();
     // And no figure is drawn behind the refusal.
     expect(screen.queryByRole("table")).toBeNull();
+  });
+});
+
+describe("axis ticks", () => {
+  it("drops the vendor prefix every row shares, so two gateway strings are distinguishable", () => {
+    expect(tickLabel("openai/gpt-oss-120b")).toBe("gpt-oss-120b");
+  });
+
+  it("truncates a long one rather than letting it run into its neighbour", () => {
+    const tick = tickLabel("nvidia/nemotron-3-super-120b-a12b:free");
+    expect(tick.length).toBeLessThanOrEqual(18);
+    expect(tick.endsWith("…")).toBe(true);
+  });
+
+  it("leaves a short label with no slash alone", () => {
+    expect(tickLabel("free")).toBe("free");
   });
 });

@@ -291,9 +291,21 @@
  */
 
 @media (min-width: 768px) and (max-width: 1279px) {
+  /*
+   * The section headings go with the labels.
+   *
+   * They were left visible and rendered at their full width in a 64-pixel rail, so the 1024 capture
+   * of 2026-09-10 showed "INTELLIGE" cut mid-word and "SAVED LOCATIONS" broken across two lines.
+   * A heading for a group of icon-only items adds nothing a reader can use when it cannot be read,
+   * and clipping it is worse than not drawing it. Each remains the section's accessible name
+   * through `aria-labelledby`, so the groups are still navigable structure to a screen reader —
+   * this hides them from sight, not from the accessibility tree.
+   */
   .brandName,
   .identityText,
-  .plannedMark {
+  .plannedMark,
+  .plannedHeading,
+  .savedHeading {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -304,6 +316,25 @@
 
   .item {
     justify-content: center;
+  }
+
+  /*
+   * The sign-out control is the one thing in the rail with no icon, so it cannot be reduced to one
+   * the way the entries are — a control with no accessible name is worse than a wrapped one. It
+   * keeps its words, centred over two lines and at the label size, so it reads as a deliberate
+   * two-line control rather than as text that ran out of room.
+   */
+  .identityPerson {
+    justify-content: center;
+  }
+
+  .identity form button {
+    text-align: center;
+    padding-left: var(--space-1);
+    padding-right: var(--space-1);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-line);
+    letter-spacing: 0.02em;
   }
 
   .itemLabel {

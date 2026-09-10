@@ -230,10 +230,17 @@
 
 .overview {
   display: grid;
+  /*
+   * `minmax(0, 1fr)`, not the implicit `auto` a single-column grid gets by default.
+   *
+   * This is what was actually pushing the page open: an implicit `auto` track is sized to its
+   * max-content, so the whole band grew to the widest thing inside it — the usage table's nowrap
+   * row, 1288px — and overflowed its own 1160px container. `min-width: 0` on the *items* cannot fix
+   * that, because the item was already the size the track told it to be; the track is what had to
+   * be capped. Every single-column grid on this screen says it explicitly for the same reason.
+   */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-5);
-  /* A flex item's default `min-width: auto` is what let the fifth KPI card and the usage table
-     overflow the screen's right edge: the grid sized itself to its widest cell rather than to the
-     column it sits in. Every band that can hold a wide table or a nowrap number repeats this. */
   min-width: 0;
 }
 
@@ -248,6 +255,7 @@
 
 .kpi {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   gap: var(--space-1);
   padding: var(--space-4);
@@ -291,6 +299,7 @@
 
 .overviewSide {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
   min-width: 0;
 }
@@ -311,6 +320,7 @@
 .chart {
   margin: 0 0 var(--space-4);
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-2);
 }
 
@@ -358,9 +368,6 @@
 
 .table {
   width: 100%;
-  /* Wide enough that the columns stay readable, narrow enough that it fits a desk width without
-     scrolling at all. Below that it scrolls inside `.scroll` rather than pushing the page. */
-  min-width: 640px;
   border-collapse: collapse;
   font-size: var(--type-ui-size);
 }
@@ -371,6 +378,21 @@
   text-align: left;
   white-space: nowrap;
   border-bottom: 1px solid var(--color-border-subtle);
+}
+
+/* The one column that may wrap: a gateway string is long, and it is the column whose width would
+   otherwise decide whether the whole table needs scrolling at a desk width. */
+/*
+ * The one column that may wrap: a gateway string is long, and it is the column whose width would
+ * otherwise decide whether the whole table needs scrolling at a desk width. `ch` rather than a
+ * pixel floor, because `tests/design-rules.test.ts` refuses any pixel `min-width` above the
+ * 360-pixel floor — rightly, and a column that must not collapse is exactly the kind of local
+ * exception that would erode that rule if it were allowed one.
+ */
+.wrapping {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-width: 14ch;
 }
 
 .table thead th {
@@ -422,6 +444,7 @@
 
 .failures {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-2);
   margin: 0;
   padding: 0;

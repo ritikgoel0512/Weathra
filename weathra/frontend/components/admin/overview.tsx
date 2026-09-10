@@ -102,6 +102,18 @@ function Refusal({ failure, onRetry }: { readonly failure: ViewFailure; readonly
   );
 }
 
+/**
+ * An axis tick a reader can tell apart, for a label that is a gateway string.
+ *
+ * `nvidia/nemotron-3-super-120b-a12b:free` beside `openai/gpt-oss-120b` on a 700-pixel axis draws
+ * one run-on word. The vendor prefix is the part every row shares, so the tick drops it and the
+ * tooltip — and the table below — carry the whole string.
+ */
+export function tickLabel(label: string): string {
+  const tail = label.includes("/") ? label.slice(label.indexOf("/") + 1) : label;
+  return tail.length > 18 ? `${tail.slice(0, 17)}…` : tail;
+}
+
 function count(value: number | null | undefined): string {
   return value === null || value === undefined ? "—" : Math.round(value).toLocaleString("en-GB");
 }
@@ -187,7 +199,7 @@ function UsageChart({
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={[...bars]} margin={{ top: 8, right: 12, bottom: 4, left: 0 }} barCategoryGap={8}>
             <CartesianGrid stroke="var(--color-border-subtle)" strokeDasharray="0" vertical={false} />
-            <XAxis dataKey="label" {...AXIS} interval={0} />
+            <XAxis dataKey="label" {...AXIS} interval={0} tickFormatter={tickLabel} />
             <YAxis {...AXIS} width={64} />
             <Tooltip
               cursor={{ fill: "var(--color-surface-raised)" }}
@@ -254,15 +266,17 @@ function CatalogPanel(): ReactNode {
                     : undefined;
                   return (
                     <tr key={entry.catalog_key}>
-                      <th scope="row">
+                      <th scope="row" className={styles.wrapping}>
                         {entry.display_name}
                         <span className={styles.catalogKey}>{entry.catalog_key}</span>
                       </th>
-                      <td className={styles.gateway}>
+                      <td className={`${styles.gateway} ${styles.wrapping}`}>
                         {entry.gateway_model}
                         <span className={styles.catalogKey}>{entry.gateway_provider}</span>
                       </td>
-                      <td>{entry.capability_roles.join(", ")}</td>
+                      {/* Three role names is the longest cell in the row and the one that decided
+                          whether the last column fitted. It wraps; the numbers do not. */}
+                      <td className={styles.wrapping}>{entry.capability_roles.join(", ")}</td>
                       <td>{entry.capability_tier}</td>
                       <td>{entry.supports_structured_output ? "yes" : "no"}</td>
                       <td>{entry.is_free_tier ? "free tier" : "paid"}</td>
@@ -393,41 +407,6 @@ export function AdminOverview(): ReactNode {
                 </div>
 
                 <UsageChart summary={summary} measure={measure} />
-
-                <ScrollRegion label={`Usage grouped by ${summary.grouped_by}`} className={styles.scroll}>
-                  <table className={styles.table}>
-                    <thead>
-                      <tr>
-                        <th scope="col">{summary.grouped_by.replace("_", " ")}</th>
-                        <th scope="col">Traffic</th>
-                        <th scope="col">Calls</th>
-                        <th scope="col">Failures</th>
-                        <th scope="col">Tokens</th>
-                        <th scope="col">Estimated cost</th>
-                        <th scope="col">p50 ms</th>
-                        <th scope="col">p95 ms</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {groups.map((group) => (
-                        <tr key={`${group.group}-${group.is_internal}`}>
-                          <th scope="row">{group.group ?? "not recorded"}</th>
-                          <td>
-                            <Badge tone={group.is_internal ? "accent" : "neutral"}>
-                              {group.is_internal ? "internal" : "product"}
-                            </Badge>
-                          </td>
-                          <td>{count(group.calls)}</td>
-                          <td>{count(group.failures)}</td>
-                          <td>{count(group.total_tokens)}</td>
-                          <td>{group.estimated_cost_total ?? "—"}</td>
-                          <td>{count(group.latency_p50_ms)}</td>
-                          <td>{count(group.latency_p95_ms)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </ScrollRegion>
               </>
             )}
           </CardBody>
@@ -486,6 +465,60 @@ export function AdminOverview(): ReactNode {
           </Card>
         </div>
       </div>
+
+      {/*
+        The figures the chart is drawn from, at full width — where the artifact puts its table too.
+        It was inside the chart card, which is two thirds of a row, and a nine-column table in two
+        thirds of a row scrolls at every width including the one the artifact is drawn at.
+      */}
+      {summary === null || groups.length === 0 ? null : (
+        <Card aria-labelledby="admin-figures">
+          <CardHeader
+            title="The figures behind the chart"
+            titleId="admin-figures"
+            headingLevel={3}
+            subtitle={`Grouped by ${summary.grouped_by.replace("_", " ")}, over ${windowLabel(summary)}.`}
+          />
+          <CardBody>
+            <ScrollRegion label={`Usage grouped by ${summary.grouped_by}`} className={styles.scroll}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th scope="col">{summary.grouped_by.replace("_", " ")}</th>
+                    <th scope="col">Traffic</th>
+                    <th scope="col">Calls</th>
+                    <th scope="col">Failures</th>
+                    <th scope="col">Tokens</th>
+                    <th scope="col">Estimated cost</th>
+                    <th scope="col">p50 ms</th>
+                    <th scope="col">p95 ms</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groups.map((group) => (
+                    <tr key={`${group.group}-${group.is_internal}`}>
+                      <th scope="row" className={styles.wrapping}>
+                        {group.group ?? "not recorded"}
+                      </th>
+                      <td>
+                        <Badge tone={group.is_internal ? "accent" : "neutral"}>
+                          {group.is_internal ? "internal" : "product"}
+                        </Badge>
+                      </td>
+                      <td>{count(group.calls)}</td>
+                      <td>{count(group.failures)}</td>
+                      <td>{count(group.total_tokens)}</td>
+                      <td>{group.estimated_cost_total ?? "—"}</td>
+                      <td>{count(group.latency_p50_ms)}</td>
+                      <td>{count(group.latency_p95_ms)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </ScrollRegion>
+          </CardBody>
+        </Card>
+      )}
 
       <CatalogPanel />
     </section>
