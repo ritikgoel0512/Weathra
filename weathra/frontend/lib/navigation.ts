@@ -119,10 +119,31 @@ export const ADMIN_NAVIGATION: readonly Destination[] = ADMIN_SCREENS.map((scree
   icon: "intelligence" as const,
 }));
 
+/**
+ * Every destination the product can be *on*, whoever is looking.
+ *
+ * Wider than `NAVIGATION` on purpose. What the rail offers depends on who is asking — the account
+ * group is offered to everybody and the administrative one only to an administrator — but "which
+ * screen is this?" does not: a person standing on a route is standing on it either way, and the
+ * answer decides the active state in the rail and the name in the top bar. Leaving the two extra
+ * groups out meant `/plan` and `/admin/model-usage` had no active entry and no title, which is how
+ * a section that was correctly offered still looked like it had not been reached.
+ *
+ * It carries no capability. This is a path-to-title map, and the administrative route refuses a
+ * caller without the role whether or not this can name it.
+ */
+export const ALL_DESTINATIONS: readonly Destination[] = [
+  ...NAVIGATION,
+  ...ACCOUNT_NAVIGATION,
+  ...ADMIN_NAVIGATION,
+];
+
 /** The destination whose route the given path is on, or null for a path outside the model. */
 export function destinationFor(pathname: string): Destination | null {
   // Longest path first, so `/` does not claim `/analyst`.
-  const candidates = [...NAVIGATION].sort((one, other) => other.path.length - one.path.length);
+  const candidates = [...ALL_DESTINATIONS].sort(
+    (one, other) => other.path.length - one.path.length,
+  );
   return (
     candidates.find((entry) =>
       entry.path === "/"

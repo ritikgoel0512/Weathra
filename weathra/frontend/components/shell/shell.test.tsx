@@ -18,7 +18,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Identity } from "@/lib/auth/identity";
 import { SessionBoundary } from "@/lib/session/provider";
 import { NAVIGATION } from "@/lib/navigation";
-import { MVP_SCREENS, POST_MVP_SCREENS } from "@/lib/routes";
+import { ADMIN_MODEL_USAGE_PATH, MVP_SCREENS, POST_MVP_SCREENS } from "@/lib/routes";
 
 import { AppShell } from "./app-shell";
 import { RouteStatus } from "./route-status";
@@ -421,6 +421,78 @@ describe("the administrative section of the rail", () => {
     await screen.findByRole("link", { name: "Dashboard" });
 
     expect(screen.queryByRole("heading", { name: "Admin" })).toBeNull();
+  });
+
+  it("marks the administrative entry as the page you are on", async () => {
+    // The gap this closes: the section was offered correctly, but nothing in it was ever marked
+    // active, because the active-state lookup only knew the destinations everybody sees. A section
+    // you can reach but that never lights up reads as a link that did not work.
+    pathname.mockReturnValue(ADMIN_MODEL_USAGE_PATH);
+    renderShellAs({ ...ORDINARY, administrative: true });
+
+    const link = await screen.findByRole("link", { name: "Model & AI Usage" });
+    expect(link).toHaveAttribute("aria-current", "page");
+    expect(link).toHaveAttribute("data-active", "true");
+  });
+
+  it("is in the one navigation the drawer and the rail share", async () => {
+    // Not a second navigation system: the shell renders one <nav>, and the header's menu button
+    // opens that same element on a narrow viewport. So an administrator gets the entry on a phone
+    // by the same code path, and a person without the role gets it on neither.
+    renderShellAs({ ...ORDINARY, administrative: true });
+    const link = await screen.findByRole("link", { name: "Model & AI Usage" });
+
+    const navigation = screen.getByRole("navigation", { name: "Weathra" });
+    expect(navigation.contains(link)).toBe(true);
+    expect(screen.getByRole("button", { name: /menu/i })).toHaveAttribute(
+      "aria-controls",
+      navigation.id,
+    );
+  });
+
+  it("survives a remount, which is what a refresh is", async () => {
+    // A refresh re-resolves the session server-side and mounts the shell again; the capability is
+    // read from the backend each time rather than remembered anywhere, so there is nothing to go
+    // stale and nothing to restore.
+    const first = renderShellAs({ ...ORDINARY, administrative: true });
+    await screen.findByRole("heading", { name: "Admin" });
+    first.unmount();
+
+    renderShellAs({ ...ORDINARY, administrative: true });
+    expect(await screen.findByRole("heading", { name: "Admin" })).toBeInTheDocument();
+  });
+
+  it("is gone once the session is not administrative any more", async () => {
+    // Sign-out leaves the `(app)` group entirely and an expired session replaces the shell with the
+    // expired state, so neither can leave this on screen. What this covers is the remaining case:
+    // the same shell mounted for a session that does not hold the role shows nothing.
+    const asAdmin = renderShellAs({ ...ORDINARY, administrative: true });
+    await screen.findByRole("heading", { name: "Admin" });
+    asAdmin.unmount();
+
+    renderShellAs(ORDINARY);
+    await screen.findByRole("link", { name: "Dashboard" });
+    expect(screen.queryByRole("heading", { name: "Admin" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Model & AI Usage" })).toBeNull();
+  });
+
+  it("closes the drawer when an administrator follows it on a narrow viewport", async () => {
+    // The mobile behaviour that makes the entry usable rather than merely present: the drawer is
+    // the same <nav>, so following a link inside it has to dismiss it, exactly as the product
+    // entries above already do.
+    const person = userEvent.setup();
+    renderShellAs({ ...ORDINARY, administrative: true });
+    await screen.findByRole("link", { name: "Model & AI Usage" });
+
+    await person.click(screen.getByRole("button", { name: "Menu" }));
+    expect(screen.getByRole("navigation", { name: "Weathra" })).toHaveAttribute(
+      "data-open",
+      "true",
+    );
+
+    await person.click(screen.getByRole("link", { name: "Model & AI Usage" }));
+    expect(screen.getByRole("navigation", { name: "Weathra" })).not.toHaveAttribute("data-open");
+    expect(screen.getByRole("button", { name: "Menu" })).toHaveAttribute("aria-expanded", "false");
   });
 
   it("offers only administrative surfaces that are actually implemented", async () => {

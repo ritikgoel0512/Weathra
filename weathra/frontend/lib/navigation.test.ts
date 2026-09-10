@@ -16,7 +16,15 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { NAVIGATION, destinationFor, isActive } from "./navigation";
+import { ADMIN_MODEL_USAGE_PATH, PLAN_USAGE_PATH } from "@/lib/routes";
+
+import {
+  ADMIN_NAVIGATION,
+  ALL_DESTINATIONS,
+  NAVIGATION,
+  destinationFor,
+  isActive,
+} from "./navigation";
 import { MVP_SCREENS, POST_MVP_SCREENS } from "./routes";
 
 function read(relative: string): string {
@@ -160,5 +168,31 @@ describe("every destination is reachable", () => {
       const directory = entry.path === "/" ? "." : entry.path;
       expect(existsSync(projectPath("app", directory, "page.tsx"))).toBe(false);
     }
+  });
+});
+
+describe("the destinations a person can be standing on", () => {
+  it("includes the account and administrative groups, not only what everybody sees", () => {
+    // What the rail *offers* depends on who is asking; which screen you are *on* does not. Leaving
+    // these out left `/plan` and `/admin/model-usage` with no active entry and no title.
+    expect(ALL_DESTINATIONS.map((entry) => entry.path)).toContain(PLAN_USAGE_PATH);
+    expect(ALL_DESTINATIONS.map((entry) => entry.path)).toContain(ADMIN_MODEL_USAGE_PATH);
+  });
+
+  it("names the administrative route, so the rail can mark it and the top bar can title it", () => {
+    expect(destinationFor(ADMIN_MODEL_USAGE_PATH)?.title).toBe("Model & AI Usage");
+    expect(destinationFor(PLAN_USAGE_PATH)?.title).toBe("Plan & Usage");
+  });
+
+  it("marks the administrative entry active on its own route and on no other", () => {
+    const admin = ADMIN_NAVIGATION[0]!;
+    expect(isActive(admin, ADMIN_MODEL_USAGE_PATH)).toBe(true);
+    expect(isActive(admin, PLAN_USAGE_PATH)).toBe(false);
+    expect(isActive(admin, "/")).toBe(false);
+  });
+
+  it("still answers null for a path outside the product", () => {
+    expect(destinationFor("/sign-in")).toBeNull();
+    expect(destinationFor("/nothing-here")).toBeNull();
   });
 });
