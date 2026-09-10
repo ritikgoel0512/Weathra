@@ -1,0 +1,120 @@
+/*
+ * Weather Scenario Lab — from the task 20.3 tokens against
+ * `docs/design/screens/13-weather-scenario-lab.png`.
+ *
+ * The artifact's layout: assumptions in a narrow left column, results in the wide right one, delta
+ * cards beneath the chart, the disclaimer last. Its session id, inference model, station id,
+ * stability index, simulation engine, report export, correlation model and node counts are absent
+ * from the markup rather than styled away.
+ *
+ * `quota` is the badge tone the design system reserves for a state that is not a data class —
+ * SIMULATED is exactly that: not observed, not forecast, not historical, not computed from the
+ * record, but supposed.
+ */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.lede {
+  margin: 0;
+  color: var(--color-text-secondary);
+  max-width: 74ch;
+}
+
+.body {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr);
+  gap: var(--space-4);
+  align-items: start;
+  min-width: 0;
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.deltas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+}
+
+.delta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.deltaLabel {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+}
+
+.deltaValue {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  font-variant-numeric: tabular-nums;
+}
+
+.deltaMethod,
+.deltaNote {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.quiet {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  max-width: 74ch;
+}
+
+@media (max-width: 1023px) {
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

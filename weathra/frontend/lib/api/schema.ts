@@ -993,6 +993,66 @@ export interface SavedLocationsResponse {
   readonly locations: SavedLocationRecord[];
 }
 
+/** What a person supposed. Every field optional; an omitted one changes nothing. */
+export interface ScenarioAssumptions {
+  /** Scales every reported precipitation figure. -100 removes it entirely. */
+  readonly precipitation_percent?: number | null;
+  /** Added to every reported humidity, in points. */
+  readonly relative_humidity_delta?: number | null;
+  /** Added to every reported temperature. */
+  readonly temperature_delta?: number | null;
+  /** Added to every reported wind speed. */
+  readonly wind_speed_delta?: number | null;
+}
+
+/** One measure, before and after, with the arithmetic that produced the after. */
+export interface ScenarioMeasure {
+  readonly assumption: number;
+  /** Mean of the reported values. Null where none were reported. */
+  readonly baseline_mean?: number | null;
+  /** Hours where the assumption would have crossed a physical bound and was applied up to it instead. Counted rather than absorbed. */
+  readonly clipped?: number;
+  /** Scenario mean less baseline mean, where both exist. */
+  readonly difference?: number | null;
+  readonly measure: Measure;
+  readonly method: string;
+  /** Hours the provider reported nothing for this measure. */
+  readonly points_excluded?: number;
+  readonly points_used?: number;
+  readonly scenario_mean?: number | null;
+  readonly unit?: string | null;
+}
+
+/** A place, a horizon, and what to suppose about it. */
+export interface ScenarioRequest {
+  /** Every field optional. An omitted assumption changes nothing, and a request with none returns the forecast unchanged — which is a legitimate baseline to draw. */
+  readonly assumptions?: ScenarioAssumptions;
+  readonly days?: number | null;
+  readonly latitude?: number | null;
+  readonly location?: string | null;
+  readonly longitude?: number | null;
+  readonly provider?: string | null;
+  readonly units?: UnitSystem | null;
+}
+
+/** A stated assumption applied to a real forecast, and the arithmetic that did it. */
+export interface ScenarioResponse {
+  readonly assumptions: ScenarioAssumptions;
+  readonly attribution: WeatherAttribution;
+  /** Exactly what the provider returned. Unmodified. */
+  readonly baseline: Series;
+  /** What the result is and is not, in one sentence, for any surface that shows it. */
+  readonly disclaimer: string;
+  readonly horizon_days: number;
+  /** Per adjusted measure: the arithmetic used, the means either side, and the hours excluded or clipped. */
+  readonly measures: ScenarioMeasure[];
+  readonly period: Period;
+  /** The same instants and units, with the assumptions applied. */
+  readonly scenario: Series;
+  /** Always true. This is a hypothetical, not a forecast and not an observation. */
+  readonly simulated?: true;
+}
+
 /** Ranked candidates for a partial query. An empty list is a real answer. */
 export interface SearchResponse {
   readonly count: number;
@@ -1962,5 +2022,16 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
       { name: "units", in: "query", required: false },
       { name: "provider", in: "query", required: false },
     ],
+  },
+  {
+    operationId: "scenario_api_v1_weather_scenario_post",
+    method: "POST",
+    path: "/api/v1/weather/scenario",
+    requiresToken: false,
+    administrative: false,
+    request: "ScenarioRequest",
+    successStatus: 200,
+    response: "ScenarioResponse",
+    parameters: [],
   },
 ];

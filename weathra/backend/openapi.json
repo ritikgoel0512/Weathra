@@ -4655,6 +4655,302 @@
         "title": "SavedLocationsResponse",
         "type": "object"
       },
+      "ScenarioAssumptions": {
+        "additionalProperties": false,
+        "description": "What a person supposed. Every field optional; an omitted one changes nothing.",
+        "properties": {
+          "precipitation_percent": {
+            "anyOf": [
+              {
+                "maximum": 500.0,
+                "minimum": -100.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Scales every reported precipitation figure. -100 removes it entirely.",
+            "title": "Precipitation Percent"
+          },
+          "relative_humidity_delta": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": -100.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Added to every reported humidity, in points.",
+            "title": "Relative Humidity Delta"
+          },
+          "temperature_delta": {
+            "anyOf": [
+              {
+                "maximum": 30.0,
+                "minimum": -30.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Added to every reported temperature.",
+            "title": "Temperature Delta"
+          },
+          "wind_speed_delta": {
+            "anyOf": [
+              {
+                "maximum": 200.0,
+                "minimum": -200.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Added to every reported wind speed.",
+            "title": "Wind Speed Delta"
+          }
+        },
+        "title": "ScenarioAssumptions",
+        "type": "object"
+      },
+      "ScenarioMeasure": {
+        "additionalProperties": false,
+        "description": "One measure, before and after, with the arithmetic that produced the after.",
+        "properties": {
+          "assumption": {
+            "title": "Assumption",
+            "type": "number"
+          },
+          "baseline_mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Mean of the reported values. Null where none were reported.",
+            "title": "Baseline Mean"
+          },
+          "clipped": {
+            "default": 0,
+            "description": "Hours where the assumption would have crossed a physical bound and was applied up to it instead. Counted rather than absorbed.",
+            "minimum": 0.0,
+            "title": "Clipped",
+            "type": "integer"
+          },
+          "difference": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Scenario mean less baseline mean, where both exist.",
+            "title": "Difference"
+          },
+          "measure": {
+            "$ref": "#/components/schemas/Measure"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "points_excluded": {
+            "default": 0,
+            "description": "Hours the provider reported nothing for this measure.",
+            "minimum": 0.0,
+            "title": "Points Excluded",
+            "type": "integer"
+          },
+          "points_used": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Points Used",
+            "type": "integer"
+          },
+          "scenario_mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scenario Mean"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "required": [
+          "measure",
+          "assumption",
+          "method"
+        ],
+        "title": "ScenarioMeasure",
+        "type": "object"
+      },
+      "ScenarioRequest": {
+        "additionalProperties": false,
+        "description": "A place, a horizon, and what to suppose about it.",
+        "properties": {
+          "assumptions": {
+            "$ref": "#/components/schemas/ScenarioAssumptions",
+            "description": "Every field optional. An omitted assumption changes nothing, and a request with none returns the forecast unchanged \u2014 which is a legitimate baseline to draw."
+          },
+          "days": {
+            "anyOf": [
+              {
+                "maximum": 365.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "maximum": 90.0,
+                "minimum": -90.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "maximum": 180.0,
+                "minimum": -180.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "units": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnitSystem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ScenarioRequest",
+        "type": "object"
+      },
+      "ScenarioResponse": {
+        "additionalProperties": false,
+        "description": "A stated assumption applied to a real forecast, and the arithmetic that did it.\n\n**Simulated, and the field says so before any number does.** `specs/forecast-analysis` requires\na forecast to be labelled as a forecast; this is not one. It is a retrieved series with a\nperson's supposition applied to it, and reading it as a prediction of what the weather will do\nis the one misunderstanding the whole surface is shaped to prevent.",
+        "properties": {
+          "assumptions": {
+            "$ref": "#/components/schemas/ScenarioAssumptions"
+          },
+          "attribution": {
+            "$ref": "#/components/schemas/weathra__api__routers__weather__Attribution"
+          },
+          "baseline": {
+            "$ref": "#/components/schemas/Series",
+            "description": "Exactly what the provider returned. Unmodified."
+          },
+          "disclaimer": {
+            "description": "What the result is and is not, in one sentence, for any surface that shows it.",
+            "title": "Disclaimer",
+            "type": "string"
+          },
+          "horizon_days": {
+            "title": "Horizon Days",
+            "type": "integer"
+          },
+          "measures": {
+            "description": "Per adjusted measure: the arithmetic used, the means either side, and the hours excluded or clipped.",
+            "items": {
+              "$ref": "#/components/schemas/ScenarioMeasure"
+            },
+            "title": "Measures",
+            "type": "array"
+          },
+          "period": {
+            "$ref": "#/components/schemas/Period"
+          },
+          "scenario": {
+            "$ref": "#/components/schemas/Series",
+            "description": "The same instants and units, with the assumptions applied."
+          },
+          "simulated": {
+            "const": true,
+            "default": true,
+            "description": "Always true. This is a hypothetical, not a forecast and not an observation.",
+            "title": "Simulated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "disclaimer",
+          "attribution",
+          "period",
+          "horizon_days",
+          "assumptions",
+          "baseline",
+          "scenario",
+          "measures"
+        ],
+        "title": "ScenarioResponse",
+        "type": "object"
+      },
       "SearchResponse": {
         "additionalProperties": false,
         "description": "Ranked candidates for a partial query. An empty list is a real answer.",
@@ -9284,6 +9580,49 @@
         "summary": "Compare two past periods",
         "tags": [
           "history"
+        ]
+      }
+    },
+    "/api/v1/weather/scenario": {
+      "post": {
+        "description": "**Public.** Stated assumptions applied to a real forecast. Hypothetical, and labelled so.\n\nWhat the forecast would read if the assumptions held \u2014 arithmetic, not meteorology.\n\nThe baseline is a real forecast for a real place, retrieved through the same service every other\nforecast comes from. The assumptions are the caller's. What joins them is\n`analytics/scenario.py`, which adds or scales and bounds the result, and states per measure what\nit did \u2014 no model of the atmosphere is involved, and none is implied.\n\n**No language model is called.** An interpretation of a scenario is a separate, explicit request\nto the agent; making one here would spend somebody's allowance on every slider movement and\nwould put model prose where a computed figure belongs.",
+        "operationId": "scenario_api_v1_weather_scenario_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScenarioRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [],
+        "summary": "Apply assumptions to a forecast",
+        "tags": [
+          "weather"
         ]
       }
     }

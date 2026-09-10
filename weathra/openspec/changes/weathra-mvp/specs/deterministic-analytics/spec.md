@@ -4,6 +4,38 @@ The single place where every meteorological number Weathra reports is calculated
 
 ## ADDED Requirements
 
+### Requirement: Stated assumptions applied to a retrieved series
+
+The system SHALL support applying caller-stated assumptions to a retrieved weather series and returning the result, computed deterministically and without any language model. The same series and the same assumptions SHALL produce the same result.
+
+The result SHALL be labelled as hypothetical and SHALL NOT be presented as a forecast, a prediction or an observation. It SHALL carry the unmodified baseline alongside the adjusted series, the assumptions as stated, and per adjusted measure: the arithmetic applied in words, the mean either side, the difference, the points used, the points excluded because the provider reported nothing, and the number of points where a physical bound was reached.
+
+An assumption SHALL only address a measure the system declares adjustable. A value the provider did not report SHALL remain absent rather than becoming the assumption. Where an adjustment would carry a value outside a physical bound — a relative humidity outside 0–100, a negative precipitation or wind speed — the bound SHALL be applied and the occurrence counted rather than absorbed silently.
+
+#### Scenario: An assumption is applied
+
+- **WHEN** assumptions are applied to a retrieved series
+- **THEN** the adjusted series carries the same instants, granularity and units as the baseline
+- **AND** both series are returned, with the arithmetic stated per adjusted measure
+
+#### Scenario: An absent value stays absent
+
+- **WHEN** the provider reported no value for a measure at an instant
+- **THEN** the adjusted series reports none at that instant
+- **AND** the point is counted as excluded rather than treated as zero
+
+#### Scenario: A physical bound is reached
+
+- **WHEN** an assumption would carry a value past a physical bound
+- **THEN** the value is bounded
+- **AND** the number of points bounded is reported
+
+#### Scenario: The result is not a forecast
+
+- **WHEN** a scenario result is inspected
+- **THEN** it is labelled hypothetical
+- **AND** it states that it is neither a forecast nor an official warning
+
 ### Requirement: Analytics are pure, deterministic, and free of language models
 
 Every analytics function SHALL be a pure function of its arguments: the same inputs SHALL always produce identical outputs. Analytics functions SHALL perform no network access, no database access, no clock reads, and SHALL NOT invoke a language model. The analysed window and units SHALL be passed in as arguments rather than derived from ambient state.

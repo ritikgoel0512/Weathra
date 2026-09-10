@@ -21,11 +21,12 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
+from weathra.analytics.scenario import ScenarioAssumptions, ScenarioMeasure, apply_assumptions
 from weathra.api.dependencies import Configuration, CurrentSession, Places, WeatherFor
 from weathra.api.middleware import annotate
 from weathra.api.routers.support import horizon_for, provider_for, resolve_one, units_for
@@ -186,6 +187,56 @@ async def current(
     )
 
 
+class ScenarioRequest(BaseModel):
+    """A place, a horizon, and what to suppose about it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    location: str | None = None
+    latitude: float | None = Field(default=None, ge=-90.0, le=90.0)
+    longitude: float | None = Field(default=None, ge=-180.0, le=180.0)
+    days: int | None = Field(default=None, ge=1, le=365)
+    units: UnitSystem | None = None
+    provider: str | None = None
+    assumptions: ScenarioAssumptions = Field(
+        default_factory=ScenarioAssumptions,
+        description="Every field optional. An omitted assumption changes nothing, and a request "
+        "with none returns the forecast unchanged — which is a legitimate baseline to draw.",
+    )
+
+
+class ScenarioResponse(BaseModel):
+    """A stated assumption applied to a real forecast, and the arithmetic that did it.
+
+    **Simulated, and the field says so before any number does.** `specs/forecast-analysis` requires
+    a forecast to be labelled as a forecast; this is not one. It is a retrieved series with a
+    person's supposition applied to it, and reading it as a prediction of what the weather will do
+    is the one misunderstanding the whole surface is shaped to prevent.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    simulated: Literal[True] = Field(
+        default=True,
+        description="Always true. This is a hypothetical, not a forecast and not an observation.",
+    )
+    disclaimer: str = Field(
+        description="What the result is and is not, in one sentence, for any surface that shows it."
+    )
+    attribution: Attribution
+    period: Period
+    horizon_days: int
+    assumptions: ScenarioAssumptions
+    baseline: Series = Field(description="Exactly what the provider returned. Unmodified.")
+    scenario: Series = Field(
+        description="The same instants and units, with the assumptions applied."
+    )
+    measures: tuple[ScenarioMeasure, ...] = Field(
+        description="Per adjusted measure: the arithmetic used, the means either side, and the "
+        "hours excluded or clipped."
+    )
+
+
 @router.get("/forecast", response_model=ForecastResponse, summary="Forecast")
 async def forecast(
     request: Request,
@@ -266,4 +317,87 @@ def _forecast_response(retrieved: Forecast, *, units_source: str) -> ForecastRes
         daily=retrieved.daily,
         hourly=retrieved.hourly,
         uncertainty=describe_uncertainty(retrieved),
+    )
+
+
+SCENARIO_DISCLAIMER = (
+    "A hypothetical: your stated assumptions applied to a real forecast. It is not a forecast, not "
+    "a prediction of what the weather will do, and not an official warning."
+)
+
+
+@router.post(
+    "/scenario",
+    response_model=ScenarioResponse,
+    summary="Apply assumptions to a forecast",
+)
+async def scenario(
+    request: Request,
+    body: ScenarioRequest,
+    geocoder: Places,
+    weather: WeatherFor,
+    session: CurrentSession,
+    settings: Configuration,
+    principal: OptionalPrincipal,
+) -> ScenarioResponse:
+    """What the forecast would read if the assumptions held — arithmetic, not meteorology.
+
+    The baseline is a real forecast for a real place, retrieved through the same service every other
+    forecast comes from. The assumptions are the caller's. What joins them is
+    `analytics/scenario.py`, which adds or scales and bounds the result, and states per measure what
+    it did — no model of the atmosphere is involved, and none is implied.
+
+    **No language model is called.** An interpretation of a scenario is a separate, explicit request
+    to the agent; making one here would spend somebody's allowance on every slider movement and
+    would put model prose where a computed figure belongs.
+    """
+    place = await resolve_one(
+        geocoder, location=body.location, latitude=body.latitude, longitude=body.longitude
+    )
+    unit_system, units_source = await units_for(
+        request,
+        requested=body.units,
+        principal=principal,
+        preferences=(
+            PreferenceStore(session, principal, settings) if principal is not None else None
+        ),
+    )
+    horizon = await horizon_for(
+        body.days,
+        principal=principal,
+        preferences=(
+            PreferenceStore(session, principal, settings) if principal is not None else None
+        ),
+    )
+
+    chosen = provider_for(request, weather, body.provider, settings)
+    retrieved = await ForecastService(
+        provider=chosen, geocoder=geocoder, settings=settings
+    ).forecast(place, days=horizon, unit_system=unit_system)
+    annotate(
+        request,
+        acting_user_id=principal.user_id if principal else None,
+        weather_provider=retrieved.provider,
+        cache_status="hit" if retrieved.from_cache else "miss",
+    )
+
+    adjusted, measures = apply_assumptions(retrieved.hourly, body.assumptions)
+
+    return ScenarioResponse(
+        disclaimer=SCENARIO_DISCLAIMER,
+        attribution=_attribution(
+            location=retrieved.location,
+            provider=retrieved.provider,
+            units=retrieved.unit_system,
+            retrieved_at=retrieved.retrieved_at,
+            from_cache=retrieved.from_cache,
+            data_class=retrieved.data_class,
+            units_source=units_source,
+        ),
+        period=retrieved.period,
+        horizon_days=retrieved.horizon_days,
+        assumptions=body.assumptions,
+        baseline=retrieved.hourly,
+        scenario=adjusted,
+        measures=measures,
     )

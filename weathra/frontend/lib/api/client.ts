@@ -53,6 +53,8 @@ import type {
   PreferenceView,
   ReadinessResponse,
   ResolvedResponse,
+  ScenarioRequest,
+  ScenarioResponse,
   SavedLocationRecord,
   SavedLocationRequest,
   SavedLocationsResponse,
@@ -218,6 +220,13 @@ export interface ApiClient {
   baselineComparison(query: BaselineComparisonQuery): Promise<BaselineComparison>;
   periodComparison(query: PeriodComparisonQuery): Promise<PeriodComparison>;
   compareLocations(request: ComparisonRequest): Promise<ComparisonResult>;
+  /**
+   * A stated assumption applied to a real forecast.
+   *
+   * Hypothetical by construction and labelled so by the backend: the response carries `simulated`
+   * and a disclaimer before it carries a number. No model is called to produce it.
+   */
+  scenario(request: ScenarioRequest): Promise<ScenarioResponse>;
 
   ask(request: AskRequest): Promise<AskResponse>;
   /**
@@ -473,6 +482,8 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
       get<PeriodComparison>("/api/v1/weather/history/comparison", { ...query }),
     compareLocations: (request) =>
       call<ComparisonResult>("POST", "/api/v1/weather/comparison", {}, request, true),
+    scenario: (request) =>
+      call<ScenarioResponse>("POST", "/api/v1/weather/scenario", {}, request, true),
 
     ask: (request) => call<AskResponse>("POST", "/api/v1/agent/ask", {}, request, true),
     openAgentStream: (request, signal) => openStream(request, signal),

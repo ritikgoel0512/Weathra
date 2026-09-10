@@ -73,6 +73,7 @@ reflection vector.
 | `GET` | `/api/v1/weather/analysis` | public | 200 | `AnalysisResponse` |
 | `GET` | `/api/v1/weather/changes` | **protected** | 200 | `WhatChanged` |
 | `POST` | `/api/v1/weather/comparison` | public | 200 | `ComparisonResult` |
+| `POST` | `/api/v1/weather/scenario` | **public** | 200 | `ScenarioResponse` |
 | `GET` | `/api/v1/weather/current` | public | 200 | `CurrentResponse` |
 | `GET` | `/api/v1/weather/forecast` | public | 200 | `ForecastResponse` |
 | `GET` | `/api/v1/weather/history` | public | 200 | `HistoryResponse` |
@@ -129,6 +130,7 @@ reflection vector.
 | `/weather/analysis` | public | Deterministic analytics over a supplied window. Reads no user-owned row. |
 | `/weather/changes` | **protected** | Forecast movement since the last snapshot. Records the retrieval it compares, and is not one of the endpoints specs/http-api admits to the public surface. |
 | `/weather/comparison` | public | Ranking supplied candidates. Reads no user-owned row. |
+| `/weather/scenario` | **public** | Applies stated assumptions to a real forecast. Hypothetical, never a forecast. |
 | `/weather/current` | public | Current conditions for supplied parameters. Applies the caller's units when signed in. |
 | `/weather/forecast` | public | A forecast for supplied parameters. Applies the caller's units when signed in. |
 | `/weather/history` | public | Archive observations for a supplied range. Reads no user-owned row. |

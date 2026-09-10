@@ -125,6 +125,11 @@ _CLASSIFICATIONS: tuple[EndpointClassification, ...] = (
         Access.PUBLIC,
         "Ranking supplied candidates. Reads no user-owned row.",
     ),
+    EndpointClassification(
+        "/weather/scenario",
+        Access.PUBLIC,
+        "Stated assumptions applied to a real forecast. Hypothetical, and labelled so.",
+    ),
     # ------------------------------------------ protected: writes the shared snapshot history
     EndpointClassification(
         "/weather/changes",

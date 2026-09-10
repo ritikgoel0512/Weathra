@@ -387,6 +387,24 @@ The ranking SHALL come from the backend's own comparison, and the screen SHALL N
 - **THEN** it states that it describes weather only
 - **AND** no flight, airline, transport, booking or sensor content appears
 
+### Requirement: Weather Scenario Lab
+
+The frontend SHALL provide a Weather Scenario Lab that takes the assumptions the scenario endpoint accepts, applies them to the forecast for the acting person's default location through that endpoint, and shows the resulting series against the baseline together with the per-measure arithmetic the backend reported.
+
+The screen SHALL NOT compute a scenario value itself. It SHALL label the result as simulated wherever it appears, SHALL state that it is neither a forecast nor an official warning, and SHALL state that no atmosphere was modelled. It SHALL report the hours an assumption was bounded and the hours the provider reported nothing to adjust, and SHALL offer no assumption the backend does not accept.
+
+#### Scenario: An assumption is applied
+
+- **WHEN** a person runs a scenario
+- **THEN** the request carries only the assumptions the endpoint declares
+- **AND** the adjusted series, the per-measure arithmetic and the differences the backend computed are shown
+
+#### Scenario: It is labelled as a hypothetical
+
+- **WHEN** the screen is inspected in any state
+- **THEN** the result is labelled simulated
+- **AND** it states that it is not a forecast and that no atmosphere was modelled
+
 ### Requirement: The navigation is grouped by what a screen is for
 
 The frontend SHALL group the navigation into the product's core screens, the intelligence screens that analyse Weathra's own data, the account screens, and — for a principal the backend confirms holds the administrative role — the administrative ones. The core group SHALL carry no heading, being the product itself.
