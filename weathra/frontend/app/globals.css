@@ -138,7 +138,7 @@
   --shadow-focus: 0 0 0 2px var(--color-surface-base), 0 0 0 4px var(--color-accent);
 
   /* Responsive foundations */
-  --layout-navigation-width: 248px;
+  --layout-navigation-width: 272px;
   --layout-navigation-collapsed-width: 64px;
   --layout-content-maximum: 1440px;
   /* The room the collapsed rail's hover/focus labels need beside it. The widest of the twelve —

@@ -164,14 +164,22 @@
   cursor: pointer;
 }
 
-/* Wraps rather than truncates. `design-system.md` §5 is the official navigation precisely because
- * the mockups' sidebars "omit an entry, abbreviate one, or name one differently" — so an
- * implementation that ellipsis-clips "Weather Intelligence Report" to "Weather Int..." reintroduces
- * the fault that table exists to correct. The longest entry needs about 196px and the widest a
- * 248px rail can offer a label is about 165px even with no chip beside it, so the label wraps to a
- * second line; widening the rail instead would push the shell past the proportion the artifacts
- * establish. In the collapsed tier below, this same element is the hover/focus tooltip and stays
- * on one line. */
+/*
+ * Never truncated, at any width. One rule, three tiers.
+ *
+ * `design-system.md` §5 is the official navigation precisely because the mockups' sidebars "omit an
+ * entry, abbreviate one, or name one differently" — so a label reading `Weather Intelligence Re…`
+ * is the fault that table exists to correct, and it is not made acceptable by the full name being
+ * one hover away. Every tier therefore shows the whole name:
+ *
+ * * **≥1280** — the rail is 272px, which is enough room for the longest entry on one line. See the
+ *   wide tier's note below.
+ * * **768–1279** — the rail is 64px of icons and this element becomes the hover and focus tooltip,
+ *   on one line, carrying the full name.
+ * * **<768** — the rail is a drawer at the full 272px, and the label wraps if it needs to.
+ *
+ * Wrapping is what happens when a name does not fit; nothing is ever clipped away.
+ */
 .itemLabel {
   flex: 1;
   min-width: 0;
@@ -912,14 +920,21 @@
   }
 
   /*
-   * One line, truncated rather than wrapped. The full title stays the link's accessible name, so
-   * nothing is lost to a screen reader or to a test that queries by name — only to the eye, and
-   * only at this width.
+   * One line, complete. Not truncated.
+   *
+   * This tier used to ellipsis-clip, which showed `Weather Intelligence Re…` in the rail at every
+   * desk width — a primary destination unable to state its own name. The fix is the rail, not the
+   * label: `--layout-navigation-width` is 272px, which leaves about 210px of label room, and the
+   * longest entry needs about 197px. So every name fits on one line and the rows stay the single
+   * short row the artifacts draw.
+   *
+   * `white-space` is deliberately left at `normal`. If a font renders wider than measured here, the
+   * label wraps to a second line — one row taller than its neighbours, and still readable — rather
+   * than losing its last word. Wrapping is the safety valve, not the design; at the shipped font it
+   * does not happen, and the capture at 1440 is what checks that.
    */
   .itemLabel {
-    white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   /*

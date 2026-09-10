@@ -58,6 +58,26 @@ export function friendlyName(location: Location): string {
 }
 
 /**
+ * The name to show a customer for a place, wherever a place is named on screen.
+ *
+ * `friendlyName` spelled out, with one guard in front of it: a provider that reported no name for a
+ * point gives back its coordinates as the `display_name`, and `48.1374, 11.5755` is a fact about a
+ * pin rather than a name for a place. Showing it in an attribution line, a run's focus or a
+ * comparison card reads as a developer's value leaking into the product.
+ *
+ * So a coordinate-named place is named `Unnamed place` here and its coordinates stay where they
+ * belong — in the metadata the request carries. `savedLocationDisplay` does the same job for a
+ * saved record, which additionally has a label the person may have typed; this one is for a place
+ * that arrives inside a weather or agent response and has no label of its own.
+ */
+export function placeLabel(location: Location | null | undefined): string | null {
+  if (!location) return null;
+  const name = location.display_name?.trim() ?? "";
+  if (name === "" || isCoordinateName(name)) return UNNAMED_PLACE;
+  return friendlyName(location);
+}
+
+/**
  * A stable key for a place, from its coordinates.
  *
  * The same distinction the backend's saved-location store de-duplicates on: a place is where it is,

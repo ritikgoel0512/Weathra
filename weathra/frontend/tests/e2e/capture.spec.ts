@@ -33,7 +33,16 @@ const WIDTHS = (process.env.WEATHRA_WIDTHS ?? "1440,1024,768,375")
   .map((width) => Number(width.trim()))
   .filter((width) => Number.isFinite(width) && width > 0);
 
-const SCREENS = [
+/**
+ * `WEATHRA_SCREENS=01-dashboard,09-admin` photographs only those, so a targeted check after one
+ * change does not re-run the whole matrix.
+ */
+const ONLY = (process.env.WEATHRA_SCREENS ?? "")
+  .split(",")
+  .map((name) => name.trim())
+  .filter((name) => name.length > 0);
+
+const ALL_SCREENS = [
   { name: "01-dashboard", path: "/" },
   { name: "02-analyst", path: "/analyst" },
   { name: "03-historical", path: "/historical" },
@@ -51,6 +60,8 @@ const SCREENS = [
   // rather than judged from source as it was in the first fidelity review.
   { name: "09-admin", path: "/admin/model-usage" },
 ] as const;
+
+const SCREENS = ONLY.length === 0 ? ALL_SCREENS : ALL_SCREENS.filter((screen) => ONLY.includes(screen.name));
 
 test.describe("capture", () => {
   test.skip(!CAPTURING, "set WEATHRA_CAPTURE=true to write screenshots");

@@ -446,8 +446,16 @@ export const LAYOUT = {
   compact: 768,
   /** At and above this the navigation is full width and the card grid is multi-column. */
   wide: 1280,
-  /** The persistent navigation's width when it is full, and when it is collapsed to icons. */
-  navigationWidth: 248,
+  /**
+   * The persistent navigation's width when it is full, and when it is collapsed to icons.
+   *
+   * 272 rather than 248 because the rail carries the product's real feature names and the longest
+   * of them — `Weather Intelligence Report` — needs about 197px of label room. A 248px rail offers
+   * about 186px once its own padding, the row's padding, the icon and the gap are taken out, so
+   * that entry was ellipsis-clipped to `Weather Intelligence Re…` at every desk width. A primary
+   * destination that cannot show its own name is a worse trade than 24 pixels of rail.
+   */
+  navigationWidth: 272,
   navigationCollapsedWidth: 64,
   /** The widest a page's content grows before it stops, so a line of prose stays readable. */
   contentMaximum: 1440,

@@ -319,9 +319,16 @@ Shell rules:
 
 | Width | Shell |
 |---|---|
-| ≥ 1280px | Full left navigation, multi-column card grid |
-| 768–1279px | Left navigation collapsed to icons with labels on focus; two-column grid |
-| < 768px | Navigation in a drawer behind a labelled control; single column |
+| ≥ 1280px | Full left navigation at 272px, every entry's complete name on one line; multi-column card grid |
+| 768–1279px | Left navigation collapsed to 64px of icons, the complete name as the hover and focus label; two-column grid |
+| < 768px | Navigation in a drawer behind a labelled control, at the full 272px; single column |
+
+**A destination is never abbreviated to fit.** §5 is the official navigation precisely because the
+mockups' sidebars omit, abbreviate or rename entries, so the rail is sized to the longest real name
+— `Weather Intelligence Report`, about 197px of label — rather than the name being clipped to the
+rail. It shipped ellipsis-clipped until the 1440 capture of 2026-09-10 showed
+`Weather Intelligence Re…`; `tests/design-rules.test.ts` now refuses both the ellipsis and a rail
+narrower than the name needs.
 
 The floor is a **360-pixel** viewport, usable, with **no horizontal page scroll**. Wide content —
 comparison tables, historical charts, evidence rows — scrolls **inside its own container**. Cards

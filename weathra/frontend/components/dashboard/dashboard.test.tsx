@@ -39,8 +39,14 @@ vi.mock("next/navigation", () => ({
 
 /* ------------------------------------------------------------------- fixtures */
 
+/*
+ * `display_name` is the city alone, which is what the geocoder actually returns — the region and
+ * the country arrive as their own fields. This fixture used to carry `"Berlin, Germany"` in the
+ * name, which is a shape the backend never sends, and it hid what the screen does with the real
+ * one: `placeLabel` composes `Berlin, Germany` for reading from the three fields.
+ */
 const LOCATION = {
-  display_name: "Berlin, Germany",
+  display_name: "Berlin",
   latitude: 52.52,
   longitude: 13.405,
   timezone: "Europe/Berlin",

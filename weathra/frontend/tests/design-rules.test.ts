@@ -230,6 +230,41 @@ describe("the collapsed rail does not clip its own labels", () => {
   });
 });
 
+describe("a destination always states its own name", () => {
+  const [, shell] = stylesheets().find(([path]) =>
+    path.endsWith(join("shell", "shell.module.css")),
+  ) ?? ["", ""];
+
+  it("never truncates a navigation label", () => {
+    /*
+     * `design-system.md` §5 is the official navigation because the mockups' sidebars "omit an
+     * entry, abbreviate one, or name one differently". A rail that renders `Weather Intelligence
+     * Re…` abbreviates one — the full name being the accessible name does not undo that for the
+     * person reading the screen. It shipped that way until the 1440 capture of 2026-09-10.
+     *
+     * The rail is 272px so the longest entry fits on one line; if a font ever renders wider the
+     * label wraps. What must never come back is the ellipsis.
+     */
+    const clipping = rules(shell).filter(
+      ({ selector, body }) =>
+        selector.includes(".itemLabel") && /text-overflow:\s*ellipsis/.test(body),
+    );
+    expect(
+      clipping.map(({ selector }) => selector),
+      "a navigation label is ellipsis-clipped; widen the rail or let it wrap",
+    ).toEqual([]);
+  });
+
+  it("keeps the rail wide enough for the longest entry", () => {
+    // 197px of text plus the rail's padding, the row's padding, the icon and the gap. Below about
+    // 264 the longest name cannot fit on one line, and this is the number that decides it.
+    const [, globals] = stylesheets().find(([path]) => path.endsWith("globals.css")) ?? ["", ""];
+    const width = /--layout-navigation-width:\s*(\d+)px/.exec(globals)?.[1];
+    expect(width, "the rail width token is gone").toBeDefined();
+    expect(Number(width)).toBeGreaterThanOrEqual(264);
+  });
+});
+
 describe("nothing pins the page wider than the viewport", () => {
   it("never sets `overflow-x` on the document or the body", () => {
     const [, globals] = SHEETS.find(([path]) => path.endsWith("globals.css")) ?? ["", ""];

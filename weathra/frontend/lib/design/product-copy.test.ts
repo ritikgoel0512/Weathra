@@ -61,6 +61,14 @@ const UNSUPPORTABLE = [
   "state-of-the-art",
   "proprietary",
   "guaranteed",
+  // Metric names the artifacts invent, which have no figure behind them and never will. They were
+  // briefly kept as permanently-empty bars, which advertised a capability while denying it; the
+  // rule now is that a metric Weathra does not compute is not named on a product screen at all.
+  "model convergence",
+  "atmospheric instability",
+  "precipitation lag",
+  "integrated risk",
+  "data reliability",
 ] as const;
 
 /**

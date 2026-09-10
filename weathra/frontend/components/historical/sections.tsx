@@ -524,8 +524,12 @@ export interface DeviationAnalysisProps {
  * Instability, filled to percentages nobody computed. Weathra computes one of the three honestly:
  * the z-score against the baseline is exactly a normalised measure of temperature deviation, so
  * that bar carries it, scaled so three standard deviations fills the track and the note says so.
- * The other two have no computed equivalent — there is no precipitation-lag or instability
- * statistic in `BaselineComparison` — so they keep their tracks and say the figure is not computed.
+ *
+ * **The other two are absent rather than empty.** There is no precipitation-lag or instability
+ * statistic anywhere in `BaselineComparison`, and there is no plan to compute one, so a permanent
+ * row reading "Not computed" tells a customer about a metric this product does not have while
+ * denying it in the same breath. One real bar is a better panel than one real bar and two
+ * apologies. The same call was made for the Dashboard's confidence matrix, for the same reason.
  */
 export function DeviationAnalysis({ comparison }: DeviationAnalysisProps): ReactNode {
   const zResult = comparison?.z_score;
@@ -544,18 +548,6 @@ export function DeviationAnalysis({ comparison }: DeviationAnalysisProps): React
             ? `z = ${z.toFixed(2)} against the baseline; the track is three standard deviations.`
             : "The backend reported no z-score for this window."
         }
-      />
-      <Meter
-        label="Precipitation lag"
-        value={null}
-        unavailable="Not computed"
-        note="No precipitation-lag statistic is produced for this window."
-      />
-      <Meter
-        label="Atmospheric instability"
-        value={null}
-        unavailable="Not computed"
-        note="No instability index is produced for this window."
       />
     </section>
   );

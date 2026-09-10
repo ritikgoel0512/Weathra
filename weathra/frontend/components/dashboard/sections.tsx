@@ -48,6 +48,7 @@ import type {
 import { hasValues, missingCount, pointsFrom } from "@/lib/historical/analysis";
 import type { ViewState } from "@/lib/query/state";
 import { confidenceLevelFor } from "@/lib/design/data-class";
+import { placeLabel } from "@/lib/locations/place";
 import {
   dayPrecipitationFrom,
   formatReading,
@@ -63,7 +64,9 @@ import styles from "./dashboard.module.css";
 
 /** A location as the attribution line names it. Never a station, never a coordinate pair alone. */
 function placeOf(location: Location | null | undefined): string | null {
-  return location?.display_name ?? null;
+  // `placeLabel` rather than the raw `display_name`: a provider that named no point hands back its
+  // coordinates as the name, and `48.1374, 11.5755` in an attribution line is a pin, not a place.
+  return placeLabel(location);
 }
 
 function attributionOf(
@@ -896,14 +899,19 @@ export interface ConfidenceMatrixProps {
 /**
  * "Confidence Matrix" — the bars beside Weathra Intelligence in `01-dashboard.png`.
  *
- * The artifact fills them with MODEL CONVERGENCE 94% and DATA RELIABILITY 82%. Weathra computes
- * neither: there is one provider, so there is nothing to converge, and no endpoint scores a
- * provider's reliability. Both bars are therefore drawn unfilled with the reason stated.
- *
- * The two rows that *can* carry something do. Forecast confidence comes from the backend's own
+ * Two rows, and both carry a figure. Forecast confidence comes from the backend's own
  * `UncertaintyStatement` — a level per horizon distance, which is a real graded figure — and
  * coverage is the share of points the deterministic analytics actually used, which the statistics
  * report themselves.
+ *
+ * **The artifact's other two bars are gone rather than drawn empty.** It fills MODEL CONVERGENCE
+ * with 94% and DATA RELIABILITY with 82%; Weathra computes neither, because it reads one provider
+ * and no endpoint scores a provider. They were kept as unfilled bars, on the reasoning that the
+ * artifact's geometry was worth preserving and the empty state said why. Photographing the result
+ * settled it the other way: two permanent rows of "Weathra does not compute this" advertise a
+ * capability to a customer in the act of denying it, and that is internal reasoning on a product
+ * screen. `EmptyChart` still exists for the different case — a real figure the provider did not
+ * report this time, where the frame is worth holding open.
  */
 export function ConfidenceMatrix({ forecast, analysis }: ConfidenceMatrixProps): ReactNode {
   const horizon = forecast?.uncertainty?.horizon?.[0] ?? null;
@@ -943,18 +951,6 @@ export function ConfidenceMatrix({ forecast, analysis }: ConfidenceMatrixProps):
             ? "Nothing computed for this window."
             : `${used} of ${used + excluded} points usable.`
         }
-      />
-      <Meter
-        label="Model convergence"
-        value={null}
-        unavailable="Single provider"
-        note="Weathra reads one provider, so there is nothing to converge."
-      />
-      <Meter
-        label="Provider reliability"
-        value={null}
-        unavailable="Not scored"
-        note="No endpoint scores a provider's reliability."
       />
     </section>
   );

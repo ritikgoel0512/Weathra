@@ -53,7 +53,7 @@ import type {
 import { FixtureDashboard } from "@/components/dashboard/fixture-dashboard";
 import { PLACE_PARAM } from "@/components/shell/top-bar";
 import { briefingLocationFrom, calendarWindowFrom } from "@/lib/dashboard/briefing";
-import { qualifiedName } from "@/lib/locations/place";
+import { placeLabel, qualifiedName } from "@/lib/locations/place";
 import { useLocationResolution } from "@/hooks/use-location-resolution";
 import { usingVisilyFixtures } from "@/lib/fixtures/visily";
 import { useApiQuery } from "@/lib/query/hooks";
@@ -264,7 +264,7 @@ function Briefing({
   // The two retrieved surfaces are what the briefing rests on: while either is in flight there is
   // nothing honest to show, and if either fails the screen says so and offers a retry.
   if (current.state.kind === "loading" || forecast.state.kind === "loading") {
-    return <LoadingState label={`Loading the briefing for ${location.display_name}`} lines={6} />;
+    return <LoadingState label={`Loading the briefing for ${placeLabel(location)}`} lines={6} />;
   }
 
   if (current.state.kind === "error") {
@@ -401,7 +401,7 @@ function Briefing({
           <span className={styles.statusStripItem}>
             Provider: {current.state.data.attribution?.provider ?? "not reported"}
           </span>
-          <span className={styles.statusStripItem}>{location.display_name}</span>
+          <span className={styles.statusStripItem}>{placeLabel(location)}</span>
           <span className={styles.statusStripItem}>Units: {units}</span>
         </p>
       ) : null}
