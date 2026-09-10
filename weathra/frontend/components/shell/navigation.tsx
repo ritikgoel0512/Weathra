@@ -31,7 +31,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { ADMIN_NAVIGATION, NAVIGATION, isActive, type Destination } from "@/lib/navigation";
+import {
+  ACCOUNT_NAVIGATION,
+  ADMIN_NAVIGATION,
+  NAVIGATION,
+  isActive,
+  type Destination,
+} from "@/lib/navigation";
 
 import { Icon } from "./icons";
 import styles from "./shell.module.css";
@@ -100,6 +106,14 @@ export function Navigation({ onNavigate, administrative = false }: NavigationPro
   return (
     <>
       <ul className={styles.list}>{built.map(render)}</ul>
+      <section className={styles.plannedGroup} aria-labelledby="weathra-account-heading">
+        <h2 className={styles.plannedHeading} id="weathra-account-heading">
+          Account
+        </h2>
+        <ul className={styles.list} data-account="true">
+          {ACCOUNT_NAVIGATION.map(render)}
+        </ul>
+      </section>
       {administrative ? (
         <section className={styles.plannedGroup} aria-labelledby="weathra-admin-heading">
           <h2 className={styles.plannedHeading} id="weathra-admin-heading">

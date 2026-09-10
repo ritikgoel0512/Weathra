@@ -44,7 +44,7 @@ a post-MVP screen as built. See [`screens.md`](screens.md) §5.
 | Screen | Route | Design status | Roadmap entry |
 |---|---|---|---|
 | Admin Model & AI Usage | `/admin/model-usage` | Roadmap entry — **designed and approved 2026-09-09** (task 33.1), [`screens/09-admin-model-ai-usage.png`](screens/09-admin-model-ai-usage.png). Implemented post-MVP, except the model policy confirmation panel built in task 34.8 (2026-09-10). In the navigation for an administrator from task 34.9; not in it for anybody else | Part B of the change's `tasks.md`, *Screens* |
-| Plan & Usage | `/plan` | Roadmap entry — **designed and approved 2026-09-09** (task 33.2), [`screens/10-plan-usage.png`](screens/10-plan-usage.png). Implemented post-MVP | Part B of the change's `tasks.md`, *Screens* |
+| Plan & Usage | `/plan` | Roadmap entry — **designed and approved 2026-09-09** (task 33.2), [`screens/10-plan-usage.png`](screens/10-plan-usage.png). Implemented in task 34.10 (2026-09-10); in the navigation as an account destination | Part B of the change's `tasks.md`, *Screens* |
 
 Both routes exist as of task 33.4 and are declared as `UNLISTED_SCREENS` in
 `frontend/lib/routes.ts` — a list of their own rather than `POST_MVP_SCREENS`, because the

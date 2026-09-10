@@ -16,7 +16,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { MVP_SCREENS, POST_MVP_SCREENS } from "@/lib/routes";
+import { ACCOUNT_SCREENS, MVP_SCREENS, POST_MVP_SCREENS } from "@/lib/routes";
 import { NAVIGATION } from "@/lib/navigation";
 
 import { Navigation } from "./navigation";
@@ -27,17 +27,26 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
-/** The complete set, from the route map rather than from a list written here. */
-const EVERY_DESTINATION = [...MVP_SCREENS, ...POST_MVP_SCREENS];
+/**
+ * The complete set, from the route map rather than from a list written here.
+ *
+ * `ACCOUNT_SCREENS` joined it in task 34.10, when Plan & Usage stopped being a route with no screen
+ * behind it. `ADMIN_SCREENS` deliberately does not: the administrative section is offered only to a
+ * principal the backend confirms holds the role, so it is absent from this render by default and is
+ * asserted in `shell.test.tsx` where the capability can be set.
+ */
+const EVERY_DESTINATION = [...MVP_SCREENS, ...POST_MVP_SCREENS, ...ACCOUNT_SCREENS];
 
 describe("the complete Weathra navigation", () => {
   it("offers every destination the route map declares, and no others", () => {
     render(<Navigation />);
     const links = screen.getAllByRole("link");
 
-    // Twelve, not four. The count is asserted so a silently dropped entry fails here.
+    // The count is asserted so a silently dropped entry fails here. Twelve product destinations
+    // plus the account one, and never four — an earlier fidelity pass rendered the artifacts'
+    // four-entry mockup sidebar and removed eight of Weathra's destinations from the product.
     expect(links).toHaveLength(EVERY_DESTINATION.length);
-    expect(NAVIGATION).toHaveLength(EVERY_DESTINATION.length);
+    expect(NAVIGATION.length + ACCOUNT_SCREENS.length).toBe(EVERY_DESTINATION.length);
 
     for (const screenRecord of EVERY_DESTINATION) {
       const link = links.find((candidate) => candidate.getAttribute("href") === screenRecord.path);

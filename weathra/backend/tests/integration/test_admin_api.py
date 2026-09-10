@@ -759,7 +759,9 @@ async def test_the_trail_carries_no_other_records_change(
     """
     async with with_inference(api_factory) as api:
         subject = await administrator(api)
-        other = new_user_id()
+        # `on_plan` creates the profile row the plan's foreign key needs. A bare subject id has none,
+        # and assigning a plan to it is a foreign-key violation rather than a test of anything.
+        other = await on_plan(api, PlanCode.FREE)
 
         assigned = await api.client.put(
             f"{PREFIX}/admin/principals/{other}/plan",

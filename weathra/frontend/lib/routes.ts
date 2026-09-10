@@ -154,6 +154,18 @@ export const UNLISTED_SCREENS: readonly Screen[] = [
 ];
 
 /**
+ * The account destinations: a person's own standing with Weathra, rather than a weather surface.
+ *
+ * Plan & Usage is built (task 34.10) and belongs in the navigation for everybody — it is the
+ * signed-in person's own plan and their own consumption, which every plan has. It sits in its own
+ * group rather than among the seven product screens because it answers a different kind of
+ * question: those are about weather, this is about the account.
+ */
+export const ACCOUNT_SCREENS: readonly Screen[] = [
+  { path: PLAN_USAGE_PATH, title: "Plan & Usage" },
+];
+
+/**
  * The administrative destinations, offered only to a principal the backend confirms holds the role.
  *
  * Separate from every list above because the condition is different in kind: the others are absent

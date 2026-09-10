@@ -1,16 +1,13 @@
 /**
- * The two routes that carry no navigation entry — task 33.4, revised for task 34.5.
+ * The administrative route — task 33.4, revised for tasks 34.5 and 34.9.
  *
- * **Plan & Usage is unchanged and still holds the strict form of the guarantee.** `specs/web-ui`
- * asks three things of it in this change: the route resolves and says plainly that the screen is
- * not yet available, it renders nothing broken and nothing empty, and **no catalog, usage, cost or
- * lab request is issued** — for any visitor, not only for a person without the administrative role.
- * The third is the one an implementation drifts away from, so it is asserted twice, from opposite
- * directions: nothing reaches the network when the page renders, and the module has no way to
- * reach it.
+ * Plan & Usage used to be tested here as the other route with no screen behind it. It has one now
+ * (task 34.10), so its suite lives with the screen in `components/plan/plan-usage.test.tsx`; what
+ * remains of it here is the navigation and protection assertions at the bottom, which still cover
+ * both routes.
  *
- * **Admin Model & AI Usage now carries a narrower guarantee, and the difference is a requirement
- * rather than a relaxation.** `specs/web-ui`'s *Administrative model policy confirmation* names one
+ * **Admin Model & AI Usage carries a narrower guarantee than it did, and the difference is a
+ * requirement rather than a relaxation.** `specs/web-ui`'s *Administrative model policy confirmation* names one
  * panel of that screen as implemented in this change: the audited candidate-list confirmation task
  * 34.5 depends on. So the route does load something, and what it may load is exactly bounded —
  * policies, catalog observations, comparison runs and one policy's audit trail, every one of them a
@@ -26,7 +23,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { ApiError, type ApiClient } from "@/lib/api/client";
 import { ApiProvider } from "@/lib/api/context";
@@ -37,10 +34,9 @@ import {
   UNLISTED_SCREENS,
   isProtectedPath,
 } from "@/lib/routes";
-import { NAVIGATION } from "@/lib/navigation";
+import { ACCOUNT_NAVIGATION, ADMIN_NAVIGATION, NAVIGATION } from "@/lib/navigation";
 
 import AdminModelUsagePage from "./admin/model-usage/page";
-import PlanUsagePage from "./plan/page";
 
 function source(relative: string): string {
   return readFileSync(fileURLToPath(new URL(relative, import.meta.url)), "utf8");
@@ -70,67 +66,6 @@ const PERMITTED_ADMIN_METHODS = [
   "confirmPolicyCandidates",
   "adminPolicyAudit",
 ] as const;
-
-describe("Plan & Usage: the route with no screen behind it", () => {
-  let fetchSpy: ReturnType<typeof vi.fn>;
-
-  beforeEach(() => {
-    fetchSpy = vi.fn(() => Promise.reject(new Error("no request may be issued from this route")));
-    vi.stubGlobal("fetch", fetchSpy);
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("states that it is not yet available", () => {
-    render(<PlanUsagePage />);
-
-    expect(screen.getByRole("heading", { name: "Plan & Usage" })).toBeInTheDocument();
-    expect(screen.getByText("Not yet available")).toBeInTheDocument();
-    expect(screen.getByText(/This screen is not yet available/)).toBeInTheDocument();
-  });
-
-  it("renders nothing broken and nothing empty", () => {
-    const { container } = render(<PlanUsagePage />);
-
-    expect(container.textContent?.trim().length ?? 0).toBeGreaterThan(80);
-    expect(screen.queryByRole("alert")).toBeNull();
-    expect(screen.queryByRole("status")).toBeNull();
-  });
-
-  it("issues no request when it renders", () => {
-    render(<PlanUsagePage />);
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it("has no way to reach the network at all", () => {
-    const text = source("./plan/page.tsx");
-
-    for (const forbidden of ["/api/v1/admin", "/api/v1/me/usage"]) {
-      expect(text).not.toContain(forbidden);
-    }
-    for (const reach of [
-      "useApiQuery",
-      "useApiClient",
-      "createApiClient",
-      "fetch(",
-      "createClient",
-    ]) {
-      expect(text, `plan/page.tsx references ${reach}`).not.toContain(reach);
-    }
-  });
-
-  it("renders no plan or usage content", () => {
-    const { container } = render(<PlanUsagePage />);
-    const text = container.textContent ?? "";
-
-    expect(text).not.toMatch(/\d+(\.\d+)?\s*(tokens|ms|%)/i);
-    expect(text).not.toMatch(/\$\d/);
-    expect(screen.queryByRole("table")).toBeNull();
-    expect(screen.queryByRole("button")).toBeNull();
-  });
-});
 
 describe("Admin Model & AI Usage: one panel built, the rest stated as unbuilt", () => {
   /** A client that answers every administrative read the way the backend answers a non-admin. */
@@ -212,13 +147,26 @@ describe("Admin Model & AI Usage: one panel built, the rest stated as unbuilt", 
   });
 });
 
-describe("both unlisted routes", () => {
-  it("keeps both out of the navigation while their screens are unbuilt", () => {
-    // `docs/design/roadmap.md`, "Not in the navigation". Reachable by route; not advertised.
-    for (const unlisted of UNLISTED_SCREENS) {
-      expect(NAVIGATION.map((entry) => entry.path)).not.toContain(unlisted.path);
-      expect(NAVIGATION.map((entry) => entry.title)).not.toContain(unlisted.title);
-    }
+describe("the two routes that began without a navigation entry", () => {
+  it("offers Plan & Usage to everybody, now that it has a screen", () => {
+    // It was unlisted because it was unbuilt (task 33.4). Task 34.10 built it, so it is offered —
+    // in its own Account group rather than among the seven weather screens, because it answers a
+    // different kind of question.
+    expect(ACCOUNT_NAVIGATION.map((entry) => entry.path)).toContain(PLAN_USAGE_PATH);
+    expect(NAVIGATION.map((entry) => entry.path)).not.toContain(PLAN_USAGE_PATH);
+  });
+
+  it("keeps the administrative route out of the navigation everybody sees", () => {
+    // Not because it is unbuilt — because most people may not open it. It is offered to a principal
+    // the backend confirms holds the role, which `components/shell/shell.test.tsx` asserts both
+    // ways; what is asserted here is that it is in no list rendered unconditionally.
+    expect(NAVIGATION.map((entry) => entry.path)).not.toContain(ADMIN_MODEL_USAGE_PATH);
+    expect(ACCOUNT_NAVIGATION.map((entry) => entry.path)).not.toContain(ADMIN_MODEL_USAGE_PATH);
+    expect(ADMIN_NAVIGATION.map((entry) => entry.path)).toContain(ADMIN_MODEL_USAGE_PATH);
+  });
+
+  it("offers only administrative surfaces that exist", () => {
+    expect(ADMIN_NAVIGATION.map(({ title }) => title)).toEqual(["Model & AI Usage"]);
   });
 
   it("protects both routes by the same default as every other screen", () => {
@@ -230,7 +178,7 @@ describe("both unlisted routes", () => {
     expect(isProtectedPath(PLAN_USAGE_PATH)).toBe(true);
   });
 
-  it("names the two screens `specs/web-ui` leaves out of the sidebar", () => {
+  it("still names the two `specs/web-ui` left out of the sidebar to begin with", () => {
     expect(UNLISTED_SCREENS.map(({ title }) => title)).toEqual([
       "Admin Model & AI Usage",
       "Plan & Usage",

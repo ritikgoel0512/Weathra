@@ -1055,10 +1055,17 @@ async def test_a_place_with_only_a_coordinate_label_can_become_the_default(
         assert reread.json()["default_location"]["display_name"] == place["display_name"]
 
 
-async def test_a_default_location_refuses_two_ways_of_naming_one_place(
+async def test_a_default_location_refuses_a_name_and_a_pair_that_disagree(
     api_factory: ApiFactory,
 ) -> None:
-    """A name and a coordinate pair in one request is a question, not an instruction."""
+    """A name and a coordinate pair naming *different* places is a question, not an instruction.
+
+    Berlin is not at 48.14, 11.58, and storing either of the two would record one place while the
+    caller believed the other. What changed in task 34.10 is only that agreement is now possible: a
+    pair that matches one of the name's own candidates has chosen between them, which is what lets a
+    stored default carry a canonical name instead of a coordinate string. Disagreement is still
+    refused, and this is the case that says so.
+    """
     async with api_factory() as api:
         headers = api.authorize(subject=USER_A)
         response = await api.client.put(
@@ -1067,7 +1074,34 @@ async def test_a_default_location_refuses_two_ways_of_naming_one_place(
             headers=headers,
         )
         assert response.status_code == 400
-        assert "not both" in response.json()["error"]["message"]
+        assert "not two different places" in response.json()["error"]["message"]
+
+
+async def test_a_default_location_accepts_a_name_and_the_pair_it_resolved_to(
+    api_factory: ApiFactory,
+) -> None:
+    """The pair chooses among the name's candidates, and the stored default keeps the name.
+
+    Coordinates alone could only ever store the point, and the backend names a point after itself —
+    which is how a stored default came to read "48.1374, 11.5755" where `specs/memory` wants the
+    canonical name. Task 34.10.
+    """
+    async with api_factory() as api:
+        headers = api.authorize(subject=USER_A)
+        response = await api.client.put(
+            f"{PREFIX}/me/preferences",
+            json={
+                "default_location": "Berlin",
+                "latitude": BERLIN.latitude,
+                "longitude": BERLIN.longitude,
+            },
+            headers=headers,
+        )
+
+    assert response.status_code == 200
+    stored = response.json()["default_location"]
+    assert stored["display_name"] == BERLIN.display_name
+    assert stored["display_name"] != f"{BERLIN.latitude:.4f}, {BERLIN.longitude:.4f}"
 
 
 async def test_a_default_location_refuses_half_a_coordinate_pair(api_factory: ApiFactory) -> None:

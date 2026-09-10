@@ -523,3 +523,20 @@ async def test_coordinates_alone_resolve_exactly_as_they_did() -> None:
 
     assert place.display_name == "48.1374, 11.5755"
     assert geocoder.coordinate_calls == 1
+
+
+async def test_a_name_and_a_pair_naming_different_places_are_refused() -> None:
+    """Agreement is what the pair is for. Disagreement is a question, not an instruction.
+
+    Storing either side would record one place while the caller believed the other, which is what
+    the weather path's blanket "not both" refusal always protected. That protection survives; what
+    changed is only that agreement became possible.
+    """
+    from weathra.api.routers.support import resolve_for_saving
+
+    geocoder = _NamedGeocoder(MUNICH)
+    with pytest.raises(ValidationFailed) as refusal:
+        await resolve_for_saving(geocoder, location="Munich", latitude=52.52, longitude=13.405)
+
+    assert "not two different places" in str(refusal.value)
+    assert geocoder.coordinate_calls == 0, "a refusal resolves nothing"

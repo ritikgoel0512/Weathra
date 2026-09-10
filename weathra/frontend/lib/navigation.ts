@@ -19,7 +19,13 @@
  * supersedes it.
  */
 
-import { ADMIN_SCREENS, MVP_SCREENS, POST_MVP_SCREENS, type Screen } from "@/lib/routes";
+import {
+  ACCOUNT_SCREENS,
+  ADMIN_SCREENS,
+  MVP_SCREENS,
+  POST_MVP_SCREENS,
+  type Screen,
+} from "@/lib/routes";
 
 /**
  * Whether a destination is built in this change.
@@ -28,7 +34,7 @@ import { ADMIN_SCREENS, MVP_SCREENS, POST_MVP_SCREENS, type Screen } from "@/lib
  * state plainly that the screen is not yet available, so the status is what the navigation and the
  * route both read to say the same thing.
  */
-export type DestinationStatus = "mvp" | "planned" | "admin";
+export type DestinationStatus = "mvp" | "planned" | "admin" | "account";
 
 /**
  * The name of an icon in `components/shell/icons.tsx`.
@@ -90,6 +96,15 @@ function destination({ path, icon }: { path: string; icon: IconName }): Destinat
 
 /** The twelve entries, in the order the design record fixes. */
 export const NAVIGATION: readonly Destination[] = ORDER.map(destination);
+
+/**
+ * The account section: built, offered to everybody, and about the account rather than the weather.
+ */
+export const ACCOUNT_NAVIGATION: readonly Destination[] = ACCOUNT_SCREENS.map((screen) => ({
+  ...screen,
+  status: "account" as const,
+  icon: "account" as const,
+}));
 
 /**
  * The administrative section, shown only to a principal the backend says holds the role.

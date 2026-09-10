@@ -1,0 +1,260 @@
+/*
+ * Plan & Usage — task 34.10, built from the task 20.3 tokens against
+ * `docs/design/screens/10-plan-usage.png`.
+ *
+ * What the artifact governs and this reproduces: the tier card beside a row of metric tiles, the
+ * allocation bars in a wide left column with the smaller cards stacked to the right, and the
+ * restrained monospaced treatment of the figures. What it draws and Weathra does not have is
+ * refused in `docs/design/screens.md` §5 and absent from the markup, not styled out of sight.
+ *
+ * No colour, size or spacing is written here that is not a token.
+ */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.lede {
+  margin: 0;
+  color: var(--color-text-secondary);
+  max-width: 66ch;
+}
+
+/* ------------------------------------------------------------------- the top */
+
+.top {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.tiers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tier {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+}
+
+.tier[data-active] {
+  background: var(--color-surface-inset);
+  border-color: var(--color-accent-muted);
+  color: var(--color-text-primary);
+}
+
+.planNote {
+  margin: var(--space-3) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  max-width: 52ch;
+}
+
+/* ----------------------------------------------------------- the metric tiles */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  min-width: 0;
+}
+
+.tileLabel {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tileValue {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line);
+  overflow-wrap: anywhere;
+}
+
+.tileUnit {
+  margin-left: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.tileNote {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+}
+
+/* ------------------------------------------------------------ under pressure */
+
+.pressure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-status-warning-surface);
+  border: 1px solid var(--color-status-warning);
+  border-radius: var(--radius-md);
+}
+
+.pressure p {
+  margin: 0;
+  color: var(--color-text-primary);
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------- the two columns */
+
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.allowances {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.allowance {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.allowanceHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.allowanceName {
+  color: var(--color-text-primary);
+}
+
+.allowanceWindow {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.allowanceFigures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+}
+
+.allowanceFigures strong {
+  color: var(--color-text-primary);
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+}
+
+.allowanceRemaining {
+  margin-left: auto;
+  color: var(--color-text-muted);
+}
+
+/* --------------------------------------------------------------- small cards */
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.facts dt {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.facts dd {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+}
+
+.resets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.resets li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: space-between;
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+}
+
+.resetAt {
+  color: var(--color-text-primary);
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+}
+
+/* -------------------------------------------------------------- narrow screens */
+
+@media (max-width: 767px) {
+  .top,
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

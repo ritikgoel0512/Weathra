@@ -300,7 +300,7 @@ Every MVP product screen SHALL be reachable from a persistent navigation surface
 
 The frontend SHALL reserve navigation and routing structure for the post-MVP screens — Weather Intelligence Report, Forecast Explorer, Weather Scenario Lab, Weather Watch, Travel Intelligence, Admin Model & AI Usage, and Plan & Usage — without implementing their functionality in this change. Any such route present SHALL state plainly that the screen is not yet available rather than rendering a broken or empty screen.
 
-One panel of one of those screens is an exception, and it is named rather than left to inference: the administrative model policy confirmation surface required below is implemented in this change, because the audited candidate-list confirmation it carries is the only administrative write the MVP's own evidence trail depends on. Every other panel of the Admin Model & AI Usage screen remains unbuilt and SHALL continue to state so on the same route, and the Plan & Usage route remains unbuilt entirely.
+Two of those screens are exceptions, and they are named rather than left to inference. The administrative model policy confirmation surface required below is implemented in this change, because the audited candidate-list confirmation it carries is the only administrative write the MVP's own evidence trail depends on; every other panel of the Admin Model & AI Usage screen remains unbuilt and SHALL continue to state so on the same route. Plan & Usage is implemented in full, because everything it shows is a person's own plan and consumption, which the account contract has always reported.
 
 #### Scenario: Post-MVP route states its status
 
@@ -313,11 +313,11 @@ One panel of one of those screens is an exception, and it is named rather than l
 - **WHEN** the navigation surface is inspected
 - **THEN** post-MVP screens are either absent or marked as not yet available
 
-#### Scenario: Plan & Usage route states its status without fetching
+#### Scenario: Plan & Usage shows the person their own standing
 
-- **WHEN** any person navigates to the Plan & Usage route in this change
-- **THEN** the route states that the screen is not yet available
-- **AND** no catalog, usage, cost, or lab request is issued
+- **WHEN** a signed-in person navigates to the Plan & Usage route in this change
+- **THEN** their own plan, allowances and consumption are shown
+- **AND** no other person's usage and no aggregate across users is requested or rendered
 
 #### Scenario: The administrative route states which of its panels are unbuilt
 
@@ -565,7 +565,21 @@ Where the backend refuses a request for an exhausted allowance, the frontend SHA
 
 ### Requirement: Plan and usage visible to the signed-in person
 
-The frontend SHALL show the signed-in person their own plan and usage — the plan name, consumption against allowance per applicable dimension, and each window's reset time — and SHALL show no other person's usage, no internal usage, and no aggregate cost across users. This view is post-MVP and is designed in the design phase alongside the administrative screen.
+The frontend SHALL show the signed-in person their own plan and usage — the plan name, consumption against allowance per applicable dimension, and each window's reset time — and SHALL show no other person's usage, no internal usage, and no aggregate cost across users. This view is designed in the design phase alongside the administrative screen, and is implemented in this change.
+
+It SHALL name the plans Weathra has and which one is in effect, and SHALL NOT present a plan change as something the person can complete: plan assignment is an administrative write and there is no checkout, no billing interval, no payment instrument and no invoice. An unlimited dimension SHALL be stated as unlimited rather than shown as a proportion of nothing, and a figure the backend reported as absent — a token count the gateway did not send, a window that does not turn over — SHALL be stated as absent rather than as zero. Where the acting principal's traffic is accounted as internal rather than against a product plan, the view SHALL say so, since the plan's allowances are then not what their calls spend.
+
+#### Scenario: Plans named without a checkout
+
+- **WHEN** the plan view is inspected
+- **THEN** the plans Weathra has are named with the one in effect marked
+- **AND** no purchase, upgrade, billing or payment control is offered
+
+#### Scenario: An absent figure is not shown as zero
+
+- **WHEN** a dimension is unlimited, or the backend reported no token count or no reset window
+- **THEN** each is stated as unlimited or absent
+- **AND** none is rendered as zero or as a full allowance
 
 #### Scenario: Own plan and usage shown
 

@@ -142,9 +142,15 @@ async def resolve_for_saving(
     coordinates of the Illinois one is not ambiguous — the pair chose. Without the pair it still is,
     and is still refused.
 
-    A pair that matches none of the name's candidates falls back to naming the point by its
-    coordinates rather than refusing the save. The pair came from a resolution the client had
-    already been given, so a mismatch is a provider disagreeing with itself between two calls, and
+    **A name and a pair that disagree are refused.** "Berlin" sent with Munich's coordinates names
+    two places, and picking either would store one while the caller believes the other — so it is a
+    question rather than an instruction, which is what the weather path's blanket refusal always
+    protected. The difference here is only that agreement is now *possible*: a pair matching one of
+    the name's candidates has chosen between them rather than contradicting them.
+
+    A name the provider cannot resolve at all is the one case that falls back to naming the point by
+    its coordinates. That name came from a resolution the caller had already been given, so the
+    provider no longer knowing it is the provider disagreeing with itself between two calls, and
     losing somebody's saved place over it would be the worse failure. It is logged.
     """
     named = bool(location and location.strip())
@@ -171,12 +177,20 @@ async def resolve_for_saving(
         if location_identifier(candidate.latitude, candidate.longitude) == wanted:
             return candidate
 
-    logger.info(
-        "saving %r by coordinates: none of its %d candidate(s) matched %s",
-        location,
-        len(candidates),
-        wanted,
-    )
+    if candidates:
+        raise ValidationFailed(
+            f"{location!r} is not at {checked_latitude}, {checked_longitude}. Send the name and "
+            "the coordinates of one place, or either on its own — not two different places.",
+            details={
+                "field": "location",
+                "location": location,
+                "latitude": checked_latitude,
+                "longitude": checked_longitude,
+                "candidates": [candidate.model_dump(mode="json") for candidate in candidates],
+            },
+        )
+
+    logger.info("saving %r by coordinates: the provider no longer resolves that name", location)
     return await geocoder.resolve_coordinates(checked_latitude, checked_longitude)
 
 
