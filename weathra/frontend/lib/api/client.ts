@@ -63,6 +63,7 @@ import type {
   ThreadsResponse,
   UnitSystem,
   UsageResponse,
+  UsageSummaryResponse,
   WatchEdit,
   WatchRecord,
   WatchRequest,
@@ -287,6 +288,13 @@ export interface ApiClient {
    * calling them is not deciding it may — it is asking, and being answered 403 when it may not.
    */
 
+  /**
+   * Aggregate language model usage, grouped and split between product and internal traffic.
+   *
+   * Never a row and never a subject — the endpoint aggregates, so there is nothing here that could
+   * name whose call a figure came from.
+   */
+  adminUsage(by?: string, days?: number): Promise<UsageSummaryResponse>;
   /** The model policies, each with its ordered candidate list. */
   adminPolicies(): Promise<PolicyListResponse>;
   /** The catalog, with the most recent evaluation recorded per entry where there is one. */
@@ -567,6 +575,7 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
 
     deleteMyData: () => call<DeletionResponse>("DELETE", "/api/v1/me/data", {}, NO_BODY, true),
 
+    adminUsage: (by, days) => get<UsageSummaryResponse>("/api/v1/admin/usage", { by, days }),
     adminPolicies: () => get<PolicyListResponse>("/api/v1/admin/policies"),
     adminCatalog: () => get<CatalogListResponse>("/api/v1/admin/models"),
     adminComparisons: (limit) => get<LabRunListResponse>("/api/v1/admin/lab/comparisons", { limit }),

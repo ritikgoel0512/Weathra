@@ -431,7 +431,9 @@ export function DifferentialMatrix({ result }: { readonly result: ComparisonResu
           beneath the ranking.
         </p>
       ) : (
-      <ScrollRegion label="Figures behind the ranking">
+      // The box is the screen's to supply: `ScrollRegion` measures and adds the tab stop, and
+      // without a container the table widens the page instead of scrolling in its card.
+      <ScrollRegion label="Figures behind the ranking" className={styles.tableScroll}>
         <table className={styles.matrix}>
           <caption className={styles.matrixCaption}>
             Each statistic the comparison applied, for each place, over the shared window.

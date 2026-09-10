@@ -1,22 +1,27 @@
 /**
- * The administrative route — task 33.4, revised for tasks 34.5 and 34.9.
+ * The administrative route — task 33.4, revised for tasks 34.5, 34.9 and 34.18.
  *
  * Plan & Usage used to be tested here as the other route with no screen behind it. It has one now
  * (task 34.10), so its suite lives with the screen in `components/plan/plan-usage.test.tsx`; what
  * remains of it here is the navigation and protection assertions at the bottom, which still cover
  * both routes.
  *
- * **Admin Model & AI Usage carries a narrower guarantee than it did, and the difference is a
- * requirement rather than a relaxation.** `specs/web-ui`'s *Administrative model policy confirmation* names one
- * panel of that screen as implemented in this change: the audited candidate-list confirmation task
- * 34.5 depends on. So the route does load something, and what it may load is exactly bounded —
- * policies, catalog observations, comparison runs and one policy's audit trail, every one of them a
- * read the backend refuses without the administrative role. What it still may not load is the
- * unbuilt panels' data: no token usage, no cost, no per-plan consumption, for anybody.
+ * **The screen is no longer one built panel and a paragraph of apology.** Task 34.18 built the
+ * dashboard the artifact composes — KPIs, the usage chart, the grouped table, the product/internal
+ * split, failures and the catalog — from the two administrative endpoints that already existed. So
+ * this file's guarantee moves with it: what is bounded is no longer *how little* the route loads
+ * but *what* it may load, and from where.
  *
- * The two assertions that matter for the new shape are therefore: an ordinary authenticated person
- * gets a not-permitted state with nothing behind it, and no usage or cost request is issued in any
- * state. The panel's own behaviour is tested in `components/admin/model-policy.test.tsx`.
+ * Three things are asserted here and nowhere else. An ordinary authenticated person gets a
+ * not-permitted state with no figures behind it, because every request this route issues is one the
+ * backend refuses without the role. The route never asks for the acting person's *own* plan or
+ * consumption, which is a different question from the estate's. And the reads it makes are exactly
+ * the named administrative ones, reached through the typed client — a method appearing in either
+ * component that is not on the list is a panel that grew a capability its requirement does not
+ * cover.
+ *
+ * Each panel's own behaviour is tested beside it: `components/admin/model-policy.test.tsx` and
+ * `components/admin/overview.test.tsx`.
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -45,20 +50,38 @@ function source(relative: string): string {
 const ADMIN_FILES = [
   "./admin/model-usage/page.tsx",
   "../../components/admin/model-policy.tsx",
+  "../../components/admin/overview.tsx",
 ] as const;
 
 /**
- * Every path that would carry the *unbuilt* panels' content.
+ * The path that would carry somebody's *own* plan and consumption.
  *
- * From `docs/api.md`: aggregate administrative usage and cost is `/api/v1/admin/usage`, and a
- * person's own plan and consumption is `/api/v1/me/usage`. Neither is any part of the policy
- * confirmation surface, and a request to either from this route is the failure this test exists
- * for — the panels they would feed are not built.
+ * `/api/v1/me/usage` answers for the acting person, and an administrative screen has no business
+ * asking it: an operator looking at the estate is not looking at their own allowance. Aggregate
+ * administrative usage (`/api/v1/admin/usage`) is a different endpoint and is legitimately read
+ * here, since task 34.18 built the panels it feeds.
  */
-const FORBIDDEN_PATHS = ["/api/v1/admin/usage", "/api/v1/me/usage"] as const;
+const FORBIDDEN_PATHS = ["/api/v1/me/usage"] as const;
 
-/** Everything the confirmation surface is permitted to reach, and nothing else. */
+/**
+ * Model names the artifact draws and Weathra does not have.
+ *
+ * `09-admin-model-ai-usage.png` populates its model table with four vendor models and its
+ * comparison lab with two versions of an in-house engine. Copying any of them would put a model
+ * Weathra cannot resolve in front of an operator making an operational decision. The catalog table
+ * renders `model_catalog`, so the fixture's own names appear and these never do.
+ */
+const FICTIONAL_MODELS = [
+  "GPT-4o",
+  "Claude 3.5",
+  "Llama 3.1",
+  "Gemini 1.5",
+  "WEATHRA-CORE",
+] as const;
+
+/** Everything the two administrative panels are permitted to reach, and nothing else. */
 const PERMITTED_ADMIN_METHODS = [
+  "adminUsage",
   "adminPolicies",
   "adminCatalog",
   "adminComparisons",
@@ -67,7 +90,7 @@ const PERMITTED_ADMIN_METHODS = [
   "adminPolicyAudit",
 ] as const;
 
-describe("Admin Model & AI Usage: one panel built, the rest stated as unbuilt", () => {
+describe("Admin Model & AI Usage: built from what Weathra records, refused to everybody else", () => {
   /** A client that answers every administrative read the way the backend answers a non-admin. */
   function refusingClient(): ApiClient {
     const forbidden = () =>
@@ -78,13 +101,14 @@ describe("Admin Model & AI Usage: one panel built, the rest stated as unbuilt", 
         }),
       );
     return {
+      adminUsage: vi.fn(forbidden),
       adminPolicies: vi.fn(forbidden),
       adminCatalog: vi.fn(forbidden),
       adminComparisons: vi.fn(forbidden),
       adminComparison: vi.fn(forbidden),
       adminPolicyAudit: vi.fn(forbidden),
       confirmPolicyCandidates: vi.fn(forbidden),
-      usage: vi.fn(() => Promise.reject(new Error("the unbuilt panels fetch nothing"))),
+      usage: vi.fn(() => Promise.reject(new Error("this route never asks for the caller's own"))),
     } as unknown as ApiClient;
   }
 
@@ -98,27 +122,30 @@ describe("Admin Model & AI Usage: one panel built, the rest stated as unbuilt", 
     );
   }
 
-  it("says which panels are not yet available", () => {
+  it("names the screen and says what its cost figure is", () => {
     mount(refusingClient());
 
     expect(screen.getByRole("heading", { name: "Admin Model & AI Usage" })).toBeInTheDocument();
-    expect(
-      screen.getByText(/Model status, token usage, estimated cost, latency, errors/),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/nothing about them is loaded here/)).toBeInTheDocument();
+    // The one qualification that must survive every redesign of this screen: the column is an
+    // operational estimate priced from the catalog, and calling it a bill would be a false claim
+    // about money.
+    expect(screen.getByText(/not\s+a billed amount/)).toBeInTheDocument();
   });
 
-  it("shows an ordinary authenticated person a not-permitted state with nothing behind it", async () => {
+  it("shows an ordinary authenticated person a not-permitted state with no figures behind it", async () => {
     mount(refusingClient());
 
-    const refusal = await screen.findByRole("alert");
-    expect(refusal).toHaveTextContent("Not permitted");
+    // Both panels refuse, so there is more than one; each says the same thing for the same reason.
+    const refusals = await screen.findAllByRole("alert");
+    expect(refusals.length).toBeGreaterThan(0);
+    for (const refusal of refusals) expect(refusal).toHaveTextContent(/Not permitted|not permitted/);
+
     expect(screen.queryByRole("button", { name: "Confirm candidate order" })).toBeNull();
     expect(screen.queryByRole("table")).toBeNull();
-    expect(screen.queryByText(/Comparison run/)).toBeNull();
+    expect(screen.queryByRole("img", { name: /by model/i })).toBeNull();
   });
 
-  it("never asks for token usage, cost, or per-plan consumption", () => {
+  it("never asks for the acting person's own plan or consumption", () => {
     const api = refusingClient();
     mount(api);
 
@@ -131,18 +158,32 @@ describe("Admin Model & AI Usage: one panel built, the rest stated as unbuilt", 
     }
   });
 
+  it("writes no model name of its own, fictional or real", () => {
+    // The catalog table is rendered from the API. A model name written into a component would be
+    // both a vendor coupling and, in this screen's case, a figure an operator could act on.
+    for (const file of ADMIN_FILES) {
+      const text = source(file);
+      for (const fictional of FICTIONAL_MODELS) {
+        expect(text, `${file} names ${fictional}`).not.toContain(fictional);
+      }
+    }
+  });
+
   it("reaches the backend only through the typed client, and only for the permitted reads", () => {
-    const panel = source("../../components/admin/model-policy.tsx");
+    const components = ["../../components/admin/model-policy.tsx", "../../components/admin/overview.tsx"];
 
     // No second way in: no raw fetch, no Supabase client, no hand-built Authorization header. The
     // token is the API client's business and is added there, once, per request.
-    for (const reach of ["fetch(", "createClient", "Authorization", "localStorage", "document.cookie"]) {
-      expect(panel, `model-policy.tsx references ${reach}`).not.toContain(reach);
+    for (const file of components) {
+      const text = source(file);
+      for (const reach of ["fetch(", "createClient", "Authorization", "localStorage", "document.cookie"]) {
+        expect(text, `${file} references ${reach}`).not.toContain(reach);
+      }
     }
 
-    // And the reads it does make are the six named ones. A method appearing here that is not in
-    // that list is a panel that grew a capability its requirement does not cover.
-    const called = [...panel.matchAll(/client\.([A-Za-z]+)\(/g)].map((match) => match[1]);
+    const called = components.flatMap((file) =>
+      [...source(file).matchAll(/client\.([A-Za-z]+)\(/g)].map((match) => match[1]),
+    );
     expect(new Set(called)).toEqual(new Set(PERMITTED_ADMIN_METHODS));
   });
 });

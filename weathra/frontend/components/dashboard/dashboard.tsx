@@ -358,14 +358,15 @@ function Briefing({
         </div>
       ) : null}
 
-      <div className={styles.columns}>
-        <div className={styles.column}>
-          {forecast.state.kind === "ready" ? (
-            <ForecastMovement forecast={forecast.state.data} location={location} />
-          ) : null}
-        </div>
-
-      </div>
+      {/*
+        Full width, because it is one band and not two. It sat in the two-column grid above with
+        nothing beside it, which left a third of the row empty at every desk width — the artifact
+        has no void there, and the emptiness read as a panel that had failed to load rather than as
+        a panel that was never there.
+      */}
+      {forecast.state.kind === "ready" ? (
+        <ForecastMovement forecast={forecast.state.data} location={location} />
+      ) : null}
 
       {/*
         The wide baseline band `01-dashboard.png` closes on: the account on the left, the figures

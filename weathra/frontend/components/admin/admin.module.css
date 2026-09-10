@@ -22,12 +22,6 @@
   gap: var(--space-3);
 }
 
-.unbuilt {
-  margin: 0;
-  color: var(--color-text-secondary);
-  max-width: 78ch;
-}
-
 .panel {
   display: flex;
   flex-direction: column;
@@ -230,4 +224,235 @@
   margin: 0;
   padding-left: var(--space-4);
   color: var(--color-text-primary);
+}
+
+/* --------------------------------------------------------------- the usage dashboard */
+
+.overview {
+  display: grid;
+  gap: var(--space-5);
+  /* A flex item's default `min-width: auto` is what let the fifth KPI card and the usage table
+     overflow the screen's right edge: the grid sized itself to its widest cell rather than to the
+     column it sits in. Every band that can hold a wide table or a nowrap number repeats this. */
+  min-width: 0;
+}
+
+/* Five figures across at desk width, folding to two and then one. The artifact's KPI row is the
+   screen's first band and the thing an operator reads before anything else. */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.kpi {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
+.kpiLabel {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.kpiValue {
+  margin: 0;
+  /* Long totals wrap rather than widening the card past its column. */
+  overflow-wrap: anywhere;
+  color: var(--color-text-primary);
+  font-size: var(--type-display-size);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.kpiNote {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+}
+
+.overviewBody {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+  min-width: 0;
+}
+
+.overviewSide {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.measures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.chart {
+  margin: 0 0 var(--space-4);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.chartPlot {
+  height: 260px;
+  width: 100%;
+}
+
+.chartNote {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+}
+
+.tooltip {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-overlay);
+}
+
+.tooltipName {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.tooltipValue {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-size);
+}
+
+/*
+ * `ScrollRegion` carries no styles of its own — it measures its container and adds the tab stop,
+ * and the screen supplies the box. Without this the two admin tables simply widened the page: 112
+ * pixels of horizontal document scroll at 1440 and 925 at 375, which is exactly what `specs/web-ui`
+ * rules out. The table scrolls inside its card; the page does not move.
+ */
+.scroll {
+  overflow-x: auto;
+  max-width: 100%;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  /* Wide enough that the columns stay readable, narrow enough that it fits a desk width without
+     scrolling at all. Below that it scrolls inside `.scroll` rather than pushing the page. */
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: var(--type-ui-size);
+}
+
+.table th,
+.table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.table thead th {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.table tbody th {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.table td {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.catalogKey,
+.gateway span {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  font-weight: 400;
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+}
+
+.split dt {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+}
+
+.split dd {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-heading-size);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.failures {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.failures li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.quiet {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 1100px) {
+  .kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .overviewBody {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

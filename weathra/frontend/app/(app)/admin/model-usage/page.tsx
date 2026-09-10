@@ -1,38 +1,36 @@
 /**
  * `/admin/model-usage` — Admin Model & AI Usage.
  *
- * **One panel of this screen is built, and the route says which.** `specs/web-ui` keeps the screen
- * post-MVP with one named exception: the administrative *model policy confirmation* surface, added
- * to the spec for this change because the audited candidate-list write it carries is the only
- * administrative write the MVP's own evidence trail depends on (task 34.5). Model status, token
- * usage, cost, latency, errors and plan usage are still designed rather than built, and the
- * paragraph below states that rather than leaving a reader to infer it from panels that are absent.
+ * **The screen is built from what Weathra actually records.** `specs/web-ui` kept it post-MVP with
+ * one named exception, the administrative model *policy confirmation* surface that task 34.5's
+ * evidence trail depends on. This change adds the rest of the screen the artifact composes — the
+ * KPI row, the usage chart, the grouped table, the product/internal split, the failures panel and
+ * the model catalog — from two administrative endpoints that already existed: `GET /admin/usage`,
+ * which returns aggregate measures and never a row or a subject, and `GET /admin/models`.
  *
- * **What that changes about the earlier guarantee, and what it does not.** Until this change the
- * requirement was that *no* catalog, usage, cost or lab request be issued from this route for any
- * visitor at all, and the guarantee was a property of this module: it held no client, so it could
- * not have fetched. That is now narrower and still exact. The unbuilt panels fetch nothing — there
- * is no token-usage, cost or plan-consumption request here for anybody — and the policy panel's
- * reads are administrative reads the backend refuses to a caller without the role, which is why an
+ * **What the panels do not do is invent the artifact's operational estate.** No model name is
+ * written in this codebase; the catalog table renders whatever `model_catalog` holds. The composite
+ * quality and cost-efficiency scores, the per-tier user headcounts, the export and audit-report
+ * controls and the "all services operational" footer are absent rather than styled out of sight,
+ * and `docs/design/screens.md` §5 records why for each.
+ *
+ * Authorization is still not this module's business. The role is a row in `admin_roles` keyed by the
+ * validated token subject (`docs/authentication.md`); nothing on this page decides who may look, and
+ * every request it issues is one the backend refuses to a caller without the role — which is why an
  * ordinary authenticated person reaching this path is shown a not-permitted state rather than an
  * empty screen dressed as a working one.
  *
- * Authorization is still not this module's business. The role is a row in `admin_roles` keyed by the
- * validated token subject (`docs/authentication.md`); nothing on this page decides who may look,
- * and the route is protected by the same default as every other product route.
- *
  * The screen's approved design is `docs/design/screens/09-admin-model-ai-usage.png` (task 33.1,
- * approved 2026-09-09). The panel built here is not drawn in it — the artifact composes the usage,
- * cost and comparison views, not an audited policy confirmation — and that divergence is recorded in
- * `docs/design/screens.md` §8, alongside §5's standing refusals of its composite scores, invented
- * model names and export controls.
+ * approved 2026-09-09). The policy panel below the dashboard is not drawn in it — the artifact
+ * composes usage, cost and a comparison lab, not an audited policy confirmation — and that
+ * divergence is recorded in `docs/design/screens.md` §8.
  */
 
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { ModelPolicyPanel } from "@/components/admin/model-policy";
-import { Badge } from "@/components/ui";
+import { AdminOverview } from "@/components/admin/overview";
 
 import styles from "@/components/admin/admin.module.css";
 
@@ -43,14 +41,13 @@ export default function Page(): ReactNode {
     <div className={styles.screen}>
       <div className={styles.screenHead}>
         <h1>Admin Model & AI Usage</h1>
-        <Badge tone="neutral">Partly available</Badge>
       </div>
-      <p className={styles.unbuilt}>
-        Model status, token usage, estimated cost, latency, errors and per-plan consumption are not
-        yet available on this screen, and nothing about them is loaded here. What is built is the
-        model policy surface below: the recorded comparison evidence behind each policy&rsquo;s
-        candidate list, and the audited write that confirms it.
+      <p className={styles.intro}>
+        Calls, tokens, estimated cost, latency and failures over a period, and the catalog behind
+        them. Cost is an operational estimate priced from the catalog at the time of each call, not
+        a billed amount.
       </p>
+      <AdminOverview />
       <ModelPolicyPanel />
     </div>
   );

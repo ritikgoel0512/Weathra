@@ -349,6 +349,7 @@ describe("the client's coverage of the contract", () => {
     // that quietly joined the client, and one of these six silently dropped.
     const NEEDED = new Set([
       "/api/v1/admin/models",
+      "/api/v1/admin/usage",
       "/api/v1/admin/policies",
       "/api/v1/admin/policies/{}/audit",
       "/api/v1/admin/policies/{}/candidates",

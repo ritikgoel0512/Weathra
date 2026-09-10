@@ -21,7 +21,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { RecordedAgainstBaselineChart } from "@/components/historical/charts";
+import { PrecipitationChart, RecordedAgainstBaselineChart } from "@/components/historical/charts";
 import {
   Badge,
   Card,
@@ -806,7 +806,17 @@ export function ClimatePulse({ forecast }: { readonly forecast: ForecastResponse
  * statement the backend supplies with every forecast — its basis, its provider, and whether that
  * provider gave a spread at all. Where the provider reported no precipitation, the panel says that
  * rather than showing a zero, because no reading and a reading of zero are different facts.
+ *
+ * **It draws the series where there is one.** The panel used to be a list of dates and figures
+ * beside a full-width chart, which made the artifact's analytics row read as one graphic and one
+ * paragraph. Where the provider reports an hourly precipitation series the panel plots it, using
+ * the same bar chart Historical Analytics uses for the same measure — one chart, defined once. The
+ * daily list remains for a forecast that carries daily precipitation but no hourly series, because
+ * a list of real figures is still better than an empty frame.
  */
+/** The measure key the provider reports precipitation under, in both the hourly and daily series. */
+const PRECIPITATION = "precipitation";
+
 export function PrecipitationOutlook({
   forecast,
 }: {
@@ -821,6 +831,8 @@ export function PrecipitationOutlook({
     .filter((entry): entry is { date: string; reading: Reading } => entry.reading !== null);
 
   const uncertainty = forecast.uncertainty;
+  const hourly = pointsFrom(forecast.hourly);
+  const plottable = hasValues(hourly, PRECIPITATION);
 
   return (
     <ProvenanceSection
@@ -835,7 +847,16 @@ export function PrecipitationOutlook({
         fromCache: forecast.attribution?.from_cache,
       })}
     >
-      {wet.length > 0 ? (
+      {plottable ? (
+        <PrecipitationChart
+          points={hourly}
+          measure={PRECIPITATION}
+          unit={forecast.hourly?.units?.[PRECIPITATION] ?? null}
+          seriesLabel="Precipitation"
+          title="Precipitation through the forecast window"
+          missing={missingCount(hourly, PRECIPITATION)}
+        />
+      ) : wet.length > 0 ? (
         <dl className={styles.measures}>
           {wet.map((entry) => (
             <div className={styles.measure} key={entry.date}>
@@ -845,10 +866,10 @@ export function PrecipitationOutlook({
           ))}
         </dl>
       ) : (
-        <p className={styles.note}>
-          This provider reported no precipitation for the days in this window. That is an absent
-          reading, not a reading of zero.
-        </p>
+        <EmptyChart
+          title="Precipitation through the forecast window"
+          reason="This provider reported no precipitation for this window. That is an absent reading, not a reading of zero."
+        />
       )}
 
       {uncertainty ? (
