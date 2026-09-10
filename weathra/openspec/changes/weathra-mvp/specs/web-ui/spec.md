@@ -351,6 +351,24 @@ It SHALL show the resolution the provider actually reported: no entry SHALL be i
 - **AND** no forecast model, sensor network, reliability score or convergence figure appears
 - **AND** no language model is called
 
+### Requirement: Weather Intelligence Report
+
+The frontend SHALL provide a Weather Intelligence Report for the acting person's default location, composed of the current conditions, the forecast outlook, how the forecast has moved, the statistics computed for the window, and the historical baseline behind it — every figure retrieved or deterministically computed, and none originated by the screen.
+
+A model-written synthesis of those figures MAY be offered, and SHALL be produced only when the person asks for it: the report SHALL be complete and readable without it, and opening the report SHALL NOT call a language model. Where a synthesis is produced it SHALL be labelled as a model's reading, SHALL name the model that wrote it where the backend reported one, and SHALL offer the evidence record for the run. The screen SHALL NOT print an agent version, count evidence nodes, or offer an export it cannot produce.
+
+#### Scenario: The report is complete without a model
+
+- **WHEN** a person opens the report
+- **THEN** the conditions, outlook, movement, computed statistics and baseline are shown
+- **AND** no language model has been called
+
+#### Scenario: The synthesis is asked for
+
+- **WHEN** the person asks Weathra to read the report
+- **THEN** the model's reading is shown, labelled as an interpretation and naming the model
+- **AND** the evidence record for that run is offered
+
 ### Requirement: The navigation is grouped by what a screen is for
 
 The frontend SHALL group the navigation into the product's core screens, the intelligence screens that analyse Weathra's own data, the account screens, and — for a principal the backend confirms holds the administrative role — the administrative ones. The core group SHALL carry no heading, being the product itself.

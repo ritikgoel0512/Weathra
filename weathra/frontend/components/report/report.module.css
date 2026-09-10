@@ -1,0 +1,100 @@
+/*
+ * Weather Intelligence Report — from the task 20.3 tokens against
+ * `docs/design/screens/12-weather-intelligence-report.png`.
+ *
+ * A stack of report sections rather than a dashboard grid: the artifact reads top to bottom, and
+ * so does this. What it draws and Weathra does not have — an agent version string, an
+ * evidence-node count, a PDF export, a confidence percentage on the narrative — is absent from the
+ * markup rather than styled away.
+ */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  max-width: 1100px;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.lede {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-secondary);
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.metric dt {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+}
+
+.metric dd {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  overflow-wrap: anywhere;
+}
+
+.days {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.day {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.dayName {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+}
+
+.dayValue {
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.synthesis {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-primary);
+  max-width: 72ch;
+}
+
+.evidence {
+  color: var(--color-accent);
+}
+
+.quiet {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+  max-width: 72ch;
+}

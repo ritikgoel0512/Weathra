@@ -136,7 +136,7 @@ export const INTELLIGENCE_SCREENS: readonly Screen[] = [
  *
  * Each entry moves here in the checkpoint that builds its screen.
  */
-export const INTELLIGENCE_BUILT: readonly string[] = ["/explorer"];
+export const INTELLIGENCE_BUILT: readonly string[] = ["/explorer", "/report"];
 
 /** Retained under its previous name for the route map's own assertions. */
 export const POST_MVP_SCREENS: readonly Screen[] = INTELLIGENCE_SCREENS;
