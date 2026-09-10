@@ -110,17 +110,36 @@ export const MVP_SCREENS: readonly Screen[] = [
 ];
 
 /**
- * Routing structure reserved for the post-MVP screens, which `specs/web-ui` requires to exist and
- * to state plainly that they are not yet available — protected like any other product route, so
- * the boundary does not acquire an exception it would have to remember to close later.
+ * The intelligence screens: analytical surfaces built over the same weather and agent contracts as
+ * the seven core ones.
+ *
+ * They were `POST_MVP_SCREENS` — routing structure with a "not yet available" statement behind it —
+ * and are being built one at a time. The name changed with the classification: a screen is in this
+ * group because of what it *is* (an analysis over Weathra's own data) rather than when it shipped,
+ * and `INTELLIGENCE_BUILT` below is what says which of them a person can use today.
  */
-export const POST_MVP_SCREENS: readonly Screen[] = [
-  { path: "/report", title: "Weather Intelligence Report" },
+export const INTELLIGENCE_SCREENS: readonly Screen[] = [
   { path: "/explorer", title: "Forecast Explorer" },
+  { path: "/report", title: "Weather Intelligence Report" },
   { path: "/scenarios", title: "Weather Scenario Lab" },
   { path: "/watch", title: "Weather Watch" },
   { path: "/travel", title: "Travel Intelligence" },
 ];
+
+/**
+ * Which intelligence screens are actually built, and therefore offered without a caveat.
+ *
+ * The list exists so the navigation can stop marking a screen the moment it becomes real, and so
+ * that it cannot stop marking one *before* — five unmarked entries leading to "not yet available"
+ * would be five dead ends in the primary navigation, which is a worse product than an honest label
+ * and is what `specs/web-ui` forbids when it says a post-MVP screen is either absent or marked.
+ *
+ * Each entry moves here in the checkpoint that builds its screen.
+ */
+export const INTELLIGENCE_BUILT: readonly string[] = [];
+
+/** Retained under its previous name for the route map's own assertions. */
+export const POST_MVP_SCREENS: readonly Screen[] = INTELLIGENCE_SCREENS;
 
 /**
  * Admin Model & AI Usage, which `specs/web-ui` names among the post-MVP screens.

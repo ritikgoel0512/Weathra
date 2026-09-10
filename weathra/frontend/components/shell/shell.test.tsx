@@ -163,14 +163,14 @@ describe("every MVP product screen is reachable", () => {
     expect(lastBuilt).toBeLessThan(firstPlanned);
   });
 
-  it("marks a planned destination as not yet available, in words", () => {
+  it("caveats an unbuilt destination in words rather than with a badge", () => {
     renderShell();
     const navigation = screen.getByRole("navigation", { name: "Weathra" });
 
     for (const planned of POST_MVP_SCREENS) {
       // The accessible name carries the marking, so it is not colour-and-chip only.
       const link = within(navigation).getByRole("link", {
-        name: `${planned.title} — not yet available`,
+        name: `${planned.title} — coming soon`,
       });
       expect(link).toHaveAttribute("href", planned.path);
       expect(link).toHaveAttribute("data-status", "planned");

@@ -22,6 +22,8 @@
 import {
   ACCOUNT_SCREENS,
   ADMIN_SCREENS,
+  INTELLIGENCE_BUILT,
+  INTELLIGENCE_SCREENS,
   MVP_SCREENS,
   POST_MVP_SCREENS,
   type Screen,
@@ -34,7 +36,7 @@ import {
  * state plainly that the screen is not yet available, so the status is what the navigation and the
  * route both read to say the same thing.
  */
-export type DestinationStatus = "mvp" | "planned" | "admin" | "account";
+export type DestinationStatus = "mvp" | "planned" | "admin" | "account" | "intelligence";
 
 /**
  * The name of an icon in `components/shell/icons.tsx`.
@@ -82,6 +84,11 @@ const ORDER: readonly { path: string; icon: IconName }[] = [
   { path: "/settings", icon: "settings" },
 ];
 
+/** The icon each group's entries carry, by path. Drawn from `ORDER`, so one place names them. */
+const ICONS: Record<string, IconName> = Object.fromEntries(
+  ORDER.map((entry) => [entry.path, entry.icon]),
+);
+
 function destination({ path, icon }: { path: string; icon: IconName }): Destination {
   const mvp = MVP_SCREENS.find((screen) => screen.path === path);
   if (mvp) return { ...mvp, status: "mvp", icon };
@@ -94,8 +101,43 @@ function destination({ path, icon }: { path: string; icon: IconName }): Destinat
   throw new Error(`${path} is in the navigation but not in the route map`);
 }
 
-/** The twelve entries, in the order the design record fixes. */
+/**
+ * The twelve product entries, in the order the design record fixes.
+ *
+ * Kept as the flat union of core and intelligence, because that is what "the product's screens"
+ * means and several assertions are about exactly that set. The rail renders the groups.
+ */
 export const NAVIGATION: readonly Destination[] = ORDER.map(destination);
+
+/**
+ * The seven core product screens, in the recorded order.
+ *
+ * "Core" is the group heading the artifacts' sidebar uses, and the split is the one a person reads:
+ * these answer a question about the weather somewhere, and the intelligence group below analyses it.
+ */
+export const CORE_NAVIGATION: readonly Destination[] = MVP_SCREENS.map((screen) => ({
+  ...screen,
+  status: "mvp" as const,
+  icon: ICONS[screen.path] ?? "dashboard",
+}));
+
+/**
+ * The intelligence section.
+ *
+ * A screen here carries `status: "intelligence"` once it is built and `"planned"` until then, and
+ * the rail marks only the second. The marking goes away per screen rather than all at once: an
+ * unmarked entry that leads to "not yet available" is a dead end in the primary navigation, and
+ * five of them would read as a product that does not work rather than one still being built.
+ */
+export const INTELLIGENCE_NAVIGATION: readonly Destination[] = INTELLIGENCE_SCREENS.map(
+  (screen) => ({
+    ...screen,
+    status: INTELLIGENCE_BUILT.includes(screen.path)
+      ? ("intelligence" as const)
+      : ("planned" as const),
+    icon: ICONS[screen.path] ?? "explorer",
+  }),
+);
 
 /**
  * The account section: built, offered to everybody, and about the account rather than the weather.

@@ -16,7 +16,13 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { ACCOUNT_SCREENS, MVP_SCREENS, POST_MVP_SCREENS } from "@/lib/routes";
+import {
+  ACCOUNT_SCREENS,
+  INTELLIGENCE_BUILT,
+  INTELLIGENCE_SCREENS,
+  MVP_SCREENS,
+  POST_MVP_SCREENS,
+} from "@/lib/routes";
 import { NAVIGATION } from "@/lib/navigation";
 
 import { Navigation } from "./navigation";
@@ -75,25 +81,34 @@ describe("the complete Weathra navigation", () => {
     expect(new Set(paths).size).toBe(paths.length);
   });
 
-  it("keeps the planned destinations visible, and says they are planned", () => {
+  it("keeps an unbuilt intelligence screen reachable and caveated, without a badge", () => {
     render(<Navigation />);
 
-    for (const planned of POST_MVP_SCREENS) {
-      const link = screen.getByRole("link", { name: new RegExp(planned.title, "i") });
-      expect(link.getAttribute("href")).toBe(planned.path);
-      expect(link.getAttribute("data-status")).toBe("planned");
-      // The status is in the accessible name, not only in a visual mark.
-      expect(link).toHaveAccessibleName(/not yet available/i);
-    }
+    for (const screenRecord of INTELLIGENCE_SCREENS) {
+      const link = screen.getByRole("link", { name: new RegExp(screenRecord.title, "i") });
+      expect(link.getAttribute("href")).toBe(screenRecord.path);
 
-    expect(POST_MVP_SCREENS.length).toBeGreaterThan(0);
+      if (INTELLIGENCE_BUILT.includes(screenRecord.path)) {
+        expect(link.getAttribute("data-status")).toBe("intelligence");
+        expect(link).not.toHaveAccessibleName(/coming soon/i);
+      } else {
+        // Dimmed rather than badged: a chip beside five of twelve entries made the primary
+        // navigation read as a roadmap. The caveat stays in the accessible name, because a
+        // treatment that is only visual says nothing to somebody who cannot see it.
+        expect(link.getAttribute("data-status")).toBe("planned");
+        expect(link).toHaveAccessibleName(/coming soon/i);
+      }
+      expect(within(link).queryByText("Planned")).toBeNull();
+    }
   });
 
-  it("groups the planned ones under their own heading rather than hiding them", () => {
+  it("groups the intelligence screens under their own heading", () => {
     render(<Navigation />);
-    const group = screen.getByRole("region", { name: /planned/i });
-    for (const planned of POST_MVP_SCREENS) {
-      expect(within(group).getByRole("link", { name: new RegExp(planned.title, "i") })).toBeTruthy();
+    const group = screen.getByRole("region", { name: /intelligence/i });
+    for (const screenRecord of INTELLIGENCE_SCREENS) {
+      expect(
+        within(group).getByRole("link", { name: new RegExp(screenRecord.title, "i") }),
+      ).toBeTruthy();
     }
   });
 });

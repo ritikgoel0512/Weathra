@@ -281,7 +281,7 @@ code that does not exist. So each names the group 26-34 task that owes it, and t
 that task to being open. Close one of those tasks and the first assertion starts demanding its
 tests. Both directions stay honest without anyone maintaining a list of which spec is which.
 
-Of **211** requirements across twenty specs, **210** are implemented and tested, **1** is
+Of **212** requirements across twenty specs, **211** are implemented and tested, **1** is
 manual-pending, and **0** are open. Exactly **0** requirements have no test. The one that remains
 manual-pending is `web-ui`'s accessibility and responsive layout, which is automatically tested as
 far as automation reaches and still owes a human pass (task 21.8).
@@ -311,13 +311,13 @@ model access or an allowance** and **the Visily design gate** are closed outrigh
 | `rag-knowledge` | 8 | 8 | 0 | 0 | 11 |
 | `safety-grounding` | 10 | 10 | 0 | 0 | 17 |
 | `weather-providers` | 7 | 7 | 0 | 0 | 5 |
-| `web-ui` | 17 | 16 | 1 | 0 | 19, 20, 21, 33, 34 |
+| `web-ui` | 18 | 17 | 1 | 0 | 19, 20, 21, 33, 34 |
 | `model-policy` | 10 | 10 | 0 | 0 | 28 |
 | `model-catalog` | 7 | 7 | 0 | 0 | 26, 27 |
 | `llm-telemetry` | 7 | 7 | 0 | 0 | 29 |
 | `usage-limits` | 9 | 9 | 0 | 0 | 30 |
 | `model-lab` | 6 | 6 | 0 | 0 | 32 |
-| **Total** | **211** | **210** | **1** | **0** | |
+| **Total** | **212** | **211** | **1** | **0** | |
 
 ### `agent-orchestration`
 
@@ -555,6 +555,7 @@ model access or an allowance** and **the Visily design gate** are closed outrigh
 | Protected areas and authentication states | 20.8 | frontend/middleware.ts, frontend/lib/session/ | frontend/tests/protected-route.test.tsx, frontend/tests/e2e/protected-route.spec.ts, frontend/app/(app)/layout.test.tsx | IMPLEMENTED |
 | MVP product screens | 21.1–21.7 | frontend/components/{dashboard,analyst,compare,historical,locations,settings,evidence}/ | frontend/components/*/*.test.tsx, frontend/components/shell/complete-product.test.tsx, frontend/lib/dashboard/briefing.test.ts, frontend/lib/analyst/run.test.ts, frontend/lib/fixtures/fixtures.test.ts, frontend/lib/images/locations.test.ts, frontend/lib/images/provider.test.ts | IMPLEMENTED |
 | Post-MVP screens are designed, not built | 21.7 | frontend/lib/routes.ts, frontend/lib/navigation.ts | frontend/lib/routes.test.ts, frontend/lib/navigation.test.ts | IMPLEMENTED |
+| The navigation is grouped by what a screen is for | 34.12 | frontend/lib/routes.ts, frontend/lib/navigation.ts, frontend/components/shell/navigation.tsx | frontend/lib/routes.test.ts, frontend/lib/navigation.test.ts, frontend/components/shell/complete-product.test.tsx, frontend/components/shell/shell.test.tsx | IMPLEMENTED |
 | Data classes and attribution are visible | 21.4 | frontend/components/ui/provenance.tsx | frontend/components/ui/provenance.test.tsx, frontend/lib/design/data-class.test.ts | IMPLEMENTED |
 | Loading, empty, and error states | 20.9 | frontend/components/view-state.tsx | frontend/components/ui/primitives.test.tsx, frontend/lib/query/query-layer.test.tsx | IMPLEMENTED |
 | Agent unavailability handled gracefully | 21.2 | frontend/components/analyst/, frontend/hooks/use-agent-stream.ts | frontend/components/analyst/analyst.test.tsx, frontend/hooks/use-agent-stream.test.tsx | IMPLEMENTED |

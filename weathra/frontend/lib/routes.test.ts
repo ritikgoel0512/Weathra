@@ -16,6 +16,8 @@ import {
   isAuthPath,
   isProtectedPath,
   isPublicPath,
+  INTELLIGENCE_BUILT,
+  INTELLIGENCE_SCREENS,
   MVP_SCREENS,
   POST_MVP_SCREENS,
   UNLISTED_SCREENS,
@@ -36,14 +38,25 @@ describe("the route map", () => {
     ]);
   });
 
-  it("reserves routing structure for the five post-MVP screens", () => {
-    expect(POST_MVP_SCREENS.map(({ title }) => title)).toEqual([
-      "Weather Intelligence Report",
+  it("names the five intelligence screens, in the order the rail groups them", () => {
+    // Reordered when the group became a product section rather than a roadmap list: Forecast
+    // Explorer leads because it is the one whose data Weathra already serves in full.
+    expect(INTELLIGENCE_SCREENS.map(({ title }) => title)).toEqual([
       "Forecast Explorer",
+      "Weather Intelligence Report",
       "Weather Scenario Lab",
       "Weather Watch",
       "Travel Intelligence",
     ]);
+    expect(POST_MVP_SCREENS).toEqual(INTELLIGENCE_SCREENS);
+  });
+
+  it("claims a screen is built only when it is", () => {
+    // The list the rail reads to decide what to caveat. It grows one entry per checkpoint, and an
+    // entry appearing here before its screen exists is a dead end in the primary navigation.
+    for (const path of INTELLIGENCE_BUILT) {
+      expect(INTELLIGENCE_SCREENS.map((screen) => screen.path)).toContain(path);
+    }
   });
 
   it("protects every product route, MVP and post-MVP alike", () => {

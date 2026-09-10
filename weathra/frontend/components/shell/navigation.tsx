@@ -34,7 +34,8 @@ import type { ReactNode } from "react";
 import {
   ACCOUNT_NAVIGATION,
   ADMIN_NAVIGATION,
-  NAVIGATION,
+  CORE_NAVIGATION,
+  INTELLIGENCE_NAVIGATION,
   isActive,
   type Destination,
 } from "@/lib/navigation";
@@ -73,9 +74,6 @@ export function Navigation({ onNavigate, administrative = false }: NavigationPro
    * planned marks, the saved-locations subsection, the identity footer — and that is a matter for
    * `shell.module.css`, not for which destinations exist. Full navigation, Visily treatment.
    */
-  const built = NAVIGATION.filter((entry) => entry.status !== "planned");
-  const planned = NAVIGATION.filter((entry) => entry.status === "planned");
-
   const render = (entry: Destination): ReactNode => {
     const active = isActive(entry, pathname);
     return (
@@ -91,49 +89,50 @@ export function Navigation({ onNavigate, administrative = false }: NavigationPro
           <Icon name={entry.icon} />
           <span className={styles.itemLabel}>{entry.title}</span>
           {entry.status === "planned" ? (
-            <>
-              <span className={styles.plannedMark} aria-hidden="true">
-                Planned
-              </span>
-              <span className="weathra-visually-hidden">— not yet available</span>
-            </>
+            /*
+             * No badge. A "PLANNED" chip beside five of twelve entries made the primary navigation
+             * read as a roadmap, which is not what the artifacts draw and not what a person opening
+             * Weathra is looking at. The row is dimmed instead — `[data-status="planned"]` in
+             * `shell.module.css` — and the caveat stays in the accessible name, because a
+             * treatment that is only visual says nothing to somebody who cannot see it.
+             *
+             * The dimming goes away per screen, as each one is built. It does not go away first:
+             * an unmarked entry leading to an unbuilt screen is a dead end in the one navigation
+             * the product has.
+             */
+            <span className="weathra-visually-hidden">— coming soon</span>
           ) : null}
         </Link>
       </li>
     );
   };
 
+  const group = (id: string, heading: string, entries: readonly Destination[]): ReactNode => (
+    <section className={styles.plannedGroup} aria-labelledby={`weathra-${id}-heading`}>
+      <h2 className={styles.plannedHeading} id={`weathra-${id}-heading`}>
+        {heading}
+      </h2>
+      <ul className={styles.list} data-group={id}>
+        {entries.map(render)}
+      </ul>
+    </section>
+  );
+
+  /*
+   * Four groups, in the order the artifacts' sidebar reads: what the product does, what it
+   * analyses, the account, and — for an administrator only — administration.
+   *
+   * Core is unheaded. A heading over the first group would push the Dashboard down the rail behind
+   * a label that says nothing a person needs: they are looking at Weathra, and these are Weathra.
+   */
   return (
     <>
-      <ul className={styles.list}>{built.map(render)}</ul>
-      <section className={styles.plannedGroup} aria-labelledby="weathra-account-heading">
-        <h2 className={styles.plannedHeading} id="weathra-account-heading">
-          Account
-        </h2>
-        <ul className={styles.list} data-account="true">
-          {ACCOUNT_NAVIGATION.map(render)}
-        </ul>
-      </section>
-      {administrative ? (
-        <section className={styles.plannedGroup} aria-labelledby="weathra-admin-heading">
-          <h2 className={styles.plannedHeading} id="weathra-admin-heading">
-            Admin
-          </h2>
-          <ul className={styles.list} data-admin="true">
-            {ADMIN_NAVIGATION.map(render)}
-          </ul>
-        </section>
-      ) : null}
-      {planned.length > 0 ? (
-        <section className={styles.plannedGroup} aria-labelledby="weathra-planned-heading">
-          <h2 className={styles.plannedHeading} id="weathra-planned-heading">
-            Planned
-          </h2>
-          <ul className={styles.list} data-planned="true">
-            {planned.map(render)}
-          </ul>
-        </section>
-      ) : null}
+      <ul className={styles.list} data-group="core">
+        {CORE_NAVIGATION.map(render)}
+      </ul>
+      {group("intelligence", "Intelligence", INTELLIGENCE_NAVIGATION)}
+      {group("account", "Account", ACCOUNT_NAVIGATION)}
+      {administrative ? group("admin", "Admin", ADMIN_NAVIGATION) : null}
     </>
   );
 }

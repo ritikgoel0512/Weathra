@@ -96,13 +96,13 @@ describe("the shell carries the regions every product artifact draws", () => {
     expect(await within(saved).findByText("Berlin, Germany")).toBeInTheDocument();
   });
 
-  it("separates the not-yet-built destinations from the built ones, still marked in words", () => {
+  it("groups the intelligence screens, caveating the unbuilt ones in words", () => {
     renderShell();
     const rail = within(screen.getByRole("navigation", { name: "Weathra" }));
-    expect(rail.getByRole("region", { name: "Planned" })).toBeInTheDocument();
+    expect(rail.getByRole("region", { name: "Intelligence" })).toBeInTheDocument();
     // The marking is words, not only a chip: the accessible name still carries it.
     expect(
-      rail.getByRole("link", { name: /Forecast Explorer — not yet available/ }),
+      rail.getByRole("link", { name: /Forecast Explorer — coming soon/ }),
     ).toBeInTheDocument();
   });
 

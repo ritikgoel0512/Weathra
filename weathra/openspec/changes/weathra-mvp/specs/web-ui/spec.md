@@ -308,10 +308,11 @@ Two of those screens are exceptions, and they are named rather than left to infe
 - **THEN** the screen states that it is not yet available
 - **AND** does not render a broken or empty interface
 
-#### Scenario: Post-MVP screens not advertised as working
+#### Scenario: An unbuilt screen is caveated rather than badged
 
 - **WHEN** the navigation surface is inspected
-- **THEN** post-MVP screens are either absent or marked as not yet available
+- **THEN** a screen that is not yet built is de-emphasised and its accessible name says it is coming
+- **AND** it is not advertised as working, and carries no badge that makes the navigation read as a roadmap
 
 #### Scenario: Plan & Usage shows the person their own standing
 
@@ -325,6 +326,24 @@ Two of those screens are exceptions, and they are named rather than left to infe
 - **THEN** the route states that model status, token usage, cost, latency, errors and plan usage are not yet available
 - **AND** no token-usage, cost, or plan-consumption request is issued for any visitor
 - **AND** the policy confirmation surface below is the only part of the screen that loads anything, and every read it issues is one the backend refuses to a caller without the administrative role
+
+### Requirement: The navigation is grouped by what a screen is for
+
+The frontend SHALL group the navigation into the product's core screens, the intelligence screens that analyse Weathra's own data, the account screens, and — for a principal the backend confirms holds the administrative role — the administrative ones. The core group SHALL carry no heading, being the product itself.
+
+An intelligence screen SHALL be offered in that group whether or not it is built, and one that is not built SHALL be de-emphasised with the caveat carried in its accessible name rather than in a badge. It SHALL NOT be offered without that caveat before its screen exists, since an uncaveated entry leading to nothing is a dead end in the only navigation the product has. The caveat SHALL be removed per screen as each is built, and never for a screen that is not.
+
+#### Scenario: The four groups
+
+- **WHEN** a signed-in person views the navigation
+- **THEN** the core screens appear first without a heading, then the intelligence group, then the account group
+- **AND** the administrative group appears only for a principal the backend confirms holds the role
+
+#### Scenario: A built intelligence screen loses its caveat
+
+- **WHEN** an intelligence screen is built
+- **THEN** its entry is offered without a caveat
+- **AND** every intelligence screen that is not built keeps one
 
 ### Requirement: Data classes and attribution are visible
 
