@@ -102,6 +102,9 @@ OPERATIONS: tuple[tuple[str, str, dict[str, Any] | None], ...] = (
         "/admin/allowances/internal",
         {"dimension": "requests_per_day", "allowance": 3000},
     ),
+    # Task 34.22: the listing the plan-management screen reads. A subject and a tier — Weathra
+    # holds no contact detail, so there is none here to withhold from a non-administrator either.
+    ("GET", "/admin/principals", None),
     ("GET", "/admin/principals/administrators", None),
     (
         "PUT",
