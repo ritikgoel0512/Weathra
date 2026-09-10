@@ -106,6 +106,7 @@ reflection vector.
 | `PUT` | `/api/v1/admin/plans/{plan_code}/policies` | **protected** | 200 | `no body` |
 | `GET` | `/api/v1/admin/policies` | **protected** | 200 | `PolicyListResponse` |
 | `POST` | `/api/v1/admin/policies` | **protected** | 201 | `PolicyRecord` |
+| `GET` | `/api/v1/admin/policies/{policy_id}/audit` | **protected** | 200 | `PolicyAuditResponse` |
 | `PUT` | `/api/v1/admin/policies/{policy_id}/candidates` | **protected** | 200 | `PolicyRecord` |
 | `PUT` | `/api/v1/admin/policies/{policy_id}/fallback` | **protected** | 200 | `PolicyRecord` |
 | `GET` | `/api/v1/admin/principals/administrators` | **protected** | 200 | `RoleListResponse` |
@@ -143,6 +144,7 @@ reflection vector.
 | `/admin/models/{catalog_key}/enable` | **protected**, administrative | Returns a model to resolution. |
 | `/admin/models/{catalog_key}/disable` | **protected**, administrative | Withdraws a model from resolution, refused for the last one serving a call role. |
 | `/admin/policies` | **protected**, administrative | Lists and creates model policies. |
+| `/admin/policies/{policy_id}/audit` | **protected**, administrative | Reads one policy's audit trail, with the comparison runs each change cited. |
 | `/admin/policies/{policy_id}/candidates` | **protected**, administrative | Re-points a policy's ordered candidate list — a model promotion. |
 | `/admin/policies/{policy_id}/fallback` | **protected**, administrative | Sets or clears a policy's declared fallback. |
 | `/admin/plans` | **protected**, administrative | Lists the subscription plans. |

@@ -85,3 +85,42 @@ export function presentableMessage(message: string, fallback = AGENT_UNAVAILABLE
   if (/environment variable|env var/i.test(trimmed)) return fallback;
   return trimmed;
 }
+
+/**
+ * A validated identity the backend will not let do this — 403.
+ *
+ * Distinct from every code in `AUTHENTICATION_ERROR_CODES`, and the distinction is the whole
+ * point: those mean *sign in again*, this means *signing in again will not help*. The
+ * administrative surfaces are the only place the frontend meets it, because they are the only
+ * place a signed-in person can be refused for who they are rather than for what they asked.
+ */
+export const FORBIDDEN_CODE = "forbidden";
+
+/** Whether a code means an authenticated caller lacks the role, rather than lacking a session. */
+export function isForbiddenCode(code: string | null | undefined): boolean {
+  return code === FORBIDDEN_CODE;
+}
+
+/**
+ * The criteria a promotion gate refused a candidate on, read out of a refusal's details.
+ *
+ * `specs/evaluation` forbids promoting on cost or latency a candidate that failed structured JSON
+ * reliability or groundedness, and the backend refuses such a write with `validation_failed` and a
+ * `failed_criteria` map. The map is what makes the refusal actionable — "which candidate, which
+ * criterion" — so it is read structurally here rather than parsed out of the sentence.
+ *
+ * Returns null when the refusal was some other validation failure, so a caller can tell a
+ * malformed request from a gated one instead of showing the gate's explanation for both.
+ */
+export function promotionGateFailures(
+  details: Record<string, unknown> | null | undefined,
+): Record<string, readonly string[]> | null {
+  const failed = details?.failed_criteria;
+  if (typeof failed !== "object" || failed === null) return null;
+
+  const named: Record<string, readonly string[]> = {};
+  for (const [candidate, criteria] of Object.entries(failed as Record<string, unknown>)) {
+    if (Array.isArray(criteria)) named[candidate] = criteria.map(String);
+  }
+  return Object.keys(named).length === 0 ? null : named;
+}

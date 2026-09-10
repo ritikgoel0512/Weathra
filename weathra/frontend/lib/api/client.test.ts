@@ -333,18 +333,41 @@ describe("the client's coverage of the contract", () => {
     }
   });
 
-  it("has an administrative surface the backend declares and this client does not yet serve", () => {
-    // Two assertions, and the second is the one that matters. The first says the backend has an
-    // administrative surface at all; the second says every path this client skips is skipped
-    // *because it is administrative* — so an ordinary endpoint can never quietly join the
-    // exclusion by being left out of the client.
+  it("serves exactly the administrative paths the one built administrative surface needs", () => {
+    // Until task 34.8 this read "and this client does not yet serve": no administrative path
+    // reached the client, because the administrative screens were designed and not built. One
+    // panel of one of them is now built — `specs/web-ui`'s *Administrative model policy
+    // confirmation* — so the assertion is no longer "none" but "these, and nothing else".
+    //
+    // Stated as a set rather than as a per-path substring check, because the client builds these
+    // as template literals and a substring test either misses one or accidentally matches a
+    // different path's prefix. Set equality catches both directions: an administrative endpoint
+    // that quietly joined the client, and one of these six silently dropped.
+    const NEEDED = new Set([
+      "/api/v1/admin/models",
+      "/api/v1/admin/policies",
+      "/api/v1/admin/policies/{}/audit",
+      "/api/v1/admin/policies/{}/candidates",
+      "/api/v1/admin/lab/comparisons",
+      "/api/v1/admin/lab/comparisons/{}",
+    ]);
+
     const administrative = API_OPERATIONS.filter(({ administrative }) => administrative);
     expect(administrative.length).toBeGreaterThan(8);
+    for (const { path } of administrative) expect(path, path).toMatch(/^\/api\/v1\/admin\//);
 
-    for (const { path } of administrative) {
-      expect(path, path).toMatch(/^\/api\/v1\/admin\//);
-      expect(source, `${path} reached the client before its screens exist`).not.toContain(path);
-    }
+    // Every administrative path the contract declares, and every one the client reaches, in one
+    // shape: a parameter is `{}` however it was written.
+    const shape = (path: string) => path.replace(/\{[^}]*\}/g, "{}");
+    const declared = new Set(administrative.map(({ path }) => shape(path)));
+    const reached = new Set(
+      [...source.matchAll(/\/api\/v1\/admin\/[^"'`]*/g)].map((match) =>
+        shape(match[0].replace(/\$\{[^}]*\}/g, "{}")),
+      ),
+    );
+
+    expect([...reached].sort()).toEqual([...NEEDED].sort());
+    expect([...NEEDED].filter((path) => !declared.has(path))).toEqual([]);
 
     const uncovered = API_OPERATIONS.filter(({ path, administrative }) => {
       const template = path.replace(/\{[^}]+\}/g, "").replace(/\/$/, "");

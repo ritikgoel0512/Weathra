@@ -29,12 +29,13 @@ from weathra.api.routers.admin.deps import AdministrativeSession
 from weathra.auth.deps import AdministrativePrincipal
 from weathra.domain.entitlements import CallRole, PlanCode
 from weathra.domain.errors import ValidationFailed
-from weathra.entitlements.audit import record_change
+from weathra.entitlements.audit import record_change, recorded_changes
 from weathra.entitlements.catalog import CatalogStore
 from weathra.entitlements.plans import PlanStore
 from weathra.entitlements.policies import POLICY_SUBJECT_KIND, PolicyStore
 from weathra.entitlements.records import (
     AdminAction,
+    AuditEntry,
     CapabilityTier,
     CatalogEntry,
     CatalogStatus,
@@ -210,6 +211,22 @@ class PolicyListResponse(BaseModel):
     policies: tuple[PolicyRecord, ...]
 
 
+class PolicyAuditResponse(BaseModel):
+    """One policy's audit trail, and no other record's.
+
+    Narrowed to the policy in the path rather than paging the whole of ``admin_audit``: what a
+    candidate-list change needs to be readable is *its own* history — who changed this policy, from
+    what to what, citing which comparison — and a listing that answered more than that would put a
+    plan assignment and a role grant in front of a reader who asked about a policy.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    policy_id: str
+    count: int = Field(ge=0, description="Entries returned, newest first.")
+    entries: tuple[AuditEntry, ...]
+
+
 # =========================================================================== the catalog
 
 
@@ -332,6 +349,41 @@ async def list_policies(
     annotate(request, acting_user_id=principal.user_id)
     policies = await PolicyStore(session).list()
     return PolicyListResponse(count=len(policies), policies=policies)
+
+
+@router.get(
+    "/policies/{policy_id}/audit",
+    response_model=PolicyAuditResponse,
+    summary="Read one policy's audit trail",
+)
+async def read_policy_audit(
+    request: Request,
+    policy_id: PolicyIdentifier,
+    principal: AdministrativePrincipal,
+    session: AdministrativeSession,
+    limit: Annotated[int, Query(ge=1, le=100, description="Newest first.")] = 20,
+) -> PolicyAuditResponse:
+    """What has been done to one policy, newest first, with the comparison runs each change cited.
+
+    A read rather than a convenience: `specs/model-lab` requires a promotion to be "recorded with
+    the acting principal, the change made, and the comparison run identifiers cited as its basis",
+    and a record nothing can read back is a record only in name. The write side has existed since
+    group 31; this is the side that lets somebody other than a database client confirm it.
+
+    Unknown policy is a 404 rather than an empty list, because "this policy has no history" and
+    "there is no such policy" are different answers and a reader acting on the first when the
+    second is true would conclude a change had not been recorded.
+
+    Every field comes from ``admin_audit``, which holds no prompt, completion, or weather content —
+    the before and after are the policy row, and the acting principal is an auth subject.
+    """
+    annotate(request, acting_user_id=principal.user_id)
+    await PolicyStore(session).require(policy_id)
+    entries = await recorded_changes(
+        session, subject_kind=POLICY_SUBJECT_KIND, subject_id=policy_id
+    )
+    kept = entries[:limit]
+    return PolicyAuditResponse(policy_id=policy_id, count=len(kept), entries=kept)
 
 
 @router.post(

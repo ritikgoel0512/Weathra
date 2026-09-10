@@ -64,6 +64,24 @@
         "title": "AccountDeletionReport",
         "type": "object"
       },
+      "AdminAction": {
+        "description": "What an administrative write did. The verb half of an audit row.",
+        "enum": [
+          "catalog_create",
+          "catalog_edit",
+          "catalog_enable",
+          "catalog_disable",
+          "policy_create",
+          "policy_edit",
+          "plan_mapping_edit",
+          "allowance_set",
+          "plan_assign",
+          "role_grant",
+          "role_revoke"
+        ],
+        "title": "AdminAction",
+        "type": "string"
+      },
       "AgentName": {
         "description": "The four specialized agents, plus the two nodes that frame a run.\n\nKept as an enum because ``specs/agent-orchestration`` requires each agent's responsibility to\nstay separately identifiable in the execution record, not merged into a free-text label.",
         "enum": [
@@ -698,6 +716,83 @@
           "memory_available"
         ],
         "title": "AskResponse",
+        "type": "object"
+      },
+      "AuditEntry": {
+        "additionalProperties": false,
+        "description": "One administrative change, as it is recorded.\n\nEvery write in this package produces one. The before and after are the whole point: \"who\nchanged the candidate list\" is answerable without it, and \"what did it used to be\" is not.",
+        "properties": {
+          "acting_principal": {
+            "minLength": 1,
+            "title": "Acting Principal",
+            "type": "string"
+          },
+          "action": {
+            "$ref": "#/components/schemas/AdminAction"
+          },
+          "after": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "cited_comparison_run_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Cited Comparison Run Ids",
+            "type": "array"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "subject_id": {
+            "minLength": 1,
+            "title": "Subject Id",
+            "type": "string"
+          },
+          "subject_kind": {
+            "description": "Which kind of record changed.",
+            "minLength": 1,
+            "title": "Subject Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "acting_principal",
+          "action",
+          "subject_kind",
+          "subject_id"
+        ],
+        "title": "AuditEntry",
         "type": "object"
       },
       "Baseline": {
@@ -3732,6 +3827,36 @@
         "title": "PointValue",
         "type": "object"
       },
+      "PolicyAuditResponse": {
+        "additionalProperties": false,
+        "description": "One policy's audit trail, and no other record's.\n\nNarrowed to the policy in the path rather than paging the whole of ``admin_audit``: what a\ncandidate-list change needs to be readable is *its own* history \u2014 who changed this policy, from\nwhat to what, citing which comparison \u2014 and a listing that answered more than that would put a\nplan assignment and a role grant in front of a reader who asked about a policy.",
+        "properties": {
+          "count": {
+            "description": "Entries returned, newest first.",
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/AuditEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "policy_id": {
+            "title": "Policy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "policy_id",
+          "count",
+          "entries"
+        ],
+        "title": "PolicyAuditResponse",
+        "type": "object"
+      },
       "PolicyCandidatesRequest": {
         "additionalProperties": false,
         "description": "A re-pointed candidate list \u2014 a model promotion, in practice.\n\n``cited_comparison_run_ids`` is design.md decision 26's discipline: a promotion names the\ncomparison runs that justified it, so the audit trail carries the evidence rather than a\nrecollection of it.\n\n``acknowledge_criteria_failure`` exists because the criteria gate has to be refusable by a\nperson and not merely by a machine. `specs/evaluation` forbids promoting on cost or latency a\ncandidate that failed structured reliability or groundedness; it does not forbid an\nadministrator who has read the evidence from overriding that. What it must not be is silent \u2014\nso the override is an explicit field, and the audit row records that it was used and which\ncriteria it overrode.",
@@ -6552,6 +6677,75 @@
           }
         ],
         "summary": "Create a model policy",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/policies/{policy_id}/audit": {
+      "get": {
+        "description": "**Protected. Administrative.** Reads one policy's audit trail, with the comparison runs each change cited.\n\nWhat has been done to one policy, newest first, with the comparison runs each change cited.\n\nA read rather than a convenience: `specs/model-lab` requires a promotion to be \"recorded with\nthe acting principal, the change made, and the comparison run identifiers cited as its basis\",\nand a record nothing can read back is a record only in name. The write side has existed since\ngroup 31; this is the side that lets somebody other than a database client confirm it.\n\nUnknown policy is a 404 rather than an empty list, because \"this policy has no history\" and\n\"there is no such policy\" are different answers and a reader acting on the first when the\nsecond is true would conclude a change had not been recorded.\n\nEvery field comes from ``admin_audit``, which holds no prompt, completion, or weather content \u2014\nthe before and after are the policy row, and the acting principal is an auth subject.",
+        "operationId": "read_policy_audit_api_v1_admin_policies__policy_id__audit_get",
+        "parameters": [
+          {
+            "description": "The policy.",
+            "in": "path",
+            "name": "policy_id",
+            "required": true,
+            "schema": {
+              "description": "The policy.",
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Policy Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Newest first.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "Newest first.",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyAuditResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Read one policy's audit trail",
         "tags": [
           "administration"
         ]

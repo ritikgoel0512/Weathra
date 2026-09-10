@@ -22,6 +22,9 @@ export interface AccountDeletionReport {
   readonly user_id: string;
 }
 
+/** What an administrative write did. The verb half of an audit row. */
+export type AdminAction = "catalog_create" | "catalog_edit" | "catalog_enable" | "catalog_disable" | "policy_create" | "policy_edit" | "plan_mapping_edit" | "allowance_set" | "plan_assign" | "role_grant" | "role_revoke";
+
 /** The four specialized agents, plus the two nodes that frame a run. */
 export type AgentName = "supervisor" | "forecast" | "historical" | "analytics" | "rag" | "synthesis";
 
@@ -159,6 +162,19 @@ export interface AskResponse {
   readonly memory_available: boolean;
   readonly memory_note?: string | null;
   readonly thread_id?: string | null;
+}
+
+/** One administrative change, as it is recorded. */
+export interface AuditEntry {
+  readonly acting_principal: string;
+  readonly action: AdminAction;
+  readonly after?: Record<string, unknown> | null;
+  readonly before?: Record<string, unknown> | null;
+  readonly cited_comparison_run_ids?: string[];
+  readonly created_at?: string | null;
+  readonly subject_id: string;
+  /** Which kind of record changed. */
+  readonly subject_kind: string;
 }
 
 /** A multi-year baseline for one location and calendar period, computed by Weathra. */
@@ -794,6 +810,14 @@ export interface PointValue {
   readonly time_utc: string;
   /** Null where the window had nothing usable. */
   readonly value: number | null;
+}
+
+/** One policy's audit trail, and no other record's. */
+export interface PolicyAuditResponse {
+  /** Entries returned, newest first. */
+  readonly count: number;
+  readonly entries: AuditEntry[];
+  readonly policy_id: string;
 }
 
 /** A re-pointed candidate list — a model promotion, in practice. */
@@ -1442,6 +1466,20 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     successStatus: 201,
     response: "PolicyRecord",
     parameters: [],
+  },
+  {
+    operationId: "read_policy_audit_api_v1_admin_policies__policy_id__audit_get",
+    method: "GET",
+    path: "/api/v1/admin/policies/{policy_id}/audit",
+    requiresToken: true,
+    administrative: true,
+    request: null,
+    successStatus: 200,
+    response: "PolicyAuditResponse",
+    parameters: [
+      { name: "policy_id", in: "path", required: true },
+      { name: "limit", in: "query", required: false },
+    ],
   },
   {
     operationId: "set_policy_candidates_api_v1_admin_policies__policy_id__candidates_put",

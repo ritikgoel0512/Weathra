@@ -281,7 +281,7 @@ code that does not exist. So each names the group 26-34 task that owes it, and t
 that task to being open. Close one of those tasks and the first assertion starts demanding its
 tests. Both directions stay honest without anyone maintaining a list of which spec is which.
 
-Of **210** requirements across twenty specs, **209** are implemented and tested, **1** is
+Of **211** requirements across twenty specs, **210** are implemented and tested, **1** is
 manual-pending, and **0** are open. Exactly **0** requirements have no test. The one that remains
 manual-pending is `web-ui`'s accessibility and responsive layout, which is automatically tested as
 far as automation reaches and still owes a human pass (task 21.8).
@@ -311,13 +311,13 @@ model access or an allowance** and **the Visily design gate** are closed outrigh
 | `rag-knowledge` | 8 | 8 | 0 | 0 | 11 |
 | `safety-grounding` | 10 | 10 | 0 | 0 | 17 |
 | `weather-providers` | 7 | 7 | 0 | 0 | 5 |
-| `web-ui` | 16 | 15 | 1 | 0 | 19, 20, 21, 33 |
+| `web-ui` | 17 | 16 | 1 | 0 | 19, 20, 21, 33, 34 |
 | `model-policy` | 10 | 10 | 0 | 0 | 28 |
 | `model-catalog` | 7 | 7 | 0 | 0 | 26, 27 |
 | `llm-telemetry` | 7 | 7 | 0 | 0 | 29 |
 | `usage-limits` | 9 | 9 | 0 | 0 | 30 |
 | `model-lab` | 6 | 6 | 0 | 0 | 32 |
-| **Total** | **210** | **209** | **1** | **0** | |
+| **Total** | **211** | **210** | **1** | **0** | |
 
 ### `agent-orchestration`
 
@@ -561,6 +561,7 @@ model access or an allowance** and **the Visily design gate** are closed outrigh
 | Ambiguous location handling in the UI | 21.5 | frontend/components/locations/candidate-choice.tsx | frontend/components/locations/candidate-choice.test.tsx | IMPLEMENTED |
 | Accessibility and responsive layout | 21.8 | frontend/components/shell/, frontend/app/globals.css | frontend/tests/accessibility.test.tsx, frontend/tests/e2e/accessibility.spec.ts, frontend/tests/e2e/axe.spec.ts, frontend/lib/design/contrast.test.ts | MANUAL |
 | Admin Model & AI Usage screen | 33.1, 33.4 | docs/design/screens/09-admin-model-ai-usage.png, frontend/app/(app)/admin/model-usage/page.tsx | frontend/app/(app)/unlisted-routes.test.tsx, test_documentation.py | IMPLEMENTED |
+| Administrative model policy confirmation | 34.8 | frontend/components/admin/model-policy.tsx, frontend/lib/admin/policy-evidence.ts, frontend/lib/api/client.ts, api/routers/admin/models.py | frontend/components/admin/model-policy.test.tsx, frontend/lib/admin/policy-evidence.test.ts, frontend/app/(app)/unlisted-routes.test.tsx, integration/test_admin_api.py | IMPLEMENTED |
 | The UI never authorizes model access or an allowance | 33.4–33.6 | frontend/lib/api/quota.ts, frontend/lib/inference/served.ts, frontend/components/ui/states.tsx, frontend/components/analyst/, frontend/components/dashboard/, frontend/components/evidence/ | frontend/lib/api/quota.test.ts, frontend/lib/inference/served.test.ts, frontend/components/analyst/analyst.test.tsx, frontend/components/dashboard/dashboard.test.tsx, frontend/components/evidence/evidence.test.tsx, frontend/components/ui/primitives.test.tsx, test_frontend_error_codes.py | IMPLEMENTED |
 | Plan and usage visible to the signed-in person | 33.2, 33.4 | docs/design/screens/10-plan-usage.png, frontend/app/(app)/plan/page.tsx | frontend/app/(app)/unlisted-routes.test.tsx, test_documentation.py | IMPLEMENTED |
 | Administrative and plan screens remain subject to the Visily design gate | 33.3 | docs/design/screens.md, docs/design/roadmap.md | test_documentation.py, frontend/lib/navigation.test.ts, frontend/app/(app)/unlisted-routes.test.tsx | IMPLEMENTED |

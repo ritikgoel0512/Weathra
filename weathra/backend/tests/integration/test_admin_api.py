@@ -88,6 +88,7 @@ OPERATIONS: tuple[tuple[str, str, dict[str, Any] | None], ...] = (
         {"candidate_catalog_keys": ["standard-general"]},
     ),
     ("PUT", "/admin/policies/balanced/fallback", {"fallback_policy_id": None}),
+    ("GET", "/admin/policies/free_default/audit", None),
     ("GET", "/admin/plans", None),
     ("PUT", "/admin/plans/free/policies", {"policy_by_call_role": {"synthesis": "free_default"}}),
     (
@@ -643,6 +644,110 @@ async def test_two_administrators_editing_one_policy_leave_it_in_one_of_the_two_
         "the candidate list interleaved two writers rather than settling on one of them"
     )
     assert recorded == 2, "both writes are in the trail, whichever of them the row ended up as"
+
+
+# ======================================================= 34.5 reading a policy's own audit trail
+
+
+async def test_an_administrator_reads_the_trail_of_the_policy_they_changed(
+    api_factory: ApiFactory, seeded_reference_data: None
+) -> None:
+    """`specs/model-lab` requires a promotion to be recorded with the acting principal, the change,
+    and the comparison runs cited as its basis. A record nothing can read back is a record only in
+    name, and until 34.5 the only reader was a database client — so this is the endpoint that makes
+    the requirement checkable by the person who made the change.
+    """
+    run_id = "9b5849dd-b798-4dc8-b04f-a8e6c0874e1a"
+    async with with_inference(api_factory) as api:
+        subject = await administrator(api)
+
+        written = await api.client.put(
+            f"{PREFIX}/admin/policies/balanced/candidates",
+            json={
+                "candidate_catalog_keys": ["standard-general", "economy-free-primary"],
+                "cited_comparison_run_ids": [run_id],
+            },
+            headers=api.authorize(subject=subject),
+        )
+        assert written.status_code == 200
+
+        read = await api.client.get(
+            f"{PREFIX}/admin/policies/balanced/audit", headers=api.authorize(subject=subject)
+        )
+
+    assert read.status_code == 200
+    body = read.json()
+    assert body["policy_id"] == "balanced"
+    assert body["count"] == len(body["entries"]) == 1
+
+    entry = body["entries"][0]
+    assert entry["action"] == "policy_edit"
+    assert entry["subject_kind"] == "model_policy"
+    assert entry["subject_id"] == "balanced"
+    assert entry["acting_principal"] == subject
+    assert entry["cited_comparison_run_ids"] == [run_id]
+    # The before and after are the whole point: "who changed the candidate list" is answerable
+    # without them and "what did it used to be" is not.
+    assert entry["before"]["candidate_catalog_keys"] == ["standard-general", "economy-free-primary"]
+    assert entry["after"]["candidate_catalog_keys"] == ["standard-general", "economy-free-primary"]
+
+
+async def test_the_trail_carries_no_other_records_change(
+    api_factory: ApiFactory, seeded_reference_data: None
+) -> None:
+    """Narrowed to the policy in the path. A reader asking about one policy is not handed a plan
+    assignment, a catalog edit, or somebody's role grant — and the role grant matters most: it names
+    an auth subject, and the answer to "what happened to this policy" is not the place to disclose
+    who was made an administrator.
+    """
+    async with with_inference(api_factory) as api:
+        subject = await administrator(api)
+        other = new_user_id()
+
+        assigned = await api.client.put(
+            f"{PREFIX}/admin/principals/{other}/plan",
+            json={"plan_code": "pro"},
+            headers=api.authorize(subject=subject),
+        )
+        assert assigned.status_code == 200
+        edited = await api.client.put(
+            f"{PREFIX}/admin/policies/balanced/candidates",
+            json={"candidate_catalog_keys": ["standard-general"]},
+            headers=api.authorize(subject=subject),
+        )
+        assert edited.status_code == 200
+
+        read = await api.client.get(
+            f"{PREFIX}/admin/policies/balanced/audit", headers=api.authorize(subject=subject)
+        )
+
+    entries = read.json()["entries"]
+    assert [entry["action"] for entry in entries] == ["policy_edit"]
+    assert other not in read.text, "the trail of one policy disclosed an unrelated principal"
+
+
+async def test_a_policy_with_no_recorded_change_reads_as_empty_rather_than_missing(
+    api_factory: ApiFactory, seeded_reference_data: None
+) -> None:
+    """An untouched policy has an empty trail; an unknown one is a 404.
+
+    Different answers because they are different facts: a reader told "no history" for a policy that
+    does not exist would conclude a change had gone unrecorded.
+    """
+    async with with_inference(api_factory) as api:
+        subject = await administrator(api)
+
+        untouched = await api.client.get(
+            f"{PREFIX}/admin/policies/free_default/audit", headers=api.authorize(subject=subject)
+        )
+        unknown = await api.client.get(
+            f"{PREFIX}/admin/policies/no-such-policy/audit", headers=api.authorize(subject=subject)
+        )
+
+    assert untouched.status_code == 200
+    assert untouched.json() == {"policy_id": "free_default", "count": 0, "entries": []}
+    assert unknown.status_code == 404
+    assert unknown.json()["error"]["details"]["policy_id"] == "no-such-policy"
 
 
 # =========================================================================== 31.2 the audit

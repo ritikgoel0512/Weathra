@@ -300,6 +300,8 @@ Every MVP product screen SHALL be reachable from a persistent navigation surface
 
 The frontend SHALL reserve navigation and routing structure for the post-MVP screens — Weather Intelligence Report, Forecast Explorer, Weather Scenario Lab, Weather Watch, Travel Intelligence, Admin Model & AI Usage, and Plan & Usage — without implementing their functionality in this change. Any such route present SHALL state plainly that the screen is not yet available rather than rendering a broken or empty screen.
 
+One panel of one of those screens is an exception, and it is named rather than left to inference: the administrative model policy confirmation surface required below is implemented in this change, because the audited candidate-list confirmation it carries is the only administrative write the MVP's own evidence trail depends on. Every other panel of the Admin Model & AI Usage screen remains unbuilt and SHALL continue to state so on the same route, and the Plan & Usage route remains unbuilt entirely.
+
 #### Scenario: Post-MVP route states its status
 
 - **WHEN** a person navigates to a post-MVP screen's route
@@ -311,11 +313,18 @@ The frontend SHALL reserve navigation and routing structure for the post-MVP scr
 - **WHEN** the navigation surface is inspected
 - **THEN** post-MVP screens are either absent or marked as not yet available
 
-#### Scenario: Administrative route states its status without fetching
+#### Scenario: Plan & Usage route states its status without fetching
 
-- **WHEN** any person navigates to the Admin Model & AI Usage route or the Plan & Usage route in this change
+- **WHEN** any person navigates to the Plan & Usage route in this change
 - **THEN** the route states that the screen is not yet available
 - **AND** no catalog, usage, cost, or lab request is issued
+
+#### Scenario: The administrative route states which of its panels are unbuilt
+
+- **WHEN** any person navigates to the Admin Model & AI Usage route in this change
+- **THEN** the route states that model status, token usage, cost, latency, errors and plan usage are not yet available
+- **AND** no token-usage, cost, or plan-consumption request is issued for any visitor
+- **AND** the policy confirmation surface below is the only part of the screen that loads anything, and every read it issues is one the backend refuses to a caller without the administrative role
 
 ### Requirement: Data classes and attribution are visible
 
@@ -431,7 +440,7 @@ The frontend SHALL provide an administrative Model & AI Usage screen, reachable 
 - **Plan usage** — consumption against allowance per plan, with internal and evaluation usage shown separately from product usage.
 - **Internal model selector** — selection of one or more enabled catalog models for a controlled comparison run, with the recorded results of past runs.
 
-The screen SHALL present no conversation content, since usage records hold none, and SHALL show no other user's questions, threads, or saved data. This screen is post-MVP; it is designed in the design phase and implemented after the MVP screens.
+The screen SHALL present no conversation content, since usage records hold none, and SHALL show no other user's questions, threads, or saved data. This screen is post-MVP; it is designed in the design phase and implemented after the MVP screens, save for the model policy confirmation surface required next, which this change implements on the same route.
 
 #### Scenario: Administrative screen reachable by an administrator
 
@@ -463,6 +472,54 @@ The screen SHALL present no conversation content, since usage records hold none,
 
 - **WHEN** the usage, cost, latency, and error views are inspected
 - **THEN** they contain no prompt text, completion text, or other person's question
+
+### Requirement: Administrative model policy confirmation
+
+The frontend SHALL provide, on the administrative route and reachable only by a principal the backend confirms holds the administrative role, a surface presenting each model policy's ordered candidate list, the evaluation outcome the backend has recorded for each candidate, and the comparison runs available as evidence — and SHALL submit a candidate-list confirmation to the backend citing the comparison runs relied upon, as an ordinary authenticated request carrying the signed-in person's own session.
+
+A candidate for which the backend recorded no evaluation SHALL be presented as unevidenced, and SHALL NOT be presented as having failed a criterion. The surface SHALL NOT compute, infer, or display an evaluation outcome the backend did not record, SHALL NOT describe an ordering as evidenced by a comparison run that scored no result for the candidate in question, and SHALL state a candidate ordering it submits unchanged as a confirmation rather than as a reordering.
+
+The surface SHALL display no access token, no service-role credential, and no configuration value. Its refusals SHALL be distinguishable by a reader: an expired session, an authenticated principal without the role, a validation failure, a refusal by the backend's promotion gate, and a backend or network failure SHALL each be stated as itself, and none SHALL be retried automatically. The surface SHALL show the recorded result of a confirmation it made — the resulting candidate order, the comparison runs cited, and that the change was audited — read back from the backend rather than assumed from the request having succeeded.
+
+#### Scenario: Administrator sees the recorded evidence
+
+- **WHEN** a principal the backend confirms is administrative opens the policy confirmation surface
+- **THEN** each policy's ordered candidate list is shown
+- **AND** each candidate carries the evaluation outcome the backend recorded for it, or is marked unevidenced
+
+#### Scenario: An unevidenced candidate is not reported as failing
+
+- **WHEN** a candidate has no recorded evaluation
+- **THEN** it is marked unevidenced
+- **AND** it is not described as having failed any criterion
+
+#### Scenario: A confirmation cites the runs it rests on
+
+- **WHEN** an administrator confirms a policy's candidate list
+- **THEN** the request carries the ordered candidate list and the comparison run identifiers selected as its basis
+- **AND** the resulting audit record, read back from the backend, names the cited runs
+
+#### Scenario: An unchanged order is stated as a confirmation
+
+- **WHEN** the submitted candidate order is the order already stored
+- **THEN** the surface states that the order was confirmed rather than reordered
+
+#### Scenario: Non-administrative visitor is refused
+
+- **WHEN** an ordinary authenticated person opens the administrative route
+- **THEN** they are shown a not-permitted state
+- **AND** no policy, catalog, comparison, or audit content is rendered
+
+#### Scenario: The promotion gate's refusal is shown as itself
+
+- **WHEN** the backend refuses a confirmation because a candidate failed a gating criterion
+- **THEN** the refusal names the criteria the backend reported
+- **AND** it is not presented as a validation error, a session failure, or a server fault
+
+#### Scenario: No credential is displayed
+
+- **WHEN** the surface is inspected in any state
+- **THEN** no access token, service-role credential, or configuration value appears
 
 ### Requirement: The UI never authorizes model access or an allowance
 

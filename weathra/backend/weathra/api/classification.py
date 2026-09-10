@@ -210,6 +210,12 @@ _CLASSIFICATIONS: tuple[EndpointClassification, ...] = (
         administrative=True,
     ),
     EndpointClassification(
+        "/admin/policies/{policy_id}/audit",
+        Access.PROTECTED,
+        "Reads one policy's audit trail, with the comparison runs each change cited.",
+        administrative=True,
+    ),
+    EndpointClassification(
         "/admin/policies/{policy_id}/candidates",
         Access.PROTECTED,
         "Re-points a policy's ordered candidate list — a model promotion.",

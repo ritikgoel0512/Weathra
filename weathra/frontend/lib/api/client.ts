@@ -31,6 +31,7 @@ import type {
   AskResponse,
   Baseline,
   BaselineComparison,
+  CatalogListResponse,
   ComparisonRequest,
   ComparisonResult,
   CurrentResponse,
@@ -39,9 +40,15 @@ import type {
   ForecastResponse,
   HealthResponse,
   HistoryResponse,
+  LabRunListResponse,
+  LabRunResponse,
   MeResponse,
   Measure,
   PeriodComparison,
+  PolicyAuditResponse,
+  PolicyCandidatesRequest,
+  PolicyListResponse,
+  PolicyRecord,
   PreferenceUpdate,
   PreferenceView,
   ReadinessResponse,
@@ -246,6 +253,37 @@ export interface ApiClient {
   deleteThread(threadId: string): Promise<void>;
 
   deleteMyData(): Promise<DeletionResponse>;
+
+  /* --------------------------------------------------------- administrative
+   *
+   * Every one of these is refused by the backend for a principal without the administrative role,
+   * and none of them is reachable by a client-asserted anything: the role is a row in
+   * `admin_roles` keyed by the validated token subject (`docs/authentication.md`). So a screen
+   * calling them is not deciding it may — it is asking, and being answered 403 when it may not.
+   */
+
+  /** The model policies, each with its ordered candidate list. */
+  adminPolicies(): Promise<PolicyListResponse>;
+  /** The catalog, with the most recent evaluation recorded per entry where there is one. */
+  adminCatalog(): Promise<CatalogListResponse>;
+  /** Recent comparison runs, newest first. */
+  adminComparisons(limit?: number): Promise<LabRunListResponse>;
+  /** One comparison run and its per-model, per-case cells. */
+  adminComparison(runId: string): Promise<LabRunResponse>;
+  /**
+   * Re-point — or confirm in place — a policy's ordered candidate list.
+   *
+   * `cited_comparison_run_ids` is the evidence the change rests on, and the backend writes it into
+   * the audit row. Nothing here decides whether the candidates are permitted: the promotion gate
+   * is the backend's, and its refusal arrives as an `ApiError` with the failed criteria in
+   * `details`.
+   */
+  confirmPolicyCandidates(
+    policyId: string,
+    request: PolicyCandidatesRequest,
+  ): Promise<PolicyRecord>;
+  /** One policy's audit trail, newest first, with the comparison runs each change cited. */
+  adminPolicyAudit(policyId: string, limit?: number): Promise<PolicyAuditResponse>;
 }
 
 /** The base URL with any trailing slash removed, so path joining is unambiguous. */
@@ -473,5 +511,24 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
       ),
 
     deleteMyData: () => call<DeletionResponse>("DELETE", "/api/v1/me/data", {}, NO_BODY, true),
+
+    adminPolicies: () => get<PolicyListResponse>("/api/v1/admin/policies"),
+    adminCatalog: () => get<CatalogListResponse>("/api/v1/admin/models"),
+    adminComparisons: (limit) => get<LabRunListResponse>("/api/v1/admin/lab/comparisons", { limit }),
+    adminComparison: (runId) =>
+      get<LabRunResponse>(`/api/v1/admin/lab/comparisons/${encodeURIComponent(runId)}`),
+    confirmPolicyCandidates: (policyId, request) =>
+      call<PolicyRecord>(
+        "PUT",
+        `/api/v1/admin/policies/${encodeURIComponent(policyId)}/candidates`,
+        {},
+        request,
+        true,
+      ),
+    adminPolicyAudit: (policyId, limit) =>
+      get<PolicyAuditResponse>(
+        `/api/v1/admin/policies/${encodeURIComponent(policyId)}/audit`,
+        { limit },
+      ),
   };
 }

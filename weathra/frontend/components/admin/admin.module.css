@@ -1,0 +1,233 @@
+/*
+ * Model policy — the administrative confirmation surface, built from the task 20.3 tokens.
+ *
+ * No colour, size or spacing is written here that is not a token. The panel is deliberately plain:
+ * `docs/design/screens.md` §8 records why this surface diverges from
+ * `docs/design/screens/09-admin-model-ai-usage.png` rather than reproducing it — the artifact's
+ * composite scores, invented model names and export controls are mockup filler, and the one panel
+ * built here is the audited candidate confirmation, which the artifact does not draw at all.
+ */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.screenHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.unbuilt {
+  margin: 0;
+  color: var(--color-text-secondary);
+  max-width: 78ch;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.intro {
+  color: var(--color-text-secondary);
+  max-width: 78ch;
+}
+
+/* ------------------------------------------------------------------ the run */
+
+.runFacts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-3) 0 0;
+}
+
+.runFacts dt {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.runFacts dd {
+  margin: 0;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------- the policies */
+
+.policies {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.candidates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.candidate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.candidateHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.position {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--space-5);
+  height: var(--space-5);
+  padding: 0 var(--space-1);
+  background: var(--color-surface-overlay);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+}
+
+.candidateKey {
+  color: var(--color-text-primary);
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  overflow-wrap: anywhere;
+}
+
+.gatewayModel {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-meta-size);
+  overflow-wrap: anywhere;
+}
+
+.runStanding {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+}
+
+.criteria {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.criterion dt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-primary);
+  font-size: var(--type-meta-size);
+}
+
+.criterion dd {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+}
+
+.criterion dd[data-measured="false"] {
+  color: var(--color-text-muted);
+}
+
+.citable {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  overflow-wrap: anywhere;
+}
+
+/* -------------------------------------------------------------- the action */
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.actionNote {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+  max-width: 72ch;
+}
+
+/* ------------------------------------------------------- outcome and refusal */
+
+.confirmation,
+.refusal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.confirmation {
+  background: var(--color-status-ok-surface);
+  border: 1px solid var(--color-status-ok);
+}
+
+.refusal {
+  background: var(--color-status-error-surface);
+  border: 1px solid var(--color-status-error);
+}
+
+.confirmation p,
+.refusal p {
+  margin: 0;
+  color: var(--color-text-primary);
+}
+
+.confirmation code,
+.refusal code,
+.auditLine code {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  overflow-wrap: anywhere;
+}
+
+.finalOrder {
+  margin: 0;
+  padding-left: var(--space-4);
+  color: var(--color-text-primary);
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+}
+
+.auditLine {
+  color: var(--color-text-secondary);
+}
+
+.refusal ul {
+  margin: 0;
+  padding-left: var(--space-4);
+  color: var(--color-text-primary);
+}
