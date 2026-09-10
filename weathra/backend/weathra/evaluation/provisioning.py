@@ -27,7 +27,6 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass
-from enum import StrEnum
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
@@ -39,6 +38,7 @@ from weathra.auth.tokens import TokenValidator
 from weathra.config import Settings
 from weathra.db.engine import Engines
 from weathra.db.session import privileged_session
+from weathra.evaluation.records import EvaluationMode
 
 __all__ = ["EvaluationMode", "TestIdentity", "provision_test_user"]
 
@@ -49,13 +49,6 @@ TEST_USER_EMAIL = "evaluation+weathra-mvp@weathra.test"
 
 # A fixed subject in offline mode, so a run's records are recognisable and a re-run reuses them.
 OFFLINE_TEST_SUBJECT = "e0a1f2b3-0000-4000-8000-e5a1a7100001"
-
-
-class EvaluationMode(StrEnum):
-    """Where a run gets its weather, its inference, and its tokens."""
-
-    OFFLINE = "offline"
-    LIVE = "live"
 
 
 class TestIdentity(BaseModel):

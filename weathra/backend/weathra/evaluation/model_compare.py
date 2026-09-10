@@ -37,17 +37,21 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field
-
 from weathra.config import Settings
 from weathra.db.engine import Engines
 from weathra.db.session import privileged_session
 from weathra.domain.errors import ValidationFailed
 from weathra.entitlements.records import CatalogEntry
 from weathra.evaluation.cases import DATASET_VERSION, EvaluationCase
-from weathra.evaluation.criteria import SelectionCriteria, compute_criteria
+from weathra.evaluation.criteria import compute_criteria
 from weathra.evaluation.metrics import CaseOutcome
-from weathra.evaluation.provisioning import EvaluationMode
+from weathra.evaluation.records import (
+    CandidateCase,
+    CandidateOutcome,
+    EvaluationMode,
+    ModelComparison,
+    PinnedConfiguration,
+)
 from weathra.evaluation.runner import RunResult, execute_run, select_cases
 from weathra.lab.compare import LabRunner, resolve_candidates
 from weathra.lab.evidence import ComparisonEvidence, record_comparison
@@ -64,130 +68,6 @@ __all__ = [
 ]
 
 logger = logging.getLogger("weathra.evaluation.model_compare")
-
-
-class PinnedConfiguration(BaseModel):
-    """Everything a comparison holds fixed, stated once for the whole run.
-
-    Once, and not per candidate, because that is the claim: two candidates scored against
-    different fixtures are not comparable, and a record that repeated the fields per candidate
-    could describe that state without contradicting itself.
-    """
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    dataset_version: str
-    mode: EvaluationMode
-    weather_provider: str
-    embedding_model: str
-    commit_sha: str | None = None
-    category_filter: str | None = None
-    case_filter: str | None = None
-    case_ids: tuple[str, ...] = Field(
-        default=(), description="The exact cases every candidate ran, in order."
-    )
-
-
-class CandidateCase(BaseModel):
-    """What one candidate did on one case, as the comparison measured it.
-
-    Carried so a persisted comparison can name a real per-case measurement instead of a null. The
-    fields are only the ones the runner actually recorded per case: no token counts, because the
-    evaluation runner does not attribute them per case, and a zero there would make the least
-    forthcoming provider look like the cheapest one.
-
-    The failure is a *classification*, never the recorded error text — that string can carry a
-    provider's payload, and a comparison record is read by people and archived by CI.
-    """
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    case_id: str
-    succeeded: bool
-    latency_ms: float | None = None
-
-
-class CandidateOutcome(BaseModel):
-    """One candidate's whole showing: its run, its criteria, or the failure that stopped it."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    catalog_key: str
-    gateway_model: str
-    completed: bool
-    criteria: SelectionCriteria | None = None
-    cases: tuple[CandidateCase, ...] = Field(
-        default=(), description="Per case, what this candidate did. Empty where it never ran one."
-    )
-    metrics: dict[str, float | None] = Field(default_factory=dict)
-    cases_scored: int = Field(default=0, ge=0)
-    passed: bool | None = None
-    failure: str | None = Field(
-        default=None,
-        description="The failure classification, where the candidate did not complete. Never a "
-        "provider's message, which may carry a payload.",
-    )
-
-
-class ModelComparison(BaseModel):
-    """A whole comparison: what was held fixed, and what each candidate did with it."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    configuration: PinnedConfiguration
-    candidates: tuple[CandidateOutcome, ...]
-    started_at: datetime
-    completed_at: datetime
-    identity_subject: str | None = Field(
-        default=None,
-        description="The subject every candidate's run authenticated as — the derived evaluation "
-        "user. Recorded because `specs/model-lab` asks a run to name its initiating principal, "
-        "and a comparison run persisted without one could not say who executed it.",
-    )
-    budget_exhausted: bool = Field(
-        default=False,
-        description="Whether the wall-clock budget stopped the comparison before every candidate "
-        "ran. The result is partial and names what completed.",
-    )
-
-    @property
-    def is_partial(self) -> bool:
-        return self.budget_exhausted or any(not item.completed for item in self.candidates)
-
-    def completed_keys(self) -> tuple[str, ...]:
-        return tuple(item.catalog_key for item in self.candidates if item.completed)
-
-    def differences(self, first: str, second: str) -> dict[str, dict[str, float | None]]:
-        """Each recorded measure's difference between two candidates.
-
-        `specs/model-lab` asks for the difference per measure rather than a verdict, and the
-        distinction is the point: a difference is a measured fact, and which of two models is
-        better is a judgement somebody has to make and record.
-        """
-        left = self._candidate(first)
-        right = self._candidate(second)
-        measures = sorted(set(left.metrics) | set(right.metrics))
-        return {
-            measure: {
-                first: left.metrics.get(measure),
-                second: right.metrics.get(measure),
-                "difference": _difference(left.metrics.get(measure), right.metrics.get(measure)),
-            }
-            for measure in measures
-        }
-
-    def _candidate(self, catalog_key: str) -> CandidateOutcome:
-        for item in self.candidates:
-            if item.catalog_key == catalog_key:
-                return item
-        raise KeyError(f"{catalog_key!r} was not a candidate in this comparison.")
-
-
-def _difference(left: float | None, right: float | None) -> float | None:
-    """Null where either side is unmeasured. Subtracting from an absence invents a number."""
-    if left is None or right is None:
-        return None
-    return right - left
 
 
 # =========================================================================== the comparison

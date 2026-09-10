@@ -72,12 +72,20 @@ LAYERS: dict[str, int] = {
 # provision a user, which is why `evaluation/` is layer 7 at all. A lab run inside a request
 # booting a second application would be the failure this rule exists to name, and it is a mistake
 # that looks entirely reasonable in a diff.
+#
+# `records` joined the list when the comparison record types moved out of `model_compare.py`, and it
+# is on it for the same reason as the rest rather than as an exception to them: it holds the shapes a
+# comparison produces and nothing that produces them — no app, no network, no database. The rule is
+# about what a module *does*, so a module that does nothing is exactly what may cross. What the move
+# fixed was `lab/evidence.py` having to import the engine to read its own data, which is how this
+# list came to be violated by a module whose job is persistence.
 LAB_MAY_IMPORT_FROM_EVALUATION = frozenset(
     {
         "weathra.evaluation.cases",
         "weathra.evaluation.criteria",
         "weathra.evaluation.integrity",
         "weathra.evaluation.metrics",
+        "weathra.evaluation.records",
         "weathra.evaluation.thresholds",
     }
 )

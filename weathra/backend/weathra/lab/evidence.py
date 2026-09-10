@@ -30,19 +30,14 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, Final
+from typing import Any, Final
 
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from weathra.domain.usage import FailureClass
-from weathra.evaluation.provisioning import EvaluationMode
+from weathra.evaluation.records import CandidateOutcome, EvaluationMode, ModelComparison
 from weathra.lab.records import ComparisonResultRecord, LabRecords
-
-if TYPE_CHECKING:  # pragma: no cover - imported for the annotation only
-    # Runtime-free on purpose: `evaluation/model_compare.py` imports this module to persist what it
-    # produced, and importing it back would close a cycle.
-    from weathra.evaluation.model_compare import CandidateOutcome, ModelComparison
 
 __all__ = [
     "ComparisonEvidence",
