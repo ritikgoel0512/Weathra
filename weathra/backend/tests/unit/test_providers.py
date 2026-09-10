@@ -225,7 +225,9 @@ async def test_a_rate_limited_provider_request_is_not_retried() -> None:
         return httpx.Response(429, json={"error": True, "reason": "Minutely limit exceeded"})
 
     with pytest.raises(ProviderRateLimited):
-        await _request(httpx.AsyncClient(transport=httpx.MockTransport(handler)), http_max_retries=2)
+        await _request(
+            httpx.AsyncClient(transport=httpx.MockTransport(handler)), http_max_retries=2
+        )
     assert attempts == 1, f"a 429 was sent {attempts} times with no budget to wait"
 
 
