@@ -102,7 +102,7 @@ describe("the shell carries the regions every product artifact draws", () => {
     expect(rail.getByRole("region", { name: "Intelligence" })).toBeInTheDocument();
     // The marking is words, not only a chip: the accessible name still carries it.
     expect(
-      rail.getByRole("link", { name: /Forecast Explorer — coming soon/ }),
+      rail.getByRole("link", { name: /Weather Watch — coming soon/ }),
     ).toBeInTheDocument();
   });
 

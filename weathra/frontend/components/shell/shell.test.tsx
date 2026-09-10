@@ -18,7 +18,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Identity } from "@/lib/auth/identity";
 import { SessionBoundary } from "@/lib/session/provider";
 import { NAVIGATION } from "@/lib/navigation";
-import { ADMIN_MODEL_USAGE_PATH, MVP_SCREENS, POST_MVP_SCREENS } from "@/lib/routes";
+import {
+  ADMIN_MODEL_USAGE_PATH,
+  INTELLIGENCE_BUILT,
+  MVP_SCREENS,
+  POST_MVP_SCREENS,
+} from "@/lib/routes";
 
 import { AppShell } from "./app-shell";
 import { RouteStatus } from "./route-status";
@@ -167,7 +172,14 @@ describe("every MVP product screen is reachable", () => {
     renderShell();
     const navigation = screen.getByRole("navigation", { name: "Weathra" });
 
-    for (const planned of POST_MVP_SCREENS) {
+    // Only the ones still unbuilt. `INTELLIGENCE_BUILT` grows per checkpoint, and an entry that
+    // has become a screen must stop being caveated on the same day.
+    const unbuilt = POST_MVP_SCREENS.filter(
+      (screenRecord) => !INTELLIGENCE_BUILT.includes(screenRecord.path),
+    );
+    expect(unbuilt.length).toBeGreaterThan(0);
+
+    for (const planned of unbuilt) {
       // The accessible name carries the marking, so it is not colour-and-chip only.
       const link = within(navigation).getByRole("link", {
         name: `${planned.title} — coming soon`,

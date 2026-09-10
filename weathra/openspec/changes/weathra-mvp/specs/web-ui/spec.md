@@ -327,6 +327,30 @@ Two of those screens are exceptions, and they are named rather than left to infe
 - **AND** no token-usage, cost, or plan-consumption request is issued for any visitor
 - **AND** the policy confirmation surface below is the only part of the screen that loads anything, and every read it issues is one the backend refuses to a caller without the administrative role
 
+### Requirement: Forecast Explorer
+
+The frontend SHALL provide a Forecast Explorer screen showing, for the acting person's default location, the current measurements the provider reported, a selectable forecast horizon, the forecast series drawn over that horizon, the deterministic statistics computed for it, the confidence the forecast itself carries with its stated basis, and every hourly entry the provider returned.
+
+It SHALL show the resolution the provider actually reported: no entry SHALL be interpolated to fill a grid and none SHALL be dropped to fit one. A measure the provider did not report SHALL be absent rather than shown as a dash or a zero, and where no hourly series was returned the screen SHALL say so instead of drawing one. The screen SHALL name the provider that answered, SHALL NOT name a forecast model, a sensor network, a reliability score or a convergence figure Weathra does not have, and SHALL NOT call a language model — every figure on it is retrieved or deterministically computed.
+
+#### Scenario: The forecast at the provider's own resolution
+
+- **WHEN** a person opens Forecast Explorer
+- **THEN** the current measurements, the forecast series, the computed statistics and the forecast's confidence are shown for their default location
+- **AND** every hourly entry the provider returned is listed, with no entry interpolated or dropped
+
+#### Scenario: A horizon is chosen
+
+- **WHEN** a person selects a different horizon
+- **THEN** the forecast, the statistics and the listing are requested for that horizon
+
+#### Scenario: Nothing is claimed that Weathra does not have
+
+- **WHEN** the screen is inspected
+- **THEN** the provider that answered is named
+- **AND** no forecast model, sensor network, reliability score or convergence figure appears
+- **AND** no language model is called
+
 ### Requirement: The navigation is grouped by what a screen is for
 
 The frontend SHALL group the navigation into the product's core screens, the intelligence screens that analyse Weathra's own data, the account screens, and — for a principal the backend confirms holds the administrative role — the administrative ones. The core group SHALL carry no heading, being the product itself.
