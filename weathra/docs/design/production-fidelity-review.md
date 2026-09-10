@@ -1,71 +1,68 @@
 # Production fidelity review — the fifteen screens against their artifacts
 
-**Date:** 2026-09-10 (revised the same day) · **Reviewer:** Claude Opus 5 · **Method:** screenshots
-of the real production build, not source reading.
+**Date:** 2026-09-10, third revision · **Reviewer:** Claude Opus 5 · **Method:** screenshots of the
+real production build, compared against the approved PNG, one screen at a time.
 
-**All fifteen screens are photographed, at four widths each** — 1440, 1024, 768 and 375 — by
-`frontend/tests/e2e/capture.spec.ts`, which runs `next build` and drives the shipping bundle against
-the two offline stubs the browser suite already uses. Every line of Weathra in the path is the one
-that deploys; only Supabase Auth and the FastAPI backend are stood in for. Run it with
-`WEATHRA_CAPTURE=true npx playwright test capture.spec.ts --project=chromium`, or one width with
-`WEATHRA_WIDTHS=1440`.
+Captured by `frontend/tests/e2e/capture.spec.ts`, which runs `next build` and drives the shipping
+bundle against the two offline stubs. `WEATHRA_SCREENS` takes a subset and `WEATHRA_WIDTHS` a width,
+so a targeted check after one change does not re-run the matrix.
 
-The first revision of this review judged two screens from source rather than a photograph. Both are
-now photographed: the administrative screen, once the stub modelled the administrative reads, and
-Authentication, which every other capture signs *through* and which is therefore taken before the
-session exists.
+**This revision grades harder than the last two, and several rows went down.** The instruction it
+was re-run under is the right one: a screen is not close because its sections have similar names,
+because the ground is the right dark, or because the route works. It is close when a person looking
+at the two images sees the same screen. Where production reads as text and the artifact reads as
+graphics, the row says NOT CLOSE however good the reasons are.
 
-**The classification is about composition, not existence.** A route that resolves is not CLOSE. A
-screen is CLOSE when its regions, hierarchy and graphical weight read as the artifact's; ACCEPTABLE
-DIVERGENCE when it differs for a recorded reason — almost always because the artifact draws
-something Weathra does not have; NOT CLOSE when the artifact's own composition has not been built;
-NOT REVIEWED when no photograph of it has been looked at.
-
-**Three questions, kept apart.** A screen can be a faithful rendering of its artifact, be wired to
-the right endpoint, and still be photographed with nothing in it — and calling that one verdict
-hides which of the three is the problem. So the table's `Fidelity` column answers only the first,
-and two further columns answer the others:
+**What changed the grades as much as the code did: photographing the screens with content in them.**
+Three screens keep their content behind a control — Compare Cities, Travel Intelligence and the
+Scenario Lab — and were being photographed in their empty state, which is a picture of nothing. The
+harness now presses the control. The stub gained an hourly forecast series and a scenario fixture,
+which turned four empty chart frames into charts. Those pictures were the evidence for two earlier
+rounds of grading, and they were showing less than the product does.
 
 | Column | Question it answers |
 |---|---|
-| **Fidelity** | *Visual.* Does the composition read as the artifact's — its regions, hierarchy and graphical weight? |
-| **Functional** | *Correctness.* Does the screen read the right contract and render every state it can return, refusals and empty states included? |
-| **Live data** | *Availability.* Was it photographed with real content, or with what the offline stub happens to hold? |
+| **Fidelity** | *Visual.* Does the composition read as the artifact's — its regions, hierarchy, density and graphical weight? |
+| **Functional** | *Correctness.* Does the screen read the right contract and render every state it can return? |
+| **Live data** | *Availability.* Was it photographed with real content, or with what the stub happens to hold? |
 
-A screen marked CLOSE / correct / stub-thin is finished work whose picture understates it. One
-marked CLOSE / correct / full needs nothing.
+CLOSE means a person would recognise the two as the same screen. ACCEPTABLE DIVERGENCE means the
+composition matches where Weathra has the data and departs where the artifact draws something this
+product does not own, per screen in `screens.md` §5. NOT CLOSE means the artifact is graphical and
+production is not, or the composition has not been built.
 
 ---
 
 ## The table
 
-| # | Screen | Route | Artifact | Fidelity | Functional | Live data | Real data | Graphical components | Deliberate divergence | Remaining |
-|---|---|---|---|---|---|---|---|---|---|---|
-| 01 | Dashboard | `/` | `01-dashboard.png` | **ACCEPTABLE DIVERGENCE** | correct | stub-thin — no hourly series, so two panels photograph as empty frames | current, forecast, changes, analysis, baseline, saved locations | Photographic hero, metric cluster, confidence meters, day strip, intra-day chart, baseline chart | Station id, neural agent version, model-convergence and data-reliability bars, integrated-risk index, system hash, version string — none exist, and as of this revision the two invented confidence bars are **absent rather than drawn empty** | Column heights differ where one column's content outruns the other's. With the stub's thin forecast that reads as a void; the panels involved are the two that need an hourly series, so the imbalance is a property of the data in the photograph rather than of the layout |
-| 02 | AI Weather Analyst | `/analyst` | `02-ai-weather-analyst.png` | **ACCEPTABLE DIVERGENCE** | correct | empty state only — a populated run needs a live model call | agent run, evidence, memory | Composer with focus/units/depth chips, suggested prompts, run-detail rail | No agent version string; no History control, since no screen lists threads | Populated state not photographed — it needs a live model call |
-| 03 | Historical Analytics | `/historical` | `03-historical-analytics.png` | **CLOSE** | correct | stub-thin — some statistics report as not computable | archive observations, deterministic analytics, baseline, period comparison | Two Recharts charts (line + bars), KPI cards, z-score, deviation meter, CSV export | Two charts rather than one dual-axis; no WMO/ERA5 badge | "Not computable" cards are the stub's thin data, not a defect |
-| 04 | Compare Cities | `/compare` | `04-compare-cities.png` | **ACCEPTABLE DIVERGENCE** | correct | empty state only — the ranking is requested on demand, and was not run | `/weather/comparison` ranking with supporting statistics | City cards, ranked bars, delta chart | Synthesis-confidence, correlation-score and data-density bars refused; candlestick panel refused | Historical comparison per city not surfaced |
-| 05 | Agent Evidence | `/evidence` | `05-agent-evidence.png` | **ACCEPTABLE DIVERGENCE** | correct | empty state only — a populated trace needs a live run | stored agent run: steps, tools, citations, grounding | Execution timeline, source cards, grounding panel | No audit hash, no signature, no stability index, no invented station ids | Only the empty state photographed; a populated trace needs a live run |
-| 06 | Saved Locations | `/locations` | `06-saved-locations.png` | **CLOSE** | correct | full — two saved places with live conditions | saved locations, `/weather/current` per card | Cards with live conditions, allowance meter, workspace summary | No map | — |
-| 07 | Settings | `/settings` | `07-settings.png` | **CLOSE** | correct | full | preferences, saved locations | Tabs, segmented unit control, selects, save/discard/reset | Only supported preferences are offered | — |
-| 08 | Authentication | `/sign-in` | `08-authentication.png` | **CLOSE** | correct | full — the form is the screen | Supabase Auth | Centred card on the light ground the artifact uses, mark in its accent tile, one primary action, reveal control on the password field, the way out beneath the card | No plan selection at signup: a plan is not an identity. No **Remember me**: the session's lifetime is Supabase's, and a checkbox that changed nothing would be a control that lies. No photographic backdrop | The card's own layout matches; the accent is the product's teal rather than the artifact's cyan, which is a brand question `fidelity-review.md` leaves to the owner |
-| 09 | Admin Model & AI Usage | `/admin/model-usage` | `09-admin-model-ai-usage.png` | **CLOSE** | correct | full — stub fixtures shaped as `/admin/usage` returns, nulls included | `/admin/usage` aggregates, catalog with observations, comparison runs, policy audit | Five KPI cards, usage chart with a measure switch, full-width figures table, product/internal meter, failures panel, catalog table, policy confirmation | Fictional model rows, composite scores, per-tier headcounts, export and audit-report controls, operational-status footer — all refused. One chart rather than two, because the endpoint aggregates a period into groups and returns no time series | A time series would need a per-day aggregate the backend does not compute |
-| 10 | Plan & Usage | `/plan` | `10-plan-usage.png` | **CLOSE** | correct | full | `/me/usage`: plan, per-dimension allowance, reset windows, recent activity | Metric tiles, allowance meters, tier list, reset schedule | The whole billing half refused — no subscription id, interval, payment method, invoice or upgrade; no per-day chart, because `recent` is a summary and not a series | — |
-| 11 | Forecast Explorer | `/explorer` | `11-forecast-explorer.png` | **CLOSE** | correct | full | current, forecast, analysis | Metric row, horizon control, forecast chart, hourly matrix | ECMWF source line, neural agent, convergence/alignment/grounding scores, reliability card, sensor nodes, encryption banner — none exist | — |
-| 12 | Weather Intelligence Report | `/report` | `12-weather-intelligence-report.png` | **ACCEPTABLE DIVERGENCE** | correct | full except the synthesis, which is a control and was not pressed | current, forecast, changes, analysis, baseline, agent | Sectioned report, metric grids, day cards | Synthesis is a control, not a page-load model call; no agent version, no evidence-node count, no PDF export | Fewer charts than the artifact |
-| 13 | Weather Scenario Lab | `/scenarios` | `13-weather-scenario-lab.png` | **ACCEPTABLE DIVERGENCE** | correct | full | `/weather/scenario` over a real forecast | Assumption inputs, scenario chart, delta cards | Session id, DELTA-INFERENCE-V4, station id, stability index, inference confidence, simulation engine, what-if deltas, report export, correlation model, node counts — none exist | Inputs are numeric fields rather than the artifact's sliders |
-| 14 | Weather Watch | `/watch` | `14-weather-watch.png` | **CLOSE** | correct | full — three watch states, including no-reading | `weather_watches` + forecast evaluation | Summary tiles, watch list with three distinct states, create form | Watch engine, monitoring nodes, recalibration, sensor telemetry, push alerts, live status light — Weathra has no scheduler and sends nothing | No graphical weather context beside the list |
-| 15 | Travel Intelligence | `/travel` | `15-travel-intelligence.png` | **ACCEPTABLE DIVERGENCE** | correct | full | `/weather/comparison` day ranking with contributions | Ranked day cards, score meters, contribution disclosure | Flight stability, airline operations, departure boards, booking, sensor telemetry, model convergence — Weathra knows none of them | No destination hero imagery |
+Graded against the PNG, from the 1440 capture of this revision. A row whose verdict changed says so.
 
-**Totals.** Visual fidelity: 8 CLOSE · 7 ACCEPTABLE DIVERGENCE · 0 NOT CLOSE · 0 NOT REVIEWED.
-Functional correctness: 15 correct. Live data in the photographs: 9 full (06, 07, 08, 09, 10, 11,
-13, 14, 15), 1 full but for one control nobody pressed (12), 2 thin (01, 03) and 3 photographed in
-their empty state (02, 04, 05).
+| # | Screen | Fidelity | Functional | Live data | What the capture shows | What is still short of the artifact |
+|---|---|---|---|---|---|---|
+| 01 | Dashboard | **ACCEPTABLE DIVERGENCE** | correct | full | Photographic hero with the readout over it, confidence matrix with two real bars, anomalies column, seven-day strip, and — new this revision — a populated temperature line and precipitation bars | Column heights differ where one column outruns the other; three voids at desk width. The artifact's station id, neural agent, convergence and reliability figures are refused (§5) |
+| 02 | AI Weather Analyst | **NOT CLOSE** | correct | empty state only | Composer, focus/units/depth chips, suggested prompts, run-detail rail — all correct, all empty | The artifact is a populated conversation with an evidence rail beside it. Ours cannot be photographed populated without a live model call, and a screen that has only ever been seen empty is not close to one that is full |
+| 03 | Historical Analytics | **ACCEPTABLE DIVERGENCE** | correct | thin | Rebuilt this revision: one combined plot (temperature line, dashed normal, precipitation bars on their own axis), the statistics row, the baseline panel, deviation, period-against-period | The stub's two-day window fills one metric card where the artifact has six, and the left column is short against the baseline column. Both are data, not layout — but the picture is still less dense than the PNG |
+| 04 | Compare Cities | **ACCEPTABLE DIVERGENCE** | correct | full | City cards with imagery, ranked bars, the delta chart, the figures matrix | The artifact's synthesis-confidence, correlation-score and data-density bars are refused (§5); no candlestick panel |
+| 05 | Agent Evidence | **NOT CLOSE** | correct | empty state only | The seven sections a run's record fills, each an empty card that names what will go in it | The artifact is a populated execution trace with source cards and a grounding panel. Seven empty cards down a page is the right *structure* and nothing like the same screen |
+| 06 | Saved Locations | **CLOSE** | correct | full | Cards with the live reading, and — new this revision — the artifact's three labelled chips for precipitation, humidity and wind, allowance meter, workspace summary | No map. The artifact's node-health, telemetry-sync and model-consensus panels are refused (§5) |
+| 07 | Settings | **CLOSE** | correct | full | Tabs, segmented unit control, selects, save/discard/reset | Only supported preferences are offered |
+| 08 | Authentication | **CLOSE** | correct | full | The centred card on the light ground the artifact uses, mark in its accent tile, one primary action, reveal control, the way out beneath | No photographic backdrop; the accent is the product's teal rather than the artifact's cyan |
+| 09 | Admin Model & AI Usage | **CLOSE** | correct | full | Five KPIs, the usage chart with a measure switch, the full-width figures table, product/internal meter, failures, catalog — and, new this revision, the routing panel and the principals-and-plans table | The artifact's composite scores, per-tier headcounts, export and audit controls and status footer are refused (§5). One chart rather than two: the endpoint aggregates a period into groups and returns no time series |
+| 10 | Plan & Usage | **CLOSE** | correct | full | Metric tiles, allowance meters, tier list, reset schedule | The whole billing half is refused — no subscription id, interval, payment method, invoice or upgrade, because Weathra bills nobody |
+| 11 | Forecast Explorer | **CLOSE** | correct | full | Location band, observed metric row, the temperature chart with its gap drawn as a gap, confidence, computed findings, and the full hour-by-hour matrix | The artifact's ECMWF line, neural agent, convergence and grounding scores, sensor nodes and encryption banner are refused (§5) |
+| 12 | Weather Intelligence Report | **NOT CLOSE** | correct | full but for the synthesis | Sectioned report with metric grids and day cards | The artifact is a report with charts through it; ours is mostly figures and prose in cards. The sections are right and the graphical weight is not |
+| 13 | Weather Scenario Lab | **CLOSE** | correct | full | New this revision, once the stub modelled the endpoint: the assumption panel, the scenario-against-forecast line chart with the forecast mean as a reference, and the delta cards with the arithmetic named | Inputs are numeric fields rather than the artifact's sliders. Its session id, engine version, station id, stability index and node counts are refused (§5) |
+| 14 | Weather Watch | **ACCEPTABLE DIVERGENCE** | correct | full | Summary tiles, the watch list with its three distinct states, the create form, the disclaimer | No graphical weather context beside the list, and no evaluation history — there is no scheduler, so there is no history to draw |
+| 15 | Travel Intelligence | **CLOSE** | correct | full | New this revision: the destination photographed, the trip controls, and the ranked day cards with score meters and their contributions | The artifact's flight stability, airline operations, departure boards and booking are refused — Weathra knows none of them |
 
-Every ACCEPTABLE DIVERGENCE is a refusal of content Weathra does not have, recorded per screen in
-`screens.md` §5. None is an unbuilt composition.
+**Totals.** Visual: 6 CLOSE · 6 ACCEPTABLE DIVERGENCE · **3 NOT CLOSE** · 0 NOT REVIEWED.
+Functional: 15 correct. Live data: 11 full, 1 full but for one control, 1 thin, 2 empty-state only.
 
----
+**The three NOT CLOSE rows are the honest result of grading harder.** Two of them — the Analyst and
+Agent Evidence — are screens whose artifact is a populated trace and whose production version has
+only ever been photographed empty, because populating either needs a live model call. The third,
+the Intelligence Report, has the artifact's sections and not its graphics, and that is a build gap
+rather than a data one.
 
 ## What the review changed
 
@@ -124,6 +121,21 @@ neural agents, convergence percentages, encryption banners, node counts — that
 own. Weathra reads one weather provider and one model gateway. Where a panel's slot is real and its
 content is not, the slot is filled with what Weathra actually knows; where the whole panel is
 invented, it is absent rather than styled out of sight.
+
+## What this revision did not reach
+
+Named so the next pass starts from a list rather than from a re-read:
+
+* **The Analyst and Agent Evidence populated states.** Both need a live model call. Until one is
+  made and photographed, neither can be graded above NOT CLOSE, and neither should be.
+* **The Intelligence Report's graphics.** It has the artifact's sections and the artifact's figures;
+  what it does not have is the artifact's charts through them.
+* **Column balance on the Dashboard and Historical.** Both draw a two-column band where one column
+  outruns the other, and at desk width that reads as a void. Rebalancing against the stub's thin
+  window would misplace the panels against a real one, so it wants a populated capture first.
+* **A responsive re-run.** This revision graded at 1440. The four-width pass of the previous
+  revision still stands for the screens it covered, but the screens rebuilt here have been
+  photographed at one width only.
 
 ## Known limits of this review
 
