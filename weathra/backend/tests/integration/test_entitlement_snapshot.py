@@ -167,8 +167,17 @@ async def test_a_change_is_invisible_inside_the_window_and_visible_after_it(
     assert cache.refreshes == 1
 
     # Age the snapshot past its window rather than sleeping through it.
+    #
+    # The boundary is checked on a snapshot whose `captured_at` is exactly zero, and that is not
+    # fussiness. `captured_at` is a monotonic clock reading, which on a host that has been up for
+    # weeks is a large float; `captured_at + 60` then rounds, and subtracting `captured_at` back out
+    # gives 59.999999… rather than 60. The assertion is about the comparison being `>=`, so it is
+    # made where the arithmetic is exact. CI failed here once for precisely this reason.
+    boundary = before.model_copy(update={"captured_at": 0.0})
+    assert not boundary.is_stale(60, now=59.0)
+    assert boundary.is_stale(60, now=60.0)
     assert not before.is_stale(60, now=before.captured_at + 59)
-    assert before.is_stale(60, now=before.captured_at + 60)
+    assert before.is_stale(60, now=before.captured_at + 61)
 
     stale = _cache(ttl_seconds=0)
     after = await stale.current(session)
