@@ -369,6 +369,24 @@ A model-written synthesis of those figures MAY be offered, and SHALL be produced
 - **THEN** the model's reading is shown, labelled as an interpretation and naming the model
 - **AND** the evidence record for that run is offered
 
+### Requirement: Travel Intelligence
+
+The frontend SHALL provide a Travel Intelligence screen that ranks the days in a forecast window at one destination against a criterion the backend scores, showing each day's rank, the statistics that supported its score, and the contributions that produced it.
+
+The ranking SHALL come from the backend's own comparison, and the screen SHALL NOT compute a score, index or weighting of its own. It SHALL state that it describes weather only, and SHALL NOT present flight, airline, transport, booking or sensor information, none of which Weathra holds. Days the provider reported too little to score SHALL be reported as excluded rather than ranked last.
+
+#### Scenario: A window is ranked
+
+- **WHEN** a person asks for a window to be ranked against a criterion
+- **THEN** each day's rank, supporting statistics and score contributions are shown
+- **AND** the ranking is the backend's, with no score computed by the screen
+
+#### Scenario: It says what it is not
+
+- **WHEN** the screen is inspected
+- **THEN** it states that it describes weather only
+- **AND** no flight, airline, transport, booking or sensor content appears
+
 ### Requirement: The navigation is grouped by what a screen is for
 
 The frontend SHALL group the navigation into the product's core screens, the intelligence screens that analyse Weathra's own data, the account screens, and — for a principal the backend confirms holds the administrative role — the administrative ones. The core group SHALL carry no heading, being the product itself.
