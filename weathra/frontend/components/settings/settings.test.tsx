@@ -111,7 +111,7 @@ const THREADS = {
       created_at: "2026-09-03T09:00:00Z",
       last_activity_at: "2026-09-04T08:40:00Z",
       expires_at: "2026-09-11T08:40:00Z",
-      locations: ["Berlin, Berlin, DE"],
+      locations: ["Berlin, Germany"],
     },
   ],
 };
@@ -334,7 +334,7 @@ describe("the preference form", () => {
     // the name, and a save sends coordinates. See the note on `PreferenceDraft`.
     const location = within(form).getByLabelText("Default location") as HTMLSelectElement;
     expect(location).toHaveValue("52.5200,13.4050");
-    expect(location.selectedOptions[0]?.textContent).toBe("Berlin, Berlin, DE");
+    expect(location.selectedOptions[0]?.textContent).toBe("Berlin, Germany");
 
     // A default is never shown as though it were a decision the person made. The rule is stated
     // once and only the exceptions are marked, so "Your choice." no longer appears under every
@@ -358,8 +358,8 @@ describe("the preference form", () => {
     const options = [...(select as HTMLSelectElement).options];
     expect(options.map((option) => option.textContent)).toEqual([
       "No default location",
-      "Berlin, Berlin, DE",
-      "Tokyo, Tokyo, JP",
+      "Berlin, Germany",
+      "Tokyo, Japan",
     ]);
     expect(options.map((option) => option.value)).toEqual([
       "",

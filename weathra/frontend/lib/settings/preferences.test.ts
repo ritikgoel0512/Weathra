@@ -180,16 +180,16 @@ describe("horizonChoicesFor", () => {
 });
 
 describe("defaultLocationChoices", () => {
-  it("labels the saved locations canonically and keys them by place", () => {
+  it("labels the saved locations for a person and keys them by place", () => {
     expect(defaultLocationChoices([BERLIN, TOKYO], null)).toEqual([
-      { value: "52.5200,13.4050", label: "Berlin, Berlin, DE", location: BERLIN },
-      { value: "35.6895,139.6917", label: "Tokyo, Tokyo, JP", location: TOKYO },
+      { value: "52.5200,13.4050", label: "Berlin, Germany", location: BERLIN },
+      { value: "35.6895,139.6917", label: "Tokyo, Japan", location: TOKYO },
     ]);
   });
 
   it("keeps a stored default that is not among the saved places", () => {
     const choices = defaultLocationChoices([TOKYO], BERLIN);
-    expect(choices.map((choice) => choice.label)).toEqual(["Berlin, Berlin, DE", "Tokyo, Tokyo, JP"]);
+    expect(choices.map((choice) => choice.label)).toEqual(["Berlin, Germany", "Tokyo, Japan"]);
   });
 
   it("lists a place once when it is both saved and the default", () => {

@@ -31,7 +31,7 @@
  */
 
 import type { Location, PreferenceSource, PreferenceUpdate, PreferenceView, UnitSystem } from "@/lib/api/schema";
-import { isSamePlace, placeKey, qualifiedName, sendableName } from "@/lib/locations/place";
+import { friendlyName, isSamePlace, placeKey, sendableName } from "@/lib/locations/place";
 
 /* ---------------------------------------------------------------------- units */
 
@@ -230,7 +230,8 @@ export function defaultLocationChoices(
     const value = placeKey(place);
     if (seen.has(value)) continue;
     seen.add(value);
-    choices.push({ value, label: qualifiedName(place), location: place });
+    // Named for a person: the choice reads "Berlin, Germany", not the geocoder's round-trip form.
+    choices.push({ value, label: friendlyName(place), location: place });
   }
   return choices;
 }
