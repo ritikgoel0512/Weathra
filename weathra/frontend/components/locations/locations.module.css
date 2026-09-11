@@ -415,17 +415,6 @@
   overflow-wrap: anywhere;
 }
 
-/*
- * The place, pictured, then named. The image is the card's first element and sets its width, so
- * the grid keeps its columns rather than letting a long place name widen one.
- */
-.card > :global(figure),
-.card > :global(div[data-location-image]) {
-  margin: calc(var(--space-3) * -1) calc(var(--space-3) * -1) var(--space-2);
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
-  overflow: hidden;
-}
-
 /* Coordinates are how Weathra identifies a point, not what a person calls one. */
 .cardCoordinates {
   font-size: var(--type-meta-size);

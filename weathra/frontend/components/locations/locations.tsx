@@ -31,7 +31,6 @@
 import Link from "next/link";
 
 import { PLACE_PARAM } from "@/components/shell/top-bar";
-import { LocationImage } from "@/components/ui/location-image";
 
 import { useCallback, useState, type FormEvent, type ReactNode } from "react";
 
@@ -239,18 +238,14 @@ function LocationCard({
   return (
     <li className={styles.card} data-saved-location={record.id}>
       {/*
-        The place, pictured. `06-saved-locations.png` identifies a saved place by its city before it
-        identifies it by its name, and the same generated-fallback architecture the Dashboard hero
-        and Compare Cities already use costs nothing to reach for here. Decorative: the name is
-        right underneath, so the image is described by the place rather than describing it.
+        **No photography here, deliberately.** A city image was added and reverted the same day:
+        `06-saved-locations.png` draws these cards without one — a freshness dot, the place, a
+        dominant temperature, the condition, the high and low, and three metric tiles — and
+        `location-imagery.test.tsx` holds that line. The artifact governs imagery, and a saved-place
+        list is the one surface in the set it deliberately leaves unpictured: four cards across
+        answer "what is it doing at my places", and a photograph on each is the thing that stops
+        four fitting.
       */}
-      <LocationImage
-        displayName={canonical}
-        latitude={record.location.latitude}
-        longitude={record.location.longitude}
-        variant="banner"
-        scrim="soft"
-      />
       <span className={styles.cardName}>{shown}</span>
       {/*
         The person's label never replaces the canonical name — it sits above it. Except where the
