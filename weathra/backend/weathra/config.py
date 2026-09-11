@@ -242,6 +242,19 @@ class Settings(BaseSettings):
         default=0.25, validation_alias="http_backoff_seconds"
     )
 
+    open_meteo_api_key: SecretStr | None = Field(
+        default=None,
+        validation_alias="open_meteo_api_key",
+        description=(
+            "Open-Meteo commercial API key. Absent by default, which keeps Weathra on the free "
+            "public endpoints. Those are rate-limited *by IP*, and a platform like Render sends "
+            "outbound traffic through addresses shared with other tenants — so Weathra can be "
+            "refused for volume it did not generate, which is what ordinary low-volume navigation "
+            "was hitting. Setting this moves every Open-Meteo call to the customer host, where the "
+            "quota belongs to the key rather than to the address."
+        ),
+    )
+
     # ---------------------------------------------------------------- caching
 
     cache_current_ttl_seconds: Annotated[int, Field(ge=0, le=86_400)] = Field(

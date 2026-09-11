@@ -1358,3 +1358,26 @@ and a batched call has to preserve that rather than failing the whole comparison
 **A shared cache across instances.** Every point above about cold processes disappears with a cache
 that outlives one. `CachedProvider` is deliberately the seam where that drops in; nothing else would
 need to change.
+
+### The remedy the product does not ship with
+
+Reproduced on 2026-09-11, signed in as an existing production account and navigating normally:
+naming *Lisbon* on Forecast Explorer resolved the place correctly — "Lisbon, Lisbon District,
+Portugal" — and then answered `open-meteo rate-limited the request` in two regions of the screen.
+Asking the backend directly for two cold cities immediately afterwards returned
+`provider_rate_limited` for both, while cities already in the cache still served. Six upstream calls
+had been made in the whole session, so this is not Weathra's own burst.
+
+`OPEN_METEO_API_KEY` is now read (see `docs/configuration.md`). Unset, everything is exactly as it
+was — the free hosts, no credential parameter, and a test asserting so. Set, every Open-Meteo call
+moves to the `customer-*` hosts with the key attached: forecast, archive **and** geocoding, because
+on the free tier resolving a name counts against the same per-IP quota as retrieving weather, and
+moving only half would have moved neither in practice.
+
+It is a `SecretStr`, so a settings dump in a log or an error page cannot carry it, and
+`request_json` records the provider and the status rather than the URL.
+
+**This is a credential the owner has to obtain and set; it is deliberately not set here.** Until it
+is, the graceful 429 handling stays exactly as it is — one refused request rather than three, and a
+message rather than a blank screen — and cold cities on a cold instance will sometimes still be
+refused.

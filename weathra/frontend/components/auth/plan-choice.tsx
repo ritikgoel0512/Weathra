@@ -80,6 +80,19 @@ function periodOf(allowance: PlanAllowanceView): string {
   return WINDOW_LABELS[allowance.window] ?? allowance.window;
 }
 
+/**
+ * The bar's label: the measure and its window, unless the measure already carries the window.
+ *
+ * "Runs at once" over a `concurrent` window composed to "Runs at once at a time", which is what
+ * production drew. Where the measure's own name states the cadence, the window is left off rather
+ * than a second phrase for the same thing being appended to it.
+ */
+function meterLabel(allowance: PlanAllowanceView): string {
+  const measure = measureOf(allowance);
+  const period = periodOf(allowance);
+  return measure.toLowerCase().endsWith("at once") ? measure : `${measure} ${period}`;
+}
+
 /** An allowance with no ceiling is genuinely unlimited, not zero and not unknown. */
 function isUnlimited(allowance: PlanAllowanceView): boolean {
   return allowance.allowance === null || allowance.allowance === undefined;
@@ -171,7 +184,7 @@ function PlanCard({
             return (
               <li key={keyOf(allowance)}>
                 <Meter
-                  label={`${measureOf(allowance)} ${periodOf(allowance)}`}
+                  label={meterLabel(allowance)}
                   value={Number.isFinite(value as number) ? value : null}
                   valueLabel={amountOf(allowance)}
                   unavailable={amountOf(allowance)}

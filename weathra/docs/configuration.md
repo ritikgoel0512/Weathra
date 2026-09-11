@@ -78,6 +78,7 @@ bundle — see [`authentication.md`](authentication.md) for why the split is dra
 | `LLM_SINGLE_MODEL_MODE` | `false` | behaviour | Development only. Every call uses `LLM_MODEL` and is recorded as the configured fallback rather than a resolved policy. Refused at startup in a deployed environment |
 | `LLM_FAILOVER_MAX_MODELS` | `2` | behaviour | How many models one call role may attempt, counting the first. Only a withdrawn model, a gateway error or a timeout advances it — never a rate limit, and never output quality |
 | `DEFAULT_WEATHER_PROVIDER` | `open-meteo` | behaviour | Provider used when a request names none |
+| `OPEN_METEO_API_KEY` | — | behaviour | Open-Meteo commercial key. Absent keeps Weathra on the free public hosts, which are rate-limited **by IP** — and a platform like Render sends outbound traffic through addresses shared with other tenants, so Weathra can be refused for volume it did not generate. Setting it moves the forecast, archive *and* geocoding calls to the `customer-*` hosts, where the quota belongs to the key. Nothing else changes: same paths, same parameters, same responses |
 | `DEFAULT_GEOCODER` | `open-meteo` | behaviour | Geocoder used when a request names none |
 | `DEFAULT_UNIT_SYSTEM` | `metric` | behaviour | `metric` or `imperial`, when neither the request nor a preference says |
 | `DEFAULT_FORECAST_DAYS` | `7` | behaviour | Forecast horizon when a request names none |

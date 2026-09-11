@@ -48,13 +48,28 @@ from weathra.domain.location import (
 )
 from weathra.geocoding.base import DEFAULT_SEARCH_LIMIT
 from weathra.providers.http import request_json
-from weathra.providers.open_meteo import FORECAST_URL, OPEN_METEO_NAME
+from weathra.providers.open_meteo import (
+    CUSTOMER_FORECAST_URL,
+    FORECAST_URL,
+    OPEN_METEO_NAME,
+)
 
-__all__ = ["GEOCODING_URL", "OpenMeteoGeocoder", "normalize_query", "split_qualifier"]
+__all__ = [
+    "CUSTOMER_GEOCODING_URL",
+    "GEOCODING_URL",
+    "OpenMeteoGeocoder",
+    "normalize_query",
+    "split_qualifier",
+]
 
 logger = logging.getLogger("weathra.geocoding.open_meteo")
 
 GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
+
+# The commercial geocoding host. Used only when a key is configured — see
+# `Settings.open_meteo_api_key`. Resolving a name and retrieving weather count against the same
+# per-IP quota on the free hosts, so a keyed deployment has to move both or it has moved neither.
+CUSTOMER_GEOCODING_URL = "https://customer-geocoding-api.open-meteo.com/v1/search"
 
 # Open-Meteo's search takes one name; a qualifier is matched locally against the candidates.
 _MAX_UPSTREAM_RESULTS = 20
@@ -182,9 +197,10 @@ class OpenMeteoGeocoder:
     async def resolve_coordinates(self, latitude: float, longitude: float) -> Location:
         latitude, longitude = validate_coordinates(latitude, longitude)
 
+        endpoint, credential = self._endpoint(FORECAST_URL, CUSTOMER_FORECAST_URL)
         payload = await request_json(
             self._client,
-            FORECAST_URL,
+            endpoint,
             params={
                 "latitude": latitude,
                 "longitude": longitude,
@@ -193,6 +209,7 @@ class OpenMeteoGeocoder:
                 "timezone": "auto",
                 "current": "temperature_2m",
                 "forecast_days": 1,
+                **credential,
             },
             provider=OPEN_METEO_NAME,
             settings=self._settings,
@@ -244,10 +261,17 @@ class OpenMeteoGeocoder:
         if cached is not None:
             return cached
 
+        endpoint, credential = self._endpoint(GEOCODING_URL, CUSTOMER_GEOCODING_URL)
         payload = await request_json(
             self._client,
-            GEOCODING_URL,
-            params={"name": name, "count": limit, "language": "en", "format": "json"},
+            endpoint,
+            params={
+                "name": name,
+                "count": limit,
+                "language": "en",
+                "format": "json",
+                **credential,
+            },
             provider=f"{OPEN_METEO_NAME} geocoding",
             settings=self._settings,
         )
@@ -359,6 +383,19 @@ class OpenMeteoGeocoder:
     @staticmethod
     def _coordinate_label(latitude: float, longitude: float) -> str:
         return f"{latitude:.4f}, {longitude:.4f}".replace(".0000", ".0")
+
+    def _endpoint(self, free: str, customer: str) -> tuple[str, dict[str, str]]:
+        """The host to call and the credential to send, given whether a key is configured.
+
+        Without a key this is exactly what it always was: the free host and no extra parameter.
+        With one, the customer host and the key — geocoding shares the free tier's per-IP quota
+        with the weather endpoints, so moving only the weather calls would leave every resolved
+        name still counting against the shared address.
+        """
+        key = self._settings.open_meteo_api_key
+        if key is None:
+            return free, {}
+        return customer, {"apikey": key.get_secret_value()}
 
     def _cached(self, key: str) -> tuple[_Candidate, ...] | None:
         entry = self._cache.get(key)

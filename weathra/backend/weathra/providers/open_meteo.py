@@ -54,6 +54,8 @@ from weathra.providers.http import request_json
 
 __all__ = [
     "ARCHIVE_URL",
+    "CUSTOMER_ARCHIVE_URL",
+    "CUSTOMER_FORECAST_URL",
     "EARLIEST_HISTORICAL_DATE",
     "FORECAST_URL",
     "MAXIMUM_FORECAST_DAYS",
@@ -66,6 +68,20 @@ logger = logging.getLogger("weathra.providers.open_meteo")
 OPEN_METEO_NAME = "open-meteo"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
+
+# The commercial hosts, used only when a key is configured.
+#
+# The free hosts are rate-limited by IP, and Weathra's outbound address on Render is shared with
+# other tenants — so ordinary navigation was being refused for volume Weathra did not generate. A
+# key moves the quota from the address to the key, which is the difference between "sometimes"
+# and "reliably". Same paths, same parameters, same responses; only the host changes.
+CUSTOMER_FORECAST_URL = "https://customer-api.open-meteo.com/v1/forecast"
+CUSTOMER_ARCHIVE_URL = "https://customer-archive-api.open-meteo.com/v1/archive"
+
+CUSTOMER_HOSTS: dict[str, str] = {
+    FORECAST_URL: CUSTOMER_FORECAST_URL,
+    ARCHIVE_URL: CUSTOMER_ARCHIVE_URL,
+}
 
 # Open-Meteo's declared limits, as of the ERA5-backed archive and the standard forecast endpoint.
 MAXIMUM_FORECAST_DAYS = 16
@@ -385,9 +401,16 @@ class OpenMeteoProvider:
             **UNIT_PARAMETERS[unit_system],
             **extra,
         }
+        endpoint = url
+        key = self._settings.open_meteo_api_key
+        if key is not None:
+            # The key goes in the query because that is the only place Open-Meteo reads it. It is
+            # never logged: `request_json` records the provider and the status, not the URL.
+            endpoint = CUSTOMER_HOSTS.get(url, url)
+            params["apikey"] = key.get_secret_value()
         return await request_json(
             self._client,
-            url,
+            endpoint,
             params=params,
             provider=OPEN_METEO_NAME,
             settings=self._settings,
