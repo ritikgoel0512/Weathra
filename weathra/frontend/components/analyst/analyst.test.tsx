@@ -478,10 +478,12 @@ describe("a streamed answer", () => {
 
     const retrieved = container.querySelector('[data-tier="retrieved"]') as HTMLElement;
     expect(retrieved.querySelector('[data-attribution="true"]')).toBeInTheDocument();
-    expect(within(retrieved).getByText("open-meteo")).toBeInTheDocument();
+    // Named in the attribution summary and again in the row it opens to; both are inside this
+    // region, which is what this asserts.
+    expect(within(retrieved).getAllByText("open-meteo").length).toBeGreaterThanOrEqual(1);
     expect(within(retrieved).getByText("Berlin, Germany")).toBeInTheDocument();
     expect(within(retrieved).getByText(/2026-09-04 00:00 to 2026-09-07 00:00/)).toBeInTheDocument();
-    expect(within(retrieved).getByText(/2026-09-04 06:15 UTC/)).toBeInTheDocument();
+    expect(within(retrieved).getAllByText(/2026-09-04 06:15 UTC/).length).toBeGreaterThanOrEqual(1);
   });
 
   it("attributes the run to what produced it, and to no place or period it never had (2.11)", async () => {

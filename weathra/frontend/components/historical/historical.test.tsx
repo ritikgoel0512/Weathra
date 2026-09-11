@@ -289,7 +289,10 @@ describe("historical retrieval", () => {
     expect(within(observations).getAllByText("open-meteo").length).toBeGreaterThan(0);
     expect(within(observations).getAllByText("Berlin, Germany").length).toBeGreaterThan(0);
     expect(within(observations).getByText(/2025-06-01 00:00 to 2025-06-03 23:59/)).toBeInTheDocument();
-    expect(within(observations).getByText(/2025-06-10 06:15 UTC/)).toBeInTheDocument();
+    // In the attribution summary and in the Retrieved row beneath it.
+    expect(within(observations).getAllByText(/2025-06-10 06:15 UTC/).length).toBeGreaterThanOrEqual(
+      1,
+    );
   });
 
   it("asks the documented history endpoint by resolved coordinates", async () => {
