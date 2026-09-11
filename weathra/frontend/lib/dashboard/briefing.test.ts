@@ -17,6 +17,7 @@ import {
   formatReading,
   localDateOf,
   measureLabel,
+  statisticPhrase,
   preferenceSource,
   readingFor,
   readingsFrom,
@@ -160,5 +161,35 @@ describe("the historical window", () => {
 
   it("asks for nothing when there is no period to ask about", () => {
     expect(calendarWindowFrom(undefined)).toBeNull();
+  });
+});
+
+describe("statisticPhrase — what a computed figure is called on a consumer screen", () => {
+  it("says what the Dashboard used to print as two field names", () => {
+    // Observed in production on 2026-09-11: `mean · temperature max`, `range · temperature max`,
+    // `probability maximum · precipitation probability max`.
+    expect(statisticPhrase("mean", "temperature_max")).toBe("Average high");
+    expect(statisticPhrase("range", "temperature_max")).toBe("High temperature range");
+    expect(statisticPhrase("probability_maximum", "precipitation_probability_max")).toBe(
+      "Peak rain chance",
+    );
+    expect(statisticPhrase("maximum", "wind_gust_max")).toBe("Strongest gust");
+    expect(statisticPhrase("mean", "relative_humidity")).toBe("Average humidity");
+  });
+
+  it("never prints an underscore or a bare canonical key", () => {
+    for (const [statistic, measure] of [
+      ["mean", "temperature_max"],
+      ["sum", "precipitation_sum"],
+      ["some_new_statistic", "a_new_measure"],
+    ] as const) {
+      expect(statisticPhrase(statistic, measure)).not.toMatch(/_/);
+    }
+  });
+
+  it("stays readable for a pair nobody has phrased yet", () => {
+    // A statistic the table does not cover still reads as words, never as a key.
+    expect(statisticPhrase("mean", "soil_moisture_0_to_7cm")).toBe("Average soil moisture 0 to 7cm");
+    expect(statisticPhrase("kurtosis", "temperature_max")).toBe("Kurtosis high");
   });
 });

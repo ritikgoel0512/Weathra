@@ -996,8 +996,18 @@ input.controlBare[type="date"]::-webkit-calendar-picker-indicator:hover {
 
 .methodMethod,
 .methodBody,
+.methodMethodDetail,
 .methodReason {
   color: var(--color-text-muted);
+}
+
+/*
+ * The affordance, not the methodology. It reads as a control because that is what it now is: the
+ * method sentence it used to contain moved into `.methodBody` behind it.
+ */
+.methodMethod {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
 }
 
 .methodBody {

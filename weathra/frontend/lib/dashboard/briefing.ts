@@ -102,6 +102,70 @@ export function measureLabel(key: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
+/**
+ * What a computed figure is called on a consumer screen: `Average high`, not `mean · temperature max`.
+ *
+ * The Dashboard used to print the backend's own two keys with their underscores swapped for spaces,
+ * which is how a person briefing on Munich was shown `probability maximum · precipitation
+ * probability max`. Those are canonical field names and they are correct; they are not language,
+ * and a weather product that makes somebody parse its column names has moved its own work onto
+ * them.
+ *
+ * So the pair is phrased. The table below covers the combinations the analytics endpoint actually
+ * produces; anything else falls back to the measure's own label with the statistic in front of it,
+ * which is still readable and never a raw key. The canonical names are not lost — Agent Evidence
+ * and the methodology note still carry them, which is where somebody checking the arithmetic looks.
+ */
+export function statisticPhrase(statistic: string, measure: string): string {
+  const exact = STATISTIC_PHRASES[`${statistic}:${measure}`];
+  if (exact) return exact;
+
+  const qualifier = STATISTIC_QUALIFIERS[statistic];
+  const subject = measureLabel(measure).toLowerCase();
+  if (qualifier) return `${qualifier} ${subject}`.replace(/^./, (first) => first.toUpperCase());
+
+  const words = statistic.replace(/_/g, " ").trim();
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)} ${subject}`;
+}
+
+/** The pairs worth saying properly, because they are the ones the Dashboard shows. */
+const STATISTIC_PHRASES: Readonly<Record<string, string>> = {
+  "mean:temperature_max": "Average high",
+  "mean:temperature_min": "Average low",
+  "mean:temperature_mean": "Average temperature",
+  "minimum:temperature_max": "Lowest daily high",
+  "maximum:temperature_max": "Highest daily high",
+  "minimum:temperature_min": "Lowest daily low",
+  "maximum:temperature_min": "Highest daily low",
+  "range:temperature_max": "High temperature range",
+  "range:temperature_min": "Low temperature range",
+  "sum:precipitation_sum": "Rain total",
+  "total:precipitation_sum": "Rain total",
+  "probability_maximum:precipitation_probability_max": "Peak rain chance",
+  "probability_mean:precipitation_probability_max": "Average rain chance",
+  "maximum:wind_gust_max": "Strongest gust",
+  "mean_speed:wind_speed_max": "Average wind",
+  "maximum_sustained_speed:wind_speed_max": "Strongest wind",
+  "prevailing_direction:wind_direction_dominant": "Prevailing wind",
+  "mean:relative_humidity": "Average humidity",
+  "range:relative_humidity": "Humidity range",
+  "mean:dew_point": "Average dew point",
+  "range:dew_point": "Dew point range",
+  "mean:surface_pressure": "Average pressure",
+  "range:surface_pressure": "Pressure range",
+  "wet_entry_count:precipitation_sum": "Days with rain",
+};
+
+/** How a statistic reads in front of a measure when the pair is not spelled out above. */
+const STATISTIC_QUALIFIERS: Readonly<Record<string, string>> = {
+  mean: "average",
+  minimum: "lowest",
+  maximum: "highest",
+  range: "range of",
+  sum: "total",
+  total: "total",
+};
+
 /** One reported figure: what it is, what it reads, and the unit the backend expressed it in. */
 export interface Reading {
   readonly key: string;

@@ -393,12 +393,21 @@ export function MethodNote({
   return (
     <div className={styles.methodNote} data-method-note="true">
       <details className={styles.methodDetails}>
+        {/*
+          The summary used to carry the method sentence itself, so every computed figure on the
+          Dashboard printed "median absolute deviation with a materiality floor…" beside its value
+          — a page of methodology a person had to read past to find the weather. The method is not
+          removed and not shortened; it moved one disclosure level down, behind a short affordance.
+          `specs/safety-grounding` requires the arithmetic to be available, not that it be the
+          first thing on the screen.
+        */}
         <summary className={styles.methodSummary}>
           {compact ? null : <span className={styles.methodStatement}>Computed by Weathra</span>}
-          <span className={styles.methodMethod}>Method: {method}.</span>
+          <span className={styles.methodMethod}>View analysis</span>
         </summary>
 
         <p className={styles.methodBody}>
+          <span className={styles.methodMethodDetail}>Method: {method}.</span>{" "}
           <span>{COMPUTED_BY_WEATHRA}</span>
           {typeof pointsUsed === "number" ? <span> {pointsUsed} points used.</span> : null}
           {typeof pointsExcluded === "number" && pointsExcluded > 0 ? (

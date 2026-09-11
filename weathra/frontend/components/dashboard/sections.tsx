@@ -56,6 +56,7 @@ import {
   forecastDaysFrom,
   readingFor,
   readingsFrom,
+  statisticPhrase,
   type DayPrecipitation,
   type Reading,
   type WhatChangedReport,
@@ -445,8 +446,10 @@ function Finding({ result }: { readonly result: StatisticResult }): ReactNode {
   const value = typeof result.value === "number" ? result.value : null;
   return (
     <li className={styles.finding}>
+      {/* `Average high`, not `mean · temperature max`. The canonical keys stay in the method note
+          and in Agent Evidence, which is where somebody checking the arithmetic looks. */}
       <span className={styles.findingLabel}>
-        {result.statistic.replace(/_/g, " ")} · {result.measure.replace(/_/g, " ")}
+        {statisticPhrase(result.statistic, result.measure)}
       </span>
       {value === null ? (
         <span className={styles.note}>Not computable.</span>

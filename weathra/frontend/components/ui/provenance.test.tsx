@@ -474,3 +474,24 @@ describe("what these primitives never say", () => {
     expect(shown).not.toMatch(/AI INTERPRETATION/);
   });
 });
+
+describe("where a method sentence lives", () => {
+  /**
+   * The Dashboard printed "median absolute deviation with a materiality floor…" beside every
+   * computed figure, because the method was the `<summary>` of its own disclosure. The arithmetic
+   * has to stay available — `specs/safety-grounding` requires it — but it is level-3 detail and it
+   * was the first thing on a weather screen.
+   */
+  it("shows an affordance rather than the methodology, and still carries the methodology", () => {
+    render(<MethodNote method="median absolute deviation over a 30-day window" pointsUsed={30} />);
+
+    const summary = document.querySelector("summary")!;
+    expect(summary.textContent).toContain("View analysis");
+    expect(summary.textContent).not.toContain("median absolute deviation");
+
+    // Not removed: still in the note, one disclosure level down.
+    const note = document.querySelector('[data-method-note="true"]')!;
+    expect(note.textContent).toContain("median absolute deviation over a 30-day window");
+    expect(note.textContent).toContain("30 points used");
+  });
+});
