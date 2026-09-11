@@ -44,7 +44,11 @@ import type {
   Location,
   PreferenceView,
 } from "@/lib/api/schema";
-import { briefingLocationFrom, formatReading, measureLabel } from "@/lib/dashboard/briefing";
+import {
+  briefingLocationFrom,
+  formatReading,
+  measureLabel,
+} from "@/lib/dashboard/briefing";
 import { friendlyName } from "@/lib/locations/place";
 import { useApiMutation, useApiQuery } from "@/lib/query/hooks";
 import { PREFERENCES_KEY } from "@/lib/query/keys";
@@ -72,7 +76,9 @@ function DayRow({
       <div className={styles.dayHead}>
         <span className={styles.dayRank}>{candidate.rank}</span>
         <span className={styles.dayLabel}>{candidate.label}</span>
-        {candidate.rank === 1 ? <Badge tone="ok">Best in this window</Badge> : null}
+        {candidate.rank === 1 ? (
+          <Badge tone="ok">Best in this window</Badge>
+        ) : null}
         {candidate.tied ? <Badge tone="neutral">Tied</Badge> : null}
       </div>
 
@@ -80,7 +86,9 @@ function DayRow({
           pretending the raw score is a percentage of anything. */}
       <Meter
         label={`Score for ${candidate.label}`}
-        value={best === 0 ? null : Math.max(0, Math.min(1, candidate.score / best))}
+        value={
+          best === 0 ? null : Math.max(0, Math.min(1, candidate.score / best))
+        }
       />
 
       {(candidate.supporting ?? []).length > 0 ? (
@@ -91,7 +99,10 @@ function DayRow({
               <dd>
                 {statistic.value === null || statistic.value === undefined
                   ? "Not computable"
-                  : formatReading({ value: statistic.value, unit: statistic.unit ?? null })}
+                  : formatReading({
+                      value: statistic.value,
+                      unit: statistic.unit ?? null,
+                    })}
               </dd>
             </div>
           ))}
@@ -104,7 +115,8 @@ function DayRow({
           <ul>
             {candidate.contributions!.map((contribution) => (
               <li key={contribution.measure}>
-                {measureLabel(contribution.measure)}: {contribution.contribution}
+                {measureLabel(contribution.measure)}:{" "}
+                {contribution.contribution}
               </li>
             ))}
           </ul>
@@ -114,7 +126,14 @@ function DayRow({
   );
 }
 
-function TravelFor({ location }: { readonly location: Location }): ReactNode {
+function TravelFor({
+  location,
+  chooser,
+}: {
+  readonly location: Location;
+  /** The screen's place control, rendered under its own heading. */
+  readonly chooser: ReactNode;
+}): ReactNode {
   const [criterion, setCriterion] = useState<Criterion>("outdoor_suitability");
   const [days, setDays] = useState("7");
 
@@ -136,11 +155,14 @@ function TravelFor({ location }: { readonly location: Location }): ReactNode {
         <div>
           <h1>Travel Intelligence</h1>
           <p className={styles.lede}>
-            Which days at {friendlyName(location)} the weather favours, and what makes them score
-            that way.
+            Which days at {friendlyName(location)} the weather favours, and what
+            makes them score that way.
           </p>
         </div>
       </header>
+
+      {/* Under the heading, where the artifacts put a screen's own controls. */}
+      {chooser}
 
       {/*
         The destination, photographed. `15-travel-intelligence.png` leads with imagery of the place
@@ -162,12 +184,21 @@ function TravelFor({ location }: { readonly location: Location }): ReactNode {
         <CardHeader title="Your trip" titleId="travel-controls" />
         <CardBody>
           <div className={styles.controls}>
-            <Input label="Destination" value={friendlyName(location)} readOnly />
+            <Input
+              label="Destination"
+              value={friendlyName(location)}
+              readOnly
+            />
             <Select
               label="What you want from the weather"
               value={criterion}
-              onChange={(event) => setCriterion(event.target.value as Criterion)}
-              options={CRITERIA.map((entry) => ({ value: entry.value, label: entry.label }))}
+              onChange={(event) =>
+                setCriterion(event.target.value as Criterion)
+              }
+              options={CRITERIA.map((entry) => ({
+                value: entry.value,
+                label: entry.label,
+              }))}
             />
             <Select
               label="Window"
@@ -179,7 +210,11 @@ function TravelFor({ location }: { readonly location: Location }): ReactNode {
                 { value: "14", label: "Next 14 days" },
               ]}
             />
-            <Button variant="primary" busy={ranking.busy} onClick={() => ranking.submit()}>
+            <Button
+              variant="primary"
+              busy={ranking.busy}
+              onClick={() => ranking.submit()}
+            >
               Rank these days
             </Button>
           </div>
@@ -187,7 +222,10 @@ function TravelFor({ location }: { readonly location: Location }): ReactNode {
       </Card>
 
       {ranking.state.kind === "error" ? (
-        <ErrorState failure={ranking.state.failure} title="Those days were not ranked" />
+        <ErrorState
+          failure={ranking.state.failure}
+          title="Those days were not ranked"
+        />
       ) : null}
 
       {result ? (
@@ -202,26 +240,34 @@ function TravelFor({ location }: { readonly location: Location }): ReactNode {
             <CardBody>
               <ul className={styles.days}>
                 {result.candidates.map((candidate) => (
-                  <DayRow key={candidate.label} candidate={candidate} best={best} />
+                  <DayRow
+                    key={candidate.label}
+                    candidate={candidate}
+                    best={best}
+                  />
                 ))}
               </ul>
               {(result.excluded?.length ?? 0) > 0 ? (
                 <p className={styles.quiet}>
                   {result.excluded!.length} day
-                  {result.excluded!.length === 1 ? " was" : "s were"} left out: the provider reported
-                  too little to score them.
+                  {result.excluded!.length === 1 ? " was" : "s were"} left out:
+                  the provider reported too little to score them.
                 </p>
               ) : null}
             </CardBody>
           </Card>
 
           <Card aria-labelledby="travel-caveat">
-            <CardHeader title="What this is, and is not" titleId="travel-caveat" />
+            <CardHeader
+              title="What this is, and is not"
+              titleId="travel-caveat"
+            />
             <CardBody>
               <p className={styles.quiet}>
-                This ranks days by the weather forecast for one place. It is not advice about
-                flights, airlines, transport or bookings — Weathra has no information about any of
-                them — and a forecast further out is less certain than one nearby.
+                This ranks days by the weather forecast for one place. It is not
+                advice about flights, airlines, transport or bookings — Weathra
+                has no information about any of them — and a forecast further
+                out is less certain than one nearby.
               </p>
             </CardBody>
           </Card>
@@ -230,8 +276,8 @@ function TravelFor({ location }: { readonly location: Location }): ReactNode {
         <LoadingState label="Ranking the days in your window" lines={4} />
       ) : (
         <EmptyState title="Pick what you want from the weather">
-          Weathra will rank each day in the window against it, and show what made each day score
-          that way.
+          Weathra will rank each day in the window against it, and show what
+          made each day score that way.
         </EmptyState>
       )}
     </div>
@@ -250,12 +296,34 @@ export function TravelIntelligence(): ReactNode {
     return <LoadingState label="Reading your preferences" lines={4} />;
   }
   if (preferences.state.kind === "error") {
-    return <ErrorState failure={preferences.state.failure} onRetry={preferences.retry} />;
+    return (
+      <ErrorState
+        failure={preferences.state.failure}
+        onRetry={preferences.retry}
+      />
+    );
   }
   if (preferences.state.kind !== "ready") return null;
 
   const saved = briefingLocationFrom(preferences.state.data);
   const location = chosen ?? saved;
+
+  /*
+   * Declared once and used in both branches. The empty branch needs it most: its own text
+   * says "name one above", and an empty state saying that with nothing above it is the
+   * dead end this control exists to remove.
+   */
+  const chooser = (
+    <PlaceChooser
+      summary="Travel to another place"
+      label="Travel to a place"
+      description="Weathra resolves the name before it retrieves anything. Leave it empty to use your default location."
+      current={location}
+      usingDefault={chosen === null}
+      hasDefault={saved !== null}
+      onChoose={setChosen}
+    />
+  );
 
   return (
     <>
@@ -264,25 +332,21 @@ export function TravelIntelligence(): ReactNode {
         to Settings, which made the feature reachable only by configuring a preference somewhere
         else first — see `PlaceChooser` for why that is not a substitute for a product.
       */}
-      <PlaceChooser
-        summary="Travel to another place"
-        label="Travel to a place"
-        description="Weathra resolves the name before it retrieves anything. Leave it empty to use your default location."
-        current={location}
-        usingDefault={chosen === null}
-        hasDefault={saved !== null}
-        onChoose={setChosen}
-      />
 
       {location === null ? (
-        <EmptyState title="Name a destination">
-          Travel Intelligence ranks the days at your default location. Name one above, or set a
-          default in <Link href="/settings">Settings</Link>.
-        </EmptyState>
+        <>
+          {chooser}
+          <EmptyState title="Name a destination">
+            Travel Intelligence ranks the days at your default location. Name
+            one above, or set a default in{" "}
+            <Link href="/settings">Settings</Link>.
+          </EmptyState>
+        </>
       ) : (
         <TravelFor
           key={`${location.latitude},${location.longitude}`}
           location={location}
+          chooser={chooser}
         />
       )}
     </>

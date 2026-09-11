@@ -68,7 +68,10 @@ import type {
   PreferenceView,
   WhatChanged,
 } from "@/lib/api/schema";
-import { briefingLocationFrom, calendarWindowFrom } from "@/lib/dashboard/briefing";
+import {
+  briefingLocationFrom,
+  calendarWindowFrom,
+} from "@/lib/dashboard/briefing";
 import { friendlyName } from "@/lib/locations/place";
 import { useApiMutation, useApiQuery } from "@/lib/query/hooks";
 import { PREFERENCES_KEY } from "@/lib/query/keys";
@@ -104,7 +107,8 @@ function Panel({
 }: {
   readonly title: string;
   readonly id: string;
-  readonly dataClass: "observed" | "forecast" | "historical" | "analytics" | "interpretation";
+  readonly dataClass:
+    "observed" | "forecast" | "historical" | "analytics" | "interpretation";
   readonly subtitle?: string;
   readonly children: ReactNode;
 }): ReactNode {
@@ -129,9 +133,13 @@ function timelineFrom(forecast: ForecastResponse | null): TimelinePoint[] {
     label: hourLabelOf(entry.time_local),
     stamp: entry.time_local,
     temperature:
-      typeof entry.values?.temperature === "number" ? entry.values.temperature : null,
+      typeof entry.values?.temperature === "number"
+        ? entry.values.temperature
+        : null,
     precipitation:
-      typeof entry.values?.precipitation === "number" ? entry.values.precipitation : null,
+      typeof entry.values?.precipitation === "number"
+        ? entry.values.precipitation
+        : null,
   }));
 }
 
@@ -164,7 +172,8 @@ function sourcesFrom({
     dataClass: SourceRow["dataClass"],
   ) => {
     if (!name) return;
-    if (rows.some((row) => row.name === name && row.dataClass === dataClass)) return;
+    if (rows.some((row) => row.name === name && row.dataClass === dataClass))
+      return;
     rows.push({ name, detail, dataClass });
   };
 
@@ -183,12 +192,24 @@ function sourcesFrom({
     );
   }
   if (baseline) add(baseline.provider, baseline.labelling, "historical");
-  if (analysis) add(analysis.provider, "Computed by Weathra from the retrieved series", "analytics");
+  if (analysis)
+    add(
+      analysis.provider,
+      "Computed by Weathra from the retrieved series",
+      "analytics",
+    );
 
   return rows;
 }
 
-function ReportFor({ location }: { readonly location: Location }): ReactNode {
+function ReportFor({
+  location,
+  chooser,
+}: {
+  readonly location: Location;
+  /** The screen's place control, rendered under its own heading. */
+  readonly chooser: ReactNode;
+}): ReactNode {
   const place = { latitude: location.latitude, longitude: location.longitude };
 
   const current = useApiQuery<CurrentResponse>({
@@ -212,7 +233,14 @@ function ReportFor({ location }: { readonly location: Location }): ReactNode {
     forecast.state.kind === "ready" ? forecast.state.data.period : undefined,
   );
   const baseline = useApiQuery<Baseline>({
-    key: ["weather", "baseline", place.latitude, place.longitude, window?.start, window?.end],
+    key: [
+      "weather",
+      "baseline",
+      place.latitude,
+      place.longitude,
+      window?.start,
+      window?.end,
+    ],
     request: (client) =>
       client.baseline({
         ...place,
@@ -232,7 +260,14 @@ function ReportFor({ location }: { readonly location: Location }): ReactNode {
    * statistic and attributing it to the analytics engine.
    */
   const comparison = useApiQuery<BaselineComparison>({
-    key: ["weather", "baseline-comparison", place.latitude, place.longitude, window?.start, window?.end],
+    key: [
+      "weather",
+      "baseline-comparison",
+      place.latitude,
+      place.longitude,
+      window?.start,
+      window?.end,
+    ],
     request: (client) =>
       client.baselineComparison({
         ...place,
@@ -251,34 +286,81 @@ function ReportFor({ location }: { readonly location: Location }): ReactNode {
       }),
   });
 
+  /*
+   * The shell outlives the report.
+   *
+   * Both branches below used to replace the whole screen with one sentence, so a provider hiccup
+   * took the heading, the place chooser and the visual shell with it — and the chooser is the one
+   * control that would let a person try somewhere else. `specs/web-ui` wants a degraded panel, not
+   * a degraded screen.
+   */
+  const shell = (body: ReactNode): ReactNode => (
+    <div className={styles.screen}>
+      <header className={styles.header}>
+        <div className={styles.headerText}>
+          <div className={styles.headerBadges}>
+            <DataClassBadge dataClass="analytics" />
+            <span className={styles.headerPeriod}>{location.timezone}</span>
+          </div>
+          <h1 className={styles.title}>Weather Intelligence Report</h1>
+          <p className={styles.lede}>{friendlyName(location)}</p>
+        </div>
+      </header>
+
+      {chooser}
+
+      {body}
+    </div>
+  );
+
   if (forecast.state.kind === "loading" || current.state.kind === "loading") {
-    return <LoadingState label={`Building the report for ${friendlyName(location)}`} lines={6} />;
+    return shell(
+      <LoadingState
+        label={`Building the report for ${friendlyName(location)}`}
+        lines={6}
+      />,
+    );
   }
   if (forecast.state.kind === "error") {
-    return <ErrorState failure={forecast.state.failure} onRetry={forecast.retry} />;
+    return shell(
+      <ErrorState failure={forecast.state.failure} onRetry={forecast.retry} />,
+    );
   }
 
-  const forecastData = forecast.state.kind === "ready" ? forecast.state.data : null;
-  const currentData = current.state.kind === "ready" ? current.state.data : null;
-  const analysisData = analysis.state.kind === "ready" ? analysis.state.data : null;
-  const baselineData = baseline.state.kind === "ready" ? baseline.state.data : null;
-  const comparisonData = comparison.state.kind === "ready" ? comparison.state.data : null;
+  const forecastData =
+    forecast.state.kind === "ready" ? forecast.state.data : null;
+  const currentData =
+    current.state.kind === "ready" ? current.state.data : null;
+  const analysisData =
+    analysis.state.kind === "ready" ? analysis.state.data : null;
+  const baselineData =
+    baseline.state.kind === "ready" ? baseline.state.data : null;
+  const comparisonData =
+    comparison.state.kind === "ready" ? comparison.state.data : null;
 
   const nearest = forecastData?.uncertainty?.horizon?.[0] ?? null;
   const timeline = timelineFrom(forecastData);
-  const missingHours = timeline.filter((point) => point.temperature === null).length;
+  const missingHours = timeline.filter(
+    (point) => point.temperature === null,
+  ).length;
   const plottable = timeline.some((point) => point.temperature !== null);
   const days = outlookDaysFrom(forecastData);
   const deviations = deviationsFrom(analysisData);
   const anomalies = analysisData?.anomalies ?? null;
   const baselineMean =
-    typeof baselineData?.mean?.value === "number" ? baselineData.mean.value : null;
+    typeof baselineData?.mean?.value === "number"
+      ? baselineData.mean.value
+      : null;
 
   const temperatureUnit =
-    forecastData?.hourly?.units?.temperature ?? currentData?.units?.temperature ?? null;
+    forecastData?.hourly?.units?.temperature ??
+    currentData?.units?.temperature ??
+    null;
   const precipitationUnit = forecastData?.hourly?.units?.precipitation ?? null;
   const dailyUnit =
-    forecastData?.daily?.units?.temperature_max ?? forecastData?.daily?.units?.temperature ?? null;
+    forecastData?.daily?.units?.temperature_max ??
+    forecastData?.daily?.units?.temperature ??
+    null;
   const dailyPrecipitationUnit =
     forecastData?.daily?.units?.precipitation_sum ??
     forecastData?.daily?.units?.precipitation_probability_max ??
@@ -296,8 +378,9 @@ function ReportFor({ location }: { readonly location: Location }): ReactNode {
           </div>
           <h1 className={styles.title}>Weather Intelligence Report</h1>
           <p className={styles.lede}>
-            {friendlyName(location)} — read across current conditions, the forecast window, what has
-            moved, the computed statistics and the archive record.
+            {friendlyName(location)} — read across current conditions, the
+            forecast window, what has moved, the computed statistics and the
+            archive record.
           </p>
         </div>
         <div className={styles.headerMeta}>
@@ -313,6 +396,9 @@ function ReportFor({ location }: { readonly location: Location }): ReactNode {
           ) : null}
         </div>
       </header>
+
+      {/* Under the heading, where the artifacts put a screen's own controls. */}
+      {chooser}
 
       {/* Lead band: the place and its computed reading, with everything observed beside it. */}
       <div className={styles.lead}>
@@ -351,7 +437,9 @@ function ReportFor({ location }: { readonly location: Location }): ReactNode {
               precipitationUnit={dailyPrecipitationUnit}
             />
           ) : (
-            <p className={styles.quiet}>This provider reported no daily outlook for this window.</p>
+            <p className={styles.quiet}>
+              This provider reported no daily outlook for this window.
+            </p>
           )}
         </Panel>
 
@@ -359,7 +447,9 @@ function ReportFor({ location }: { readonly location: Location }): ReactNode {
           {changes.state.kind === "ready" ? (
             <WhatMoved changes={changes.state.data} />
           ) : (
-            <p className={styles.quiet}>No earlier forecast is on record to compare against.</p>
+            <p className={styles.quiet}>
+              No earlier forecast is on record to compare against.
+            </p>
           )}
         </Panel>
       </div>
@@ -400,14 +490,21 @@ function ReportFor({ location }: { readonly location: Location }): ReactNode {
           id="report-history"
           title="Against the record"
           dataClass="historical"
-          subtitle={baselineData ? undefined : "No baseline is available for this window yet."}
+          subtitle={
+            baselineData
+              ? undefined
+              : "No baseline is available for this window yet."
+          }
         >
           {baselineData ? (
-            <HistoricalContext baseline={baselineData} comparison={comparisonData} />
+            <HistoricalContext
+              baseline={baselineData}
+              comparison={comparisonData}
+            />
           ) : (
             <p className={styles.quiet}>
-              The archive returned no baseline for this calendar window, so nothing is placed
-              against it.
+              The archive returned no baseline for this calendar window, so
+              nothing is placed against it.
             </p>
           )}
         </Panel>
@@ -426,7 +523,9 @@ function ReportFor({ location }: { readonly location: Location }): ReactNode {
             adds.
           */
           subtitle={
-            analysisData?.provider ? `Computed by Weathra from ${analysisData.provider}.` : undefined
+            analysisData?.provider
+              ? `Computed by Weathra from ${analysisData.provider}.`
+              : undefined
           }
         >
           {analysisData ? (
@@ -435,12 +534,15 @@ function ReportFor({ location }: { readonly location: Location }): ReactNode {
 
               {deviations.length > 0 || !anomalies ? null : (
                 <p className={styles.quiet}>
-                  {anomalies.note ?? `No entry stood out from this window by ${anomalies.method}.`}
+                  {anomalies.note ??
+                    `No entry stood out from this window by ${anomalies.method}.`}
                 </p>
               )}
             </>
           ) : (
-            <p className={styles.quiet}>Nothing was computed for this window.</p>
+            <p className={styles.quiet}>
+              Nothing was computed for this window.
+            </p>
           )}
         </Panel>
 
@@ -494,7 +596,9 @@ function ReportFor({ location }: { readonly location: Location }): ReactNode {
         >
           {synthesis.state.kind === "saved" ? (
             <>
-              <p className={styles.synthesis}>{synthesis.state.data.answer.answer_prose}</p>
+              <p className={styles.synthesis}>
+                {synthesis.state.data.answer.answer_prose}
+              </p>
               {synthesis.state.data.answer.llm_model ? (
                 <p className={styles.quiet}>
                   {synthesis.state.data.answer.llm_provider} ·{" "}
@@ -511,12 +615,15 @@ function ReportFor({ location }: { readonly location: Location }): ReactNode {
               ) : null}
             </>
           ) : synthesis.state.kind === "error" ? (
-            <ErrorState failure={synthesis.state.failure} title="That reading was not produced" />
+            <ErrorState
+              failure={synthesis.state.failure}
+              title="That reading was not produced"
+            />
           ) : (
             <>
               <p className={styles.quiet}>
-                The report above is complete without this. Ask Weathra to read it and it will
-                summarise the figures, citing what it used.
+                The report above is complete without this. Ask Weathra to read
+                it and it will summarise the figures, citing what it used.
               </p>
               <Button
                 variant="primary"
@@ -526,7 +633,9 @@ function ReportFor({ location }: { readonly location: Location }): ReactNode {
                   synthesis.submit();
                 }}
               >
-                {asked && synthesis.busy ? "Reading…" : "Ask Weathra to read this"}
+                {asked && synthesis.busy
+                  ? "Reading…"
+                  : "Ask Weathra to read this"}
               </Button>
             </>
           )}
@@ -564,12 +673,34 @@ export function WeatherIntelligenceReport(): ReactNode {
     return <LoadingState label="Reading your preferences" lines={4} />;
   }
   if (preferences.state.kind === "error") {
-    return <ErrorState failure={preferences.state.failure} onRetry={preferences.retry} />;
+    return (
+      <ErrorState
+        failure={preferences.state.failure}
+        onRetry={preferences.retry}
+      />
+    );
   }
   if (preferences.state.kind !== "ready") return null;
 
   const saved = briefingLocationFrom(preferences.state.data);
   const location = chosen ?? saved;
+
+  /*
+   * Declared once and used in both branches. The empty branch needs it most: its own text
+   * says "name one above", and an empty state saying that with nothing above it is the
+   * dead end this control exists to remove.
+   */
+  const chooser = (
+    <PlaceChooser
+      summary="Report on another place"
+      label="Report on a place"
+      description="Weathra resolves the name before it retrieves anything. Leave it empty to use your default location."
+      current={location}
+      usingDefault={chosen === null}
+      hasDefault={saved !== null}
+      onChoose={setChosen}
+    />
+  );
 
   return (
     <>
@@ -578,25 +709,20 @@ export function WeatherIntelligenceReport(): ReactNode {
         to Settings, which made the feature reachable only by configuring a preference somewhere
         else first — see `PlaceChooser` for why that is not a substitute for a product.
       */}
-      <PlaceChooser
-        summary="Report on another place"
-        label="Report on a place"
-        description="Weathra resolves the name before it retrieves anything. Leave it empty to use your default location."
-        current={location}
-        usingDefault={chosen === null}
-        hasDefault={saved !== null}
-        onChoose={setChosen}
-      />
 
       {location === null ? (
-        <EmptyState title="Name a place to report on">
-          The report covers your default location. Name one above, or set a default in{" "}
-          <Link href="/settings">Settings</Link>.
-        </EmptyState>
+        <>
+          {chooser}
+          <EmptyState title="Name a place to report on">
+            The report covers your default location. Name one above, or set a
+            default in <Link href="/settings">Settings</Link>.
+          </EmptyState>
+        </>
       ) : (
         <ReportFor
           key={`${location.latitude},${location.longitude}`}
           location={location}
+          chooser={chooser}
         />
       )}
     </>

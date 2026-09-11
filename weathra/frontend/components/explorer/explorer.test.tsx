@@ -65,12 +65,18 @@ const FORECAST = {
   },
   daily: { granularity: "daily" as const, units: {}, entries: [] },
   uncertainty: {
-    basis: "Confidence decreases with horizon distance, from one provider's output.",
+    basis:
+      "Confidence decreases with horizon distance, from one provider's output.",
     provider: "open-meteo",
     reference_time_utc: "2026-09-10T06:15:00Z",
     spread_available: false,
     horizon: [
-      { confidence: "high" as const, hours_ahead: 6, time_local: "x", time_utc: "y" },
+      {
+        confidence: "high" as const,
+        hours_ahead: 6,
+        time_local: "x",
+        time_utc: "y",
+      },
     ],
   },
 };
@@ -133,7 +139,9 @@ function mount(api: ApiClient) {
 describe("the explorer", () => {
   it("opens on the person's default location, named for a person", async () => {
     mount(client());
-    expect(await screen.findByRole("heading", { name: "Forecast Explorer" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Forecast Explorer" }),
+    ).toBeInTheDocument();
     // Named twice now — in the lede and over the location band the screen leads with — so what is
     // asserted is that the place is named for a person at all, not that it appears exactly once.
     expect(screen.getAllByText(/Berlin, Germany/).length).toBeGreaterThan(0);
@@ -141,9 +149,13 @@ describe("the explorer", () => {
 
   it("shows the current measurements the provider reported", async () => {
     mount(client());
-    await screen.findByRole("heading", { name: "Forecast Explorer" });
-
-    expect(screen.getByText("18.4 °C")).toBeInTheDocument();
+    /*
+     * Awaited on the figure rather than on the heading. The heading now outlives the state — the
+     * screen keeps its shell through loading and through a provider failure, so a person can still
+     * change place when the forecast will not come — which means it appears before there is
+     * anything to read. Finding 1.1's lesson on the Dashboard, arriving here.
+     */
+    expect(await screen.findByText("18.4 °C")).toBeInTheDocument();
     expect(screen.getByText("72 %")).toBeInTheDocument();
   });
 
@@ -171,7 +183,9 @@ describe("the explorer", () => {
     await screen.findByRole("heading", { name: "Confidence" });
 
     expect(screen.getByText("high")).toBeInTheDocument();
-    expect(screen.getByText(/Confidence decreases with horizon distance/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Confidence decreases with horizon distance/),
+    ).toBeInTheDocument();
   });
 
   it("shows the deterministic findings and the summary code wrote", async () => {
@@ -191,10 +205,14 @@ describe("the explorer", () => {
         }),
       }),
     );
-    await screen.findByRole("heading", { name: "Forecast Explorer" });
+    // The reason, not the heading: the heading is there while the request is still in flight.
+    // `findAllByText` because it is said twice on purpose, which the assertion below is about.
+    await screen.findAllByText(/reported no hourly series/);
 
     // Said in both places it matters — the empty chart and the empty matrix — and drawn in neither.
-    expect(screen.getAllByText(/reported no hourly series/).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/reported no hourly series/).length,
+    ).toBeGreaterThan(0);
     expect(screen.queryByRole("table")).toBeNull();
   });
 });
@@ -226,8 +244,7 @@ describe("what the explorer never claims", () => {
 
   it("names the provider that actually answered", async () => {
     mount(client());
-    await screen.findByRole("heading", { name: "Forecast Explorer" });
-    expect(screen.getByText(/open-meteo/)).toBeInTheDocument();
+    expect(await screen.findByText(/open-meteo/)).toBeInTheDocument();
   });
 
   it("spends no model call to fill the intelligence column", async () => {

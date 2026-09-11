@@ -153,6 +153,21 @@ export interface TemperatureChartProps extends HistoricalChartProps {
   readonly baselineValue: number | null;
   /** The years the baseline covers, so the reference line says what it is. */
   readonly baselineLabel: string | null;
+  /**
+   * The legend's word for the reference line. "Baseline" where it is one.
+   *
+   * Parameterised because Weather Watch draws a *threshold* through this chart, and a legend
+   * reading "Baseline" beside a direct label reading "threshold, above" is the same line named two
+   * different things on one figure.
+   */
+  readonly referenceLabel?: string;
+  /**
+   * What did not report, in the caller's own words. "the archive" by default.
+   *
+   * Also parameterised for Weather Watch: the series there is a *forecast*, and a caption saying
+   * the archive did not report an hour of it would attribute the gap to the wrong system.
+   */
+  readonly sourceLabel?: string;
 }
 
 /**
@@ -464,6 +479,8 @@ export function RecordedAgainstBaselineChart({
   missing,
   baselineValue,
   baselineLabel,
+  referenceLabel,
+  sourceLabel,
 }: TemperatureChartProps): ReactNode {
   const rows = rowsFor(points, measure);
   const described = useId();
@@ -478,7 +495,8 @@ export function RecordedAgainstBaselineChart({
           </span>
           {baselineValue === null ? null : (
             <span className={styles.legendItem}>
-              <span className={styles.legendLine} data-series="baseline" /> Baseline
+              <span className={styles.legendLine} data-series="baseline" />{" "}
+              {referenceLabel ?? "Baseline"}
             </span>
           )}
         </span>
@@ -545,7 +563,7 @@ export function RecordedAgainstBaselineChart({
       <p className={styles.chartNote} id={described}>
         {missing === 0
           ? "Every day in this window was reported by the archive."
-          : `${missing} ${missing === 1 ? "day" : "days"} in this window ${missing === 1 ? "was" : "were"} not reported by the archive and ${missing === 1 ? "is" : "are"} left as a gap.`}
+          : `${missing} ${missing === 1 ? "entry" : "entries"} in this window ${missing === 1 ? "was" : "were"} not reported by ${sourceLabel ?? "the archive"} and ${missing === 1 ? "is" : "are"} left as a gap.`}
       </p>
 
       <FigureTable rows={rows} unit={unit} valueLabel={seriesLabel} caption={title} />

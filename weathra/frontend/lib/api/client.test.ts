@@ -350,6 +350,9 @@ describe("the client's coverage of the contract", () => {
     const NEEDED = new Set([
       "/api/v1/admin/models",
       "/api/v1/admin/usage",
+      // The trend the administrative screen leads with. Same table and same window as
+      // `/admin/usage`, bucketed by time rather than grouped by dimension.
+      "/api/v1/admin/usage/series",
       "/api/v1/admin/policies",
       "/api/v1/admin/policies/{}/audit",
       "/api/v1/admin/policies/{}/candidates",

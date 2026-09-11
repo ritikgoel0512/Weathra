@@ -71,17 +71,22 @@ const HORIZONS = [
 ] as const;
 
 /** The metric row, in the artifact's order. Each is shown only where the provider reported it. */
-const METRICS: readonly { key: string; dataClass: "observed" | "forecast" }[] = [
-  { key: "temperature", dataClass: "observed" },
-  { key: "apparent_temperature", dataClass: "observed" },
-  { key: "precipitation", dataClass: "observed" },
-  { key: "relative_humidity", dataClass: "observed" },
-  { key: "wind_speed", dataClass: "observed" },
-  { key: "pressure", dataClass: "observed" },
-  { key: "uv_index", dataClass: "observed" },
-];
+const METRICS: readonly { key: string; dataClass: "observed" | "forecast" }[] =
+  [
+    { key: "temperature", dataClass: "observed" },
+    { key: "apparent_temperature", dataClass: "observed" },
+    { key: "precipitation", dataClass: "observed" },
+    { key: "relative_humidity", dataClass: "observed" },
+    { key: "wind_speed", dataClass: "observed" },
+    { key: "pressure", dataClass: "observed" },
+    { key: "uv_index", dataClass: "observed" },
+  ];
 
-function MetricRow({ current }: { readonly current: CurrentResponse }): ReactNode {
+function MetricRow({
+  current,
+}: {
+  readonly current: CurrentResponse;
+}): ReactNode {
   const shown = METRICS.map((metric) => ({
     ...metric,
     reading: readingFor(metric.key, current.values, current.units),
@@ -95,7 +100,11 @@ function MetricRow({ current }: { readonly current: CurrentResponse }): ReactNod
   );
 
   if (shown.length === 0 && extras.length === 0) {
-    return <p className={styles.quiet}>This provider reported no current measurements here.</p>;
+    return (
+      <p className={styles.quiet}>
+        This provider reported no current measurements here.
+      </p>
+    );
   }
 
   return (
@@ -124,22 +133,29 @@ function MetricRow({ current }: { readonly current: CurrentResponse }): ReactNod
  * The artifact calls it high-resolution and shows four-hourly rows. The resolution here is whatever
  * the provider reported — nothing is interpolated to fill a grid, and nothing is dropped to fit one.
  */
-function ForecastMatrix({ forecast }: { readonly forecast: ForecastResponse }): ReactNode {
+function ForecastMatrix({
+  forecast,
+}: {
+  readonly forecast: ForecastResponse;
+}): ReactNode {
   const entries = forecast.hourly?.entries ?? [];
   const units = forecast.hourly?.units ?? {};
 
   if (entries.length === 0) {
     return (
       <p className={styles.quiet}>
-        This provider reported no hourly series for this window, so there is no matrix to show. The
-        daily outlook above is what it did report.
+        This provider reported no hourly series for this window, so there is no
+        matrix to show. The daily outlook above is what it did report.
       </p>
     );
   }
 
   // The columns the provider actually filled, so a column of dashes never appears.
   const columns = Object.keys(units).filter((key) =>
-    entries.some((entry) => entry.values?.[key] !== null && entry.values?.[key] !== undefined),
+    entries.some(
+      (entry) =>
+        entry.values?.[key] !== null && entry.values?.[key] !== undefined,
+    ),
   );
 
   return (
@@ -161,7 +177,9 @@ function ForecastMatrix({ forecast }: { readonly forecast: ForecastResponse }): 
               <th scope="row">{entry.time_local}</th>
               {columns.map((key) => {
                 const reading = readingFor(key, entry.values ?? {}, units);
-                return <td key={key}>{reading ? formatReading(reading) : "—"}</td>;
+                return (
+                  <td key={key}>{reading ? formatReading(reading) : "—"}</td>
+                );
               })}
             </tr>
           ))}
@@ -216,7 +234,9 @@ function FindingsColumn({
               <p className={styles.quiet}>{forecast.uncertainty?.basis}</p>
             </>
           ) : (
-            <p className={styles.quiet}>This forecast carries no confidence statement.</p>
+            <p className={styles.quiet}>
+              This forecast carries no confidence statement.
+            </p>
           )}
         </CardBody>
       </Card>
@@ -229,10 +249,13 @@ function FindingsColumn({
         />
         <CardBody>
           {analysis === null ? (
-            <p className={styles.quiet}>No analysis was computed for this window.</p>
+            <p className={styles.quiet}>
+              No analysis was computed for this window.
+            </p>
           ) : analysis.findings.length === 0 ? (
             <p className={styles.quiet}>
-              Nothing in this window met the minimum points Weathra needs to compute a statistic.
+              Nothing in this window met the minimum points Weathra needs to
+              compute a statistic.
             </p>
           ) : (
             <>
@@ -248,7 +271,10 @@ function FindingsColumn({
                     <span>
                       {finding.value === null || finding.value === undefined
                         ? "Not computable"
-                        : formatReading({ value: finding.value, unit: finding.unit ?? null })}
+                        : formatReading({
+                            value: finding.value,
+                            unit: finding.unit ?? null,
+                          })}
                     </span>
                   </li>
                 ))}
@@ -263,9 +289,11 @@ function FindingsColumn({
 
 export interface ExplorerForProps {
   readonly location: Location;
+  /** The screen's place control, rendered under its own heading. */
+  readonly chooser: ReactNode;
 }
 
-function ExplorerFor({ location }: ExplorerForProps): ReactNode {
+function ExplorerFor({ location, chooser }: ExplorerForProps): ReactNode {
   const [days, setDays] = useState<string>("7");
   const place = { latitude: location.latitude, longitude: location.longitude };
   const horizon = Number(days);
@@ -283,13 +311,62 @@ function ExplorerFor({ location }: ExplorerForProps): ReactNode {
     request: (client) => client.analysis({ ...place, days: horizon }),
   });
 
+  /*
+   * The shell outlives the forecast.
+   *
+   * This used to early-return a bare `LoadingState` or `ErrorState` in place of the whole screen,
+   * so a provider hiccup replaced the heading, the horizon control and the place chooser with one
+   * sentence — and the one control that would let a person try somewhere else was the first thing
+   * to disappear. `specs/web-ui` wants a degraded panel, not a degraded screen, and this is the
+   * shape every other screen here already had.
+   *
+   * The horizon is stated from the control rather than from the response, because the control is
+   * what the person set and it is true before anything answers.
+   */
+  const shell = (body: ReactNode): ReactNode => (
+    <div className={styles.screen}>
+      <header className={styles.header}>
+        <div>
+          <h1>Forecast Explorer</h1>
+          <p className={styles.lede}>
+            {friendlyName(location)} · {horizon}-day horizon ·{" "}
+            {location.timezone}
+          </p>
+        </div>
+        <div className={styles.horizon}>
+          <Select
+            label="Horizon"
+            value={days}
+            onChange={(event) => setDays(event.target.value)}
+            options={HORIZONS.map((entry) => ({
+              value: entry.value,
+              label: entry.label,
+            }))}
+          />
+        </div>
+      </header>
+
+      {/* Under the heading, where the artifacts put a screen's own controls. */}
+      {chooser}
+
+      {body}
+    </div>
+  );
+
   if (forecast.state.kind === "loading") {
-    return <LoadingState label={`Reading the forecast for ${friendlyName(location)}`} lines={6} />;
+    return shell(
+      <LoadingState
+        label={`Reading the forecast for ${friendlyName(location)}`}
+        lines={6}
+      />,
+    );
   }
   if (forecast.state.kind === "error") {
-    return <ErrorState failure={forecast.state.failure} onRetry={forecast.retry} />;
+    return shell(
+      <ErrorState failure={forecast.state.failure} onRetry={forecast.retry} />,
+    );
   }
-  if (forecast.state.kind !== "ready") return null;
+  if (forecast.state.kind !== "ready") return shell(null);
 
   const data = forecast.state.data;
   const points = pointsFrom(data.hourly);
@@ -301,7 +378,8 @@ function ExplorerFor({ location }: ExplorerForProps): ReactNode {
         <div>
           <h1>Forecast Explorer</h1>
           <p className={styles.lede}>
-            {friendlyName(location)} · {data.horizon_days}-day horizon · {location.timezone}
+            {friendlyName(location)} · {data.horizon_days}-day horizon ·{" "}
+            {location.timezone}
           </p>
         </div>
         <div className={styles.horizon}>
@@ -309,10 +387,16 @@ function ExplorerFor({ location }: ExplorerForProps): ReactNode {
             label="Horizon"
             value={days}
             onChange={(event) => setDays(event.target.value)}
-            options={HORIZONS.map((entry) => ({ value: entry.value, label: entry.label }))}
+            options={HORIZONS.map((entry) => ({
+              value: entry.value,
+              label: entry.label,
+            }))}
           />
         </div>
       </header>
+
+      {/* Under the heading, where the artifacts put a screen's own controls. */}
+      {chooser}
 
       {/*
         The place, photographed. `11-forecast-explorer.png` opens on imagery of the location; the
@@ -328,7 +412,9 @@ function ExplorerFor({ location }: ExplorerForProps): ReactNode {
         <span className={styles.heroPlace}>{friendlyName(location)}</span>
       </LocationImage>
 
-      {current.state.kind === "ready" ? <MetricRow current={current.state.data} /> : null}
+      {current.state.kind === "ready" ? (
+        <MetricRow current={current.state.data} />
+      ) : null}
 
       <div className={styles.body}>
         <Card aria-labelledby="explorer-chart">
@@ -360,7 +446,9 @@ function ExplorerFor({ location }: ExplorerForProps): ReactNode {
         </Card>
 
         <FindingsColumn
-          analysis={analysis.state.kind === "ready" ? analysis.state.data : null}
+          analysis={
+            analysis.state.kind === "ready" ? analysis.state.data : null
+          }
           forecast={data}
         />
       </div>
@@ -400,32 +488,51 @@ export function ForecastExplorer(): ReactNode {
     return <LoadingState label="Reading your preferences" lines={4} />;
   }
   if (preferences.state.kind === "error") {
-    return <ErrorState failure={preferences.state.failure} onRetry={preferences.retry} />;
+    return (
+      <ErrorState
+        failure={preferences.state.failure}
+        onRetry={preferences.retry}
+      />
+    );
   }
   if (preferences.state.kind !== "ready") return null;
 
   const saved = briefingLocationFrom(preferences.state.data);
   const location = chosen ?? saved;
 
+  /*
+   * Declared once and used in both branches. The empty branch needs it most: its own text
+   * says "name one above", and an empty state saying that with nothing above it is the
+   * dead end this control exists to remove.
+   */
+  const chooser = (
+    <PlaceChooser
+      summary="Explore another place"
+      label="Explore a place"
+      description="Weathra resolves the name before it retrieves anything. Leave it empty to use your default location."
+      current={location}
+      usingDefault={chosen === null}
+      hasDefault={saved !== null}
+      onChoose={setChosen}
+    />
+  );
+
   return (
     <>
-      <PlaceChooser
-        summary="Explore another place"
-        label="Explore a place"
-        description="Weathra resolves the name before it retrieves anything. Leave it empty to use your default location."
-        current={location}
-        usingDefault={chosen === null}
-        hasDefault={saved !== null}
-        onChoose={setChosen}
-      />
-
       {location === null ? (
-        <EmptyState title="Name a place to explore">
-          Forecast Explorer opens on your default location. Name one above, or set a default in{" "}
-          <Link href="/settings">Settings</Link>.
-        </EmptyState>
+        <>
+          {chooser}
+          <EmptyState title="Name a place to explore">
+            Forecast Explorer opens on your default location. Name one above, or
+            set a default in <Link href="/settings">Settings</Link>.
+          </EmptyState>
+        </>
       ) : (
-        <ExplorerFor key={`${location.latitude},${location.longitude}`} location={location} />
+        <ExplorerFor
+          key={`${location.latitude},${location.longitude}`}
+          location={location}
+          chooser={chooser}
+        />
       )}
     </>
   );

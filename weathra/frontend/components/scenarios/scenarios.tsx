@@ -58,15 +58,47 @@ import styles from "./scenarios.module.css";
 
 /** The four assumptions the backend accepts. Nothing else is offered, because nothing else is applied. */
 const ASSUMPTIONS = [
-  { key: "temperature_delta", label: "Temperature shift", unit: "degrees", step: 0.5, min: -30, max: 30 },
-  { key: "precipitation_percent", label: "Precipitation change", unit: "%", step: 5, min: -100, max: 500 },
-  { key: "relative_humidity_delta", label: "Humidity shift", unit: "points", step: 1, min: -100, max: 100 },
-  { key: "wind_speed_delta", label: "Wind shift", unit: "speed", step: 1, min: -200, max: 200 },
+  {
+    key: "temperature_delta",
+    label: "Temperature shift",
+    unit: "degrees",
+    step: 0.5,
+    min: -30,
+    max: 30,
+  },
+  {
+    key: "precipitation_percent",
+    label: "Precipitation change",
+    unit: "%",
+    step: 5,
+    min: -100,
+    max: 500,
+  },
+  {
+    key: "relative_humidity_delta",
+    label: "Humidity shift",
+    unit: "points",
+    step: 1,
+    min: -100,
+    max: 100,
+  },
+  {
+    key: "wind_speed_delta",
+    label: "Wind shift",
+    unit: "speed",
+    step: 1,
+    min: -200,
+    max: 200,
+  },
 ] as const;
 
 type AssumptionKey = (typeof ASSUMPTIONS)[number]["key"];
 
-function DeltaCard({ measure }: { readonly measure: ScenarioMeasure }): ReactNode {
+function DeltaCard({
+  measure,
+}: {
+  readonly measure: ScenarioMeasure;
+}): ReactNode {
   const difference = measure.difference;
 
   return (
@@ -80,27 +112,36 @@ function DeltaCard({ measure }: { readonly measure: ScenarioMeasure }): ReactNod
       <p className={styles.deltaMethod}>{measure.method}</p>
       {(measure.clipped ?? 0) > 0 ? (
         <p className={styles.deltaNote}>
-          {measure.clipped} hour{measure.clipped === 1 ? "" : "s"} reached a physical limit and was
-          held there.
+          {measure.clipped} hour{measure.clipped === 1 ? "" : "s"} reached a
+          physical limit and was held there.
         </p>
       ) : null}
       {(measure.points_excluded ?? 0) > 0 ? (
         <p className={styles.deltaNote}>
-          {measure.points_excluded} hour{measure.points_excluded === 1 ? "" : "s"} had no reading to
-          adjust.
+          {measure.points_excluded} hour
+          {measure.points_excluded === 1 ? "" : "s"} had no reading to adjust.
         </p>
       ) : null}
     </div>
   );
 }
 
-function ScenarioFor({ location }: { readonly location: Location }): ReactNode {
-  const [assumptions, setAssumptions] = useState<Record<AssumptionKey, string>>({
-    temperature_delta: "2.5",
-    precipitation_percent: "15",
-    relative_humidity_delta: "0",
-    wind_speed_delta: "0",
-  });
+function ScenarioFor({
+  location,
+  chooser,
+}: {
+  readonly location: Location;
+  /** The screen's place control, rendered under its own heading. */
+  readonly chooser: ReactNode;
+}): ReactNode {
+  const [assumptions, setAssumptions] = useState<Record<AssumptionKey, string>>(
+    {
+      temperature_delta: "2.5",
+      precipitation_percent: "15",
+      relative_humidity_delta: "0",
+      wind_speed_delta: "0",
+    },
+  );
 
   const run = useApiMutation<void, ScenarioResponse>({
     run: (client) =>
@@ -109,9 +150,10 @@ function ScenarioFor({ location }: { readonly location: Location }): ReactNode {
         longitude: location.longitude,
         days: 2,
         assumptions: Object.fromEntries(
-          ASSUMPTIONS.map((entry) => [entry.key, Number(assumptions[entry.key])]).filter(
-            ([, value]) => Number.isFinite(value) && value !== 0,
-          ),
+          ASSUMPTIONS.map((entry) => [
+            entry.key,
+            Number(assumptions[entry.key]),
+          ]).filter(([, value]) => Number.isFinite(value) && value !== 0),
         ),
       }),
   });
@@ -128,10 +170,14 @@ function ScenarioFor({ location }: { readonly location: Location }): ReactNode {
           <h1>Weather Scenario Lab</h1>
         </div>
         <p className={styles.lede}>
-          Suppose something about the weather at {friendlyName(location)}, and Weathra applies it to
-          the real forecast. A hypothetical — never a forecast of what will happen.
+          Suppose something about the weather at {friendlyName(location)}, and
+          Weathra applies it to the real forecast. A hypothetical — never a
+          forecast of what will happen.
         </p>
       </header>
+
+      {/* Under the heading, where the artifacts put a screen's own controls. */}
+      {chooser}
 
       <div className={styles.body}>
         <Card aria-labelledby="scenario-assumptions">
@@ -153,13 +199,20 @@ function ScenarioFor({ location }: { readonly location: Location }): ReactNode {
                   max={entry.max}
                   value={assumptions[entry.key]}
                   onChange={(event) =>
-                    setAssumptions((current) => ({ ...current, [entry.key]: event.target.value }))
+                    setAssumptions((current) => ({
+                      ...current,
+                      [entry.key]: event.target.value,
+                    }))
                   }
                 />
               ))}
             </div>
             <div className={styles.actions}>
-              <Button variant="primary" busy={run.busy} onClick={() => run.submit()}>
+              <Button
+                variant="primary"
+                busy={run.busy}
+                onClick={() => run.submit()}
+              >
                 Run this scenario
               </Button>
               <Button
@@ -180,7 +233,10 @@ function ScenarioFor({ location }: { readonly location: Location }): ReactNode {
 
         <div className={styles.results}>
           {run.state.kind === "error" ? (
-            <ErrorState failure={run.state.failure} title="That scenario was not calculated" />
+            <ErrorState
+              failure={run.state.failure}
+              title="That scenario was not calculated"
+            />
           ) : null}
 
           {result ? (
@@ -202,8 +258,9 @@ function ScenarioFor({ location }: { readonly location: Location }): ReactNode {
                       title="Temperature: your scenario against the forecast"
                       missing={missingCount(scenarioPoints, "temperature")}
                       baselineValue={
-                        result.measures.find((measure) => measure.measure === "temperature")
-                          ?.baseline_mean ?? null
+                        result.measures.find(
+                          (measure) => measure.measure === "temperature",
+                        )?.baseline_mean ?? null
                       }
                       baselineLabel="Forecast mean"
                     />
@@ -226,8 +283,8 @@ function ScenarioFor({ location }: { readonly location: Location }): ReactNode {
                 <CardBody>
                   {result.measures.length === 0 ? (
                     <p className={styles.quiet}>
-                      You supposed nothing, so this is the forecast unchanged — a fair baseline to
-                      start from.
+                      You supposed nothing, so this is the forecast unchanged —
+                      a fair baseline to start from.
                     </p>
                   ) : (
                     <div className={styles.deltas}>
@@ -244,19 +301,22 @@ function ScenarioFor({ location }: { readonly location: Location }): ReactNode {
                 <CardBody>
                   <p className={styles.quiet}>{result.disclaimer}</p>
                   <p className={styles.quiet}>
-                    Weathra applied your figures to a real forecast. It did not model the
-                    atmosphere: a forecast two degrees warmer is not the weather that a warmer
-                    atmosphere would produce.
+                    Weathra applied your figures to a real forecast. It did not
+                    model the atmosphere: a forecast two degrees warmer is not
+                    the weather that a warmer atmosphere would produce.
                   </p>
                 </CardBody>
               </Card>
             </>
           ) : run.busy ? (
-            <LoadingState label="Applying your assumptions to the forecast" lines={4} />
+            <LoadingState
+              label="Applying your assumptions to the forecast"
+              lines={4}
+            />
           ) : (
             <EmptyState title="Suppose something">
-              Set your assumptions and run them against the real forecast for this place. Nothing is
-              sent anywhere until you do.
+              Set your assumptions and run them against the real forecast for
+              this place. Nothing is sent anywhere until you do.
             </EmptyState>
           )}
         </div>
@@ -277,12 +337,34 @@ export function WeatherScenarioLab(): ReactNode {
     return <LoadingState label="Reading your preferences" lines={4} />;
   }
   if (preferences.state.kind === "error") {
-    return <ErrorState failure={preferences.state.failure} onRetry={preferences.retry} />;
+    return (
+      <ErrorState
+        failure={preferences.state.failure}
+        onRetry={preferences.retry}
+      />
+    );
   }
   if (preferences.state.kind !== "ready") return null;
 
   const saved = briefingLocationFrom(preferences.state.data);
   const location = chosen ?? saved;
+
+  /*
+   * Declared once and used in both branches. The empty branch needs it most: its own text
+   * says "name one above", and an empty state saying that with nothing above it is the
+   * dead end this control exists to remove.
+   */
+  const chooser = (
+    <PlaceChooser
+      summary="Experiment on another place"
+      label="Experiment on a place"
+      description="Weathra resolves the name before it retrieves anything. Leave it empty to use your default location."
+      current={location}
+      usingDefault={chosen === null}
+      hasDefault={saved !== null}
+      onChoose={setChosen}
+    />
+  );
 
   return (
     <>
@@ -291,25 +373,21 @@ export function WeatherScenarioLab(): ReactNode {
         to Settings, which made the feature reachable only by configuring a preference somewhere
         else first — see `PlaceChooser` for why that is not a substitute for a product.
       */}
-      <PlaceChooser
-        summary="Experiment on another place"
-        label="Experiment on a place"
-        description="Weathra resolves the name before it retrieves anything. Leave it empty to use your default location."
-        current={location}
-        usingDefault={chosen === null}
-        hasDefault={saved !== null}
-        onChoose={setChosen}
-      />
 
       {location === null ? (
-        <EmptyState title="Name a place to experiment on">
-          The lab applies your assumptions to the forecast for your default location. Name one
-          above, or set a default in <Link href="/settings">Settings</Link>.
-        </EmptyState>
+        <>
+          {chooser}
+          <EmptyState title="Name a place to experiment on">
+            The lab applies your assumptions to the forecast for your default
+            location. Name one above, or set a default in{" "}
+            <Link href="/settings">Settings</Link>.
+          </EmptyState>
+        </>
       ) : (
         <ScenarioFor
           key={`${location.latitude},${location.longitude}`}
           location={location}
+          chooser={chooser}
         />
       )}
     </>

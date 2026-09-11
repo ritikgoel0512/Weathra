@@ -87,6 +87,7 @@ const FICTIONAL_MODELS = [
 /** Everything the two administrative panels are permitted to reach, and nothing else. */
 const PERMITTED_ADMIN_METHODS = [
   "adminUsage",
+  "adminUsageSeries",
   "adminPlans",
   "adminPrincipals",
   "assignPlan",
@@ -112,6 +113,7 @@ describe("Admin Model & AI Usage: built from what Weathra records, refused to ev
       );
     return {
       adminUsage: vi.fn(forbidden),
+      adminUsageSeries: vi.fn(forbidden),
       adminPolicies: vi.fn(forbidden),
       adminCatalog: vi.fn(forbidden),
       adminComparisons: vi.fn(forbidden),
