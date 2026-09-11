@@ -26,7 +26,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { Badge, Button, EmptyChart } from "@/components/ui";
+import { Badge } from "@/components/ui";
 import { PLACE_PARAM } from "@/components/shell/top-bar";
 import { DEFAULT_PROTECTED_PATH } from "@/lib/routes";
 
@@ -53,41 +53,6 @@ function placeHref(name: string): string {
 }
 
 /** What each region of the briefing will hold, in that region's own shape. */
-interface Preview {
-  readonly title: string;
-  readonly blurb: string;
-  /** Regions the artifact draws as a plot keep their plot. */
-  readonly chart?: number;
-}
-
-const PREVIEWS: readonly Preview[] = [
-  {
-    title: "Current conditions",
-    blurb:
-      "Temperature, wind, humidity and pressure as the provider reported them, with the time they were observed.",
-  },
-  {
-    title: "Forecast",
-    blurb: "The days ahead, each with its range and its expected conditions.",
-    chart: 150,
-  },
-  {
-    title: "What changed?",
-    blurb:
-      "How this forecast differs from the one before it, so a revision is something you are told about rather than something you have to notice.",
-  },
-  {
-    title: "Historical context",
-    blurb: "Today measured against the climate record for the same place and time of year.",
-    chart: 150,
-  },
-  {
-    title: "Weathra Intelligence",
-    blurb:
-      "The model's reading of the figures above, asked for when you want it — never on arrival, because it spends part of your allowance.",
-  },
-];
-
 export interface GettingStartedProps {
   /**
    * The location form, rendered by the Dashboard and placed here.
@@ -101,100 +66,44 @@ export interface GettingStartedProps {
 
 export function GettingStarted({ children }: GettingStartedProps): ReactNode {
   return (
-    <div className={styles.start}>
-      {/*
-        The hero band the populated Dashboard opens on, holding the thing to do instead of a
-        readout. It keeps the artifact's composition — full-width, dark, one dominant line — so the
-        screen is recognisably the Dashboard before there is anything to brief on.
-      */}
-      <section className={styles.startHero} aria-labelledby="start-hero-title">
-        <div className={styles.startHeroBody}>
-          <Badge tone="neutral">Getting started</Badge>
-          <h2 className={styles.startTitle} id="start-hero-title">
-            Name a place, and the briefing fills in
-          </h2>
-          <p className={styles.startLead}>
-            Weathra briefs you on one place at a time: what it is doing now, what the days ahead
-            hold, and how that sits against its own record. Nothing below is filled in yet because
-            no place has been chosen — not because there is nothing to show.
-          </p>
-          <div className={styles.startEntry}>{children}</div>
-        </div>
-      </section>
-
-      <section className={styles.startSuggestions} aria-labelledby="start-suggestions-title">
-        <h3 className={styles.startSectionTitle} id="start-suggestions-title">
-          Or start with one of these
-        </h3>
-        <ul className={styles.startChips}>
-          {SUGGESTIONS.map((name) => (
-            <li key={name}>
-              <Link className={styles.startChip} href={placeHref(name)}>
-                {name}
-              </Link>
-            </li>
-          ))}
-        </ul>
-        <p className={styles.startNote}>
-          Each one is resolved by Weathra the same way a name you type is. Choosing one briefs
-          you on it; it changes nothing about your account.
+    /*
+     * **One band, not one screen.** This used to be the whole Dashboard for an account with no
+     * default place: a hero-sized title, a lead paragraph, a chip row, three preview cards and two
+     * next-step cards — roughly two viewports of explanation standing in front of a product whose
+     * job is to show weather. `01-dashboard.png` has no such state, and the shape of the screen is
+     * what makes it recognisable as the Dashboard, so the shell stays and the onboarding shrinks
+     * to the one band the hero would occupy.
+     *
+     * What is gone is the explaining, not the helping: the field, the starter places and the way
+     * to save a default are all still here, in the space the hero will take once a place is
+     * chosen. The preview and next-step cards went with it — they described features the person
+     * can see in the rail beside them.
+     */
+    <section className={styles.start} aria-labelledby="start-hero-title">
+      <div className={styles.startBody}>
+        <Badge tone="neutral">Getting started</Badge>
+        <h2 className={styles.startTitle} id="start-hero-title">
+          Choose a place to brief on
+        </h2>
+        <p className={styles.startLead}>
+          Weathra briefs one place at a time: conditions now, the days ahead, and how they sit
+          against its own record.
         </p>
-      </section>
+        <div className={styles.startEntry}>{children}</div>
 
-      <section className={styles.startPreviews} aria-labelledby="start-previews-title">
-        <h3 className={styles.startSectionTitle} id="start-previews-title">
-          What a briefing contains
-        </h3>
-        <ul className={styles.startGrid}>
-          {PREVIEWS.map((preview) => (
-            <li className={styles.startCard} key={preview.title}>
-              <h4 className={styles.startCardTitle}>{preview.title}</h4>
-              <p className={styles.startCardBlurb}>{preview.blurb}</p>
-              {preview.chart === undefined ? (
-                <div className={styles.startCardRule} aria-hidden="true" />
-              ) : (
-                <EmptyChart
-                  title={preview.title}
-                  reason="Choose a place and this is plotted from what the provider returns."
-                  height={preview.chart}
-                />
-              )}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className={styles.startNext} aria-labelledby="start-next-title">
-        <h3 className={styles.startSectionTitle} id="start-next-title">
-          Two things worth doing once you have one
-        </h3>
-        <div className={styles.startActions}>
-          <div className={styles.startAction}>
-            <h4 className={styles.startCardTitle}>Save it, and make it your default</h4>
-            <p className={styles.startCardBlurb}>
-              A default location is what the Dashboard opens on, and saved places fill the rail on
-              the left so they are one press away on every screen.
-            </p>
-            <Link href="/locations">
-              <Button variant="secondary" size="sm">
-                Saved locations
-              </Button>
-            </Link>
-          </div>
-          <div className={styles.startAction}>
-            <h4 className={styles.startCardTitle}>Ask the Analyst a question</h4>
-            <p className={styles.startCardBlurb}>
-              A question in your own words, answered from retrieved figures — and every figure in the
-              answer is traceable to the evidence behind it.
-            </p>
-            <Link href="/analyst">
-              <Button variant="secondary" size="sm">
-                AI Weather Analyst
-              </Button>
-            </Link>
-          </div>
+        <div className={styles.startChipRow}>
+          <span className={styles.startChipLabel}>Or start with</span>
+          <ul className={styles.startChips}>
+            {SUGGESTIONS.map((name) => (
+              <li key={name}>
+                <Link className={styles.startChip} href={placeHref(name)}>
+                  {name}
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
-      </section>
-    </div>
+      </div>
+    </section>
   );
 }

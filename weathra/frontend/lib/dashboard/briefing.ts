@@ -212,9 +212,22 @@ export function readingFor(
  * digits would be inventing precision, and rounding is applied only downward.
  */
 export function formatReading(reading: Pick<Reading, "value" | "unit">): string {
+  return formatFigure(reading) + (reading.unit ? ` ${reading.unit}` : "");
+}
+
+/**
+ * The figure alone, with no unit after it.
+ *
+ * For the one place a unit is set apart from its number rather than following it: the Dashboard's
+ * hero, where `01-dashboard.png` sets the temperature at four times the size of everything around
+ * it and hangs the degree mark off its shoulder. `formatReading` would render `15.3 °C` as one
+ * run of text, and a hero built from it reads as a large sentence rather than as one figure — the
+ * defect the 2026-09-11 capture shows. Rounding is `formatReading`'s, unchanged, so the two can
+ * never state the same reading differently.
+ */
+export function formatFigure(reading: Pick<Reading, "value">): string {
   const rounded = Math.round(reading.value * 10) / 10;
-  const figure = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
-  return reading.unit ? `${figure} ${reading.unit}` : figure;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
 }
 
 /* --------------------------------------------------------------------- forecast */

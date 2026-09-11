@@ -21,9 +21,9 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { PrecipitationChart, RecordedAgainstBaselineChart } from "@/components/historical/charts";
+import { RecordedAgainstBaselineChart } from "@/components/historical/charts";
 import {
-  Badge,
+  Button,
   Card,
   CardBody,
   CardHeader,
@@ -46,7 +46,6 @@ import type {
   SavedLocationsResponse,
   StatisticResult,
 } from "@/lib/api/schema";
-import { hasValues, missingCount, pointsFrom } from "@/lib/historical/analysis";
 import type { ViewState } from "@/lib/query/state";
 import { confidenceLevelFor } from "@/lib/design/data-class";
 import { resolvedPlaceLabel } from "@/lib/locations/place";
@@ -56,8 +55,10 @@ import {
   dayDetails,
   dayPrecipitationFrom,
   formatReading,
+  formatFigure,
   forecastDaysFrom,
   readingFor,
+  measureLabel,
   readingsFrom,
   statisticPhrase,
   type DayPrecipitation,
@@ -66,7 +67,28 @@ import {
   type WhatChangedReport,
 } from "@/lib/dashboard/briefing";
 
+import { IntradayChart, intradayHours, peakOf } from "./intraday";
+
 import styles from "./dashboard.module.css";
+
+/**
+ * The UV index for the observed hour, from the forecast's hourly series.
+ *
+ * Matched on the hour of `observed_at_local` rather than taken from the first entry: the hourly
+ * series starts at midnight, and its first value is the UV index at midnight, which is zero
+ * everywhere and would be a true number about the wrong time.
+ */
+function uvNow(current: CurrentResponse, forecast: ForecastResponse | null): Reading | null {
+  const observed = current.observed_at_local ?? "";
+  const hour = observed.slice(0, 13); // `2026-09-11T14`
+  if (hour.length < 13 || !forecast?.hourly) return null;
+
+  const entry = forecast.hourly.entries?.find((candidate) =>
+    (candidate.time_local ?? "").startsWith(hour),
+  );
+  if (!entry) return null;
+  return readingFor("uv_index", entry.values, forecast.hourly.units);
+}
 
 /** One reported number, or null. The provider's condition code is a number in the values map. */
 function numberFrom(value: unknown): number | null {
@@ -133,6 +155,14 @@ function Measures({ readings }: { readonly readings: readonly Reading[] }): Reac
 export interface CurrentConditionsProps {
   readonly current: CurrentResponse;
   readonly location: Location;
+  /**
+   * The forecast this screen already holds, for the one hero figure `current` does not carry.
+   *
+   * Optional: the hero renders without it, one slot shorter. Passed rather than fetched — the
+   * Dashboard has the series already, and a second request for one number would be a worse answer
+   * than a missing tile.
+   */
+  readonly forecast?: ForecastResponse | null;
 }
 
 /**
@@ -149,21 +179,54 @@ export interface CurrentConditionsProps {
  * with no change here.
  */
 /**
- * The hero's secondary slots, and why these five.
+ * The hero's secondary slots: the artifact's four, in the artifact's 2×2 block.
  *
- * `01-dashboard.png` puts humidity, UV, wind and pressure beside the temperature. **UV is not in
- * `current`**: the provider reports it hourly and daily only, so the slot rendered "Unavailable" on
- * every load — a permanent gap advertising a field this series does not carry. It is replaced by
- * feels-like and precipitation, which `current` does report and which the artifact also shows (it
- * draws them in the same band). Five tiles, all populated, in the artifact's arrangement.
+ * `01-dashboard.png` puts humidity and wind over UV index and pressure, to the right of the
+ * temperature. **UV is not in the `current` series** — the provider reports it hourly and daily
+ * only — so it is read from the forecast's own hourly series at the hour the observation belongs
+ * to. That is the same provider, the same place and the same hour, which is what makes it the UV
+ * for *now* rather than a number borrowed from a different time. Where no hourly series is present
+ * the slot is absent rather than stated as unavailable.
  */
 const HERO_MEASURES: readonly { key: string; label: string }[] = [
-  { key: "apparent_temperature", label: "Feels like" },
   { key: "relative_humidity", label: "Humidity" },
   { key: "wind_speed", label: "Wind" },
-  { key: "precipitation", label: "Precipitation" },
+  { key: "uv_index", label: "UV index" },
   { key: "surface_pressure", label: "Pressure" },
 ];
+
+/**
+ * The observed moment, in the words a person reads a clock in.
+ *
+ * It printed `Observed 2026-09-04T08:15:00+02:00` — the stamp exactly as the backend sent it,
+ * against an artifact whose hero says "Updated 2m ago". An offset-bearing ISO string is the right
+ * thing to send over a wire and the wrong thing to put in a hero: the reader wants the hour.
+ *
+ * Not a relative age, deliberately. "2m ago" is only true for as long as it takes to read, and the
+ * backend's own freshness is already stated by `Updated` in the attribution beneath. This is the
+ * hour the *provider observed*, which is a fixed fact about the reading and stays true.
+ */
+function formatObserved(timeLocal: string | null | undefined): string | null {
+  if (!timeLocal) return null;
+  // Both parts are read from the stamp's own text, so the provider's local hour and calendar day
+  // survive whatever timezone the reader's browser is in. Reapplying the reader's timezone would
+  // move the observation to a moment the provider never reported.
+  const clock = /T(\d{2}:\d{2})/.exec(timeLocal)?.[1] ?? null;
+  const day = shortDate(timeLocal);
+  if (clock && day) return `${clock} · ${day}`;
+  return clock ?? day;
+}
+
+/** The short month names, so a date's parts are ordered by this product rather than by a locale. */
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** `2026-09-04T08:15:00+02:00` → `4 Sep`, from the stamp's own text. */
+function shortDate(timeLocal: string): string | null {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})/.exec(timeLocal);
+  if (!parts) return null;
+  const month = MONTHS[Number(parts[2]) - 1];
+  return month ? `${Number(parts[3])} ${month}` : null;
+}
 
 /**
  * The leading band: what the provider measured, badged OBSERVED.
@@ -176,12 +239,23 @@ const HERO_MEASURES: readonly { key: string; label: string }[] = [
  * band keeps its height and its atmospheric ground through the surface tokens instead, which is the
  * treatment the correction pass agreed for a hero with no approved asset behind it.
  */
-export function CurrentConditions({ current, location }: CurrentConditionsProps): ReactNode {
+export function CurrentConditions({
+  current,
+  location,
+  forecast = null,
+}: CurrentConditionsProps): ReactNode {
   // The place this screen resolved, read before any early return so the hook order is fixed.
   const known = useResolvedPlace();
 
   const temperature = readingFor("temperature", current.values, current.units);
   const condition = conditionFor(numberFrom(current.values?.weather_code));
+  const uv = uvNow(current, forecast);
+  // Feels-like belongs with the temperature it qualifies, not in the tile block beside it: it is
+  // the same measure in the same unit, and a reader meets it as a caveat on the big number rather
+  // than as a fifth statistic. `01-dashboard.png` has no slot for it at all; this is where a
+  // weather product puts it, and §8 of the reconstruction brief requires it on the screen.
+  const feelsLike = readingFor("apparent_temperature", current.values, current.units);
+  const observed = formatObserved(current.observed_at_local);
   const placeName = resolvedPlaceLabel(current.attribution?.location ?? location, known);
   // Anything the provider reported that the hero's four slots do not already name. The slots are
   // the artifact's composition; this is the guarantee that the composition never hides a reading.
@@ -190,6 +264,7 @@ export function CurrentConditions({ current, location }: CurrentConditionsProps)
   // reader shown both is being shown the same fact twice, once in a form they cannot use.
   const named = new Set<string>([
     "temperature",
+    "apparent_temperature",
     "weather_code",
     ...HERO_MEASURES.map((measure) => measure.key),
   ]);
@@ -202,6 +277,21 @@ export function CurrentConditions({ current, location }: CurrentConditionsProps)
       variant="hero"
       dataClass="observed"
       title="Current conditions"
+      /*
+        Everything else `current` reported, on the section's own footer rule rather than inside the
+        band. The artifact's hero is one photograph with a readout on it and nothing beneath; a
+        second strip of labelled figures below the image is a different composition, and it is
+        where feels-like and precipitation were landing once the block above took the artifact's
+        own four.
+      */
+      footer={
+        extras.length > 0 ? (
+          <details className={styles.heroExtras}>
+            <summary className={styles.heroExtrasSummary}>All current readings</summary>
+            <Measures readings={extras} />
+          </details>
+        ) : null
+      }
       attribution={attributionOf({
         known,
         provider: current.attribution?.provider,
@@ -227,14 +317,22 @@ export function CurrentConditions({ current, location }: CurrentConditionsProps)
             {/* The artifact names the city large and its region beneath, not the timezone. */}
             <p className={styles.place}>{placeName}</p>
             <p className={styles.placeMeta}>
-              <span>{location.timezone}</span>
-              <span>Observed {current.observed_at_local}</span>
+              {/* The artifact's small pill beside the place name. It is the zone the observation's
+                  own clock is in, which is what makes the hour beside it readable. */}
+              <span className={styles.heroZone}>{location.timezone}</span>
+              {observed ? <span>Observed {observed}</span> : null}
             </p>
           </div>
 
           <div className={styles.heroReadout}>
             {temperature ? (
-              <p className={styles.readout}>{formatReading(temperature)}</p>
+              // The degree mark is set apart from the figure so the number itself carries the
+              // weight, which is what makes the artifact's hero read as one dominant element
+              // rather than as a line of text that happens to be large.
+              <p className={styles.readout}>
+                <span className={styles.readoutFigure}>{formatFigure(temperature)}</span>
+                <span className={styles.readoutUnit}>{temperature.unit ?? ""}</span>
+              </p>
             ) : (
               <p className={styles.note}>No temperature reported</p>
             )}
@@ -245,9 +343,12 @@ export function CurrentConditions({ current, location }: CurrentConditionsProps)
             */}
             {condition ? (
               <p className={styles.readoutCondition}>
-                <WeatherIcon condition={condition} size={28} />
+                <WeatherIcon condition={condition} size={30} />
                 <span>{condition.label}</span>
               </p>
+            ) : null}
+            {feelsLike ? (
+              <p className={styles.readoutFeels}>Feels like {formatReading(feelsLike)}</p>
             ) : null}
           </div>
 
@@ -261,7 +362,9 @@ export function CurrentConditions({ current, location }: CurrentConditionsProps)
             {HERO_MEASURES.map(({ key, label }) => ({
               key,
               label,
-              reading: readingFor(key, current.values, current.units),
+              // UV is the one slot `current` does not carry; it comes from the hour the
+              // observation belongs to in the forecast's own hourly series.
+              reading: key === "uv_index" ? uv : readingFor(key, current.values, current.units),
             }))
               .filter((slot) => slot.reading !== null)
               .map((slot) => (
@@ -276,7 +379,6 @@ export function CurrentConditions({ current, location }: CurrentConditionsProps)
         </div>
       </LocationImage>
 
-      {extras.length > 0 ? <Measures readings={extras} /> : null}
     </ProvenanceSection>
   );
 }
@@ -361,6 +463,19 @@ function weekdayOf(day: { timeLocal: string; date: string }): string {
   return parsed.toLocaleDateString(undefined, { weekday: "short" });
 }
 
+/**
+ * `2026-09-12T00:00:00+02:00` → `12 Sep`. The certainty under the weekday, without the stamp.
+ *
+ * Built from the stamp's own text rather than through `toLocaleDateString`, for the same reason
+ * the clock in `formatObserved` is: the provider's local calendar day must survive whatever
+ * timezone the reader's browser is in, and the order of the parts must not depend on which locale
+ * the browser reports — `Sep 4` and `4 Sep` are the same date rendered by two machines, and a
+ * screen whose text changes with the reader's region is a screen no test can pin down.
+ */
+function shortDateOf(day: { timeLocal: string; date: string }): string {
+  return shortDate(day.timeLocal) ?? day.date;
+}
+
 export function ForecastStrip({ forecast }: ForecastStripProps): ReactNode {
   const days = forecastDaysFrom(forecast.daily);
 
@@ -384,9 +499,10 @@ export function ForecastStrip({ forecast }: ForecastStripProps): ReactNode {
           {day ? (
             <>
               {/* A weekday reads at a glance where an ISO date has to be decoded. Both are here:
-                  the name for scanning, the date beneath it for certainty. */}
+                  the name for scanning, the date beneath it for certainty — but the date is the
+                  day and the month, not the calendar stamp the backend sent. */}
               <p className={styles.stripDayName}>{weekdayOf(day)}</p>
-              <p className={styles.stripDayDate}>{day.date}</p>
+              <p className={styles.stripDayDate}>{shortDateOf(day)}</p>
               {/*
                 The artifact's day card is an icon and a condition word over the temperatures. That
                 was a precipitation glyph until the provider's `weather_code` arrived, because
@@ -395,26 +511,47 @@ export function ForecastStrip({ forecast }: ForecastStripProps): ReactNode {
                 a day the provider reported no code for.
               */}
               {conditionOf(day) ? (
-                <>
-                  <span className={styles.stripIcon}>
-                    <WeatherIcon condition={conditionOf(day)} size={30} />
-                  </span>
-                  <p className={styles.stripCondition}>{conditionOf(day)?.label}</p>
-                </>
+                <span className={styles.stripIcon}>
+                  <WeatherIcon condition={conditionOf(day)} size={32} />
+                </span>
               ) : (
                 <DayPrecipitationGlyph outlook={dayPrecipitationFrom(day)} />
               )}
+
+              {/*
+                **The day's temperature, at the size the artifact draws it.** The card carried
+                `HIGH 19.6 °C` over `LOW 10.4 °C` as two equal labelled rows, which made a strip of
+                seven cards a table of fourteen figures with no entry point;
+                `01-dashboard.png` puts one temperature on each card at three times the size of
+                anything else on it and keeps the pair as a small rule underneath. The figure is
+                the high, which is the one the day is spoken of by, and the unit sits beside it
+                once rather than on both rows.
+              */}
+              <p className={styles.stripReadout}>
+                {day.high ? (
+                  <>
+                    <span className={styles.stripReadoutFigure}>{formatFigure(day.high)}</span>
+                    <span className={styles.stripReadoutUnit}>{day.high.unit ?? ""}</span>
+                  </>
+                ) : (
+                  <span className={styles.stripReadoutFigure}>—</span>
+                )}
+              </p>
+              {conditionOf(day) ? (
+                <p className={styles.stripCondition}>{conditionOf(day)?.label}</p>
+              ) : null}
+
               <dl className={styles.stripFigures}>
                 <div className={styles.stripFigure}>
-                  <dt className={styles.stripFigureTerm}>High</dt>
+                  <dt className={styles.stripFigureTerm}>L</dt>
                   <dd className={styles.stripFigureValue}>
-                    {day.high ? formatReading(day.high) : "—"}
+                    {day.low ? formatFigure(day.low) : "—"}
                   </dd>
                 </div>
                 <div className={styles.stripFigure}>
-                  <dt className={styles.stripFigureTerm}>Low</dt>
+                  <dt className={styles.stripFigureTerm}>H</dt>
                   <dd className={styles.stripFigureValue}>
-                    {day.low ? formatReading(day.low) : "—"}
+                    {day.high ? formatFigure(day.high) : "—"}
                   </dd>
                 </div>
               </dl>
@@ -591,73 +728,107 @@ export function DeterministicAnalytics({
         fromCache: analysis.from_cache,
       })}
     >
-      {analysis.summary ? <p className={styles.summary}>{analysis.summary}</p> : null}
-
+      {/*
+        **States, then the arithmetic behind them.** This panel read out four findings, each with
+        its own "Computed by Weathra / View analysis" pair and its own method — median absolute
+        deviation, a Theil–Sen slope, a baseline spread — in a rail card the artifact draws as one
+        alert line and two figures. The analytics are unchanged and none of them moved screens;
+        what a person meets first is now the answer rather than the method.
+      */}
+      {/*
+        **One statement, then two figures.** `01-dashboard.png` draws this panel as a single tinted
+        alert line over a historical average and a variance — five lines in a rail, read in a
+        glance on the way past. It had become four equal label/value rows with the trend among
+        them, which is a small table: nothing in it was wrong and nothing in it was first.
+      */}
       {analysis.anomalies ? (
-        <div className={styles.finding}>
-          <span className={styles.findingLabel}>
-            Anomalies · {analysis.anomalies.measure.replace(/_/g, " ")}
+        <p
+          className={styles.anomalyHeadline}
+          data-tone={anomalies.length > 0 ? "flag" : "calm"}
+        >
+          <span className={styles.anomalyHeadlineTitle}>
+            {anomalies.length === 0
+              ? "Nothing unusual"
+              : `${anomalies.length} ${anomalies.length === 1 ? "day" : "days"} stood out`}
           </span>
-          {anomalies.length === 0 ? (
-            <span className={styles.statement}>
-              {analysis.anomalies.note ?? "No entry stood out from the window by this method."}
-            </span>
-          ) : (
-            <span className={styles.findingValue}>
-              {anomalies.length} {anomalies.length === 1 ? "entry" : "entries"} stood out
-            </span>
-          )}
+          <span className={styles.anomalyHeadlineDetail}>
+            {measureLabel(analysis.anomalies.measure)} against this window's own distribution.
+          </span>
+        </p>
+      ) : null}
+
+      <dl className={styles.anomalyStates}>
+        {baseline?.mean && typeof baseline.mean.value === "number" ? (
+          <div className={styles.anomalyState}>
+            <dt className={styles.anomalyTerm}>
+              {(baseline.years_used ?? []).length}-year average
+            </dt>
+            <dd className={styles.anomalyValue}>
+              {formatReading({ value: baseline.mean.value, unit: baseline.mean.unit ?? null })}
+            </dd>
+          </div>
+        ) : null}
+
+        {baseline?.standard_deviation &&
+        typeof baseline.standard_deviation.value === "number" ? (
+          <div className={styles.anomalyState}>
+            <dt className={styles.anomalyTerm}>Usual spread</dt>
+            <dd className={styles.anomalyValue}>
+              ±
+              {formatReading({
+                value: baseline.standard_deviation.value,
+                unit: baseline.standard_deviation.unit ?? null,
+              })}
+            </dd>
+          </div>
+        ) : null}
+      </dl>
+
+      {/*
+        The sentence the backend wrote about its own findings, and every method behind the states
+        above — one disclosure for the panel rather than one per figure.
+      */}
+      <details className={styles.anomalyAnalysis}>
+        <summary className={styles.anomalyAnalysisSummary}>View analysis</summary>
+
+        {analysis.summary ? <p className={styles.summary}>{analysis.summary}</p> : null}
+
+        {/*
+          The trend, with the two figures above rather than between them. It is a real computed
+          statistic and it is not the panel's headline: a rail card states whether anything is
+          unusual, and the direction of a Theil–Sen slope is the arithmetic behind that answer.
+        */}
+        {trend ? (
+          <dl className={styles.anomalyStates}>
+            <div className={styles.anomalyState}>
+              <dt className={styles.anomalyTerm}>Trend</dt>
+              <dd className={styles.anomalyValue}>
+                {trend.direction} · {formatReading({ value: trend.magnitude, unit: trend.unit })}
+              </dd>
+            </div>
+          </dl>
+        ) : null}
+
+        {analysis.anomalies ? (
           <MethodNote
             method={analysis.anomalies.method}
             pointsUsed={analysis.anomalies.points_used}
             pointsExcluded={analysis.anomalies.points_excluded}
+            compact
           />
-        </div>
-      ) : null}
-
-      {trend ? (
-        <div className={styles.finding}>
-          <span className={styles.findingLabel}>Trend · {trend.measure.replace(/_/g, " ")}</span>
-          <span className={styles.findingValue}>
-            <Badge tone="neutral">{trend.direction}</Badge>{" "}
-            {formatReading({ value: trend.magnitude, unit: trend.unit })} across the window
-          </span>
+        ) : null}
+        {trend ? (
           <MethodNote
             method={trend.method}
             pointsUsed={trend.points_used}
             pointsExcluded={trend.points_excluded}
             unit={trend.unit}
+            compact
           />
-        </div>
-      ) : null}
+        ) : null}
+        {baseline?.mean ? <MethodNote method={baseline.mean.method} compact /> : null}
+      </details>
 
-      {/*
-        The artifact's closing pair in this panel: the historical average, and the spread beside
-        it. Both are the baseline's own statistics with their own methods — see
-        `AnomalyDetectionProps.baseline` for why the second is a spread rather than a deviation.
-      */}
-      {baseline ? (
-        <ul className={styles.findings}>
-          {(
-            [
-              ["Historical average", baseline.mean],
-              ["Baseline spread", baseline.standard_deviation],
-            ] as const
-          ).map(([label, result]) =>
-            result && typeof result.value === "number" ? (
-              <li className={styles.finding} key={label}>
-                <span className={styles.findingLabel}>
-                  {label} · {(baseline.years_used ?? []).length} years
-                </span>
-                <span className={styles.findingValue}>
-                  {formatReading({ value: result.value, unit: result.unit ?? null })}
-                </span>
-                <MethodNote method={result.method} pointsUsed={result.points_used} />
-              </li>
-            ) : null,
-          )}
-        </ul>
-      ) : null}
     </ProvenanceSection>
   );
 }
@@ -685,6 +856,10 @@ export function ComputedFigures({
   const known = useResolvedPlace();
   if (analysis.findings.length === 0) return null;
 
+  // The six a person reads: the temperatures, the rain and the wind that actually blew.
+  const headline = analysis.findings.slice(0, 6);
+  const rest = analysis.findings.slice(6);
+
   return (
     <ProvenanceSection
       dataClass="analytics"
@@ -698,11 +873,34 @@ export function ComputedFigures({
         fromCache: analysis.from_cache,
       })}
     >
+      {/*
+        **Six figures, then the rest behind a control.** This rendered every statistic the analysis
+        computed as a full-width matrix in the Dashboard's main column — the largest block on a
+        screen whose subject is the weather, and the one that made the page read as a report about
+        its own arithmetic. `01-dashboard.png` has no such region at all.
+
+        Nothing is deleted and nothing moves to another screen: the same figures, the same
+        provenance, the same `View analysis` on each. What changes is how many a person meets
+        before they ask for them.
+      */}
       <ul className={styles.findings}>
-        {analysis.findings.map((result, index) => (
+        {headline.map((result, index) => (
           <Finding key={`${result.statistic}-${result.measure}-${index}`} result={result} />
         ))}
       </ul>
+
+      {rest.length > 0 ? (
+        <details className={styles.moreFigures}>
+          <summary className={styles.moreFiguresSummary}>
+            View all {analysis.findings.length} metrics
+          </summary>
+          <ul className={styles.findings}>
+            {rest.map((result, index) => (
+              <Finding key={`${result.statistic}-${result.measure}-${index}`} result={result} />
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </ProvenanceSection>
   );
 }
@@ -725,6 +923,25 @@ export function HistoricalContext({ baseline }: HistoricalContextProps): ReactNo
   const known = useResolvedPlace();
 
   const years = baseline.years_used ?? [];
+  const yearly = baseline.yearly_means ?? [];
+  const mean = typeof baseline.mean?.value === "number" ? baseline.mean.value : null;
+  const unit = baseline.mean?.unit ?? null;
+
+  /*
+   * **The band's own chart, from the figures it already had.** `01-dashboard.png` closes the
+   * Dashboard on a wide band with an account on the left and a large plot on the right; ours
+   * closed it on three labelled statistics and a sentence about how many years were available,
+   * which is the same band with the picture taken out. The plot is each reference year's own mean
+   * against the baseline those means average to — the multi-year record, drawn as the record.
+   *
+   * The artifact's own plot is a candlestick chart of invented financial data with a "2023
+   * EXTREME" callout on it. That is not imitated: `screens.md` §5 refuses the mockup's filler
+   * across the set, and there is no market in a climate baseline.
+   */
+  const points = yearly.map((entry) => ({
+    date: String(entry.year),
+    values: { [baseline.measure]: entry.value },
+  }));
 
   return (
     <ProvenanceSection
@@ -738,43 +955,95 @@ export function HistoricalContext({ baseline }: HistoricalContextProps): ReactNo
         units: baseline.unit_system,
       })}
     >
-      <p className={styles.statement}>{baseline.labelling}</p>
+      <div className={styles.baselineBand}>
+        <div className={styles.baselineAccount}>
+          <p className={styles.statement}>{baseline.labelling}</p>
 
-      <ul className={styles.findings}>
-        {(
-          [
-            ["mean", baseline.mean],
-            ["minimum", baseline.minimum],
-            ["maximum", baseline.maximum],
-          ] as const
-        ).map(
-          ([statistic, result]) =>
-            result ? (
-              <li className={styles.finding} key={statistic}>
-                {/* `Average temperature`, not `Mean · temperature mean`. The same phrasing the
-                    computed figures use, so one screen does not name a figure two ways. */}
-                <span className={styles.findingLabel}>
-                  {statisticPhrase(statistic, baseline.measure)}
-                </span>
-                {typeof result.value === "number" ? (
-                  <span className={styles.findingValue}>
-                    {formatReading({ value: result.value, unit: result.unit ?? null })}
+          {/* The artifact's one framed figure under the prose: the number the band is about. */}
+          {mean === null ? null : (
+            <p className={styles.baselineDelta}>
+              <span className={styles.baselineDeltaTerm}>
+                {years.length}-year average, {statisticPhrase("mean", baseline.measure).toLowerCase()}
+              </span>
+              <span className={styles.baselineDeltaValue}>
+                {formatReading({ value: mean, unit })}
+              </span>
+            </p>
+          )}
+
+          <p className={styles.note}>
+            {years.length > 0
+              ? `Computed from ${years.length} ${years.length === 1 ? "year" : "years"}: ${years.join(", ")}.`
+              : "The archive reported no years for this window."}
+          </p>
+          {baseline.coverage_note ? <p className={styles.note}>{baseline.coverage_note}</p> : null}
+
+          <Link href="/historical">
+            <Button variant="secondary" size="sm">
+              Open Historical Analytics
+            </Button>
+          </Link>
+        </div>
+
+        <div className={styles.baselineChart}>
+          {points.length > 0 ? (
+            <RecordedAgainstBaselineChart
+              points={points}
+              measure={baseline.measure}
+              unit={unit}
+              seriesLabel="Each year's own mean"
+              title="The reference years behind this baseline"
+              missing={0}
+              baselineValue={mean}
+              baselineLabel={mean === null ? null : `${years.length}-year average`}
+              referenceLabel="Baseline"
+              sourceLabel="the archive"
+            />
+          ) : (
+            <EmptyChart
+              title="The reference years behind this baseline"
+              reason="The archive reported no per-year means for this window, so there is nothing to plot."
+            />
+          )}
+        </div>
+      </div>
+
+      {/*
+        The spread and the extremes, and the method behind each. They were three equal columns
+        across the band; here they are the detail under the account, which is what they are.
+      */}
+      <details className={styles.baselineFigures}>
+        <summary className={styles.baselineFiguresSummary}>View the figures and their methods</summary>
+        <ul className={styles.findings}>
+          {(
+            [
+              ["mean", baseline.mean],
+              ["minimum", baseline.minimum],
+              ["maximum", baseline.maximum],
+              ["standard_deviation", baseline.standard_deviation],
+            ] as const
+          ).map(
+            ([statistic, result]) =>
+              result ? (
+                <li className={styles.finding} key={statistic}>
+                  {/* `Average temperature`, not `Mean · temperature mean`. The same phrasing the
+                      computed figures use, so one screen does not name a figure two ways. */}
+                  <span className={styles.findingLabel}>
+                    {statisticPhrase(statistic, baseline.measure)}
                   </span>
-                ) : (
-                  <span className={styles.note}>Not computable.</span>
-                )}
-                <MethodNote method={result.method} pointsUsed={result.points_used} />
-              </li>
-            ) : null,
-        )}
-      </ul>
-
-      <p className={styles.note}>
-        {years.length > 0
-          ? `Computed from ${years.length} ${years.length === 1 ? "year" : "years"}: ${years.join(", ")}.`
-          : "The archive reported no years for this window."}
-      </p>
-      {baseline.coverage_note ? <p className={styles.note}>{baseline.coverage_note}</p> : null}
+                  {typeof result.value === "number" ? (
+                    <span className={styles.findingValue}>
+                      {formatReading({ value: result.value, unit: result.unit ?? null })}
+                    </span>
+                  ) : (
+                    <span className={styles.note}>Not computable.</span>
+                  )}
+                  <MethodNote method={result.method} pointsUsed={result.points_used} />
+                </li>
+              ) : null,
+          )}
+        </ul>
+      </details>
     </ProvenanceSection>
   );
 }
@@ -847,18 +1116,24 @@ export function WhatChanged({ report }: WhatChangedProps): ReactNode {
           Nothing moved beyond the materiality margin for its measure since the previous snapshot.
         </p>
       ) : (
+        /*
+          One line per day that moved. Each row carried the backend's sentence about itself as
+          well — "The maximum for 5 September is 1.4 °C higher than in the earlier retrieval" —
+          which is the label and the delta beside it, said again in prose. Two moved days made this
+          the tallest card in the column; `01-dashboard.png` draws it as a sub-card of three lines.
+          The sentences are not lost: they are what the evidence record carries.
+        */
         <ul className={styles.findings}>
           {material.map((change) => (
             <li className={styles.finding} key={`${change.local_date}-${change.measure}`}>
               <span className={styles.findingLabel}>
-                {change.local_date} · {change.measure.replace(/_/g, " ")}
+                {change.local_date} · {measureLabel(change.measure)}
               </span>
               <span className={styles.findingValue}>
                 {typeof change.change === "number"
                   ? `${change.change > 0 ? "+" : ""}${formatReading({ value: change.change, unit: change.unit })}`
                   : "Not comparable"}
               </span>
-              <span className={styles.note}>{change.statement}</span>
             </li>
           ))}
         </ul>
@@ -950,13 +1225,27 @@ export function SavedSnapshots({
  * the stub is in, and it is a real state — not every provider returns hourly data for every place.
  * A panel that vanished would make the Dashboard a different shape depending on the provider.
  */
-export function ClimatePulse({ forecast }: { readonly forecast: ForecastResponse }): ReactNode {
+export function ClimatePulse({
+  forecast,
+  footer = null,
+}: {
+  readonly forecast: ForecastResponse;
+  /**
+   * The compact figure row along the bottom of the card.
+   *
+   * `01-dashboard.png` closes this panel on "PEAK HEAT 19°C @ 16:20 · MAX RISK 45% @ 08:00" — two
+   * statements about the curve above them, on the card the curve is on. Ours had the equivalent
+   * figures as a full-width band of its own between the intelligence row and the forecast strip,
+   * which is a band the artifact does not have; passing them in here is how that band was closed
+   * without losing anything it said.
+   */
+  readonly footer?: ReactNode;
+}): ReactNode {
   // The place this screen resolved, read before any early return so the hook order is fixed.
   const known = useResolvedPlace();
 
-  const points = pointsFrom(forecast.hourly);
-  const measure = "temperature";
-  const drawable = hasValues(points, measure);
+  const hours = intradayHours(forecast);
+  const drawable = hours.some((hour) => hour.temperature !== null);
 
   return (
     <ProvenanceSection
@@ -971,21 +1260,14 @@ export function ClimatePulse({ forecast }: { readonly forecast: ForecastResponse
         units: forecast.attribution?.units,
         fromCache: forecast.attribution?.from_cache,
       })}
+      footer={footer}
     >
+      <p className={styles.panelLead}>The next 24 reported hours</p>
       {drawable ? (
-        <RecordedAgainstBaselineChart
-          points={points}
-          measure={measure}
-          unit={forecast.hourly?.units?.[measure] ?? null}
-          seriesLabel="Temperature"
-          title="Temperature through the forecast window"
-          missing={missingCount(points, measure)}
-          baselineValue={null}
-          baselineLabel={null}
-        />
+        <IntradayChart hours={hours} unit={forecast.hourly?.units?.temperature ?? null} />
       ) : (
         <EmptyChart
-          title="Temperature through the forecast window"
+          title="Temperature through the next 24 hours"
           reason="No hourly series reported for this window."
         />
       )}
@@ -1024,17 +1306,29 @@ export function PrecipitationOutlook({
   // The place this screen resolved, read before any early return so the hook order is fixed.
   const known = useResolvedPlace();
 
-  const days = forecastDaysFrom(forecast.daily);
-  const wet = days
-    .map((day) => ({
-      date: day.date,
-      reading: day.other.find((entry) => entry.key.startsWith("precipitation")) ?? null,
-    }))
-    .filter((entry): entry is { date: string; reading: Reading } => entry.reading !== null);
+  const hours = intradayHours(forecast);
+  const peak = peakOf(hours, "chance");
+  const unit = forecast.hourly?.units?.[PRECIPITATION] ?? null;
+
+  // What the window is actually expected to deliver, added up from the hours the provider
+  // reported. Null — not zero — where it reported none, because an absent reading and a reading of
+  // zero are different facts and this panel has always said so.
+  const reported = (forecast.hourly?.entries ?? []).filter(
+    (entry) => typeof entry.values?.[PRECIPITATION] === "number",
+  );
+  const expected =
+    reported.length === 0
+      ? null
+      : reported.reduce((sum, entry) => sum + (entry.values[PRECIPITATION] as number), 0);
+
+  // The wettest hour in the window, which is the "strongest rain window" a person plans around.
+  const wettest = reported.reduce<{ at: string; value: number } | null>((best, entry) => {
+    const value = entry.values[PRECIPITATION] as number;
+    const at = /T(\d{2}:\d{2})/.exec(entry.time_local)?.[1] ?? entry.time_local;
+    return best === null || value > best.value ? { at, value } : best;
+  }, null);
 
   const uncertainty = forecast.uncertainty;
-  const hourly = pointsFrom(forecast.hourly);
-  const plottable = hasValues(hourly, PRECIPITATION);
 
   return (
     <ProvenanceSection
@@ -1050,41 +1344,61 @@ export function PrecipitationOutlook({
         fromCache: forecast.attribution?.from_cache,
       })}
     >
-      {plottable ? (
-        <PrecipitationChart
-          points={hourly}
-          measure={PRECIPITATION}
-          unit={forecast.hourly?.units?.[PRECIPITATION] ?? null}
-          seriesLabel="Precipitation"
-          title="Precipitation through the forecast window"
-          missing={missingCount(hourly, PRECIPITATION)}
-        />
-      ) : wet.length > 0 ? (
-        <dl className={styles.measures}>
-          {wet.map((entry) => (
-            <div className={styles.measure} key={entry.date}>
-              <dt className={styles.measureTerm}>{entry.date}</dt>
-              <dd className={styles.measureValue}>{formatReading(entry.reading)}</dd>
+      {/*
+        **The artifact's graphic, with the artifact's number replaced.** `01-dashboard.png` fills
+        this panel with a rain graphic over "42% Integrated Risk", a convective type and a
+        millimetre-per-hour load. None of the three is a figure Weathra's backend produces, and an
+        "integrated risk" in particular is exactly the invented confidence `screens.md` §5 refuses
+        across the set — so the composition is reproduced and the figure in it is the provider's
+        own hourly chance of rain, which is a real measure it reports and Historical Analytics
+        already reads.
+      */}
+      {peak ? (
+        <div className={styles.riskPanel}>
+          <span className={styles.riskGlyph} aria-hidden="true">
+            <WeatherIcon
+              condition={conditionFor(peak.value >= 50 ? 61 : 3)}
+              size={68}
+            />
+          </span>
+          <p className={styles.riskReadout}>
+            <span className={styles.riskFigure}>{Math.round(peak.value)}</span>
+            <span className={styles.riskUnit}>%</span>
+          </p>
+          <p className={styles.riskCaption}>
+            Highest chance of rain in the next 24 hours, at {peak.at}.
+          </p>
+
+          <dl className={styles.riskStats}>
+            <div className={styles.riskStat}>
+              <dt className={styles.riskStatTerm}>Expected</dt>
+              <dd className={styles.riskStatValue}>
+                {expected === null
+                  ? "Not reported"
+                  : formatReading({ value: expected, unit })}
+              </dd>
             </div>
-          ))}
-        </dl>
+            <div className={styles.riskStat}>
+              <dt className={styles.riskStatTerm}>Wettest hour</dt>
+              <dd className={styles.riskStatValue}>
+                {wettest === null ? "Not reported" : `${wettest.at}`}
+              </dd>
+            </div>
+          </dl>
+        </div>
       ) : (
         <EmptyChart
-          title="Precipitation through the forecast window"
-          reason="This provider reported no precipitation for this window. That is an absent reading, not a reading of zero."
+          title="Chance of rain through the next 24 hours"
+          reason="This provider reported no chance of rain for this window. That is an absent reading, not a reading of zero."
         />
       )}
 
-      {uncertainty ? (
-        <div className={styles.outlookBasis}>
-          <p className={styles.note}>{uncertainty.basis}</p>
-          <p className={styles.note}>
-            {uncertainty.spread_available
-              ? `${uncertainty.provider} supplied a spread for this forecast.`
-              : `${uncertainty.provider} supplied no forecast spread, so none is shown.`}
-          </p>
-        </div>
-      ) : null}
+      {/*
+        The uncertainty every forecast figure must carry, kept as one line rather than the two
+        paragraphs that used to close this card. The basis is the sentence a reader checks; whether
+        the provider supplied a spread is the same fact said again for everyone who did not.
+      */}
+      {uncertainty ? <p className={styles.riskBasis}>{uncertainty.basis}</p> : null}
     </ProvenanceSection>
   );
 }

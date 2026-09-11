@@ -71,6 +71,20 @@ const ATTRIBUTION = {
   units_source: "preferences",
 };
 
+/**
+ * Everything a surface says, with whitespace removed.
+ *
+ * The hero and the day cards set a figure and its unit as two elements — `18.2` at the readout
+ * step beside `°C` at a third of it, which is how `01-dashboard.png` draws the one number the
+ * screen is opened to read. `getByText("18.2 °C")` cannot see that, because there is no single
+ * node holding it. Stripping whitespace and asserting containment reads the figure as a person
+ * reads it, and is the same guarantee: the value the backend supplied is on the screen, and a
+ * value it did not supply is not.
+ */
+function figuresIn(element: HTMLElement): string {
+  return (element.textContent ?? "").replace(/\s+/gu, "");
+}
+
 function preferences(overrides: Partial<PreferenceView> = {}): PreferenceView {
   return {
     unit_system: "metric",
@@ -344,7 +358,7 @@ describe("a populated briefing", () => {
     const conditions = await screen.findByRole("region", { name: "Current conditions" });
     // The place names the readout and the attribution line beneath it.
     expect(within(conditions).getAllByText("Berlin, Germany").length).toBeGreaterThan(0);
-    expect(within(conditions).getByText("18.2 °C")).toBeInTheDocument();
+    expect(figuresIn(conditions)).toContain("18.2°C");
     expect(within(conditions).getByText("72 %")).toBeInTheDocument();
   });
 
@@ -361,10 +375,19 @@ describe("a populated briefing", () => {
     renderDashboard();
     const forecast = await screen.findByRole("region", { name: "The days ahead" });
 
-    expect(within(forecast).getByText("2026-09-04")).toBeInTheDocument();
-    expect(within(forecast).getByText("21.4 °C")).toBeInTheDocument();
-    expect(within(forecast).getByText("12.1 °C")).toBeInTheDocument();
-    expect(within(forecast).getAllByText(/High|Low/).length).toBeGreaterThan(0);
+    /*
+     * The card names its day the way a person says it — `Fri` over `4 Sep` — rather than printing
+     * the backend's calendar stamp, and it states one temperature at size with its unit over the
+     * pair as the artifact's `L 12°  H 18°` rule. So the high carries the unit and the low is a
+     * bare figure under a labelled term; both are the provider's own numbers and both are on the
+     * card.
+     */
+    expect(within(forecast).getByText("Fri")).toBeInTheDocument();
+    expect(within(forecast).getByText("4 Sep")).toBeInTheDocument();
+    expect(within(forecast).queryByText("2026-09-04")).not.toBeInTheDocument();
+    expect(figuresIn(forecast)).toContain("21.4°C");
+    expect(figuresIn(forecast)).toContain("12.1");
+    expect(within(forecast).getAllByText(/^[LH]$/).length).toBeGreaterThan(0);
   });
 
   it("carries the forecast's uncertainty with its stated basis", async () => {
@@ -388,9 +411,15 @@ describe("a populated briefing", () => {
      * for it to be forgotten.
      */
     const alert = await screen.findByRole("region", { name: "Anomaly detection" });
-    expect(within(alert).getByText(/1 entry stood out/)).toBeInTheDocument();
+    // The state a person reads, in the artifact's own rail-card shape: a word, not a count with a
+    // method beside it.
+    expect(within(alert).getByText(/1 day stood out/)).toBeInTheDocument();
+    expect(within(alert).getByText(/rising/)).toBeInTheDocument();
+
+    // And the arithmetic, behind one disclosure for the whole card rather than one per figure.
+    // `specs/deterministic-analytics` requires the method to be named wherever the figure is; it
+    // does not require it to be the first thing on the card.
     expect(within(alert).getByText(/median absolute deviation/)).toBeInTheDocument();
-    expect(within(alert).getByText("rising")).toBeInTheDocument();
     expect(within(alert).getByText(/least-squares slope/)).toBeInTheDocument();
 
     const figures = await screen.findByRole("region", { name: "Computed figures" });
@@ -439,7 +468,7 @@ describe("the person's own preferences decide the briefing", () => {
 
     const conditions = await screen.findByRole("region", { name: "Current conditions" });
     // The unit rendered is the one the response declared, not one the screen chose.
-    expect(within(conditions).getByText("64.8 °F")).toBeInTheDocument();
+    expect(figuresIn(conditions)).toContain("64.8°F");
 
     const current = fetchMock.mock.calls
       .map(([input]) => new URL(input as string))
@@ -481,7 +510,7 @@ describe("a person with no saved default location", () => {
 
     // The thing to do, in the hero, not behind a disclosure.
     expect(
-      await screen.findByRole("heading", { name: "Name a place, and the briefing fills in" }),
+      await screen.findByRole("heading", { name: "Choose a place to brief on" }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Brief me on a place")).toBeVisible();
     expect(screen.getByRole("button", { name: "Show briefing" })).toBeVisible();
@@ -492,32 +521,31 @@ describe("a person with no saved default location", () => {
     expect(asked).not.toContain("/api/v1/weather/forecast");
   });
 
-  it("previews every region of a briefing instead of leaving the viewport empty", async () => {
+  it("takes one band, not the screen, and still offers somewhere to start", async () => {
+    /*
+     * This used to preview all five regions of a briefing with a card each, plus two next-step
+     * cards — roughly two viewports of explanation standing in front of a product whose job is to
+     * show weather, and nothing `01-dashboard.png` has any counterpart for. The field and the
+     * starter places are what a person actually needs; the rest described features visible in the
+     * rail beside them.
+     */
     fetchMock = backend({
       ...POPULATED,
       "/api/v1/me/preferences": preferences({ default_location: null }),
     }) as unknown as Mock;
 
     renderDashboard();
-    await screen.findByRole("heading", { name: "Name a place, and the briefing fills in" });
+    await screen.findByRole("heading", { name: "Choose a place to brief on" });
 
-    // The five regions the populated Dashboard holds, each named and each explained.
-    for (const region of [
-      "Current conditions",
-      "Forecast",
-      "What changed?",
-      "Historical context",
-      "Weathra Intelligence",
-    ]) {
-      expect(screen.getByRole("heading", { name: region })).toBeInTheDocument();
-    }
-
-    // The two onward steps, and somewhere to start for somebody with no city in mind.
     expect(screen.getByRole("link", { name: "London, United Kingdom" }).getAttribute("href")).toBe(
       "/?place=London%2C%20United%20Kingdom",
     );
-    expect(screen.getByRole("button", { name: "Saved locations" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "AI Weather Analyst" })).toBeInTheDocument();
+
+    // The explaining is gone with it: no region previews, no next-step cards.
+    for (const gone of ["Current conditions", "What changed?", "Historical context"]) {
+      expect(screen.queryByRole("heading", { name: gone })).toBeNull();
+    }
+    expect(screen.queryByRole("button", { name: "Saved locations" })).toBeNull();
   });
 
   it("invents no measurement to fill the regions it is previewing", async () => {
@@ -527,7 +555,7 @@ describe("a person with no saved default location", () => {
     }) as unknown as Mock;
 
     renderDashboard();
-    await screen.findByRole("heading", { name: "Name a place, and the briefing fills in" });
+    await screen.findByRole("heading", { name: "Choose a place to brief on" });
 
     /*
      * The failure this guards against is a prettier one than the blank screen: filling the hero
@@ -571,7 +599,7 @@ describe("the place entry, folded (1.7)", () => {
     // hero. A form folded away behind a summary would be finding 6.5's mistake on Saved Locations,
     // and one headed "Brief on another place" would be asking for *another* than none.
     expect(
-      await screen.findByRole("heading", { name: "Name a place, and the briefing fills in" }),
+      await screen.findByRole("heading", { name: "Choose a place to brief on" }),
     ).toBeInTheDocument();
     expect(screen.queryByText("Brief on another place")).toBeNull();
     expect(screen.getByLabelText("Brief me on a place")).toBeVisible();
@@ -652,7 +680,7 @@ describe("What Changed?, through the endpoint that returns it", () => {
     ).not.toBeInTheDocument();
     // And every other surface is untouched.
     expect(screen.getByRole("region", { name: "Current conditions" })).toBeInTheDocument();
-    expect(screen.getByText("18.2 °C")).toBeInTheDocument();
+    expect(figuresIn(document.body)).toContain("18.2°C");
   });
 
   it("routes a 401 to the expired session rather than showing it as a weather failure", async () => {
@@ -861,7 +889,7 @@ describe("data classes, provenance, and the line the model does not cross", () =
 
     // The model's region contains none of the figures, and none of the figure regions contains it.
     const interpretation = container.querySelector('[data-tier="interpretation"]') as HTMLElement;
-    expect(within(interpretation).queryByText("18.2 °C")).not.toBeInTheDocument();
+    expect(figuresIn(interpretation)).not.toContain("18.2°C");
     expect(interpretation.querySelector('[data-tier="retrieved"]')).toBeNull();
     expect(interpretation.querySelector('[data-tier="computed"]')).toBeNull();
   });
@@ -971,7 +999,7 @@ describe("data classes, provenance, and the line the model does not cross", () =
     // The person's saved locations and preferences are still there, and every retrieved and
     // computed figure is untouched: a refusal of one request removed nothing.
     expect(screen.getByRole("region", { name: "Current conditions" })).toBeInTheDocument();
-    expect(screen.getByText("18.2 °C")).toBeInTheDocument();
+    expect(figuresIn(document.body)).toContain("18.2°C");
     expect(screen.getByRole("region", { name: "Saved snapshots" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Anomaly detection" })).toBeInTheDocument();
   });
@@ -1042,7 +1070,7 @@ describe("data classes, provenance, and the line the model does not cross", () =
     expect(await screen.findByText(/no inference provider is configured/i)).toBeInTheDocument();
     // Every retrieved and computed surface is untouched.
     expect(screen.getByRole("region", { name: "Current conditions" })).toBeInTheDocument();
-    expect(screen.getByText("18.2 °C")).toBeInTheDocument();
+    expect(figuresIn(document.body)).toContain("18.2°C");
     expect(screen.getByRole("region", { name: "Anomaly detection" })).toBeInTheDocument();
   });
 });
@@ -1073,12 +1101,20 @@ describe("nothing from the design artifact reaches the screen", () => {
     renderDashboard();
     await screen.findByRole("region", { name: "Historical context" });
 
-    // Each figure on screen traced back to the fixture that produced it.
+    // Each figure on screen traced back to the fixture that produced it. Read with whitespace
+    // removed, because the hero and the day cards now set a figure and its unit as two elements —
+    // see `figuresIn`.
+    const shownFigures = figuresIn(document.body);
     for (const supplied of [
-      "18.2 °C", "72 %", "21.4 °C", "12.1 °C", "23.6 °C", "13.3 °C",
-      "17.9 °C", "16.4 °C", "13.1 °C", "19.8 °C",
+      "18.2°C", "72%", "21.4°C", "23.6°C",
+      "17.9°C", "16.4°C", "13.1°C", "19.8°C",
     ]) {
-      expect(screen.getAllByText(supplied).length, supplied).toBeGreaterThan(0);
+      expect(shownFigures, supplied).toContain(supplied);
+    }
+
+    // The two lows, which the day card states as bare figures under `L` beside the high's unit.
+    for (const low of ["12.1", "13.3"]) {
+      expect(shownFigures, low).toContain(low);
     }
 
     // And the artifact's own figures, which are mockup filler, appear nowhere.
@@ -1193,7 +1229,7 @@ describe("an ambiguous place named on the Dashboard", () => {
     // And the briefing that was on screen for the default place is withdrawn: it is not the
     // answer to what was just typed, and leaving it under the candidates would let it read as one.
     expect(screen.queryByRole("region", { name: "Current conditions" })).toBeNull();
-    expect(screen.queryByText("18.2 °C")).toBeNull();
+    expect(figuresIn(document.body)).not.toContain("18.2°C");
   });
 
   it("briefs on the candidate that was pressed, by that candidate's own coordinates", async () => {

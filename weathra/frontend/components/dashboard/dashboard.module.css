@@ -62,13 +62,34 @@
 .readout {
   display: flex;
   align-items: baseline;
-  gap: var(--space-2);
+  gap: var(--space-1);
   font-family: var(--family-display);
   font-size: var(--type-readout-size);
   line-height: var(--type-readout-line);
   font-weight: var(--type-readout-weight);
   font-variant-numeric: tabular-nums;
   color: var(--color-accent);
+}
+
+/*
+ * **The figure, and the unit beside it at a third of its size.**
+ *
+ * `formatReading` returns `15.3 °C` as one run of text and the hero set all of it at the readout
+ * step, which is why the 2026-09-11 capture reads as a large sentence rather than as the artifact's
+ * one enormous number: half the width of the screen's dominant element was a unit. The artifact
+ * sets "18" at 52px and hangs the degree mark off its shoulder. Same reading, same precision —
+ * `formatFigure` is `formatReading`'s own rounding — and the weight lands on the number.
+ */
+.readoutFigure {
+  font-size: inherit;
+  line-height: 1;
+}
+
+.readoutUnit {
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-secondary);
 }
 
 /* The measure strip. Wraps rather than truncating: a dropped measure is a dropped fact. */
@@ -325,8 +346,18 @@
   min-width: 0;
 }
 
+/*
+ * Closed, it is a control and not a card: the frame collapses to nothing so the row above the hero
+ * is one line of text rather than a second empty panel. It takes the frame back the moment it
+ * opens, because then it does hold a form.
+ */
+.entryDisclosure:not([open]) {
+  border-color: transparent;
+  background: transparent;
+}
+
 .entrySummary {
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-1) 0;
   font-size: var(--type-ui-size);
   line-height: var(--type-ui-line);
   font-weight: var(--type-ui-weight);
@@ -339,6 +370,7 @@
 }
 
 .entryDisclosure[open] .entrySummary {
+  padding: var(--space-2) var(--space-4);
   border-bottom: 1px solid var(--color-border-subtle);
 }
 
@@ -375,25 +407,35 @@
 
 /* ------------------------------------------------------------- the screen title */
 
-/* The screen's own heading, added in task 21.8. */
+/*
+ * The screen's own heading, added in task 21.8 — on one baseline, not on three lines.
+ *
+ * `01-dashboard.png` carries no page title: the shell's breadcrumb names the screen and the hero
+ * is the first thing on it. The heading stays because a heading-list navigation needs the page
+ * named and the accessibility suite measures `main h1` and the paragraph after it in both
+ * appearances — but at the display step over a body-step subtitle it was taking 84 pixels of the
+ * first viewport before the band the screen exists for, which the 2026-09-11 capture shows as a
+ * third of the space above the fold spent on a title nobody came for.
+ */
 .heading {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
   min-width: 0;
 }
 
 .title {
   font-family: var(--family-display);
-  font-size: var(--type-display-size);
-  line-height: var(--type-display-line);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
   font-weight: var(--type-display-weight);
   color: var(--color-text-primary);
 }
 
 .subtitle {
-  font-size: var(--type-body-size);
-  line-height: var(--type-body-line);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
   color: var(--color-text-muted);
   max-width: 72ch;
 }
@@ -447,10 +489,10 @@
    * second half. The ground is translucent so the hero's photograph, where there is one, still
    * shows through.
    */
-  padding: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-surface-inset) 72%, transparent);
-  border: 1px solid var(--color-border-subtle);
+  background: color-mix(in srgb, var(--color-surface-base) 34%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 50%, transparent);
 }
 
 .heroMeasure {
@@ -491,7 +533,7 @@
      * "14.2 km/h" onto two rows and "1012 hPa" onto two more — the capture at 1440 is what showed
      * it; no test could have.
      */
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.5fr);
+    grid-template-columns: minmax(0, 1.3fr) auto auto;
     gap: var(--space-5);
     align-items: center;
   }
@@ -506,9 +548,14 @@
 }
 
 @media (min-width: 1280px) {
-  /* One column per slot, so a tile never wraps its own value. */
+  /*
+   * Two columns, not five. `01-dashboard.png` draws the secondary measures as a compact 2×2 block
+   * to the right of the temperature — humidity and wind over UV and pressure — not as a row
+   * stretched across the band. A single row of five made each tile narrow enough to wrap its own
+   * value and pushed the temperature off its own axis.
+   */
   .heroMeasures {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -566,8 +613,14 @@
 .stripDay {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-3);
+  align-items: center;
+  /*
+   * Tighter than the `--space-3` it had. Seven cards of five stacked rows at 12px apart measured
+   * 200 pixels tall in the 2026-09-11 capture against the artifact's 170, and the height came
+   * entirely from the gaps: the card's own content is a word, a glyph, a number and a rule.
+   */
+  gap: var(--space-2);
+  padding: var(--space-3);
   background: var(--color-surface-raised);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-lg);
@@ -584,17 +637,30 @@
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * **The pair, as one rule across the foot of the card.**
+ *
+ * It was a column: `HIGH` over `19.6 °C` over `LOW` over `10.4 °C`, four lines at the section step
+ * on every one of seven cards — fifty-six figures across the strip with nothing among them larger
+ * than anything else. `01-dashboard.png` draws the pair as a single inset rule of `L 12°  H 18°`
+ * beneath one dominant temperature, which is the composition `.stripReadout` above now carries.
+ */
 .stripFigures {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-2);
+  width: 100%;
   margin: 0;
+  margin-top: auto;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .stripFigure {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--space-1);
 }
 
 .stripFigureTerm {
@@ -608,10 +674,9 @@
 
 .stripFigureValue {
   margin: 0;
-  font-family: var(--family-display);
-  font-size: var(--type-section-size);
-  line-height: var(--type-section-line);
-  font-weight: var(--type-section-weight);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
   color: var(--color-text-primary);
   font-variant-numeric: tabular-nums;
 }
@@ -801,10 +866,8 @@
  * width it was always going to need.
  */
 .baselineRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-3);
-  align-items: start;
+  display: block;
+  min-width: 0;
 }
 
 /* Weathra Intelligence with the confidence bars beside it, as the artifact pairs them. */
@@ -830,95 +893,74 @@
  * sections at the same gap, then a card grid on the same track sizing. Somebody who chooses a place
  * should recognise the screen they were already on rather than arrive at a different one.
  */
-.start {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-6);
-  min-width: 0;
-}
+/* --------------------------------------------------------------- the first-run band */
 
 /*
- * The hero band, holding the thing to do rather than a readout.
- *
- * `01-dashboard.png` opens on a wide dark band with one dominant line on it, and so does this. The
- * gradient stands in for the photograph, which cannot exist yet: there is no city to photograph,
- * and a stock image of somewhere Weathra is not briefing on would be decoration pretending to be
- * subject matter.
+ * One band where the hero will be, not a screen of explanation. Same width, same ground, same
+ * radius as the hero it stands in for, so the Dashboard is recognisably itself before there is a
+ * place to brief on. See `GettingStarted` for what was removed and why.
  */
-.startHero {
-  position: relative;
-  overflow: hidden;
-  padding: var(--space-6);
+.start {
+  display: grid;
+  padding: var(--space-5);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-lg);
-  background:
-    radial-gradient(
-      120% 140% at 12% 0%,
-      color-mix(in srgb, var(--color-accent) 22%, transparent) 0%,
-      transparent 60%
-    ),
-    linear-gradient(160deg, var(--color-surface-raised) 0%, var(--color-surface-base) 100%);
+  background: var(--color-surface-raised);
 }
 
-.startHeroBody {
+.startBody {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
-  max-width: 62ch;
-  min-width: 0;
+  max-width: 68ch;
 }
 
 .startTitle {
   margin: 0;
-  font-family: var(--font-display), system-ui, sans-serif;
-  font-size: var(--type-display-size);
-  line-height: var(--type-display-line);
-  font-weight: var(--type-display-weight);
+  font-family: var(--family-display);
+  font-size: var(--type-title-size);
+  line-height: var(--type-title-line);
   color: var(--color-text-primary);
 }
 
 .startLead {
   margin: 0;
   color: var(--color-text-secondary);
-  font-size: var(--type-body-size);
-  line-height: 1.6;
 }
 
-/* The form sits on the band, separated from the prose above it rather than boxed. */
 .startEntry {
-  margin-top: var(--space-2);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--color-border-subtle);
-  min-width: 0;
+  display: grid;
+  gap: var(--space-3);
 }
 
-.startSectionTitle {
-  margin: 0 0 var(--space-3);
-  font-size: var(--type-section-size);
-  line-height: var(--type-section-line);
-  font-weight: var(--type-section-weight);
-  color: var(--color-text-primary);
+.startChipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
 }
 
-/* ---------------------------------------------------------- somewhere to start */
+.startChipLabel {
+  font-size: var(--type-meta-size);
+  color: var(--color-text-muted);
+}
 
 .startChips {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  margin: 0 0 var(--space-3);
+  margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .startChip {
   display: inline-block;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-1) var(--space-3);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-pill, 999px);
-  background: var(--color-surface-raised);
+  background: var(--color-surface-base);
   color: var(--color-text-primary);
-  font-size: var(--type-ui-size);
+  font-size: var(--type-meta-size);
   text-decoration: none;
 }
 
@@ -926,76 +968,6 @@
 .startChip:focus-visible {
   border-color: var(--color-accent);
   color: var(--color-accent);
-}
-
-.startNote {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--type-label-size);
-  line-height: 1.5;
-}
-
-/* ------------------------------------------------------- what a briefing holds */
-
-.startGrid {
-  display: grid;
-  /* The same track sizing the populated sections use, so the two screens share a rhythm. */
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.startCard,
-.startAction {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-2);
-  align-content: start;
-  min-width: 0;
-  padding: var(--space-4);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface-raised);
-}
-
-.startCardTitle {
-  margin: 0;
-  font-size: var(--type-ui-size);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--color-text-primary);
-}
-
-.startCardBlurb {
-  margin: 0;
-  color: var(--color-text-secondary);
-  font-size: var(--type-label-size);
-  line-height: 1.55;
-}
-
-/*
- * The regions that are not plots still end in a horizontal rule at the chart's baseline height, so
- * a card without a chart does not read as a card that lost one.
- */
-.startCardRule {
-  height: 1px;
-  margin-top: var(--space-2);
-  background: linear-gradient(
-    90deg,
-    var(--color-border-subtle) 0%,
-    transparent 100%
-  );
-}
-
-/* ------------------------------------------------------------- what to do next */
-
-.startActions {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: var(--space-3);
 }
 
 /* --------------------------------------------------------------------- hourly strip */
@@ -1141,9 +1113,34 @@
   align-items: center;
   justify-content: flex-end;
   margin: 0;
-  color: var(--color-text-primary);
+  /*
+   * The artifact sets the condition in the accent under the temperature, which is what makes the
+   * two read as one readout rather than as a figure with a caption. The icon takes the same colour
+   * so the glyph and the word are one element.
+   */
+  color: var(--color-accent);
   font-size: var(--type-section-size);
   line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
+}
+
+/* The caveat on the big number, immediately under the condition it qualifies. */
+.readoutFeels {
+  margin: 0;
+  text-align: right;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The artifact's small pill beside the place name — the zone its observed hour is in. */
+.heroZone {
+  padding: 1px var(--space-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-surface-inset) 64%, transparent);
+  font-variant-numeric: tabular-nums;
 }
 
 .stripIcon {
@@ -1159,4 +1156,644 @@
   font-size: var(--type-meta-size);
   line-height: var(--type-meta-line);
   color: var(--color-text-secondary);
+}
+
+/* The rest of the computed statistics, behind one control. See `ComputedFigures`. */
+.moreFigures {
+  margin-top: var(--space-3);
+}
+
+.moreFiguresSummary {
+  cursor: pointer;
+  color: var(--color-accent);
+  font-size: var(--type-meta-size);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.moreFigures[open] .moreFiguresSummary {
+  margin-bottom: var(--space-3);
+}
+
+/* --------------------------------------------------------------- the anomaly rail card */
+
+/*
+ * The artifact's rail panel is one alert line and two figures. These are states — a word a person
+ * can act on — with the arithmetic behind one disclosure for the whole card rather than one per
+ * figure. See `DeterministicAnalytics`.
+ */
+.anomalyStates {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.anomalyState {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.anomalyTerm {
+  font-size: var(--type-meta-size);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.anomalyValue {
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.anomalyValue[data-tone="flag"] {
+  color: var(--color-class-analytics);
+}
+
+.anomalyAnalysis {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.anomalyAnalysisSummary {
+  cursor: pointer;
+  color: var(--color-accent);
+  font-size: var(--type-meta-size);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.anomalyAnalysis[open] .anomalyAnalysisSummary {
+  margin-bottom: var(--space-2);
+}
+
+/* The rest of the current readings, behind the hero rather than under it. */
+.heroExtras {
+  margin-top: var(--space-3);
+}
+
+.heroExtrasSummary {
+  cursor: pointer;
+  color: var(--color-accent);
+  font-size: var(--type-meta-size);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.heroExtras[open] .heroExtrasSummary {
+  margin-bottom: var(--space-2);
+}
+
+/* ============================================================ the artifact's five bands
+ *
+ * `01-dashboard.png` is a sequence of five bands and nothing else: the hero, the intelligence row
+ * and its rail, the seven-day strip, the analytics pair, the baseline. The hierarchy is carried by
+ * the band *widths* — 100%, 66/33, 100%, 66/33, 100% — which is why the screen reads as a product
+ * and a stack of equal cards reads as a report. `.columns` (2fr/1fr, used elsewhere on this screen
+ * and on others) is the generic version of two of those rows; these are the Dashboard's own, named
+ * for the band they are, because each has a different inner composition.
+ */
+
+/* BAND 2 — the wide intelligence surface, and the narrow rail beside it. */
+.intelligenceBand {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .intelligenceBand {
+    /*
+     * 66/33, measured off the artifact: its intelligence card runs 250→868 of a 1136 content
+     * column and the rail 886→1186, which is 1.98:1 after the gap. Production was at 60/40 and the
+     * difference is visible in the 2026-09-11 capture as a rail wide enough to hold a table, which
+     * is what it had grown to hold.
+     */
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+}
+
+/*
+ * Inside the wide side: the model's panel and the forecast comparison on the left, the confidence
+ * bars and the arithmetic on the right. The artifact draws this as one card with an internal
+ * division; ours stays two regions because one of them is model-written language and
+ * `specs/web-ui` requires that to be its own distinguishable region rather than a paragraph inside
+ * a data card. The grid is what makes them read as one band regardless.
+ */
+.intelligenceMain {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+  /*
+   * **One ground under both sub-columns.** The artifact draws this whole surface as a single card
+   * with an internal division: prose and two sub-cards on the left, the confidence bars and two
+   * buttons on the right. Ours is four separate panels, and with each carrying its own frame the
+   * short right column left roughly 270 pixels of page ground beneath it in the 2026-09-11
+   * capture — the kind of void §16 of the reconstruction brief rules out, and the artifact has
+   * none because there is no gap to leave inside one card.
+   *
+   * So the band takes the card and the panels inside it give theirs up. They stay separate
+   * `<section>`s with their own data-class badges, which is what `specs/web-ui` requires of
+   * model-written language sitting beside retrieved figures; what they stop doing is drawing four
+   * boxes where the artifact draws one.
+   */
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
+@media (min-width: 1280px) {
+  .intelligenceMain {
+    grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  }
+}
+
+/*
+ * The panels inside the band keep their badge, their heading, their tier stripe and their
+ * attribution, and lose only the frame the band now carries for them. The interpretation panel is
+ * the exception: its own tinted ground is *how* model-written language is made visually distinct
+ * from retrieved data, so it keeps it.
+ */
+.intelligenceMain > * > section:not([data-tier="interpretation"]),
+.intelligenceMain > * > details {
+  background: transparent;
+  border-color: transparent;
+  padding-inline: 0;
+}
+
+.intelligencePrimary,
+.intelligenceAside,
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* Inside the band the two sub-columns sit closer, because one frame now holds them both. */
+.intelligencePrimary,
+.intelligenceAside {
+  gap: var(--space-3);
+}
+
+/* BAND 4 — the wide chart, the narrow risk panel. The artifact's proportions are band 2's. */
+.analyticsBand {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: stretch;
+}
+
+@media (min-width: 1024px) {
+  .analyticsBand {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+}
+
+/* A panel's one-line subject, under its title. `The next 24 reported hours`. */
+.panelLead {
+  margin: 0;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+/* --------------------------------------------------- the arithmetic, behind a disclosure
+ *
+ * `ComputedFigures` keeps its data class, its six statistics, every method note and its own
+ * attribution. What it loses is the full-width position it had in the primary view, which made the
+ * largest surface on a weather product's main screen a table of statistics with their formulas
+ * named. See the note at its call site in `dashboard.tsx`.
+ */
+.figuresDisclosure {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  min-width: 0;
+}
+
+.figuresSummary {
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.figuresSummary:hover {
+  color: var(--color-text-primary);
+}
+
+.figuresDisclosure[open] .figuresSummary {
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+/* The panel inside carries its own frame; nested inside this one it would be two. */
+.figuresDisclosure > :not(summary) {
+  border: 0;
+  background: transparent;
+}
+
+/* ------------------------------------------------------------ the anomaly headline
+ *
+ * The artifact's tinted alert line, over the two figures beneath it. `flag` is the state with
+ * something in it and takes the warning role; `calm` is the state with nothing in it and must not,
+ * because a panel that looks like an alert on a quiet day teaches a reader to ignore it.
+ */
+.anomalyHeadline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+}
+
+.anomalyHeadline[data-tone="flag"] {
+  border-color: color-mix(in srgb, var(--color-status-warning) 46%, transparent);
+  background: var(--color-status-warning-surface);
+}
+
+.anomalyHeadlineTitle {
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+}
+
+.anomalyHeadline[data-tone="flag"] .anomalyHeadlineTitle {
+  color: var(--color-status-warning);
+}
+
+.anomalyHeadlineDetail {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+/* ---------------------------------------------------------------- the day's readout
+ *
+ * One temperature per card at the heading step, which is the artifact's own hierarchy: the day, a
+ * glyph, the figure, the word, the pair. See `.stripFigures` for what it replaced.
+ */
+.stripReadout {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2px;
+  margin: 0;
+  font-family: var(--family-display);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+.stripReadoutFigure {
+  font-size: var(--type-display-size);
+  line-height: 1.1;
+  font-weight: var(--type-display-weight);
+}
+
+.stripReadoutUnit {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+/* ========================================================== the intra-day chart
+ *
+ * `components/dashboard/intraday.tsx`. The frame is the subject here, so the chrome is the least
+ * of it: a legend, a plot, one note, and the figures behind a disclosure.
+ */
+.intraday {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  min-width: 0;
+}
+
+.intradayLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+/* The swatch is the series' own colour, so the chart and its key cannot disagree about a line. */
+.intradayLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.intradayLegendItem::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--color-accent);
+}
+
+.intradayLegendItem[data-series="chance"]::before {
+  background: color-mix(in srgb, var(--color-class-analytics) 42%, transparent);
+}
+
+.intradayScroll {
+  min-width: 0;
+}
+
+/*
+ * 244px, against the artifact's 232 over a 618-wide card. Tall enough that a diurnal curve is a
+ * curve; short enough that the band and the panel beside it are one row rather than two heights.
+ */
+.intradayPlot {
+  width: 100%;
+  height: 244px;
+  /*
+   * 320, not 420: `design-rules.test.ts` holds a hard floor at 360 for any `min-width`, because a
+   * layout rule wider than the narrowest viewport is how a page gets pinned open. The chart is
+   * inside a `ScrollRegion`, so on a phone it scrolls within its own container; at desk width
+   * `ResponsiveContainer` takes the whole column and the floor never applies. The historical
+   * charts declare the same number for the same reason.
+   */
+  min-width: 320px;
+}
+
+/*
+ * The `<svg>` is inline-level by default, so it sits on a text baseline and its line box keeps
+ * descender space below it — six pixels that overflow the fixed height above and turn the scroll
+ * container into a vertically scrollable region with nothing focusable in it, which axe-core's
+ * `scrollable-region-focusable` fails. `historical.module.css` records the same fix.
+ */
+.intradayPlot :global(svg) {
+  display: block;
+}
+
+.intradayNote,
+.riskBasis {
+  margin: 0;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.intradayFigures {
+  min-width: 0;
+}
+
+.intradayFiguresSummary {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.intradayFiguresSummary:hover {
+  color: var(--color-text-primary);
+}
+
+.intradayTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--space-2);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  font-variant-numeric: tabular-nums;
+}
+
+.intradayTableCaption {
+  text-align: left;
+  padding-bottom: var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.intradayTable th,
+.intradayTable td {
+  padding: var(--space-1) var(--space-3);
+  text-align: right;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text-primary);
+}
+
+.intradayTable thead th {
+  color: var(--color-text-muted);
+  font-weight: var(--type-label-weight);
+}
+
+.intradayTable tbody th {
+  text-align: left;
+  color: var(--color-text-secondary);
+  font-weight: var(--type-body-weight);
+}
+
+.chartTooltip {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-overlay);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.chartTooltipName {
+  margin: 0;
+  font-weight: var(--type-label-weight);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.chartTooltipValue {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ========================================================== the precipitation risk panel
+ *
+ * `01-dashboard.png`'s narrow right-hand panel: a graphic, one large figure, a short reading of
+ * it, and two supporting statistics under a rule. The figure is the provider's own hourly chance
+ * of rain — see `PrecipitationOutlook` for why it is that and not the artifact's "integrated
+ * risk".
+ */
+.riskPanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /*
+   * Centred in whatever height the band gives it. The row stretches both cards to the taller one —
+   * as the artifact draws them, the same height — and a top-aligned graphic left the bottom third
+   * of this card empty in the 2026-09-11 capture.
+   */
+  justify-content: center;
+  flex: 1;
+  gap: var(--space-2);
+  text-align: center;
+  padding-block: var(--space-3);
+}
+
+/* So `flex: 1` above has a height to fill. */
+.analyticsBand > [data-variant], .analyticsBand > section {
+  height: 100%;
+}
+
+.riskGlyph {
+  display: flex;
+  color: var(--color-accent);
+}
+
+.riskReadout {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  margin: 0;
+  font-family: var(--family-display);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+.riskFigure {
+  font-size: var(--type-readout-size);
+  line-height: 1;
+  font-weight: var(--type-readout-weight);
+}
+
+.riskUnit {
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-secondary);
+}
+
+.riskCaption {
+  margin: 0;
+  max-width: 30ch;
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-secondary);
+}
+
+.riskStats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  width: 100%;
+  margin: 0;
+  margin-top: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.riskStat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.riskStatTerm {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.riskStatValue {
+  margin: 0;
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ========================================================== the baseline band
+ *
+ * The artifact's closing composition: the account on the left, the plot on the right. Ours was
+ * three labelled statistics across a full-width card with no picture in it at all.
+ */
+.baselineBand {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .baselineBand {
+    /* The artifact's own division: the account takes a third, the plot the rest. */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.9fr);
+    gap: var(--space-5);
+  }
+}
+
+.baselineAccount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.baselineChart {
+  min-width: 0;
+}
+
+/* The artifact's one framed figure under the prose, beside its own icon. */
+.baselineDelta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-3);
+  width: 100%;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+}
+
+.baselineDeltaTerm {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.baselineDeltaValue {
+  font-family: var(--family-display);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.baselineFigures {
+  min-width: 0;
+}
+
+.baselineFiguresSummary {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.baselineFiguresSummary:hover {
+  color: var(--color-text-primary);
 }

@@ -1098,11 +1098,57 @@ input.controlBare[type="date"]::-webkit-calendar-picker-indicator:hover {
  * should be. Same height, same full-bleed position, same reading order.
  */
 .provenanceSection[data-variant="hero"] {
-  padding: var(--space-5);
+  position: relative;
+  /*
+   * **Full bleed, because the band is the photograph.** It carried `--space-5` of card padding, so
+   * the image sat inset inside a panel with a labelled rule above it and a provenance line below
+   * — three frames around one picture. `01-dashboard.png`'s hero runs to both edges of the content
+   * column and everything in it is *on* the image. The 2026-09-11 capture is what showed the
+   * difference: a 1088-wide photograph in a 1136 band, 48 pixels narrower than every other band on
+   * the screen, which is enough to read as a misalignment without being enough to name.
+   */
+  padding: 0;
+  overflow: hidden;
   background:
     radial-gradient(120% 140% at 85% 0%, var(--color-surface-overlay) 0%, transparent 55%),
     radial-gradient(90% 120% at 0% 100%, var(--color-surface-inset) 0%, transparent 60%),
     var(--color-surface-raised);
+}
+
+/*
+ * The data class and the region's name ride on the photograph's top-left corner — where the
+ * artifact puts "OBSERVED" and its station identifier — rather than on a rule above the band.
+ *
+ * The title stays visible rather than being hidden behind the region's `aria-label`: it is the
+ * screen's own heading list, the accessibility suite reads it as this band's marker, and the
+ * artifact has a label in exactly this slot.
+ */
+.provenanceSection[data-variant="hero"] > .provenanceHeader {
+  position: absolute;
+  z-index: 4;
+  top: var(--space-4);
+  left: var(--space-4);
+  right: var(--space-4);
+  margin: 0;
+}
+
+.provenanceSection[data-variant="hero"] > .provenanceHeader > .provenanceTitle {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.provenanceSection[data-variant="hero"] > .provenanceBody {
+  display: block;
+}
+
+/* Padding the band itself no longer carries, restored to the two rules under the image. */
+.provenanceSection[data-variant="hero"] > .attribution,
+.provenanceSection[data-variant="hero"] > .provenanceFooter {
+  padding: var(--space-3) var(--space-4);
 }
 
 /* ---------------------------------------------------------------- location imagery

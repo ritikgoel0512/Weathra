@@ -57,7 +57,6 @@ import { placeLabel, qualifiedName } from "@/lib/locations/place";
 import { ResolvedPlaceProvider } from "@/lib/locations/resolved-place";
 import { forecastDaysFrom } from "@/lib/dashboard/briefing";
 import { baselineDifferenceOf } from "@/lib/dashboard/insights";
-import { HourlyForecast } from "./hourly";
 import { DeterministicInsights } from "./insight-panel";
 import { useLocationResolution } from "@/hooks/use-location-resolution";
 import { usingVisilyFixtures } from "@/lib/fixtures/visily";
@@ -317,88 +316,72 @@ function Briefing({
     <ResolvedPlaceProvider location={location}>
       <div className={styles.dashboard}>
       {current.state.kind === "ready" ? (
-        <CurrentConditions current={current.state.data} location={location} />
+        <CurrentConditions
+          current={current.state.data}
+          location={location}
+          forecast={forecast.state.kind === "ready" ? forecast.state.data : null}
+        />
       ) : null}
 
       {/*
-        **The order is the product.** Before this, the band under the hero was the AI panel, the
-        confidence matrix and the anomaly detail, and the forecast — the thing a weather product
-        exists to show — was four panels down. A person briefing on Munich met an interpretation
-        offer and a methodology column before they met a temperature for tomorrow.
-        `01-dashboard.png` puts the forecast immediately under the hero, and so does this now:
-        the hours, then the days, then what they add up to.
+        **BAND 2 — the intelligence row.** `01-dashboard.png` runs hero → this row → the seven-day
+        strip → the analytics pair → the baseline, and nothing else. Production had grown two extra
+        full-width bands between the rows — a computed-insight strip and an hour-by-hour strip —
+        and both sat *above* the panel the screen is named for, so the first scroll was a tour of
+        forecast data before any reading of it.
+
+        Neither band is lost and neither moved screens. The computed insights are the figure row
+        along the bottom of the climate-pulse card in band 4, which is where the artifact puts its
+        own "PEAK HEAT / MAX RISK" pair; the hour-by-hour figures are the table behind that card's
+        own disclosure, under the curve drawn from them.
+
+        Inside this row, the wide side is one composition rather than three stacked sections: the
+        model's panel and *What Changed?* on the left, the confidence bars and the arithmetic on
+        the right — the artifact's own division of its Weathra Intelligence card. They stay
+        separate `<section>`s because one of them is model-written language and `specs/web-ui`
+        requires that to be a distinguishable region, not a paragraph inside a data card.
       */}
-      {forecast.state.kind === "ready" ? <HourlyForecast forecast={forecast.state.data} /> : null}
-
-      {/*
-        One forecast band, carrying the cards, the data-class badge, the attribution and the
-        confidence. It used to be two: a bare strip here and a second, plainer copy of the same
-        seven days further down under its own heading.
-      */}
-      {forecast.state.kind === "ready" ? (
-        <ForecastMovement forecast={forecast.state.data} location={location} />
-      ) : null}
-
-      {/*
-        Weathra Intelligence's computed half, from the series the strip above just rendered. It
-        costs no inference call, so it is populated on a deployment with no provider configured —
-        the exact state in which the panel below used to say the least.
-
-        Named for what it is rather than for the feature it belongs to: "Weathra Intelligence" is
-        the panel underneath, which is where a model writes, and two regions with one name is a
-        screen reader reading the same landmark twice.
-      */}
-      {forecast.state.kind === "ready" ? (
-        <section aria-label="What the forecast says">
-          <div className={styles.bandHeading}>
-            <h2 className={styles.bandTitle}>What the forecast says</h2>
-            <p className={styles.bandMeta}>
-              Computed from the days above. No model was asked.
-            </p>
-          </div>
-          <DeterministicInsights
-            days={forecastDaysFrom(forecast.state.data.daily)}
-            baselineDifference={
-              baseline.state.kind === "ready" && analysis.state.kind === "ready"
-                ? baselineDifferenceOf(baseline.state.data, meanTemperatureOf(analysis.state.data))
-                : null
-            }
-          />
-        </section>
-      ) : null}
-
-      <div className={styles.columns}>
-        <div className={styles.column}>
-          <div className={styles.intelligenceRow}>
+      <div className={styles.intelligenceBand}>
+        <div className={styles.intelligenceMain}>
+          <div className={styles.intelligencePrimary}>
             <WeathraIntelligence units={units} />
+
+            {changes.state.kind === "loading" ? (
+              <LoadingState label="Comparing against the last snapshot" lines={2} />
+            ) : (
+              // Ready renders the comparison the backend produced — populated or no-prior-snapshot,
+              // which the report itself distinguishes. Anything else is "no comparison could be
+              // obtained", which is `null` and a different sentence.
+              <WhatChanged
+                report={changes.state.kind === "ready" ? changes.state.data : null}
+              />
+            )}
+          </div>
+
+          <div className={styles.intelligenceAside}>
             <ConfidenceMatrix
               forecast={forecast.state.kind === "ready" ? forecast.state.data : null}
               analysis={analysis.state.kind === "ready" ? analysis.state.data : null}
             />
+
+            {/*
+              **The arithmetic, one interaction from the screen rather than on it.** Six computed
+              statistics, each with its method and its own provenance, were a full-width card in
+              the primary view — the largest single surface on the Dashboard, and an engineering
+              report in the middle of a weather product. The figures are unchanged, the panel keeps
+              its data class and its attribution, and a person who wants the arithmetic is one
+              press from all of it.
+            */}
+            {analysis.state.kind === "ready" ? (
+              <details className={styles.figuresDisclosure}>
+                <summary className={styles.figuresSummary}>View computed figures</summary>
+                <ComputedFigures analysis={analysis.state.data} location={location} />
+              </details>
+            ) : null}
           </div>
-
-          {changes.state.kind === "loading" ? (
-            <LoadingState label="Comparing against the last snapshot" lines={2} />
-          ) : (
-            // Ready renders the comparison the backend produced — populated or no-prior-snapshot,
-            // which the report itself distinguishes. Anything else is "no comparison could be
-            // obtained", which is `null` and a different sentence.
-            <WhatChanged
-              report={changes.state.kind === "ready" ? changes.state.data : null}
-            />
-          )}
-
-          {/*
-            The computed statistics, in the column with room for them. They were in the narrow
-            column with the anomaly alert, which is not how `01-dashboard.png` divides this band —
-            see `ComputedFigures` for what that cost.
-          */}
-          {analysis.state.kind === "ready" ? (
-            <ComputedFigures analysis={analysis.state.data} location={location} />
-          ) : null}
         </div>
 
-        <div className={styles.column}>
+        <div className={styles.rail}>
           {analysis.state.kind === "loading" ? (
             <LoadingState label="Computing analytics" lines={3} />
           ) : analysis.state.kind === "error" ? (
@@ -416,18 +399,35 @@ function Briefing({
         </div>
       </div>
 
+      {/* **BAND 3 — the seven-day strip**, immediately under the intelligence row. */}
+      {forecast.state.kind === "ready" ? (
+        <ForecastMovement forecast={forecast.state.data} location={location} />
+      ) : null}
+
       {/*
-        The artifact's analytics row: the wide intra-day chart on the left, the precipitation panel
-        beside it. Both are drawn from the forecast the screen already holds.
+        **BAND 4 — the analytics pair.** The wide intra-day chart on the left, the precipitation
+        panel beside it, both drawn from the forecast the screen already holds. The computed
+        insights ride along the bottom of the left card as the artifact's figure row.
       */}
       {forecast.state.kind === "ready" ? (
-        <div className={styles.columns}>
-          <div className={styles.column}>
-            <ClimatePulse forecast={forecast.state.data} />
-          </div>
-          <div className={styles.column}>
-            <PrecipitationOutlook forecast={forecast.state.data} />
-          </div>
+        <div className={styles.analyticsBand}>
+          <ClimatePulse
+            forecast={forecast.state.data}
+            footer={
+              <DeterministicInsights
+                days={forecastDaysFrom(forecast.state.data.daily)}
+                baselineDifference={
+                  baseline.state.kind === "ready" && analysis.state.kind === "ready"
+                    ? baselineDifferenceOf(
+                        baseline.state.data,
+                        meanTemperatureOf(analysis.state.data),
+                      )
+                    : null
+                }
+              />
+            }
+          />
+          <PrecipitationOutlook forecast={forecast.state.data} />
         </div>
       ) : null}
 
@@ -443,26 +443,21 @@ function Briefing({
         The wide baseline band `01-dashboard.png` closes on: the account on the left, the figures
         beside it. It used to be a card in the right rail, which is a different composition.
       */}
+      {/*
+        **BAND 5 — the baseline the Dashboard closes on.** The band had a full-width heading rule
+        above it — "Climate baseline · This window against the years behind it." — over a panel
+        whose own title is "Historical context" and whose first line is the backend's sentence
+        about what the baseline is. Three introductions to one panel; the artifact has one, inside
+        the band, beside the plot. The rule is gone and the panel keeps its own heading.
+      */}
       <div className={styles.baselineRow}>
-        {/*
-          The heading introduces the band from above rather than from a column beside it. As a
-          column it was a two-line title holding 38% of a 1440-pixel row open for the height of the
-          panel next to it, which the 2026-09-10 production capture photographed as the screen's
-          largest void. "The days ahead" already introduces its band this way.
-        */}
-        <div className={styles.bandHeading}>
-          <h2 className={styles.bandTitle}>Climate baseline</h2>
-          <p className={styles.bandMeta}>This window against the years behind it.</p>
-        </div>
-        <div className={styles.column}>
-          {baseline.state.kind === "loading" ? (
-            <LoadingState label="Loading the baseline" lines={3} />
-          ) : baseline.state.kind === "error" ? (
-            <ErrorState failure={baseline.state.failure} onRetry={baseline.retry} />
-          ) : baseline.state.kind === "ready" ? (
-            <HistoricalContext baseline={baseline.state.data} />
-          ) : null}
-        </div>
+        {baseline.state.kind === "loading" ? (
+          <LoadingState label="Loading the baseline" lines={3} />
+        ) : baseline.state.kind === "error" ? (
+          <ErrorState failure={baseline.state.failure} onRetry={baseline.retry} />
+        ) : baseline.state.kind === "ready" ? (
+          <HistoricalContext baseline={baseline.state.data} />
+        ) : null}
       </div>
 
       {/*
@@ -672,6 +667,15 @@ function LocationChoice({ preferences }: { readonly preferences: PreferenceView 
 function DashboardFrame({ children }: { readonly children: ReactNode }): ReactNode {
   return (
     <div className={styles.dashboard}>
+      {/*
+        One line, not three. The heading is task 21.8's and is required — a heading-list navigation
+        of this screen needs the page named, and the accessibility suite measures `main h1` and the
+        paragraph after it for contrast in both appearances. What it does not need is the third of
+        a viewport it was taking: `01-dashboard.png` has no page title at all, because the shell's
+        breadcrumb already says Dashboard, and the hero is what the screen opens on. So the title
+        and its subtitle sit on one baseline above the hero and the band starts where the artifact
+        starts it.
+      */}
       <header className={styles.heading}>
         <h1 className={styles.title}>Dashboard</h1>
         <p className={styles.subtitle}>

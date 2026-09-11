@@ -192,6 +192,119 @@ const SPRINGFIELD_IL = {
 
 const SPRINGFIELD_MO = { ...SPRINGFIELD_IL, latitude: 37.2153, longitude: -93.2982, region: "Missouri" };
 
+/*
+ * A true hourly series, generated so it reconciles with the daily entries below.
+ *
+ * It used to be six points a day at six-hour spacing, described as "a real hourly series". It was
+ * not one: `forecast_berlin_metric_7d.json` — the recorded response from the provider Weathra
+ * actually reads — carries 168 entries, one an hour, and every consumer of this stub was therefore
+ * drawn against a shape no provider returns. Two visible defects came from it and neither was the
+ * screen's: the Dashboard's intra-day chart photographed as a six-point zigzag rather than a
+ * curve, and the hero's UV slot was always absent, because UV is read from the hour the
+ * observation belongs to (08:00) and the series jumped from 06:00 to 12:00.
+ *
+ * Each day's curve is built from that day's own daily entry — minimum before dawn, maximum
+ * mid-afternoon, the precipitation total distributed across the hours that carry the day's
+ * dominant code — so a figure read off the hourly chart and the same figure on the day card agree.
+ * `precipitation_probability` is included because the provider reports it hourly and the
+ * Dashboard's risk panel is drawn from it.
+ *
+ * The one deliberate gap survives: 5 September at midnight reports no temperature and no wind, so
+ * the missing-point behaviour stays visible in every capture.
+ */
+const HOURLY_DAYS = [
+  { date: "2026-09-04", min: 10.4, max: 19.6, precipitation: 1.6, code: 61, uvPeak: 4.6 },
+  { date: "2026-09-05", min: 11.2, max: 20.8, precipitation: 2.1, code: 63, uvPeak: 4.2 },
+  { date: "2026-09-06", min: 13.1, max: 24.5, precipitation: 0, code: 0, uvPeak: 6.1 },
+  { date: "2026-09-07", min: 12.4, max: 22.8, precipitation: 0.2, code: 61, uvPeak: 5.4 },
+  { date: "2026-09-08", min: 11.8, max: 19.1, precipitation: 3.4, code: 63, uvPeak: 3.5 },
+  { date: "2026-09-09", min: 9.7, max: 16.5, precipitation: 5.2, code: 80, uvPeak: 2.4 },
+];
+
+/** Two decimal places, so the fixture reads like a provider's response rather than like floats. */
+function round(value, places = 1) {
+  const factor = 10 ** places;
+  return Math.round(value * factor) / factor;
+}
+
+/** The share of a day's rain that falls in each hour — weighted to the afternoon, as the codes imply. */
+function rainWeight(hour) {
+  if (hour < 9 || hour > 21) return 0.1;
+  return 1 + Math.sin((Math.PI * (hour - 9)) / 12) * 2.2;
+}
+
+function hourlySeries() {
+  const entries = [];
+  for (const day of HOURLY_DAYS) {
+    const weights = Array.from({ length: 24 }, (_, hour) => rainWeight(hour));
+    const weightTotal = weights.reduce((sum, weight) => sum + weight, 0);
+    const hourTotals = [];
+    const dayStart = entries.length;
+
+    for (let hour = 0; hour < 24; hour += 1) {
+      // Coldest around 03:00, warmest around 15:00 — the diurnal shape, not a straight line.
+      const phase = (((hour - 3) % 24) + 24) % 24 / 24;
+      const warmth = 0.5 - 0.5 * Math.cos(2 * Math.PI * phase);
+      const temperature = day.min + (day.max - day.min) * warmth;
+
+      const precipitation = day.precipitation === 0
+        ? 0
+        : round((day.precipitation * weights[hour]) / weightTotal, 2);
+      // Two-decimal rounding loses a few hundredths across 24 hours; the residual is returned to
+      // the wettest hour so the hourly series and the day card state the same total.
+      hourTotals.push(precipitation);
+      // A chance of rain, not a restatement of the total: high where the rain falls, never zero on
+      // a day the provider gave a dominant rain code, and low but real on the clear day.
+      const chance = day.precipitation === 0
+        ? Math.round(4 + warmth * 8)
+        : Math.min(96, Math.round(18 + (weights[hour] / Math.max(...weights)) * 72));
+
+      // Daylight only, peaking at solar noon. Zero at night is a reported zero, not a gap.
+      const daylight = hour >= 6 && hour <= 19
+        ? Math.max(0, Math.sin((Math.PI * (hour - 6)) / 13))
+        : 0;
+
+      const gap = day.date === "2026-09-05" && hour === 0;
+      const local = `${day.date}T${String(hour).padStart(2, "0")}:00:00+02:00`;
+      const utc = new Date(Date.parse(local)).toISOString().replace(".000Z", "Z");
+
+      entries.push({
+        time_local: local,
+        time_utc: utc,
+        values: {
+          uv_index: round(day.uvPeak * daylight, 1),
+          weather_code: precipitation > 0.05 ? day.code : day.code === 0 ? 0 : 3,
+          temperature: gap ? null : round(temperature, 1),
+          precipitation,
+          precipitation_probability: chance,
+          relative_humidity: Math.round(88 - warmth * 30),
+          wind_speed: gap ? null : round(22 + warmth * 14 + (day.precipitation > 2 ? 9 : 0), 1),
+        },
+      });
+    }
+
+    if (day.precipitation > 0) {
+      const wettest = hourTotals.indexOf(Math.max(...hourTotals));
+      const drift = round(day.precipitation - hourTotals.reduce((sum, value) => sum + value, 0), 2);
+      entries[dayStart + wettest].values.precipitation = round(hourTotals[wettest] + drift, 2);
+    }
+  }
+  return {
+    granularity: "hourly",
+    units: {
+      // Empty, because that is what the provider sends for it: a UV index is a dimensionless
+      // number and `hourly_units.uv_index` in `forecast_berlin_metric_7d.json` is "".
+      uv_index: "",
+      temperature: "°C",
+      precipitation: "mm",
+      precipitation_probability: "%",
+      relative_humidity: "%",
+      wind_speed: "km/h",
+    },
+    entries,
+  };
+}
+
 function dailySeries(units) {
   const keys = Object.keys(units);
   return {
@@ -453,24 +566,24 @@ const FIXTURES = {
       granularity: "hourly",
       units: { temperature: "°C", precipitation: "mm" },
       entries: [
-        { time_local: "2026-09-04T06:00:00+02:00", time_utc: "2026-09-04T04:00:00Z", values: { weather_code: 0, temperature: 12.4, precipitation: 0 } },
-        { time_local: "2026-09-04T12:00:00+02:00", time_utc: "2026-09-04T10:00:00Z", values: { weather_code: 61, temperature: 17.8, precipitation: 0.4 } },
-        { time_local: "2026-09-04T18:00:00+02:00", time_utc: "2026-09-04T16:00:00Z", values: { weather_code: 61, temperature: 16.1, precipitation: 1.2 } },
-        { time_local: "2026-09-05T06:00:00+02:00", time_utc: "2026-09-05T04:00:00Z", values: { weather_code: 0, temperature: 11.9, precipitation: 0 } },
-        { time_local: "2026-09-05T12:00:00+02:00", time_utc: "2026-09-05T10:00:00Z", values: { weather_code: 0, temperature: 18.6, precipitation: 0 } },
-        { time_local: "2026-09-05T18:00:00+02:00", time_utc: "2026-09-05T16:00:00Z", values: { weather_code: 63, temperature: 15.4, precipitation: 2.1 } },
+        { time_local: "2026-09-04T06:00:00+02:00", time_utc: "2026-09-04T04:00:00Z", values: { uv_index: 1, weather_code: 0, temperature: 12.4, precipitation: 0 } },
+        { time_local: "2026-09-04T12:00:00+02:00", time_utc: "2026-09-04T10:00:00Z", values: { uv_index: 5, weather_code: 61, temperature: 17.8, precipitation: 0.4 } },
+        { time_local: "2026-09-04T18:00:00+02:00", time_utc: "2026-09-04T16:00:00Z", values: { uv_index: 2, weather_code: 61, temperature: 16.1, precipitation: 1.2 } },
+        { time_local: "2026-09-05T06:00:00+02:00", time_utc: "2026-09-05T04:00:00Z", values: { uv_index: 1, weather_code: 0, temperature: 11.9, precipitation: 0 } },
+        { time_local: "2026-09-05T12:00:00+02:00", time_utc: "2026-09-05T10:00:00Z", values: { uv_index: 5, weather_code: 0, temperature: 18.6, precipitation: 0 } },
+        { time_local: "2026-09-05T18:00:00+02:00", time_utc: "2026-09-05T16:00:00Z", values: { uv_index: 2, weather_code: 63, temperature: 15.4, precipitation: 2.1 } },
       ],
     },
     scenario: {
       granularity: "hourly",
       units: { temperature: "°C", precipitation: "mm" },
       entries: [
-        { time_local: "2026-09-04T06:00:00+02:00", time_utc: "2026-09-04T04:00:00Z", values: { weather_code: 0, temperature: 14.9, precipitation: 0 } },
-        { time_local: "2026-09-04T12:00:00+02:00", time_utc: "2026-09-04T10:00:00Z", values: { weather_code: 61, temperature: 20.3, precipitation: 0.46 } },
-        { time_local: "2026-09-04T18:00:00+02:00", time_utc: "2026-09-04T16:00:00Z", values: { weather_code: 61, temperature: 18.6, precipitation: 1.38 } },
-        { time_local: "2026-09-05T06:00:00+02:00", time_utc: "2026-09-05T04:00:00Z", values: { weather_code: 0, temperature: 14.4, precipitation: 0 } },
-        { time_local: "2026-09-05T12:00:00+02:00", time_utc: "2026-09-05T10:00:00Z", values: { weather_code: 0, temperature: 21.1, precipitation: 0 } },
-        { time_local: "2026-09-05T18:00:00+02:00", time_utc: "2026-09-05T16:00:00Z", values: { weather_code: 63, temperature: 17.9, precipitation: 2.42 } },
+        { time_local: "2026-09-04T06:00:00+02:00", time_utc: "2026-09-04T04:00:00Z", values: { uv_index: 1, weather_code: 0, temperature: 14.9, precipitation: 0 } },
+        { time_local: "2026-09-04T12:00:00+02:00", time_utc: "2026-09-04T10:00:00Z", values: { uv_index: 5, weather_code: 61, temperature: 20.3, precipitation: 0.46 } },
+        { time_local: "2026-09-04T18:00:00+02:00", time_utc: "2026-09-04T16:00:00Z", values: { uv_index: 2, weather_code: 61, temperature: 18.6, precipitation: 1.38 } },
+        { time_local: "2026-09-05T06:00:00+02:00", time_utc: "2026-09-05T04:00:00Z", values: { uv_index: 1, weather_code: 0, temperature: 14.4, precipitation: 0 } },
+        { time_local: "2026-09-05T12:00:00+02:00", time_utc: "2026-09-05T10:00:00Z", values: { uv_index: 5, weather_code: 0, temperature: 21.1, precipitation: 0 } },
+        { time_local: "2026-09-05T18:00:00+02:00", time_utc: "2026-09-05T16:00:00Z", values: { uv_index: 2, weather_code: 63, temperature: 17.9, precipitation: 2.42 } },
       ],
     },
     measures: [
@@ -517,36 +630,7 @@ const FIXTURES = {
      * so the report's timeline is a week rather than a corner of one — with one hour reporting no
      * temperature so the gap behaviour stays visible in every capture.
      */
-    hourly: {
-      granularity: "hourly",
-      units: { temperature: "°C", precipitation: "mm", relative_humidity: "%", wind_speed: "km/h" },
-      entries: [
-        { time_local: "2026-09-04T00:00:00+02:00", time_utc: "2026-09-03T22:00:00Z", values: { weather_code_dominant: 3, temperature: 11.8, precipitation: 0, relative_humidity: 82, wind_speed: 34.0 } },
-        { time_local: "2026-09-04T06:00:00+02:00", time_utc: "2026-09-04T04:00:00Z", values: { weather_code: 0, temperature: 12.4, precipitation: 0, relative_humidity: 79, wind_speed: 38.5 } },
-        { time_local: "2026-09-04T12:00:00+02:00", time_utc: "2026-09-04T10:00:00Z", values: { weather_code: 61, temperature: 17.8, precipitation: 0.4, relative_humidity: 61, wind_speed: 42.3 } },
-        { time_local: "2026-09-04T18:00:00+02:00", time_utc: "2026-09-04T16:00:00Z", values: { weather_code: 61, temperature: 16.1, precipitation: 1.2, relative_humidity: 68, wind_speed: 45.0 } },
-        { time_local: "2026-09-05T00:00:00+02:00", time_utc: "2026-09-04T22:00:00Z", values: { weather_code_dominant: 3, temperature: null, precipitation: 0.2, relative_humidity: 74, wind_speed: null } },
-        { time_local: "2026-09-05T06:00:00+02:00", time_utc: "2026-09-05T04:00:00Z", values: { weather_code: 0, temperature: 11.9, precipitation: 0, relative_humidity: 80, wind_speed: 45.3 } },
-        { time_local: "2026-09-05T12:00:00+02:00", time_utc: "2026-09-05T10:00:00Z", values: { weather_code: 0, temperature: 18.6, precipitation: 0, relative_humidity: 58, wind_speed: 42.9 } },
-        { time_local: "2026-09-05T18:00:00+02:00", time_utc: "2026-09-05T16:00:00Z", values: { weather_code: 63, temperature: 15.4, precipitation: 2.1, relative_humidity: 71, wind_speed: 39.2 } },
-        { time_local: "2026-09-06T00:00:00+02:00", time_utc: "2026-09-05T22:00:00Z", values: { weather_code_dominant: 3, temperature: 12.7, precipitation: 0, relative_humidity: 77, wind_speed: 34.8 } },
-        { time_local: "2026-09-06T06:00:00+02:00", time_utc: "2026-09-06T04:00:00Z", values: { weather_code: 0, temperature: 13.5, precipitation: 0, relative_humidity: 75, wind_speed: 30.2 } },
-        { time_local: "2026-09-06T12:00:00+02:00", time_utc: "2026-09-06T10:00:00Z", values: { weather_code: 0, temperature: 24.5, precipitation: 0, relative_humidity: 52, wind_speed: 26.2 } },
-        { time_local: "2026-09-06T18:00:00+02:00", time_utc: "2026-09-06T16:00:00Z", values: { weather_code: 61, temperature: 19.2, precipitation: 0.3, relative_humidity: 63, wind_speed: 23.4 } },
-        { time_local: "2026-09-07T00:00:00+02:00", time_utc: "2026-09-06T22:00:00Z", values: { weather_code_dominant: 3, temperature: 13.9, precipitation: 0, relative_humidity: 76, wind_speed: 22.1 } },
-        { time_local: "2026-09-07T06:00:00+02:00", time_utc: "2026-09-07T04:00:00Z", values: { weather_code: 0, temperature: 14.2, precipitation: 0, relative_humidity: 74, wind_speed: 22.5 } },
-        { time_local: "2026-09-07T12:00:00+02:00", time_utc: "2026-09-07T10:00:00Z", values: { weather_code: 0, temperature: 22.8, precipitation: 0, relative_humidity: 55, wind_speed: 24.6 } },
-        { time_local: "2026-09-07T18:00:00+02:00", time_utc: "2026-09-07T16:00:00Z", values: { weather_code: 61, temperature: 18.6, precipitation: 0.2, relative_humidity: 66, wind_speed: 28.1 } },
-        { time_local: "2026-09-08T00:00:00+02:00", time_utc: "2026-09-07T22:00:00Z", values: { weather_code_dominant: 3, temperature: 12.1, precipitation: 0.6, relative_humidity: 81, wind_speed: 32.5 } },
-        { time_local: "2026-09-08T06:00:00+02:00", time_utc: "2026-09-08T04:00:00Z", values: { weather_code: 61, temperature: 12.9, precipitation: 0.4, relative_humidity: 83, wind_speed: 37.0 } },
-        { time_local: "2026-09-08T12:00:00+02:00", time_utc: "2026-09-08T10:00:00Z", values: { weather_code: 61, temperature: 19.1, precipitation: 1.1, relative_humidity: 64, wind_speed: 41.2 } },
-        { time_local: "2026-09-08T18:00:00+02:00", time_utc: "2026-09-08T16:00:00Z", values: { weather_code: 61, temperature: 16.4, precipitation: 1.3, relative_humidity: 72, wind_speed: 44.3 } },
-        { time_local: "2026-09-09T00:00:00+02:00", time_utc: "2026-09-08T22:00:00Z", values: { weather_code_dominant: 3, temperature: 9.4, precipitation: 2.4, relative_humidity: 88, wind_speed: 45.8 } },
-        { time_local: "2026-09-09T06:00:00+02:00", time_utc: "2026-09-09T04:00:00Z", values: { weather_code: 61, temperature: 8.1, precipitation: 1.8, relative_humidity: 90, wind_speed: 45.7 } },
-        { time_local: "2026-09-09T12:00:00+02:00", time_utc: "2026-09-09T10:00:00Z", values: { weather_code: 61, temperature: 16.5, precipitation: 0.9, relative_humidity: 71, wind_speed: 43.9 } },
-        { time_local: "2026-09-09T18:00:00+02:00", time_utc: "2026-09-09T16:00:00Z", values: { weather_code: 61, temperature: 13.2, precipitation: 0.1, relative_humidity: 79, wind_speed: 40.6 } },
-      ],
-    },
+    hourly: hourlySeries(),
     /*
      * A week of daily entries, because the horizon is a week.
      *
@@ -754,6 +838,22 @@ const FIXTURES = {
     years_requested: 10,
     years_used: [2021, 2022, 2023],
     coverage_note: "Fewer years were available than requested.",
+    /*
+     * Each reference year's own mean, which `history_service.build_baseline` returns for every
+     * baseline it computes and this fixture did not carry. The omission was invisible until the
+     * Dashboard's closing band gained the plot the artifact draws there: the band photographed as
+     * "the archive reported no per-year means", which is a true sentence about the fixture and a
+     * false one about the product.
+     *
+     * They average to the 14.7 stated below rather than to plausible-looking numbers, and both lie
+     * inside the 12.2–17.4 the daily minimum and maximum allow, because a fixture whose parts do
+     * not reconcile is a capture that proves the layout and hides the arithmetic.
+     */
+    yearly_means: [
+      { year: 2021, value: 13.6, points_used: 3 },
+      { year: 2022, value: 14.7, points_used: 3 },
+      { year: 2023, value: 15.8, points_used: 3 },
+    ],
     mean: statistic("mean", "temperature_mean", 14.7, "°C", "arithmetic mean of usable points"),
     minimum: statistic("minimum", "temperature_mean", 12.2, "°C", "minimum of usable points"),
     maximum: statistic("maximum", "temperature_mean", 17.4, "°C", "maximum of usable points"),
