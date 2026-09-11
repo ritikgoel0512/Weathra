@@ -79,7 +79,15 @@ ADMINISTRATIVE_GETS: tuple[str, ...] = (
     "/admin/plans",
     "/admin/allowances",
     "/admin/usage",
+    "/admin/usage/series",
     "/admin/principals/administrators",
+    # Added 2026-09-11. `/admin/principals` and a policy's audit trail arrived with task 34.22 and
+    # were never added here, so two administrative reads had never been confirmed to refuse an
+    # unauthenticated caller against the deployment — the third and fourth time this assertion has
+    # caught that, after group 31's paths and Weather Watch's. It is the argument for deriving the
+    # list from the contract rather than maintaining it by hand.
+    "/admin/principals",
+    "/admin/policies/no-such-policy/audit",
     "/admin/lab/comparisons",
     f"/admin/lab/comparisons/{NOT_A_REAL_ID}",
 )

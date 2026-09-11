@@ -114,6 +114,10 @@ OPERATIONS: tuple[tuple[str, str, dict[str, Any] | None], ...] = (
     ("PUT", f"/admin/principals/{'11111111-2222-4333-8444-555555555555'}/role", None),
     ("DELETE", f"/admin/principals/{'11111111-2222-4333-8444-555555555555'}/role", None),
     ("GET", "/admin/usage", None),
+    # The trend the administrative screen leads with. Aggregates the same table as the row
+    # above and discloses the same nothing, and is listed here because this matrix is what
+    # holds every administrative operation to refusing an ordinary caller.
+    ("GET", "/admin/usage/series", None),
     ("GET", "/admin/lab/comparisons", None),
     (
         "POST",
