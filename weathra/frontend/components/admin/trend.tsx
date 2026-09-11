@@ -47,7 +47,14 @@ import {
   YAxis,
 } from "recharts";
 
-import { Badge, Button, Card, CardBody, CardHeader, EmptyChart } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  EmptyChart,
+} from "@/components/ui";
 import type { UsageBucket, UsageSeriesResponse } from "@/lib/api/schema";
 
 import styles from "./admin.module.css";
@@ -71,8 +78,16 @@ function labelOf(start: string, bucket: string): string {
   const parsed = new Date(start);
   if (Number.isNaN(parsed.getTime())) return start;
   return bucket === "hour"
-    ? parsed.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", timeZone: "UTC" })
-    : parsed.toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
+    ? parsed.toLocaleTimeString(undefined, {
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "UTC",
+      })
+    : parsed.toLocaleDateString(undefined, {
+        day: "numeric",
+        month: "short",
+        timeZone: "UTC",
+      });
 }
 
 /**
@@ -94,7 +109,8 @@ export function pointsOf(
       calls: point.calls,
       tokens: point.total_tokens ?? null,
       cost:
-        point.estimated_cost_total === null || point.estimated_cost_total === undefined
+        point.estimated_cost_total === null ||
+        point.estimated_cost_total === undefined
           ? null
           : Number(point.estimated_cost_total),
     }))
@@ -133,8 +149,26 @@ export function totalsOf(points: readonly TrendPoint[]): {
   return { tokens, cost, calls };
 }
 
-function money(value: number | null): string {
-  return value === null ? "—" : `$${value.toFixed(2)}`;
+/**
+ * How many decimal places a cost axis needs for its ticks to be distinguishable.
+ *
+ * Two is right for dollars and wrong for fractions of a cent, and the administrative screen sees
+ * both: a busy month is `$482.50`, a free-tier week is `$0.03`. At two places the four-width pass
+ * photographed a cost axis reading **`$0.01` at two different heights** — the ticks at 0.006 and
+ * 0.012 both rounding to the same string, which is an axis that cannot be read.
+ *
+ * Derived once from the largest value in the window rather than per tick, so every label on one
+ * axis carries the same precision. A mixed-precision axis is its own kind of unreadable.
+ */
+function costDecimals(largest: number): number {
+  if (largest >= 1) return 2;
+  if (largest >= 0.01) return 3;
+  if (largest >= 0.001) return 4;
+  return 5;
+}
+
+function money(value: number | null, decimals = 2): string {
+  return value === null ? "—" : `$${value.toFixed(decimals)}`;
 }
 
 function count(value: number | null): string {
@@ -145,10 +179,12 @@ function TrendTooltip({
   active,
   payload,
   label,
+  decimals = 2,
 }: {
   readonly active?: boolean;
   readonly payload?: readonly { readonly payload?: TrendPoint }[];
   readonly label?: string | number;
+  readonly decimals?: number;
 }): ReactNode {
   const point = payload?.[0]?.payload;
   if (!active || point === undefined) return null;
@@ -156,14 +192,18 @@ function TrendTooltip({
     <div className={styles.tooltip}>
       <p className={styles.tooltipName}>{String(label)}</p>
       <p className={styles.tooltipValue}>
-        {count(point.tokens)} tokens · {money(point.cost)} estimated · {point.calls}{" "}
-        {point.calls === 1 ? "call" : "calls"}
+        {count(point.tokens)} tokens · {money(point.cost, decimals)} estimated ·{" "}
+        {point.calls} {point.calls === 1 ? "call" : "calls"}
       </p>
     </div>
   );
 }
 
-export function UsageTrend({ series }: { readonly series: UsageSeriesResponse }): ReactNode {
+export function UsageTrend({
+  series,
+}: {
+  readonly series: UsageSeriesResponse;
+}): ReactNode {
   const [internal, setInternal] = useState(false);
   const described = useId();
   const points = useMemo(
@@ -172,6 +212,10 @@ export function UsageTrend({ series }: { readonly series: UsageSeriesResponse })
   );
   const totals = totalsOf(points);
   const delta = costDeltaOf(points);
+  // The largest cost in this window sets the precision for the axis, the tooltip and the delta.
+  const decimals = costDecimals(
+    Math.max(0, ...points.map((point) => Math.abs(point.cost ?? 0))),
+  );
   const side = internal ? "Internal" : "Product";
   const title = `${side} token usage and estimated cost per ${series.bucket}`;
 
@@ -190,7 +234,11 @@ export function UsageTrend({ series }: { readonly series: UsageSeriesResponse })
           would draw a total that belongs to no plan, and `specs/usage-limits` requires them
           reported apart.
         */}
-        <div className={styles.trendControls} role="group" aria-label="Which usage to plot">
+        <div
+          className={styles.trendControls}
+          role="group"
+          aria-label="Which usage to plot"
+        >
           <Button
             size="sm"
             variant={internal ? "ghost" : "secondary"}
@@ -220,15 +268,32 @@ export function UsageTrend({ series }: { readonly series: UsageSeriesResponse })
             <div
               className={styles.chartPlot}
               role="img"
-              aria-label={`${title}. ${count(totals.tokens)} tokens and ${money(totals.cost)} estimated across the window.`}
+              aria-label={`${title}. ${count(totals.tokens)} tokens and ${money(totals.cost, decimals)} estimated across the window.`}
               aria-describedby={described}
             >
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={[...points]} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+                <AreaChart
+                  data={[...points]}
+                  margin={{ top: 8, right: 12, bottom: 0, left: 0 }}
+                >
                   <defs>
-                    <linearGradient id="adminTokenFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="var(--color-accent)" stopOpacity={0.4} />
-                      <stop offset="100%" stopColor="var(--color-accent)" stopOpacity={0.02} />
+                    <linearGradient
+                      id="adminTokenFill"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop
+                        offset="0%"
+                        stopColor="var(--color-accent)"
+                        stopOpacity={0.4}
+                      />
+                      <stop
+                        offset="100%"
+                        stopColor="var(--color-accent)"
+                        stopOpacity={0.02}
+                      />
                     </linearGradient>
                   </defs>
                   <CartesianGrid
@@ -245,14 +310,17 @@ export function UsageTrend({ series }: { readonly series: UsageSeriesResponse })
                     orientation="right"
                     {...AXIS}
                     width={56}
-                    tickFormatter={(value: number) => `$${value.toFixed(2)}`}
+                    tickFormatter={(value: number) => money(value, decimals)}
                   />
                   <Tooltip
                     cursor={{ stroke: "var(--color-border-strong)" }}
-                    content={<TrendTooltip />}
+                    content={<TrendTooltip decimals={decimals} />}
                   />
                   <Legend
-                    wrapperStyle={{ fontSize: 11, color: "var(--color-text-muted)" }}
+                    wrapperStyle={{
+                      fontSize: 11,
+                      color: "var(--color-text-muted)",
+                    }}
                     iconType="plainline"
                   />
                   <Area
@@ -281,9 +349,10 @@ export function UsageTrend({ series }: { readonly series: UsageSeriesResponse })
               </ResponsiveContainer>
             </div>
             <figcaption className={styles.chartNote} id={described}>
-              A bucket the gateway reported no tokens or no pricing for is drawn as a gap rather
-              than as a zero — unlike the call count, which is dense, because every call is
-              recorded and only its token report can be missing.
+              A bucket the gateway reported no tokens or no pricing for is drawn
+              as a gap rather than as a zero — unlike the call count, which is
+              dense, because every call is recorded and only its token report
+              can be missing.
             </figcaption>
           </figure>
         )}
@@ -296,13 +365,21 @@ export function UsageTrend({ series }: { readonly series: UsageSeriesResponse })
           </div>
           <div className={styles.trendTotal}>
             <span className={styles.trendLabel}>Estimated cost</span>
-            <span className={styles.trendValue}>{money(totals.cost)}</span>
-            <span className={styles.trendNote}>an estimate, not an amount owed</span>
+            <span className={styles.trendValue}>
+              {money(totals.cost, decimals)}
+            </span>
+            <span className={styles.trendNote}>
+              an estimate, not an amount owed
+            </span>
           </div>
           <div className={styles.trendTotal}>
-            <span className={styles.trendLabel}>Last {series.bucket} delta</span>
+            <span className={styles.trendLabel}>
+              Last {series.bucket} delta
+            </span>
             <span className={styles.trendValue}>
-              {delta === null ? "—" : `${delta >= 0 ? "+" : "−"}${money(Math.abs(delta)).slice(1)}`}
+              {delta === null
+                ? "—"
+                : `${delta >= 0 ? "+" : "−"}${money(Math.abs(delta), decimals).slice(1)}`}
             </span>
             <span className={styles.trendNote}>
               {delta === null

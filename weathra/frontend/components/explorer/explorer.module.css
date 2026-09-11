@@ -177,3 +177,16 @@
   font-weight: var(--type-heading-weight);
   color: var(--color-text-primary);
 }
+
+/*
+ * The box for the hour-by-hour matrix.
+ *
+ * `ScrollRegion` supplies none of its own (`design-system.md` §13 rule 1), so without this the
+ * matrix widens the document rather than scrolling in its card. `min-width: 0` because the card is
+ * a grid item, and a grid item's default `auto` minimum is its content's width — which is the other
+ * half of the same defect.
+ */
+.tableScroll {
+  overflow-x: auto;
+  min-width: 0;
+}

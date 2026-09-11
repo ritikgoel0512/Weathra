@@ -159,7 +159,15 @@ function ForecastMatrix({
   );
 
   return (
-    <ScrollRegion label="Hourly forecast matrix">
+    /*
+      The box is the screen's to supply. `ScrollRegion` measures its container and adds the
+      keyboard tab stop; it carries no `overflow-x` of its own, so a caller that passes no
+      className gets a plain div and its table widens the *document* — which is exactly what the
+      four-width pass of 2026-09-11 photographed here: 42 pixels of horizontal document scroll at
+      768 and 367 at 375, from a 713-pixel hour-by-hour matrix. `design-system.md` §13 rule 1
+      records this, and this is the third screen to have hit it.
+    */
+    <ScrollRegion label="Hourly forecast matrix" className={styles.tableScroll}>
       <table className={styles.matrix}>
         <thead>
           <tr>

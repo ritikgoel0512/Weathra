@@ -128,26 +128,52 @@ held to.
 
 ## What cannot be closed, and what it would take
 
-Each of these is a *kind* of data rather than a formatting choice, and each names the provider or
-infrastructure that would have to exist first. None is a gap in the implementation.
+The eight kinds of data the artifacts draw that Weathra does not have. Each row was **investigated
+for a free or low-cost source** during the sixth revision rather than assumed unavailable, and two
+of the eight changed as a result — see the correction below the table.
 
-| Screen | What the artifact has | What production has | Exactly what is missing | Where it could come from |
-|---|---|---|---|---|
-| `01`, `05`, `11`, `14` | "STATION ID: BER-CENTRAL-09", sensor-node counts, node health | the provider that answered and when | a **station-level observation network**: per-station identifiers, locations and health. Open-Meteo serves a reanalysis grid, not stations, and exposes no station identity | a station-data provider — NOAA/ISD, DWD open data, or a commercial station API. A new provider behind `WeatherProvider`, plus a station table to key readings on |
-| `01`, `02`, `11`, `12` | "NEURAL AGENT V4.2", agent version strings, "MODEL ALIGNMENT SCORE" | the gateway and model key the run resolved to | a **model Weathra trains and versions**. There is none: Weathra routes to third-party models through one gateway | nothing short of training a model. This is not a roadmap item; it is a different product |
-| `01`, `11` | "MODEL CONVERGENCE 94%", a second named forecast line (ECMWF) | one provider's forecast with its own banded confidence | **two or more independent forecast models** to disagree. Convergence is a measure of spread across models, and one model has none | a second forecast provider. `specs/weather-providers` already has the interface; `docs/roadmap.md` lists multi-provider consensus as post-MVP, and the confidence signal derived from disagreement with it |
-| `01` | "DATA RELIABILITY (PROVIDER) 82%" | the provider named on every figure | a **measured reliability history** per provider — uptime, completeness, and agreement with later observations, over months | forecast-accuracy scoring, which needs stored forecast snapshots compared against subsequent observations. Post-MVP in `docs/roadmap.md`; the snapshot table exists, the scheduled capture does not |
-| `02`, `05` | named third-party feeds with per-feed millisecond latencies | the provider each figure came from, with its retrieval time | **several feeds to compare**, and per-feed timing. Weathra reads one weather provider and one model gateway; the run record already carries per-agent and per-tool timings | the same second provider as above. The timing half is already recorded and would need no new work |
-| `14` | "ANOMALIES LOGGED 02", an activity feed of past breaches | each watch's latest evaluation | an **evaluation history**, which needs something to write it. A table is trivial; the scheduler is the missing part, and without one the table would record *when somebody opened the screen* — a chart of that looks like a record of the weather while being a record of visits | a scheduler. `docs/roadmap.md` lists Weather Watch's notification and scheduling infrastructure as post-MVP; the history table should land with it, not before |
-| `10` | subscription id, billing interval, payment method, invoices, upgrade | administratively assigned plans | a **billing relationship**. Weathra bills nobody; `subscription_plans` carries an unused external reference so a payment integration has somewhere to land | a payment provider. Deliberately out of scope: drawing any of it would be an invented commercial relationship |
-| `06` | a map of saved locations | typographic cards with the live reading and three labelled chips | a **map tile provider**. Every saved place already has coordinates, so the data is present and the renderer is not | a tile provider — MapLibre with OpenStreetMap tiles needs no key; a styled basemap does. The artifact for `06` draws no map, so this is the artifact's own composition rather than a gap against it |
+| # | Desired Visily data | Why unavailable today | Derive internally? | External source required | Free / low-cost option | Future implementation |
+|---|---|---|---|---|---|---|
+| 1 | Station identifiers, sensor-node counts, node health (`01`, `05`, `11`, `14`) | Open-Meteo serves a reanalysis and model grid, not stations, and exposes no station identity at all | **No.** A grid cell has no identifier to report | A station-observation network | **Partly, and regionally.** NWS `api.weather.gov` is free and keyless with station ids and observations, **US only**; DWD Open Data is free and keyless, **Germany only**; Meteostat's bulk endpoints are free and global but a separate ingest. None is global *and* keyless *and* live | A second provider behind `WeatherProvider` plus a station table. **Held back deliberately:** a regional source gives Berlin a station id and Lisbon none, so the field would appear and vanish by country — worse than absent |
+| 2 | Agent version strings, "MODEL ALIGNMENT SCORE" (`01`, `02`, `11`, `12`) | Weathra trains no model and versions no agent; it routes to third-party models through one gateway | **No** | None that exists | **None.** No API sells a version number for a model you did not train | Not a roadmap item. It is a different product |
+| 3 | "MODEL CONVERGENCE 94%", a second named forecast line such as ECMWF (`01`, `11`) | One forecast model has no spread to measure. `/weather/forecast` requests the provider's default seamless model | **Yes, once two models are retrieved** — a spread across models is ordinary deterministic analytics | **None.** Corrected below | **Free, keyless, already-integrated provider.** Open-Meteo's `models=` parameter serves named models side by side — verified 2026-09-11 against `api.open-meteo.com` with `models=ecmwf_ifs04,gfs_seamless,icon_seamless`, which returned three separate hourly series | `docs/roadmap.md`'s multi-provider consensus, now cheaper than that entry assumes. See *The row that changed* |
+| 4 | "DATA RELIABILITY (PROVIDER) 82%" (`01`) | No measured reliability history exists — nothing compares a past forecast against what happened | **Yes, entirely internally.** `forecast_snapshots` already exists; what is missing is scheduled capture and the scoring pass | **None** | **Free.** It is Weathra's own stored data against Weathra's own later retrievals | Forecast-accuracy scoring, post-MVP in `docs/roadmap.md`. Needs a scheduler, which is the same missing piece as row 6 |
+| 5 | Named third-party feeds with per-feed millisecond latencies (`02`, `05`) | One weather provider and one model gateway, so there is one feed to name | **The latency half already is** — the run record carries per-agent and per-tool timings. The *several feeds* half is row 3 | None beyond row 3 | Same as row 3 | Falls out of row 3 at no extra cost: the timing side is already recorded |
+| 6 | "ANOMALIES LOGGED 02", an activity feed of past breaches (`14`) | Nothing evaluates a watch except a person opening the screen or pressing refresh | **Yes** — an additive `watch_evaluations` table with the same owner-only RLS as `saved_locations` | **None** | **Free** | **The table is the easy part and must not land first.** Without a scheduler it would record *when somebody opened the screen*, and a chart of that looks like a record of the weather while being a record of visits. Weather Watch's scheduling and notification infrastructure is post-MVP; the table belongs with it |
+| 7 | Subscription id, billing interval, payment method, invoices, upgrade (`10`) | Weathra bills nobody. `subscription_plans` carries an unused external reference so an integration has somewhere to land | **No.** There is no commercial relationship to describe | A payment provider | Stripe's API has no monthly fee, but a **real** account and real money movement are the point of it | Deliberately out of scope. Drawing any of it would be an invented commercial relationship, and `tests/test_no_payment_processing.py` fails the build if it appears |
+| 8 | A map of the saved locations (`06`) | No tile renderer. Every saved place already has coordinates | The data is present; the *renderer* is absent | A map tile source | **Free and keyless.** MapLibre GL JS with OpenStreetMap raster tiles needs no account; a styled vector basemap does | **Not a gap against the artifact.** `06-saved-locations.png` draws no map — it draws typographic cards, which is what production draws. This row exists because earlier reviews listed a map as missing; it is missing from the *product idea*, not from the artifact |
 
-**Two the artifacts draw that are refused on principle rather than for want of data.** The
-compliance and audit-lock apparatus on `05` and `06` — "cryptographically signed and immutable for
-compliance auditing", `ISO-MET-COMPLIANT` — would be a false claim about a security property, and
-the "Recommendations for city planners" narrative on `04` is operational advice Weathra is not
-positioned to give. Both are recorded in `screens.md` §5 and neither would be built if the data
-arrived tomorrow.
+### The row that changed, and the claim I had wrong
+
+The fifth revision recorded row 3 as needing "a second forecast provider", and row 5 with it. **That
+was wrong, and checking rather than repeating it is what this revision was for.** Open-Meteo — the
+provider Weathra already integrates, free and without a credential — serves multiple named models
+through one query parameter. Verified against the live API on 2026-09-11:
+
+```
+GET api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.405
+    &hourly=temperature_2m&models=ecmwf_ifs04,gfs_seamless,icon_seamless
+→ 200, hourly keys: temperature_2m_ecmwf_ifs04, temperature_2m_gfs_seamless,
+                    temperature_2m_icon_seamless
+```
+
+Three named models, one request, one provider, no key. So "convergence" stops being a measure
+Weathra cannot compute and becomes a measure Weathra has not yet retrieved the inputs for — and
+`docs/roadmap.md`'s multi-provider consensus entry is cheaper than it assumes, because the second
+model needs no second integration.
+
+**It is still not built in this pass, and the brief's own rule is why.** The guard for adopting a
+source during a fidelity pass is: no paid account, no substantial architecture change, genuinely
+useful. The first and third hold; the second does not. `WeatherProvider.forecast` returns one
+`Forecast`, and per-model series would change that return shape, the cache key, the validation
+layer, the MCP tool contract and every caller, then need consensus analytics and UI on two screens.
+That is a group of work with its own tasks, and half of it would leave the interface worse than
+either end. What this pass owed was to find out whether the data exists. It does, it is free, and
+the note above is what the next pass starts from instead of a re-read.
+
+One incidental finding worth keeping: in that probe `ecmwf_ifs04` returned `null` for the first six
+hours while the other two returned values. A consensus built without handling that would compute a
+spread across two models and report it as three.
 
 ## What was not reached
 
