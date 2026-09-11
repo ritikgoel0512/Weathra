@@ -41,6 +41,32 @@ export const AUTHENTICATION_ERROR_CODES: readonly string[] = [
 export const AGENT_NOT_CONFIGURED_CODE = "agent_not_configured";
 
 /**
+ * A credential *is* configured, and the inference gateway rejected it.
+ *
+ * A different fault from the one above and a different code, because the operator's remedy differs.
+ * To a visitor it is the same situation exactly — the Analyst cannot answer and nothing they can do
+ * changes that — so this screen treats the two alike and says the same sentence. The distinction
+ * lives in the backend's log and in the run's evidence, where somebody can act on it.
+ */
+export const PROVIDER_AUTHENTICATION_FAILED_CODE = "provider_authentication_failed";
+
+/**
+ * The codes that mean "the Analyst is unavailable for a reason at our end, not yours".
+ *
+ * A set rather than a comparison, so that adding a third such code is one edit here instead of a
+ * condition to find on every screen that renders an agent failure.
+ */
+export const AGENT_UNAVAILABLE_CODES: readonly string[] = [
+  AGENT_NOT_CONFIGURED_CODE,
+  PROVIDER_AUTHENTICATION_FAILED_CODE,
+];
+
+/** Whether a code means the Analyst is unavailable rather than the request having failed. */
+export function isAgentUnavailableCode(code: string | null | undefined): boolean {
+  return code !== null && code !== undefined && AGENT_UNAVAILABLE_CODES.includes(code);
+}
+
+/**
  * No evidence record with that identifier — for this caller.
  *
  * The backend answers an unknown identifier and one belonging to another user with this same code,

@@ -98,6 +98,7 @@ class InferenceStatus(StrEnum):
     PROVIDER_ERROR = "provider_error"
     TIMEOUT = "timeout"
     NOT_CONFIGURED = "not_configured"
+    PROVIDER_AUTH_FAILED = "provider_auth_failed"
 
     @property
     def served(self) -> bool:
@@ -112,9 +113,13 @@ class InferenceStatus(StrEnum):
         """Whether this outcome is the provider's doing rather than the model's judgement.
 
         The predicate a failover rule may read (``specs/model-policy``) and the one the
-        evaluation integrity classifier reads. ``NOT_CONFIGURED`` is excluded deliberately: a
-        missing or rejected credential is a configuration fault, and retrying or failing over
-        would send an operator to a status page when the answer is on their settings screen.
+        evaluation integrity classifier reads. ``NOT_CONFIGURED`` and ``PROVIDER_AUTH_FAILED`` are
+        excluded deliberately: a missing credential and a rejected one are both configuration
+        faults, and retrying or failing over would send an operator to a status page when the
+        answer is on their settings screen. They are two members rather than one because the
+        remedies differ — one secret to set, one secret to correct — and because a deployment that
+        reports itself configured and is then refused by the gateway is the harder of the two to
+        find, so it must not be filed under "nobody set it".
         """
         return self in _INFRASTRUCTURE_STATUSES
 

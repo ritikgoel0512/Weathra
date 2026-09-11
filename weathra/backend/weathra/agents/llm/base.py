@@ -41,6 +41,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from weathra.domain.errors import (
     AgentNotConfigured,
+    ProviderAuthenticationFailed,
     ProviderRateLimited,
     ProviderTimeout,
     ProviderUnavailable,
@@ -296,6 +297,10 @@ def classify_inference_failure(error: WeathraError) -> tuple[InferenceStatus, in
         return InferenceStatus.RATE_LIMITED, http_status or 429
     if isinstance(error, ProviderTimeout):
         return InferenceStatus.TIMEOUT, http_status
+    if isinstance(error, ProviderAuthenticationFailed):
+        # Configured, and refused. Kept apart from NOT_CONFIGURED so the evidence record says which
+        # of the two it was; neither is failover-eligible, because the credential is per gateway.
+        return InferenceStatus.PROVIDER_AUTH_FAILED, http_status or 401
     if isinstance(error, AgentNotConfigured):
         return InferenceStatus.NOT_CONFIGURED, http_status
     if isinstance(error, ProviderUnavailable):

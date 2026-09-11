@@ -39,7 +39,7 @@ import {
   LoadingState,
   QuotaState,
 } from "@/components/ui";
-import { AGENT_NOT_CONFIGURED_CODE } from "@/lib/api/errors";
+import { isAgentUnavailableCode } from "@/lib/api/errors";
 import { quotaRefusalFrom, type QuotaRefusal } from "@/lib/api/quota";
 import { inferenceMetadataFrom } from "@/lib/inference/served";
 import type {
@@ -116,7 +116,7 @@ function WeathraIntelligence({ units }: { readonly units: PreferenceView["unit_s
           : {
               kind: "failed",
               message: failure.message,
-              unavailable: failure.code === AGENT_NOT_CONFIGURED_CODE,
+              unavailable: isAgentUnavailableCode(failure.code),
             },
       );
     }

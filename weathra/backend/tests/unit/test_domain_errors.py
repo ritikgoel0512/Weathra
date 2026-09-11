@@ -41,6 +41,7 @@ EXPECTED_CODES: dict[type[e.WeathraError], str] = {
     e.ProviderUnavailable: "provider_unavailable",
     e.ProviderTimeout: "provider_timeout",
     e.ProviderRateLimited: "provider_rate_limited",
+    e.ProviderAuthenticationFailed: "provider_authentication_failed",
     e.McpUnavailable: "mcp_unavailable",
     e.MemoryUnavailable: "memory_unavailable",
     e.SigningKeysUnavailable: "signing_keys_unavailable",
@@ -137,9 +138,26 @@ def test_provider_failure_classes_are_distinguishable() -> None:
         e.ProviderUnavailable.code,
         e.ProviderTimeout.code,
         e.ProviderRateLimited.code,
+        e.ProviderAuthenticationFailed.code,
         e.NoDataForRange.code,
     }
-    assert len(codes) == 4
+    assert len(codes) == 5
+
+
+def test_a_rejected_credential_is_not_an_absent_one() -> None:
+    """Two conditions, two codes, and neither inherits the other — task 25.4, 2026-09-11.
+
+    They were one class until a deployment reported `agent_not_configured` from `/agent/ask` while
+    its own readiness probe reported the inference provider configured. Subclassing would have kept
+    that: a handler catching "nobody set the secret" would still quietly catch "the secret is
+    wrong", which is the behaviour the split exists to end.
+    """
+    assert e.ProviderAuthenticationFailed.code != e.AgentNotConfigured.code
+    assert not issubclass(e.ProviderAuthenticationFailed, e.AgentNotConfigured)
+    assert not issubclass(e.AgentNotConfigured, e.ProviderAuthenticationFailed)
+    # Not an `AuthenticationFailed` either: the *caller's* session is fine, and routing them to
+    # sign-in over a secret of ours would be the wrong remedy offered to the wrong person.
+    assert not issubclass(e.ProviderAuthenticationFailed, e.AuthenticationFailed)
 
 
 def test_horizon_and_coverage_errors_are_validation_failures() -> None:

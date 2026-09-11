@@ -17,15 +17,21 @@ answers with it and needs no code change.
 | connection refused, DNS    | ``ProviderUnavailable``                  |
 | 429                        | ``ProviderRateLimited``                  |
 | 5xx after the retries      | ``ProviderUnavailable``                  |
-| **401 / 403**              | **``AgentNotConfigured``**               |
+| **401**                    | **``ProviderAuthenticationFailed``**     |
+| **403**                    | **``ProviderUnavailable``**              |
 | 4xx otherwise              | ``ProviderUnavailable``                  |
 
 The 401 is the interesting row. A rejected credential is not an upstream failure and must not be
 retried or reported as one: retrying sends the same bad key again, and "the provider is
-unavailable" sends an operator to a status page when the answer is on their own settings screen. So
-it is translated to the same error a *missing* credential produces, because from the caller's side
-those are one condition — the agent surface is not configured — while every other capability keeps
-working.
+unavailable" sends an operator to a status page when the answer is on their own settings screen.
+
+It used to be translated to the error a *missing* credential produces, on the reasoning that from
+the caller's side those are one condition. They are — and they are not one condition for whoever
+has to fix it, which is the reader this classification is for. A deployment carrying a key the
+gateway refuses answered `agent_not_configured` while its own readiness probe answered
+`configured: true`, and the contradiction sent the diagnosis after a wiring fault that did not
+exist. So 401 now raises ``ProviderAuthenticationFailed``. The caller still gets 503 and the same
+sentence; the *code*, the log and the evidence record say which of the two it was.
 
 **Identity comes off the response where the gateway reports it.** OpenRouter echoes the model it
 actually served, which can differ from the one requested when a route falls back. Recording what
@@ -65,6 +71,7 @@ from weathra.config import Settings
 from weathra.domain.errors import (
     AGENT_UNAVAILABLE_MESSAGE,
     AgentNotConfigured,
+    ProviderAuthenticationFailed,
     ProviderUnavailable,
     ValidationFailed,
     WeathraError,
@@ -262,17 +269,19 @@ class OpenRouterClient:
         """Classify the two statuses a retry loop must not treat as transient.
 
         **401 and 403 are different problems and must not be reported alike.** A 401 is the
-        credential: absent, or genuinely not valid. A 403 is the gateway refusing a request whose
-        credential it accepted — the account's data policy for a `:free` model, a model this key
-        may not route to, or a moderation refusal. Collapsing them cost this project a wrong first
-        guess: production reported "the credential was rejected" and the only remedy anyone could
-        see was to replace a key that may never have been wrong.
+        credential: the gateway has one and does not accept it. A 403 is the gateway refusing a
+        request whose credential it accepted — the account's data policy for a `:free` model, a
+        model this key may not route to, or a moderation refusal. Collapsing them cost this project
+        a wrong first guess: production reported "the credential was rejected" and the only remedy
+        anyone could see was to replace a key that may never have been wrong.
 
-        So they raise different errors, which matters beyond the log. `AgentNotConfigured` records
-        `not_configured` in the evidence; a 403 records `provider_error` through
-        `ProviderUnavailable`, because "nobody configured this" is a false statement about a
-        deployment whose key the gateway just accepted. What a *person* is shown is the same
-        sentence either way — they can act on neither, and both mean the same thing to them.
+        **Nor is a 401 the same as no credential at all.** This method is only reachable once a
+        client was constructed, and construction requires the credential — so by the time a 401
+        arrives, "not configured" is already known to be false. It is reported as
+        `ProviderAuthenticationFailed`, recording `provider_auth_failed` in the evidence; a 403
+        records `provider_error` through `ProviderUnavailable`. What a *person* is shown is the
+        same sentence in all three cases — they can act on none of them, and all three mean the
+        same thing to them.
 
         **What a person is told, and why it is not what the log says.** The message reaches a
         weather screen, so it says what is unavailable and what still works. It names no
@@ -284,11 +293,15 @@ class OpenRouterClient:
 
         if status == 401:
             logger.warning(
-                "the inference gateway rejected the credential (401): it is absent or not valid. "
-                "Surrounding whitespace and a copied `Bearer ` prefix are normalised before use, "
-                "so packaging is not the cause"
+                "the inference gateway rejected the configured credential (401). A credential is "
+                "present — this client could not have been constructed without one — so this is "
+                "not an unset secret but a wrong one. Surrounding whitespace and a copied "
+                "`Bearer ` prefix are normalised at the Settings boundary, so packaging is not the "
+                "cause either; the value configured for this deployment is not one the gateway "
+                "accepts. Nothing here is retried and nothing fails over: the credential is per "
+                "gateway, so every candidate model behind it is refused identically"
             )
-            return AgentNotConfigured(
+            return ProviderAuthenticationFailed(
                 AGENT_UNAVAILABLE_MESSAGE,
                 # The status, not the body: a gateway's rejection message is not ours to forward,
                 # and the credential itself must never appear in an error a caller can see.

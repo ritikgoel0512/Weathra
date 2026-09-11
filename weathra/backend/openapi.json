@@ -3233,7 +3233,8 @@
           "model_unavailable",
           "provider_error",
           "timeout",
-          "not_configured"
+          "not_configured",
+          "provider_auth_failed"
         ],
         "title": "InferenceStatus",
         "type": "string"

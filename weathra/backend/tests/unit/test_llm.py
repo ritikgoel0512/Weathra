@@ -28,14 +28,17 @@ from weathra.agents.llm.base import (
     user_message,
     validate_against,
 )
+from weathra.agents.llm.failover import FAILOVER_ELIGIBLE
 from weathra.agents.llm.fake import FakeLLMClient, ScriptExhausted
 from weathra.agents.llm.openrouter import OPENROUTER_PROVIDER_ID, OpenRouterClient
 from weathra.agents.llm.registry import LLMProvider, available_providers, build_client
+from weathra.api.errors import status_for
 from weathra.config import Settings
 from weathra.domain.entitlements import CallRole, PolicyId, Resolution
 from weathra.domain.errors import (
     AGENT_UNAVAILABLE_MESSAGE,
     AgentNotConfigured,
+    ProviderAuthenticationFailed,
     ProviderNotFound,
     ProviderRateLimited,
     ProviderTimeout,
@@ -339,10 +342,10 @@ async def test_a_401_surfaces_as_a_configuration_error_not_an_outage() -> None:
     route = respx.post(COMPLETIONS).mock(
         return_value=httpx.Response(401, json={"error": {"message": "invalid api key"}})
     )
-    with pytest.raises(AgentNotConfigured) as raised:
+    with pytest.raises(ProviderAuthenticationFailed) as raised:
         await _client().complete(system="", messages=[])
 
-    assert raised.value.code == "agent_not_configured"
+    assert raised.value.code == "provider_authentication_failed"
     # What a person is shown, and what an operator gets, are deliberately different. The message
     # reaches a weather screen, so it names nothing about how the service is configured; the status
     # goes to `details` and the cause to the log. This assertion was inverted on 2026-09-08 — it
@@ -383,8 +386,72 @@ async def test_a_403_is_not_a_credential_problem() -> None:
 @respx.mock
 async def test_a_401_is_a_credential_problem() -> None:
     respx.post(COMPLETIONS).mock(return_value=httpx.Response(401))
-    with pytest.raises(AgentNotConfigured):
+    with pytest.raises(ProviderAuthenticationFailed):
         await _client().complete(system="", messages=[])
+
+
+@respx.mock
+async def test_a_rejected_credential_is_not_reported_as_an_absent_one() -> None:
+    """The contradiction this split exists to remove — task 25.4, 2026-09-11.
+
+    Production answered `/agent/ask` with `agent_not_configured` while its own readiness probe
+    answered `configured: true` for the same dependency. Both were true: readiness can only see
+    that a credential string exists, and only a call finds out whether the gateway accepts it. Read
+    together they say nothing an operator can act on, and the diagnosis went looking for a wiring
+    fault that was not there.
+
+    A client cannot be constructed without a credential — the constructor raises
+    `AgentNotConfigured` when there is none — so by the time a 401 comes back, "not configured" is
+    already known to be false. It is not an `AgentNotConfigured` subclass for that reason: a
+    handler written to catch "nobody set the secret" must not silently also catch "the secret is
+    wrong".
+    """
+    respx.post(COMPLETIONS).mock(return_value=httpx.Response(401))
+    with pytest.raises(ProviderAuthenticationFailed) as raised:
+        await _client().complete(system="", messages=[])
+
+    assert not isinstance(raised.value, AgentNotConfigured)
+    assert raised.value.code != AgentNotConfigured.code
+    status, http_status = classify_inference_failure(raised.value)
+    assert status is InferenceStatus.PROVIDER_AUTH_FAILED
+    assert status is not InferenceStatus.NOT_CONFIGURED
+    assert http_status == 401, "the evidence record loses which status arrived"
+
+
+@respx.mock
+async def test_a_rejected_credential_still_reads_as_unavailable_to_a_caller() -> None:
+    """Different code, same 503 and same sentence. The split is for the operator, not the visitor.
+
+    A person on the Analyst screen can act on neither condition, so telling them apart would be
+    telling them about a secret they cannot see — and a different status would make one of the two
+    look retryable when it is not.
+    """
+    respx.post(COMPLETIONS).mock(return_value=httpx.Response(401, text="no auth credentials found"))
+    with pytest.raises(ProviderAuthenticationFailed) as raised:
+        await _client().complete(system="", messages=[])
+
+    assert status_for(raised.value) == status_for(AgentNotConfigured)
+    assert str(raised.value) == AGENT_UNAVAILABLE_MESSAGE
+    assert "OPENROUTER_API_KEY" not in str(raised.value)
+    assert "no auth credentials" not in str(raised.value), "the gateway's own words are not ours"
+    assert set(raised.value.details) == {"provider", "status"}, (
+        "details is the operator's half and must carry nothing else — no body, no credential"
+    )
+
+
+def test_a_rejected_credential_does_not_fail_over_to_another_model() -> None:
+    """One key per gateway, so the second candidate is refused identically. Task 25.4.
+
+    Retrying across the catalog would turn one refusal into as many as the policy has candidates,
+    every one of them certain to fail, and would report the result as though several models had
+    been tried on their merits.
+    """
+    assert InferenceStatus.PROVIDER_AUTH_FAILED not in FAILOVER_ELIGIBLE
+    assert not InferenceStatus.PROVIDER_AUTH_FAILED.served
+    assert not InferenceStatus.PROVIDER_AUTH_FAILED.infrastructure_failure, (
+        "a wrong secret is a configuration fault; counting it as infrastructure would send an "
+        "operator to a status page"
+    )
 
 
 @respx.mock
@@ -800,14 +867,19 @@ async def test_invalid_output_classifies_as_served_not_as_a_provider_failure() -
 
 @respx.mock
 async def test_a_rejected_credential_stays_a_configuration_fault() -> None:
-    """Not an outage and not a failover trigger: retrying sends the same bad key again."""
+    """Not an outage and not a failover trigger: retrying sends the same bad key again.
+
+    A configuration fault, and — since 2026-09-11 — a *different* one from an absent credential,
+    which is why the status is `provider_auth_failed` rather than `not_configured`. Both are
+    excluded from `infrastructure_failure` for the same reason, and that is the property here.
+    """
     respx.post(COMPLETIONS).mock(return_value=httpx.Response(401))
 
-    with pytest.raises(AgentNotConfigured) as caught:
+    with pytest.raises(ProviderAuthenticationFailed) as caught:
         await _client().complete(system="s", messages=[user_message("q")])
 
     status, _ = classify_inference_failure(caught.value)
-    assert status is InferenceStatus.NOT_CONFIGURED
+    assert status is InferenceStatus.PROVIDER_AUTH_FAILED
     assert status.infrastructure_failure is False
 
 
@@ -893,9 +965,9 @@ async def test_no_rejection_reaches_a_caller_naming_configuration(status: int) -
             json={"error": {"message": "No auth credentials found: sk-or-v1-secret-fragment"}},
         )
     )
-    # 401 raises `AgentNotConfigured`, 403 raises `ProviderUnavailable`; both must be silent about
-    # configuration, which is the property under test rather than which class arrives.
-    with pytest.raises((AgentNotConfigured, ProviderUnavailable)) as raised:
+    # 401 raises `ProviderAuthenticationFailed`, 403 raises `ProviderUnavailable`; both must be
+    # silent about configuration, which is the property under test rather than which class arrives.
+    with pytest.raises((ProviderAuthenticationFailed, ProviderUnavailable)) as raised:
         await _client().complete(system="", messages=[])
 
     visible = str(raised.value) + json.dumps(raised.value.details)
@@ -908,10 +980,10 @@ async def test_no_rejection_reaches_a_caller_naming_configuration(status: int) -
 def test_the_operator_still_gets_the_diagnosis() -> None:
     """Redaction that removed the diagnosis would trade one failure for another.
 
-    `details` is where an operator looks, and the two statuses mean different things: 401 is the
-    credential, 403 is an otherwise-valid credential the account or model declined — most often a
-    `:free` model's data policy. Telling them apart is what stops "check the key" being the answer
-    to both.
+    `details` is where an operator looks, and the three conditions mean different things: no
+    credential at all, a credential the gateway rejects (401), and an otherwise-valid credential the
+    account or model declined (403) — most often a `:free` model's data policy. Telling them apart
+    is what stops "check the key" being the answer to all three.
     """
     with pytest.raises(AgentNotConfigured) as raised:
         build_client(httpx.AsyncClient(), Settings(supabase_url="https://test.supabase.co"))
@@ -926,7 +998,11 @@ def test_the_operator_still_gets_the_diagnosis() -> None:
 @pytest.mark.parametrize(
     ("response", "expected", "why"),
     [
-        (httpx.Response(401), InferenceStatus.NOT_CONFIGURED, "the credential itself"),
+        (
+            httpx.Response(401),
+            InferenceStatus.PROVIDER_AUTH_FAILED,
+            "a credential that is present and refused, not an absent one",
+        ),
         (
             httpx.Response(403),
             InferenceStatus.PROVIDER_ERROR,

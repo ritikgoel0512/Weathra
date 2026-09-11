@@ -38,6 +38,7 @@ __all__ = [
     "NoEligibleModel",
     "NotFound",
     "PolicyUnavailable",
+    "ProviderAuthenticationFailed",
     "ProviderNotFound",
     "ProviderRateLimited",
     "ProviderTimeout",
@@ -350,12 +351,41 @@ AGENT_UNAVAILABLE_MESSAGE = (
 
 
 class AgentNotConfigured(WeathraError):
-    """The agent surface was called with no inference credential configured.
+    """The agent surface was called with **no** inference credential configured.
 
     Names the missing configuration. Every non-agent capability keeps working.
+
+    Strictly *absence*. A credential that is present and the gateway refuses is
+    ``ProviderAuthenticationFailed``, and the two must not be collapsed — see its docstring.
     """
 
     code: ClassVar[str] = "agent_not_configured"
+
+
+class ProviderAuthenticationFailed(WeathraError):
+    """A credential *is* configured, and the provider rejected it.
+
+    Split out from ``AgentNotConfigured`` on 2026-09-11, because collapsing the two told an
+    operator the opposite of what was true. Production reported ``agent_not_configured`` from
+    ``/agent/ask`` while its own readiness probe reported the inference provider
+    ``configured: true`` — both correct under the old mapping, and together unreadable: readiness
+    can only see that a credential string exists, and only a call can find out whether the gateway
+    accepts it. Anyone reading the pair reasonably concluded the *readiness probe* was lying and
+    went looking for a wiring fault that was not there.
+
+    The two are different conditions with different remedies — one secret to set, one secret to
+    correct — so they are different codes. Neither is retried and neither fails over: the
+    credential is per gateway, so a second model behind the same gateway is refused identically
+    (``FAILOVER_ELIGIBLE`` in ``agents/llm/failover.py``).
+
+    What a *person* sees is unchanged and deliberately identical to the unconfigured case: they can
+    act on neither, and ``AGENT_UNAVAILABLE_MESSAGE`` says what is unavailable and what still
+    works. The distinction is for the operator, and it travels in ``details``, the log, and the
+    evidence record's ``provider_auth_failed`` status — never in the sentence on the screen, and
+    never carrying the gateway's own body or the credential itself.
+    """
+
+    code: ClassVar[str] = "provider_authentication_failed"
 
 
 class AgentBudgetExceeded(WeathraError):

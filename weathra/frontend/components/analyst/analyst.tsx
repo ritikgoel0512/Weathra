@@ -43,7 +43,7 @@ import type { PreferenceView } from "@/lib/api/schema";
 import { briefingLocationFrom } from "@/lib/dashboard/briefing";
 import { useApiQuery } from "@/lib/query/hooks";
 import { PREFERENCES_KEY } from "@/lib/query/keys";
-import { AGENT_NOT_CONFIGURED_CODE, presentableMessage } from "@/lib/api/errors";
+import { isAgentUnavailableCode, presentableMessage } from "@/lib/api/errors";
 import { quotaRefusalFrom } from "@/lib/api/quota";
 import type { AskRequest } from "@/lib/api/schema";
 import { runStepsFrom } from "@/lib/analyst/run";
@@ -94,7 +94,7 @@ function TerminalState({
   const terminal = run.terminal;
   if (terminal === null) return null;
 
-  if (terminal.kind === "error" && terminal.code === AGENT_NOT_CONFIGURED_CODE) {
+  if (terminal.kind === "error" && isAgentUnavailableCode(terminal.code)) {
     return (
       <div className={styles.unavailable} role="alert">
         <p className={styles.unavailableTitle}>The AI Weather Analyst is unavailable</p>

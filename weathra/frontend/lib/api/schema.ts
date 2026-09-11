@@ -688,7 +688,7 @@ export interface InferenceAttempt {
 export type InferenceStage = "routing" | "synthesis";
 
 /** How one language model call attempt ended. */
-export type InferenceStatus = "served" | "invalid_output" | "rate_limited" | "model_unavailable" | "provider_error" | "timeout" | "not_configured";
+export type InferenceStatus = "served" | "invalid_output" | "rate_limited" | "model_unavailable" | "provider_error" | "timeout" | "not_configured" | "provider_auth_failed";
 
 /** A retrieved knowledge chunk the answer drew on. */
 export interface KnowledgeCitation {

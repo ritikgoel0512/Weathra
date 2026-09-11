@@ -51,6 +51,7 @@ from weathra.domain.errors import (
     NoEligibleModel,
     NotFound,
     PolicyUnavailable,
+    ProviderAuthenticationFailed,
     ProviderRateLimited,
     ProviderTimeout,
     ProviderUnavailable,
@@ -122,6 +123,10 @@ _STATUS_BY_ERROR: dict[type[WeathraError], int] = {
     ProviderTimeout: status.HTTP_504_GATEWAY_TIMEOUT,
     # ---------------------------------------------------------------- 503: a dependency is not up
     AgentNotConfigured: status.HTTP_503_SERVICE_UNAVAILABLE,
+    # Shares 503 with `AgentNotConfigured` on purpose: to a caller both mean "the agent surface is
+    # not serving, and nothing you did caused it", and the retry advice is the same. They stay
+    # different *codes* because the operator's remedy differs — see the class docstring.
+    ProviderAuthenticationFailed: status.HTTP_503_SERVICE_UNAVAILABLE,
     MemoryUnavailable: status.HTTP_503_SERVICE_UNAVAILABLE,
     VectorIndexMismatch: status.HTTP_503_SERVICE_UNAVAILABLE,
     SigningKeysUnavailable: status.HTTP_503_SERVICE_UNAVAILABLE,
