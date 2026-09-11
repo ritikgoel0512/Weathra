@@ -943,6 +943,8 @@ const FIXTURES = {
         plan_code: "free",
         display_name: "Free",
         rank: 1,
+        model_tier: "economy",
+        model_name: "Economy (free tier), primary",
         allowances: [
           { dimension: "requests_per_day", window: "day", allowance: 30 },
           { dimension: "tokens_per_month", window: "month", allowance: 200000 },
@@ -953,6 +955,8 @@ const FIXTURES = {
         plan_code: "pro",
         display_name: "Pro",
         rank: 2,
+        model_tier: "standard",
+        model_name: "Standard general-purpose",
         allowances: [
           { dimension: "requests_per_day", window: "day", allowance: 300 },
           { dimension: "tokens_per_month", window: "month", allowance: 2000000 },
@@ -963,6 +967,8 @@ const FIXTURES = {
         plan_code: "premium",
         display_name: "Premium",
         rank: 3,
+        model_tier: "frontier",
+        model_name: "Frontier structured reasoning",
         allowances: [
           { dimension: "requests_per_day", window: "day", allowance: 1000 },
           { dimension: "tokens_per_month", window: "month", allowance: 8000000 },

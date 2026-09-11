@@ -160,11 +160,22 @@
 
 /* ------------------------------------------------------------- the two columns */
 
+/*
+ * Two tracks, and the left one now holds two cards stacked. `grid-auto-flow: row` with the side
+ * rail spanning both rows keeps the allowances and the reset windows in the wide column and the
+ * activity panel beside them, rather than leaving the left column short.
+ */
 .columns {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+  grid-template-rows: auto auto;
   gap: var(--space-4);
   align-items: start;
+}
+
+.columns > .side {
+  grid-column: 2;
+  grid-row: 1 / span 2;
 }
 
 .side {

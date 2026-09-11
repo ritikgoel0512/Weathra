@@ -64,18 +64,21 @@ const TIERS = {
   plans: [
     {
       plan_code: "free",
+      model_tier: "economy",
       display_name: "Free",
       rank: 1,
       allowances: [{ dimension: "requests_per_day", window: "day", allowance: 30 }],
     },
     {
       plan_code: "pro",
+      model_tier: "standard",
       display_name: "Pro",
       rank: 2,
       allowances: [{ dimension: "requests_per_day", window: "day", allowance: 300 }],
     },
     {
       plan_code: "premium",
+      model_tier: "frontier",
       display_name: "Premium",
       rank: 3,
       allowances: [{ dimension: "requests_per_day", window: "day", allowance: 1000 }],
@@ -288,6 +291,10 @@ describe("comparing tiers, changing plan, and what billing may claim", () => {
     // Every column is a configured tier and every cell an allowance, so nothing here is a claim
     // about a capability no row supports.
     expect(within(table).getByText("Daily questions")).toBeInTheDocument();
+    // The difference a bigger number cannot express: which class of model answers.
+    expect(within(table).getByText("Answers with")).toBeInTheDocument();
+    expect(within(table).getByText("Economy model")).toBeInTheDocument();
+    expect(within(table).getByText("Frontier model")).toBeInTheDocument();
     expect(within(table).getByText("30")).toBeInTheDocument();
     expect(within(table).getByText("300")).toBeInTheDocument();
     expect(within(table).getByText("1,000")).toBeInTheDocument();

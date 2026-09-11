@@ -89,6 +89,27 @@ export function pricingPublished(): boolean {
   return false;
 }
 
+/** What a capability tier is called on screen. The backend's own vocabulary, said for a reader. */
+const TIER_NAMES: Readonly<Record<string, string>> = {
+  economy: "Economy model",
+  standard: "Standard model",
+  frontier: "Frontier model",
+};
+
+/**
+ * The class of model a tier answers with, or null where the plan maps no synthesis policy.
+ *
+ * This is the difference between the tiers that is *not* a number, and until `/plans` carried it a
+ * comparison could only say "bigger allowances". It is three rows deep in the database — plan →
+ * policy → catalog entry — and the backend resolves it; nothing here asserts which model a plan
+ * gets.
+ */
+export function modelTierLabel(plan: PlanOfferView): string | null {
+  const tier = plan.model_tier;
+  if (!tier) return null;
+  return TIER_NAMES[tier] ?? `${tier.charAt(0).toUpperCase()}${tier.slice(1)} model`;
+}
+
 /**
  * A tier's one-line value proposition, **derived from its allowances** rather than written here.
  *
@@ -121,6 +142,14 @@ export function valueProposition(
     })
     .filter((entry): entry is { dimension: string; factor: number } => entry !== null)
     .sort((left, right) => right.factor - left.factor);
+
+  // The model comes first when it actually changes: which model answers is a bigger difference to a
+  // person than how many times they may ask, and it is the one a bigger number cannot express.
+  const tier = modelTierLabel(plan);
+  const beneath = modelTierLabel(below);
+  if (tier && beneath && tier !== beneath) {
+    return `${tier}, where ${below.display_name} uses the ${beneath.toLowerCase()}.`;
+  }
 
   const best = gains[0];
   if (!best) return `More headroom than ${below.display_name}.`;

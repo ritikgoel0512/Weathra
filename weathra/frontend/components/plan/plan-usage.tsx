@@ -271,6 +271,29 @@ function Ready({ usage }: { usage: UsageResponse }): ReactNode {
           </CardBody>
         </Card>
 
+        {/*
+          Under the allowances it describes, in the column that had the room. It sat in the right
+          rail beneath the activity chart, which left roughly seven hundred pixels of empty left
+          column at 1440 — the capture is what showed it.
+        */}
+        <Card aria-labelledby="resets">
+          <CardHeader title="Reset windows" titleId="resets" />
+          <CardBody>
+            {resets.length === 0 ? (
+              <p>Nothing on your plan is counted over a window.</p>
+            ) : (
+              <ul className={styles.resets}>
+                {resets.map((reading) => (
+                  <li key={reading.dimension}>
+                    <span>{reading.label}</span>
+                    <span className={styles.resetAt}>{instant(reading.resetsAt)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardBody>
+        </Card>
+
         <div className={styles.side}>
           <Card aria-labelledby="recent">
             <CardHeader
@@ -330,24 +353,6 @@ function Ready({ usage }: { usage: UsageResponse }): ReactNode {
                   </span>
                 </div>
               </div>
-            </CardBody>
-          </Card>
-
-          <Card aria-labelledby="resets">
-            <CardHeader title="Reset windows" titleId="resets" />
-            <CardBody>
-              {resets.length === 0 ? (
-                <p>Nothing on your plan is counted over a window.</p>
-              ) : (
-                <ul className={styles.resets}>
-                  {resets.map((reading) => (
-                    <li key={reading.dimension}>
-                      <span>{reading.label}</span>
-                      <span className={styles.resetAt}>{instant(reading.resetsAt)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </CardBody>
           </Card>
         </div>

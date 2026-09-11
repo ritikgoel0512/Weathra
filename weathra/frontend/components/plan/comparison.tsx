@@ -30,6 +30,7 @@ import type { PlanAllowanceView, PlanOfferView, PlansResponse } from "@/lib/api/
 import {
   allowanceLabel,
   checkoutFor,
+  modelTierLabel,
   planActionLabel,
   pricingPublished,
   valueProposition,
@@ -101,6 +102,19 @@ export function PlanComparison({ currentPlan }: { readonly currentPlan: string |
                 </tr>
               </thead>
               <tbody>
+                {/*
+                  The row that is not a number. Which model answers is the difference between the
+                  tiers a bigger allowance cannot express, and it is three rows deep in the database
+                  — plan → policy → catalog entry — resolved by `/plans` rather than asserted here.
+                */}
+                {offered.some((plan) => plan.model_tier) ? (
+                  <tr>
+                    <th scope="row">Answers with</th>
+                    {offered.map((plan) => (
+                      <td key={plan.plan_code}>{modelTierLabel(plan) ?? "—"}</td>
+                    ))}
+                  </tr>
+                ) : null}
                 {dimensions.map((dimension) => {
                   const sample = offered
                     .flatMap((plan) => plan.allowances ?? [])
