@@ -1145,10 +1145,40 @@ input.controlBare[type="date"]::-webkit-calendar-picker-indicator:hover {
   display: block;
 }
 
-/* Padding the band itself no longer carries, restored to the two rules under the image. */
+/* Padding the band itself no longer carries, restored to the rule under the image. */
 .provenanceSection[data-variant="hero"] > .attribution,
 .provenanceSection[data-variant="hero"] > .provenanceFooter {
   padding: var(--space-3) var(--space-4);
+}
+
+/*
+ * **One rule under the photograph, not two.**
+ *
+ * The band closed on a provenance line and then, beneath it, a second line holding "All current
+ * readings" — two stacked rules and roughly 70 pixels of chrome under an image the artifact puts
+ * nothing at all beneath. They are siblings of the section rather than of each other, so the
+ * footer is lifted onto the provenance line's own row: the chips are left-aligned and the right of
+ * that row was empty.
+ *
+ * Only from 768 up. Below it the chips wrap to as many lines as they need and an overlapping
+ * control would land on top of them, so the two rules stack as before, where the vertical room is
+ * cheap and the horizontal room is not.
+ */
+@media (min-width: 768px) {
+  .provenanceSection[data-variant="hero"] > .provenanceFooter {
+    position: absolute;
+    right: var(--space-4);
+    bottom: 0;
+    padding: var(--space-3) 0;
+    /* Only as wide as the control in it, so it never covers a chip that wrapped towards it. */
+    width: max-content;
+    max-width: 40%;
+  }
+
+  /* Room kept on the provenance line for the control now sitting at the end of it. */
+  .provenanceSection[data-variant="hero"] > .attribution {
+    padding-right: 42%;
+  }
 }
 
 /* ---------------------------------------------------------------- location imagery

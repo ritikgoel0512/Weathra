@@ -514,8 +514,26 @@ export function ForecastStrip({ forecast }: ForecastStripProps): ReactNode {
                 <span className={styles.stripIcon}>
                   <WeatherIcon condition={conditionOf(day)} size={32} />
                 </span>
-              ) : (
+              ) : dayPrecipitationFrom(day) !== null ? (
                 <DayPrecipitationGlyph outlook={dayPrecipitationFrom(day)} />
+              ) : (
+                /*
+                 * **A day with no condition and no precipitation figure.** Both glyph sources are
+                 * absent — the provider sent no dominant code and no rain total — and the card
+                 * rendered nothing at all in the slot, so the last card in the 2026-09-11 strip
+                 * had a hole where its neighbours had an icon and read as broken rather than as
+                 * unreported. A neutral mark keeps all seven cards one shape and says which of
+                 * the two it is; the figures the day *does* carry are untouched beneath it.
+                 */
+                <span
+                  className={styles.stripIconEmpty}
+                  title="The provider reported no condition for this day."
+                >
+                  <span aria-hidden="true">·</span>
+                  <span className="weathra-visually-hidden">
+                    No condition reported for this day.
+                  </span>
+                </span>
               )}
 
               {/*
@@ -1225,6 +1243,23 @@ export function SavedSnapshots({
  * the stub is in, and it is a real state — not every provider returns hourly data for every place.
  * A panel that vanished would make the Dashboard a different shape depending on the provider.
  */
+/**
+ * One group in a card's closing rule: a label over a figure, no frame around either.
+ *
+ * The frame is what made the old footer three cards. A KPI in the artifact is a label at the
+ * `label` step over a value at the `card` step, separated from its neighbour by space and a
+ * hairline — the same treatment the hero's metric block uses, which is how one screen ends up with
+ * one way of stating a small figure instead of three.
+ */
+function FooterKpi({ term, value }: { readonly term: string; readonly value: string }): ReactNode {
+  return (
+    <div className={styles.kpi}>
+      <span className={styles.kpiTerm}>{term}</span>
+      <span className={styles.kpiValue}>{value}</span>
+    </div>
+  );
+}
+
 export function ClimatePulse({
   forecast,
   footer = null,
@@ -1246,6 +1281,8 @@ export function ClimatePulse({
 
   const hours = intradayHours(forecast);
   const drawable = hours.some((hour) => hour.temperature !== null);
+  const peakTemperature = peakOf(hours, "temperature");
+  const peakChance = peakOf(hours, "chance");
 
   return (
     <ProvenanceSection
@@ -1260,7 +1297,29 @@ export function ClimatePulse({
         units: forecast.attribution?.units,
         fromCache: forecast.attribution?.from_cache,
       })}
-      footer={footer}
+      /*
+        **The artifact's closing rule, compacted.** `01-dashboard.png` ends this card on
+        "PEAK HEAT 19°C @ 16:20 · MAX RISK 45% @ 08:00" — two statements about the curve above
+        them, set small, on one line, divided by space rather than by borders. Ours rendered the
+        deterministic insights here as three bordered cards with display-step figures, which is
+        90 pixels of card doing the work of one 18-pixel rule.
+        Both peaks are read from the same 24 hours the chart plots, so a figure in the rule and the
+        same figure on the curve cannot disagree.
+      */
+      footer={
+        <div className={styles.kpiRule}>
+          {peakTemperature ? (
+            <FooterKpi
+              term="Peak temp"
+              value={`${formatReading({ value: peakTemperature.value, unit: forecast.hourly?.units?.temperature ?? null })} @ ${peakTemperature.at}`}
+            />
+          ) : null}
+          {peakChance ? (
+            <FooterKpi term="Max rain chance" value={`${Math.round(peakChance.value)}% @ ${peakChance.at}`} />
+          ) : null}
+          {footer}
+        </div>
+      }
     >
       <p className={styles.panelLead}>The next 24 reported hours</p>
       {drawable ? (

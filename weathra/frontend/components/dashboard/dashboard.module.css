@@ -1058,34 +1058,44 @@
  * screen support; a grid that wraps, because the number of statements is the number the data
  * carries and not a layout constant.
  */
+/*
+ * **Groups on a rule, not cards in a grid.**
+ *
+ * This was `repeat(auto-fit, minmax(180px, 1fr))` of bordered panels with display-step figures in
+ * them, which is how the climate-pulse card acquired a 90-pixel footer for three short statements.
+ * `01-dashboard.png` sets the same kind of thing — "PEAK HEAT 19°C @ 16:20" — as a label over a
+ * small figure, on one line, divided by space. `display: contents` hands each statement straight
+ * to `.kpiRule` below, so the two intra-day peaks and these three read as one rule rather than as
+ * a rule plus a grid.
+ */
 .insightGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--space-2);
+  display: contents;
 }
 
 .insight {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 2px;
-  align-content: start;
-  padding: var(--space-3);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-raised);
+  min-width: 0;
 }
 
 .insightTitle {
-  font-size: var(--type-meta-size);
-  letter-spacing: 0.04em;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
   text-transform: uppercase;
   color: var(--color-text-muted);
+  white-space: nowrap;
 }
 
 .insightValue {
-  font-size: var(--type-display-size, var(--type-section-size));
-  line-height: 1.1;
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
   color: var(--color-text-primary);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .insight[data-direction="up"] .insightValue {
@@ -1098,7 +1108,58 @@
 
 .insightDetail {
   font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
   color: var(--color-text-muted);
+}
+
+/* ------------------------------------------------- a card's closing rule of small figures
+ *
+ * The container the intra-day peaks and the deterministic insights share. One row, wrapping at
+ * narrow widths, with a hairline between neighbours rather than a border around each — see
+ * `FooterKpi` and `.insightGrid` for what this replaced.
+ */
+.kpiRule {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-4);
+  min-width: 0;
+}
+
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.kpiTerm {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.kpiValue {
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/*
+ * The divider between groups. On the group rather than between them, so a wrapped row does not
+ * open a line with a hairline and the first group on every line is clean.
+ */
+.kpiRule > .kpi:not(:first-child),
+.kpiRule > .insight {
+  padding-left: var(--space-4);
+  border-left: 1px solid var(--color-border-subtle);
 }
 
 /* ------------------------------------------------------- hero condition and day icons */
@@ -1147,7 +1208,21 @@
   display: flex;
   justify-content: center;
   color: var(--color-accent);
-  min-height: 30px;
+  min-height: 32px;
+}
+
+/*
+ * The slot for a day the provider described in no way at all — no dominant code, no rain total.
+ * Same height as its neighbours, so the strip stays one shape, and unmistakably not a reading.
+ */
+.stripIconEmpty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  font-size: var(--type-heading-size);
+  line-height: 1;
+  color: var(--color-text-muted);
 }
 
 .stripCondition {
@@ -1232,8 +1307,12 @@
 }
 
 /* The rest of the current readings, behind the hero rather than under it. */
+/*
+ * No top margin: the disclosure sits on the provenance line rather than under it, so the gap it
+ * used to need is the line's own padding now. See the hero rules in `primitives.module.css`.
+ */
 .heroExtras {
-  margin-top: var(--space-3);
+  margin-top: 0;
 }
 
 .heroExtrasSummary {
