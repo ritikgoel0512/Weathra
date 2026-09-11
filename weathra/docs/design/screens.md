@@ -208,6 +208,20 @@ invented figure reads as a real operational fact.
 | "API RATE LIMITERS — ROLLING 1M WINDOW", "TELEMETRY_SYNC: STABLE", "ENCRYPTION: 256-AES", "USAGE PIPELINE ACTIVE", "WEATHRA PLAN SERVICES V4.8.2-PRO", "LOCKED" | Nothing. Public-endpoint rate limiting is post-MVP, and an encryption banner on a usage screen is a security claim the screen cannot make. |
 | "12:04:00 HH:MM:SS" countdowns, "T-MINUS" timers | The window reset time the backend reports, stated as an instant. A live countdown is a presentation choice that may follow; it is not what makes the reset legible. |
 
+**The Intelligence Report.** `12` was rebuilt against its artifact on 2026-09-11 — a report with
+charts through it rather than sections of figures — and that rebuild made its refusals worth
+naming rather than leaving to the general rule above.
+
+| In `12-weather-intelligence-report.png` | What is implemented instead |
+|---|---|
+| "Neural Agent v4.2" and the agent version beside the synthesis | The gateway and model key the run actually resolved to, written by the backend. Weathra versions no agent of its own. |
+| "EVIDENCE NODES: 47" and the node count beside the sources | The sources the report actually read, listed with what each supplied. Nothing is counted for effect. |
+| "EXPORT PDF" | Nothing. There is no report export; see the export row above. |
+| "CONFIDENCE 96.4%" attached to the narrative | The forecast's own banded confidence with its basis and horizon. A percentage on a piece of prose attributes a measured certainty to a sentence nothing measured. |
+| "DECADAL STABILITY INDEX", "MODEL ALIGNMENT SCORE" | Nothing. Neither is computed, and both name a capability in order to display it. |
+| Named third-party feeds with millisecond latencies | The one provider each figure came from, with the period it covers and when it was retrieved. |
+| The synthesis appearing the moment the page opens | A control a person presses. The artifact's version is free; Weathra's is a real model call against a real allowance, and the report is complete and readable without it. |
+
 **What `09` and `10` do carry, and it is the reason they are approved.** Between them they compose
 every element `specs/web-ui` names — the model-status table with its enable and disable actions and
 all seven of its columns; token usage with the model, policy, plan and call-role filters; estimated
