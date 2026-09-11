@@ -261,11 +261,18 @@ declines to act here: a rejected credential is refused identically by the second
 third. There is no eligible fallback to reach for, and inventing one — a second gateway, a model
 outside the catalog — would be building new architecture to route around a wrong secret.
 
-**What remains, and who can do it.** Setting the deployed `OPENROUTER_API_KEY` to a credential
-OpenRouter accepts. That is the whole remedy, it is an operator action on the Render service, and
-nothing in this repository can perform or verify it. Until then `/agent/ask` and `/agent/stream`
-fail in production and tasks 25.4's criteria 6 and 7 stay open; every other capability serves, which
-is the property the lazy client construction above exists to preserve.
+**Done, 2026-09-11.** The deployed `OPENROUTER_API_KEY` was set to the credential this project
+already held — the same one the probes above authenticate with, nothing created, purchased or
+rotated — and the service rebuilt. The first authenticated `/agent/ask` after it answered **200**,
+served by `openrouter` / `nvidia/nemotron-3-super-120b-a12b:free` at both the routing and synthesis
+stages, with five weather figures each traceable to the run's own open-meteo series. `/agent/stream`
+completes on `final`. Tasks 25.3 and 25.4's criteria 6 and 7 are unblocked; 25.3 is closed.
+
+The diagnosis cost nothing it should not have: the credential was never replaced, the model was
+never changed to make a test pass, and the two defects found on the way — the error classification
+and the credential's quote normalisation — were worth fixing on their own terms. What made the
+difference in the end was ruling the *code path* out by driving it directly, which turned "something
+is wrong with inference" into "this one value is wrong", and that is a much smaller thing to fix.
 
 **One defect was found on the way, and fixed.** The 401 was reported to callers as
 `agent_not_configured` — while the same deployment's readiness probe reported the inference provider

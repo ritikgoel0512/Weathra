@@ -836,7 +836,31 @@ the acting subject bound and the transaction read-only; an anonymous session see
 every one of those nine tables; and claims not surviving into the next session on the same pool. The
 remaining nine need a second subject and skip.
 
-### The deployed group 18 run with two genuinely distinct accounts (2026-09-11, second pass)
+### The deployed group 18 run, clean (2026-09-11, third pass — 25.3 closed)
+
+The credential was corrected on the Render service and the deployment rebuilt. The same suite, run
+against it: **83 passed, 0 failed, 0 errors, 0 skipped.** Every case of group 18 passes against the
+deployment, including the evidence-record isolation that could not run while the agent could not
+answer, and every check of the RLS gate. **Task 25.3 is closed.**
+
+The three cases that were outstanding, and what each now reports:
+
+| Case | Group | Result |
+|---|---|---|
+| `test_neither_account_is_served_the_other_s_evidence_record` | 18.5 | **PASS** — A reads its own evidence (200); B is refused (404) with the same code and message it gets for an identifier that was never issued |
+| `test_a_question_s_every_figure_appears_in_its_evidence` | 25.4 §6 | **PASS** |
+| `test_an_authenticated_stream_completes` | 18.8 / 25.4 §7 | **PASS** — terminal event `final`, no `error` |
+
+**A defect in the harness surfaced the moment the stream worked.** The completion assertion read
+`"complete" in event or "done" in event`, and Weathra's event vocabulary has never contained either
+word: the terminal events are `final` and `error`. The assertion could not have passed against a
+working stream, and nobody found out, because every previous run terminated on `error` and failed
+for the reason everyone already expected — a wrong check agreeing with a real failure. It now
+imports `StreamEventType` and `TERMINAL_EVENTS` from the application, asserts **exactly one**
+terminal event and that it is `final`, and reads the `final` payload to confirm it carries both an
+answer and an evidence identifier. An empty terminal event would otherwise have satisfied it.
+
+### The earlier run, before the credential was corrected (2026-09-11, second pass)
 
 The second account is real this time. `WEATHRA_LIVE_USER_B_*` now names an account whose subject and
 address both differ from A's — checked before anything else ran, because the previous pass's
@@ -1090,12 +1114,11 @@ supplied a genuinely distinct second account and resolved the inference diagnosi
 
 * **A question through `/ask` whose every figure appears in its evidence**, and **an authenticated
   SSE stream completing** (25.4), together with **18.5's evidence-record isolation** (25.3). All
-  three were reached, once each, as a signed-in account, and all three are held up by one thing: the
-  `OPENROUTER_API_KEY` configured on the Render service is a credential OpenRouter refuses with 401.
-  That is established rather than surmised — the same code path returns 200 against the same model
-  when driven with a credential the gateway accepts — and it is an operator action on a value that
-  lives nowhere in this repository. Not a missing credential of Weathra's, and not anything this
-  repository declines to provide.
+  three were held up by one thing — the `OPENROUTER_API_KEY` configured on the Render service was a
+  credential OpenRouter refused with 401 — and all three **now pass**, the value having been
+  corrected to the credential this project already held. The diagnosis is recorded in
+  `docs/agents.md`; the remedy was an operator action on a value that lives nowhere in this
+  repository, and no key was created, purchased or rotated to achieve it.
 * **A second account seeing none of the first's data** (25.4), and **cross-user isolation against
   the deployed backend** (25.3). These needed two live production accounts and now have them.
   Saved-location and thread isolation pass in both directions against the deployment, and the RLS
@@ -1118,11 +1141,11 @@ first's data; verify each and record the results.* Eight criteria, verified one 
 | 3 | Readiness all-reachable | **PASS** — re-verified 2026-09-11 | `/api/v1/ready` → 200, `ready: true`, `environment: production`, `version 0.1.0`. All seven dependencies `configured: true`; `database`, `vector_store`, `mcp_server` and `conversation_memory` each `reachable: true`. `weather_provider`, `authentication_provider` and `inference_provider` report `reachable: null` **by design**, each with its reason in `detail` — a readiness probe that called Open-Meteo on every hit would spend the provider's rate limit on liveness. |
 | 4 | An attributed public forecast without a session | **PASS** — re-verified 2026-09-11 | `/weather/forecast?location=Berlin&days=3` → 200 with no credential, `provider: open-meteo`, the resolved location (`Berlin`, *State of Berlin*, `DE`, 52.52437/13.41053, `Europe/Berlin`, 74 m), `units: metric`, and `retrieved_at: 2026-09-11T04:41:50Z`. |
 | 5 | A baseline comparison with both sides labelled | **PASS** — re-verified 2026-09-11 | `/weather/history/baseline/comparison` → 200 carrying `baseline.data_class: computed_statistic` with its calendar period and `years_used: [2021, 2022, 2023, 2024, 2025]`, the observed side's own `observed_data_class`, a `characterization`, a `z_score`, and a `forecast_side_caveat`. Both sides labelled, and an instantaneous measure is still refused clearly rather than averaged. |
-| 6 | A question through `/ask` whose every figure appears in its evidence | **FAIL** — re-run once after the fix, 2026-09-11 | `POST /agent/ask` answered **503 `provider_authentication_failed`**, `details: {"provider": "openrouter", "status": 401}`. The cause is established above and is outside this repository: the credential configured on the Render service is one OpenRouter refuses. There is no grounding report to hold to its evidence, because no answer was produced. Run once, not retried. |
-| 7 | An authenticated SSE stream completing | **FAIL** — re-run once after the fix, 2026-09-11 | The stream **authorized and opened** — 200, `text/event-stream`, which is 18.8's authenticated case — then terminated on `event: error` carrying `provider_authentication_failed` and its request id, and never completed. No token or secret appears in the stream. Same cause. Run once, not retried. |
+| 6 | A question through `/ask` whose every figure appears in its evidence | **PASS** — verified 2026-09-11, after the credential was corrected | One request, no retry. `POST /agent/ask` → **200**, served by `openrouter` / `nvidia/nemotron-3-super-120b-a12b:free` for both the routing and synthesis stages, with an evidence record persisted and readable at `/evidence/{id}`. The prose carried five numerical weather figures — 17.9, 21.5, 19.766…, 11.6 and 16.866… °C — and each was **independently recomputed from the raw open-meteo daily series in the run's own tool result** (`min`, `max` and `mean` of `temperature_max`, `min` of `temperature_min`, `mean` of `temperature_mean`) as well as matched to a labelled finding carrying open-meteo attribution. The product's own grounding report agrees: `verified: true`, `figures_checked: 5`, `ungrounded_figures: []`. No token appeared in the response. |
+| 7 | An authenticated SSE stream completing | **PASS** — verified 2026-09-11 | One request, no retry. Authorization succeeded, **200 `text/event-stream`**, events arrived, and the stream reached **exactly one terminal event: `final`** — no `event: error`. The `final` payload carried both the answer envelope and the evidence record's identifier, and the bearer token appeared in no frame. |
 | 8 | A second account seeing none of the first's data | **PASS** — verified by automation 2026-09-11 | A genuinely second account, confirmed before anything ran: B's subject and address both differ from A's as the deployment itself reports them. B is served none of A's saved locations and none of A's threads, by listing and by identifier, and cannot delete either — and the same holds in the other direction, over records created for the check and removed afterwards. The deployed RLS gate asks the same question of the database directly, with one subject's claims against another's rows, across all nine user-owned tables. |
 
-Six of eight pass. **The task stays unchecked**, on two criteria and one cause each:
+Seven of eight pass. **The task stays unchecked, on exactly one blocker — criterion 1.**
 
 * **Criterion 1** is blocked on what the criterion asks of the *automation*. Production's own
   metadata says what it can: the account was created on 2026-09-05, a confirmation was sent at
@@ -1132,13 +1155,21 @@ Six of eight pass. **The task stays unchecked**, on two criteria and one cause e
   `otp`-shaped field anywhere on the user object. So the metadata proves an account created in the
   test period and verified; it cannot prove *verified by code*, and calling it that would be
   reading a fact the system does not store. Blocked, not weakened.
-* **Criteria 6 and 7** fail on a credential this repository cannot set. See above.
+* **Criteria 6 and 7** now **pass**. The `OPENROUTER_API_KEY` on the Render service was corrected
+  to the credential this project already held — nothing created, purchased or rotated — and the
+  deployment rebuilt. The first authenticated request after it answered 200.
 
 Criterion 8 moved from blocked to passing the moment a genuinely second account existed; criterion 2
 had already moved from a manual pass to an automated one. The scoped suite — `pytest
 tests/deployed/test_deployed_acceptance.py tests/deployed/test_deployed_rls_gate.py -m deployed` —
-reported **80 passed, 1 failed, 2 errors, 0 skipped**, the three exceptions being the inference
-condition and nothing else.
+now reports **83 passed, 0 failed, 0 errors, 0 skipped**.
+
+Criterion 1 is the whole of what remains. It is not blocked on a credential, a deployment or a
+check that has not been written: it is blocked on the difference between *an account that was
+verified by code* and *an automated run that performs a signup and confirms it by code*. Closing it
+needs a fresh signup and a real inbox inside the automation. Creating a third account to satisfy a
+checkbox was ruled out, and reading the existing account's metadata as proof would be reading a fact
+Supabase does not store.
 
 **A gap this pass found, and closed.** The record above used to say the suite implemented criterion
 6. It did not. `test_an_authenticated_stream_completes` covered criterion 7, and 34.7's module has
@@ -1227,11 +1258,12 @@ used to be stuck behind the same fixture and is not any more — `/agent/stream`
 it reaches inference, so a failed run still leaves a real owned row to ask about. Evidence cannot be
 freed the same way: there is no evidence without an answer.
 
-**What would close it.** One thing, and it is the same thing that closes 25.4's criteria 6 and 7: an
-`OPENROUTER_API_KEY` on the Render service that OpenRouter accepts. Nothing in this repository needs
-to change — the check is written, the second account is real, and the run that produced *80 passed,
-1 failed, 2 errors, 0 skipped* will produce a clean one on the first dispatch after that value is
-corrected.
+**Closed, 2026-09-11.** The `OPENROUTER_API_KEY` on the Render service was corrected to the
+credential this project already held, the deployment rebuilt, and the suite run again: **83 passed,
+0 failed, 0 errors, 0 skipped**. The evidence-record case was the last one outstanding and it passes
+— A reads its own evidence, B is refused with the same code, message and status it gets for an
+identifier that was never issued, and the two refusals differ only in the `request_id` every response
+carries. Every case of group 18 now passes against the deployment, and the task is checked.
 
 Recorded for continuity, because the reasoning survives its own resolution: the owner's constraints
 were **no new Supabase account is to be created**, **no second test account is to be requested**,

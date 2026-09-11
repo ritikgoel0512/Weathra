@@ -28,6 +28,7 @@ unknown issuer is still nothing.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from typing import Any
 
@@ -38,6 +39,7 @@ from tests.auth_support import build_factory
 from tests.live_support import (
     SECOND_ACCOUNT_VARIABLES,
     Credentials,
+    LiveCheckError,
     Target,
     Token,
     assert_not_server_error,
@@ -53,6 +55,7 @@ from tests.live_support import (
     upstream_refused,
 )
 from weathra.api.classification import ADMINISTRATIVE_PATHS, PROTECTED_PATHS, PUBLIC_PATHS
+from weathra.api.streaming import TERMINAL_EVENTS, StreamEventType
 
 pytestmark = pytest.mark.deployed
 
@@ -580,7 +583,21 @@ def test_one_account_cannot_delete_another_s_saved_location(
 def test_an_authenticated_stream_completes(
     writer: httpx.Client, target: Target, token_a: Token, credentials: Credentials
 ) -> None:
-    """Group 18.8's authenticated case and 25.4's stream, in one: it opens, and it finishes."""
+    """Group 18.8's authenticated case and 25.4's stream, in one: it opens, and it finishes.
+
+    **Completion is named, not guessed.** This asserted `"complete" in event or "done" in event`
+    until 2026-09-11, and Weathra's event vocabulary has never contained either word: the terminal
+    events are `final` and `error` (`StreamEventType`, and the catalogue in `docs/api.md`). The
+    assertion could not have passed against a working stream, and nobody found out, because until
+    the deployed inference credential was corrected the stream always terminated on `error` and the
+    check failed for the reason everyone was already expecting. A substring guess that happens to
+    match the failure path is the most expensive kind of wrong, so the vocabulary is imported here
+    rather than spelled again — a renamed event breaks this test instead of quietly passing it.
+
+    `specs/agent-orchestration` requires **exactly one** terminal event, so both halves are asserted:
+    `final` arrived, and `error` did not. "It finished" and "it did not fail" are not the same claim
+    when a stream is allowed to end either way.
+    """
     with writer.stream(
         "POST",
         target.api("/agent/stream"),
@@ -590,12 +607,45 @@ def test_an_authenticated_stream_completes(
     ) as response:
         assert response.status_code == 200, f"the stream answered {response.status_code}"
         assert "text/event-stream" in response.headers.get("content-type", "")
-        events = [line for line in response.iter_lines() if line.startswith("event:")]
+        body = list(response.iter_lines())
 
+    events = [line.split(":", 1)[1].strip() for line in body if line.startswith("event:")]
     assert events, "the stream carried no events"
-    assert any("complete" in event or "done" in event for event in events), (
-        f"the stream never reported completion: {events[-3:]}"
+
+    terminal = [event for event in events if event in TERMINAL_EVENTS]
+    assert terminal == [StreamEventType.FINAL], (
+        f"the stream's terminal events were {terminal or 'none'}, expected exactly "
+        f"[{StreamEventType.FINAL}]; all events: {events}"
     )
+
+    # The terminal event is the one that carries the answer, so an empty `final` would satisfy
+    # every assertion above and deliver nothing. 25.4 asks for a stream that *completes*.
+    final_payload = _final_payload(body, *credentials.secrets)
+    assert final_payload.get("answer"), "the stream's final event carried no answer"
+    assert final_payload.get("evidence_id"), "the stream's final event named no evidence record"
+
+    # The token travels in a header on the way in and must not come back out in any frame.
+    assert str(token_a) not in "\n".join(body), "the stream echoed the bearer token"
+
+
+def _final_payload(body: list[str], *secrets: str) -> dict[str, Any]:
+    """The `data:` line belonging to the `final` event, parsed."""
+    for index, line in enumerate(body):
+        if line.startswith("event:") and line.split(":", 1)[1].strip() == StreamEventType.FINAL:
+            for following in body[index + 1 :]:
+                if following.startswith("data:"):
+                    try:
+                        parsed = json.loads(following.split(":", 1)[1].strip())
+                    except ValueError as failure:
+                        raise LiveCheckError(
+                            "the stream's final event carried a data line that is not JSON"
+                        ) from failure
+                    if not isinstance(parsed, dict):
+                        raise LiveCheckError("the stream's final event is not an object")
+                    return parsed
+                if following.startswith("event:"):
+                    break
+    raise LiveCheckError("the stream carried no final event to read")
 
 
 @pytest.fixture(scope="module")
