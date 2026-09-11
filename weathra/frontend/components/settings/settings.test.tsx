@@ -407,16 +407,27 @@ describe("changing the unit system", () => {
 
     renderSettingsAndDashboard();
 
+    /*
+     * **Read as the element's own text, not as one text node.**
+     *
+     * The Dashboard's hero sets the figure and its unit in two spans so the number can carry the
+     * weight the artifact gives it — `<span>18.2</span><span>°C</span>` — which is why a matcher
+     * looking for the string "18.2 °C" stopped finding it. This suite was the only place that broke
+     * and it broke silently against a targeted test run, which is how it reached `main` red.
+     */
+    const reading = (figure: string) => (_: string, element: Element | null) =>
+      element?.tagName === "P" && element.textContent?.replace(/\s+/g, "") === figure;
+
     // The Dashboard opens in the stored unit system.
-    expect(await screen.findByText("18.2 °C")).toBeInTheDocument();
+    expect(await screen.findByText(reading("18.2°C"))).toBeInTheDocument();
 
     await person.click(screen.getByRole("radio", { name: /Imperial/ }));
     await person.click(screen.getByRole("button", { name: "Save preferences" }));
 
     // The saved change reaches the Dashboard's own read of the same preferences, and it asks the
     // backend again — for imperial. Nothing is converted in the browser.
-    expect(await screen.findByText("64.8 °F")).toBeInTheDocument();
-    expect(screen.queryByText("18.2 °C")).toBeNull();
+    expect(await screen.findByText(reading("64.8°F"))).toBeInTheDocument();
+    expect(screen.queryByText(reading("18.2°C"))).toBeNull();
 
     const asked = (fetchMock.mock.calls as [string][]).map(([input]) => new URL(input));
     const imperialCalls = asked.filter(
