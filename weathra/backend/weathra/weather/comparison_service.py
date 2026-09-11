@@ -25,7 +25,7 @@ import asyncio
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
 
-from weathra.analytics import descriptive, precipitation
+from weathra.analytics import association, descriptive, precipitation
 from weathra.analytics.support import require_usable
 from weathra.config import Settings
 from weathra.domain.analytics import Direction, Provenance, Statistic, StatisticResult
@@ -300,6 +300,9 @@ class ComparisonService:
 
         scored: list[Scored] = []
         excluded: list[ExcludedCandidate] = []
+        # The retrievals that survived, in ranking-independent order, so the association measures
+        # below work from the same forecasts the scores came from rather than fetching again.
+        retained: list[tuple[Location, Forecast]] = []
 
         for location, retrieval in zip(locations, retrievals, strict=True):
             if isinstance(retrieval, BaseException):
@@ -336,8 +339,18 @@ class ComparisonService:
                     supporting,
                 )
             )
+            retained.append((location, forecast))
 
         self._require_survivors(scored, excluded)
+
+        association = Provenance(
+            location=retained[0][0],
+            period=retained[0][1].period,
+            provider=retained[0][1].provider,
+            unit_system=unit_system,
+            source_data_class=DataClass.FORECAST,
+            retrieved_at=retained[0][1].retrieved_at,
+        )
 
         return ComparisonResult(
             mode=ComparisonMode.LOCATIONS,
@@ -352,6 +365,95 @@ class ComparisonService:
             tie_tolerance=TIE_TOLERANCE,
             local_time_basis=True,
             weighting_disclosure=WEIGHTING_DISCLOSURE if criterion.is_composite else None,
+            correlation=self._correlation(retained, provenance=association),
+            data_density=self._data_density(retained, provenance=association),
+        )
+
+    # ------------------------------------------------- how the places moved together
+
+    @staticmethod
+    def _trajectory(forecast: Forecast) -> tuple[Series, Measure]:
+        """The finest series the provider supplied, and the measure that series carries.
+
+        Hourly where there is one — it is the trajectory `04-compare-cities.png` draws, and a
+        seven-point daily series is a thin thing to correlate. Daily otherwise, on the daily mean,
+        because the two series carry different measures: `temperature` is instantaneous and
+        `temperature_mean` is an aggregate, and asking either series for the other's measure
+        returns nothing at all.
+        """
+        hourly = forecast.hourly
+        if hourly is not None and hourly.supplies(Measure.TEMPERATURE):
+            return hourly, Measure.TEMPERATURE
+        return forecast.daily, Measure.TEMPERATURE_MEAN
+
+    def _correlation(
+        self,
+        retained: Sequence[tuple[Location, Forecast]],
+        *,
+        provenance: Provenance,
+    ) -> StatisticResult | None:
+        """Pearson's r between the two compared places, where there are exactly two.
+
+        **None rather than not-computable above two candidates**, and the distinction matters: a
+        not-computable result says "this was asked and could not be answered", and a single
+        coefficient for three places is not a question with an answer — there are three pairs. The
+        screen draws no bar rather than drawing a refusal, and `screens.md` records why.
+        """
+        if len(retained) != 2:
+            return None
+        (left_place, left_forecast), (right_place, right_forecast) = retained
+        left_series, measure = self._trajectory(left_forecast)
+        right_series, right_measure = self._trajectory(right_forecast)
+        if right_measure is not measure:
+            # One provider gave an hourly series and the other did not. Comparing an instantaneous
+            # reading against a daily mean is not a correlation of the same quantity, so both drop
+            # to the coarser measure both can supply.
+            left_series, measure = left_forecast.daily, Measure.TEMPERATURE_MEAN
+            right_series = right_forecast.daily
+
+        return association.correlation(
+            left=left_series,
+            right=right_series,
+            measure=measure,
+            left_label=left_place.display_name,
+            right_label=right_place.display_name,
+            unit=left_series.unit(measure) or "",
+            provenance=provenance,
+        )
+
+    def _data_density(
+        self,
+        retained: Sequence[tuple[Location, Forecast]],
+        *,
+        provenance: Provenance,
+    ) -> StatisticResult | None:
+        """How much of the window every surviving candidate reported.
+
+        The denominator is the longest series among them: that is the number of slots the provider
+        was asked to fill, and measuring against the *shortest* would report a short answer as a
+        complete one.
+        """
+        if not retained:
+            return None
+        series: list[Series] = []
+        measure = Measure.TEMPERATURE_MEAN
+        for _, forecast in retained:
+            candidate, candidate_measure = self._trajectory(forecast)
+            series.append(candidate)
+            measure = candidate_measure
+        # Mixed resolutions fall back to daily for the same reason the correlation does.
+        if len({len(entry) for entry in series}) > 1 and any(
+            forecast.hourly is None for _, forecast in retained
+        ):
+            series = [forecast.daily for _, forecast in retained]
+            measure = Measure.TEMPERATURE_MEAN
+
+        return association.data_density(
+            series=tuple(series),
+            measure=measure,
+            labels=tuple(place.display_name for place, _ in retained),
+            expected=max(len(entry) for entry in series),
+            provenance=provenance,
         )
 
     # ---------------------------------------------------------------- days

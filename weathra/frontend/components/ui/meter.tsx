@@ -22,6 +22,16 @@ export interface MeterProps {
   readonly value?: number | null;
   /** What to say in place of a value. */
   readonly unavailable?: string;
+  /**
+   * The figure to print, when a percentage of the bar's length is the wrong thing to print.
+   *
+   * Added for Compare Cities' correlation bar. There the bar's length is |r| — a bar has no
+   * direction — and the percentage that length implies is not the statistic: `r = -0.9` fills
+   * 90% of the track and means the two places move *oppositely*, so a headline reading "90%"
+   * would be confidently wrong. The caller passes "-0.90" instead. Omit it wherever the value
+   * really is a proportion, as a data density is, and the percentage is right.
+   */
+  readonly valueLabel?: string;
   /** Optional short note under the bar. */
   readonly note?: ReactNode;
 }
@@ -30,6 +40,7 @@ export function Meter({
   label,
   value = null,
   unavailable = "Not available",
+  valueLabel,
   note,
 }: MeterProps): ReactNode {
   const known = typeof value === "number" && Number.isFinite(value);
@@ -40,13 +51,22 @@ export function Meter({
       <div className={styles.meterHead}>
         <span className={styles.meterLabel}>{label}</span>
         <span className={styles.meterValue}>
-          {known ? `${Math.round(percent)}%` : unavailable}
+          {known ? (valueLabel ?? `${Math.round(percent)}%`) : unavailable}
         </span>
       </div>
       <div
         className={styles.meterTrack}
         {...(known
-          ? { role: "meter", "aria-valuenow": Math.round(percent), "aria-valuemin": 0, "aria-valuemax": 100, "aria-label": label }
+          ? {
+              role: "meter",
+              "aria-valuenow": Math.round(percent),
+              "aria-valuemin": 0,
+              "aria-valuemax": 100,
+              "aria-label": label,
+              // The figure a sighted reader sees, so a screen reader is not told the bar's length
+              // where that length is not the statistic.
+              ...(valueLabel ? { "aria-valuetext": valueLabel } : {}),
+            }
           : { "aria-hidden": true })}
       >
         <span className={styles.meterFill} style={{ width: `${percent}%` }} />

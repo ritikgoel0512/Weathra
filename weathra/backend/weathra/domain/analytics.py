@@ -68,6 +68,11 @@ class Statistic(StrEnum):
     PERCENTILE_RANK = "percentile_rank"
     DELTA = "delta"
     Z_SCORE = "z_score"
+    # How two places' trajectories move together, and how much of a window was observed at
+    # all. Both are properties of the *data* rather than of any model, which is why they sit
+    # here beside the z-score rather than anywhere near the interpretation layer.
+    CORRELATION = "correlation"
+    DATA_DENSITY = "data_density"
     STANDARD_DEVIATION = "standard_deviation"
     # composite reports
     ANOMALIES = "anomalies"

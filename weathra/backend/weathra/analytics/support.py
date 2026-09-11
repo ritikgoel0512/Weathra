@@ -61,6 +61,12 @@ MINIMUM_POINTS: dict[Statistic, int] = {
     Statistic.PERCENTILE_RANK: 3,
     Statistic.DELTA: 1,
     Statistic.Z_SCORE: 1,
+    # Three, and the reason is worth stating: through *two* points Pearson's r is exactly
+    # ±1 whatever the values, so a two-point coefficient is an artefact of the arithmetic
+    # rather than a finding. Three is the fewest that can disagree with a straight line.
+    Statistic.CORRELATION: 3,
+    # A density of nothing is still a density: one instant either was or was not reported.
+    Statistic.DATA_DENSITY: 1,
     Statistic.STANDARD_DEVIATION: 2,
     # Median absolute deviation over fewer than three points is not a dispersion estimate.
     Statistic.ANOMALIES: 3,

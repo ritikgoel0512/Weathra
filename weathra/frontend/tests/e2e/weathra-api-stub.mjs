@@ -1429,6 +1429,27 @@ const FIXTURES = {
     retrieved_at: RETRIEVED_AT,
     basis: "Every place measured over the same window in its own local time.",
     weights: {},
+    /*
+     * The artifact's two bars, shaped as `association.py` returns them.
+     *
+     * Deliberately not a round 96%: 0.87 with two of twenty-four instants excluded is what a real
+     * pair of nearby cities and a real provider look like, and a figure that lands on a suspiciously
+     * clean number is the kind of fixture that hides a formatting bug.
+     */
+    correlation: {
+      ...statistic("correlation", "temperature", 0.87, "correlation coefficient", "Pearson correlation of the two places' values at the instants both reported, paired on UTC time: r = sum((x-mean(x))*(y-mean(y))) / sqrt(sum((x-mean(x))^2) * sum((y-mean(y))^2)), between Berlin, Germany and Munich, Germany"),
+      minimum_points: 3,
+      points_used: 22,
+      points_excluded: 2,
+    },
+    data_density: {
+      ...statistic("data_density", "temperature", 91.7, "%", "instants every candidate reported a value for, over the instants the window asked for, as a percentage; 2 candidates: Berlin, Germany, Munich, Germany"),
+      // The denominator, as `data_density` reports it: 22 of 24 instants usable = 91.7%, which is
+      // the same 22 the correlation paired. A fixture whose two figures disagreed about the same
+      // window would be a picture that proves the layout and hides the arithmetic.
+      points_used: 24,
+      points_excluded: 2,
+    },
     candidates: [
       {
         label: "Berlin, Germany",

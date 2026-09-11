@@ -64,6 +64,7 @@ import { ComparisonChart } from "./chart";
 import {
   ComparisonCharts,
   ComparisonSummary,
+  DeterministicAssociation,
   DifferentialMatrix,
   ForecastDeltaExplorer,
   Excluded, Ranking, SharedBasis,
@@ -175,7 +176,33 @@ function ForecastDeltaGrid({
     ...new Set<string>(rows.flatMap((row) => row.days.map((day) => day.date))),
   ].sort();
 
-  return <ForecastDeltaExplorer rows={rows} dates={dates} />;
+  /*
+   * The same four forecasts, as the artifact's intra-day plot.
+   *
+   * Built here rather than in `ComparisonCharts` because this is where the forecasts already are —
+   * the matrix needs them, so drawing the plot from them costs no extra request. A place whose
+   * provider returned no hourly series contributes an empty line and is filtered out by the chart.
+   */
+  const pulse = candidates.map((candidate: ComparisonCandidate, index: number) => {
+    const forecast = [a, b, c, d][index] ?? null;
+    return {
+      label: candidate.label,
+      points: (forecast?.hourly?.entries ?? []).map((entry) => ({
+        at: entry.time_utc,
+        value: entry.values?.temperature ?? null,
+      })),
+    };
+  });
+  const pulseUnit =
+    [a, b, c, d].find((forecast) => forecast?.hourly?.units?.temperature)?.hourly?.units
+      ?.temperature ?? null;
+
+  return (
+    <>
+      <ForecastDeltaExplorer rows={rows} dates={dates} />
+      <ComparisonCharts pulse={pulse} pulseUnit={pulseUnit} />
+    </>
+  );
 }
 
 function Results({ enquiry }: { readonly enquiry: Enquiry }): ReactNode {
@@ -213,11 +240,17 @@ function Results({ enquiry }: { readonly enquiry: Enquiry }): ReactNode {
         <ComparisonChart result={result} />
       </Ranking>
 
+      {/*
+        The artifact's two bars, where the artifact puts them — directly under the comparison's own
+        account of itself, above the day matrix. See `DeterministicAssociation`.
+      */}
+      <DeterministicAssociation result={result} />
+
       {/* The artifact's day-by-day matrix, from each place's own retrieved forecast. */}
       <ForecastDeltaGrid result={result} days={enquiry.days} />
 
-      {/* Its two lower charts, and the account of how the ranking was made. */}
-      <ComparisonCharts />
+      {/* The account of how the ranking was made. The two lower charts are rendered by
+          `ForecastDeltaGrid` above, which is where the forecasts they are drawn from already are. */}
       <DifferentialMatrix result={result} />
       <ComparisonSummary result={result} />
     </div>

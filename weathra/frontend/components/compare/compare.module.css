@@ -593,3 +593,85 @@
     grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
   }
 }
+
+/* ------------------------------------- the artifact's correlation and density bars */
+
+/*
+ * `04-compare-cities.png` stacks its two bars in a narrow panel. Two tracks at desk width, one
+ * below the tablet breakpoint — a meter whose label, figure and method note share a column
+ * narrower than about 260 pixels wraps its note to five lines and stops reading as a bar.
+ */
+.association {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.associationItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The figure itself, at the weight the artifact gives its percentages. */
+.associationValue {
+  color: var(--color-text-primary);
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * A reason where a bar would be. Muted and at meta size, because it is an explanation rather than
+ * a measurement — and never styled to look like the figure it stands in for.
+ */
+.associationReason {
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+/*
+ * The method, behind one press.
+ *
+ * The figures above are the screen's subject; the algebra that produced them has to be reachable
+ * (`specs/deterministic-analytics`) and does not have to be in the reading path. A native
+ * `<summary>` is keyboard-operable on every platform with its state announced, which is why this
+ * is a disclosure rather than a hover tooltip.
+ */
+.associationMethod > summary {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  cursor: pointer;
+}
+
+.associationMethod > summary:hover {
+  color: var(--color-text-secondary);
+}
+
+/* ------------------------------------------ the artifact's intra-day differential plot */
+
+/*
+ * `04-compare-cities.png`'s "Climate Pulse Differential". The plot keeps a definite height for the
+ * reason recorded at length in `historical.module.css`: `ResponsiveContainer` measures its parent,
+ * and a parent sized by flex against an `auto` basis measures zero on the pass that matters.
+ */
+.pulse {
+  margin: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.pulsePlot {
+  height: 220px;
+  width: 100%;
+}
+
+.pulseNote {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+}

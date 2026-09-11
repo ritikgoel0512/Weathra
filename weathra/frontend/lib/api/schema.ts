@@ -336,9 +336,13 @@ export interface ComparisonRequest {
 /** A completed comparison: the ranking, the shared basis, and what was left out. */
 export interface ComparisonResult {
   readonly candidates: ComparisonCandidate[];
+  /** How the two compared places' trajectories moved together, as Pearson's r over the instants both reported. Present only for a two-candidate comparison: a single coefficient describes one pair, and N places have N(N-1)/2 of them. Not computable, with its reason, where the pair shares too few instants or either side was flat. */
+  readonly correlation?: StatisticResult | null;
   readonly criterion: Criterion;
   /** Which class every candidate was evaluated from. Never mixed. */
   readonly data_class: DataClass;
+  /** How much of the window every candidate actually reported, as a percentage. Counts only instants every candidate carries a value for, because a slot one place reported and another did not is a slot the comparison could not use. */
+  readonly data_density?: StatisticResult | null;
   readonly excluded?: ExcludedCandidate[];
   /** Whether the window was applied in each candidate's own local time. */
   readonly local_time_basis?: boolean;
@@ -1139,7 +1143,7 @@ export interface SpreadPoint {
 }
 
 /** Every statistic the deterministic engine produces. */
-export type Statistic = "minimum" | "maximum" | "mean" | "range" | "total" | "daily_totals" | "wet_entry_count" | "probability_maximum" | "probability_mean" | "probability_exceedance" | "mean_speed" | "maximum_sustained_speed" | "maximum_gust" | "prevailing_direction" | "rolling_mean" | "percentile" | "percentile_rank" | "delta" | "z_score" | "standard_deviation" | "anomalies" | "trend" | "baseline";
+export type Statistic = "minimum" | "maximum" | "mean" | "range" | "total" | "daily_totals" | "wet_entry_count" | "probability_maximum" | "probability_mean" | "probability_exceedance" | "mean_speed" | "maximum_sustained_speed" | "maximum_gust" | "prevailing_direction" | "rolling_mean" | "percentile" | "percentile_rank" | "delta" | "z_score" | "correlation" | "data_density" | "standard_deviation" | "anomalies" | "trend" | "baseline";
 
 /** One computed — or explicitly not-computable — statistic, fully self-describing. */
 export interface StatisticResult {

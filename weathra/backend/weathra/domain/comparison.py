@@ -140,6 +140,23 @@ class ComparisonResult(BaseModel):
         default=None,
         description="Required for the composite criterion: whose heuristic the weights are.",
     )
+    correlation: StatisticResult | None = Field(
+        default=None,
+        description=(
+            "How the two compared places' trajectories moved together, as Pearson's r over the "
+            "instants both reported. Present only for a two-candidate comparison: a single "
+            "coefficient describes one pair, and N places have N(N-1)/2 of them. Not computable, "
+            "with its reason, where the pair shares too few instants or either side was flat."
+        ),
+    )
+    data_density: StatisticResult | None = Field(
+        default=None,
+        description=(
+            "How much of the window every candidate actually reported, as a percentage. Counts "
+            "only instants every candidate carries a value for, because a slot one place reported "
+            "and another did not is a slot the comparison could not use."
+        ),
+    )
 
     @model_validator(mode="after")
     def _basis_is_shared_and_stated(self) -> Self:

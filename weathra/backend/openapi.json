@@ -1609,12 +1609,34 @@
             "title": "Candidates",
             "type": "array"
           },
+          "correlation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatisticResult"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How the two compared places' trajectories moved together, as Pearson's r over the instants both reported. Present only for a two-candidate comparison: a single coefficient describes one pair, and N places have N(N-1)/2 of them. Not computable, with its reason, where the pair shares too few instants or either side was flat."
+          },
           "criterion": {
             "$ref": "#/components/schemas/Criterion"
           },
           "data_class": {
             "$ref": "#/components/schemas/DataClass",
             "description": "Which class every candidate was evaluated from. Never mixed."
+          },
+          "data_density": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatisticResult"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How much of the window every candidate actually reported, as a percentage. Counts only instants every candidate carries a value for, because a slot one place reported and another did not is a slot the comparison could not use."
           },
           "excluded": {
             "default": [],
@@ -5340,6 +5362,8 @@
           "percentile_rank",
           "delta",
           "z_score",
+          "correlation",
+          "data_density",
           "standard_deviation",
           "anomalies",
           "trend",

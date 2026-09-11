@@ -24,7 +24,17 @@
  * three is the failure this screen exists to avoid.
  */
 
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import {
   AttributionFooter,
@@ -33,6 +43,7 @@ import {
   MethodNote,
   EmptyChart,
   LocationImage,
+  Meter,
   ProvenanceSection,
   ScrollRegion,
 } from "@/components/ui";
@@ -60,19 +71,27 @@ import styles from "./compare.module.css";
 /* ------------------------------------------------------------------ one candidate */
 
 /** One measure's part in a composite score: which way it counts, how much, and to what effect. */
-function Contribution({ contribution }: { readonly contribution: ComponentContribution }): ReactNode {
+function Contribution({
+  contribution,
+}: {
+  readonly contribution: ComponentContribution;
+}): ReactNode {
   return (
     <li className={styles.contribution}>
       <span className={styles.contributionHead}>
-        <span className={styles.figureLabel}>{measureLabel(contribution.measure)}</span>
+        <span className={styles.figureLabel}>
+          {measureLabel(contribution.measure)}
+        </span>
         <span className={styles.figureValue}>
           {Math.round(contribution.value * 10) / 10}
           <span className={styles.figureUnit}> {contribution.unit}</span>
         </span>
       </span>
       <span className={styles.note}>
-        {contribution.direction === "above" ? "Higher scores better" : "Lower scores better"} ·{" "}
-        {weightPercentage(contribution.weight)} of the score · added{" "}
+        {contribution.direction === "above"
+          ? "Higher scores better"
+          : "Lower scores better"}{" "}
+        · {weightPercentage(contribution.weight)} of the score · added{" "}
         {Math.round(contribution.contribution * 100) / 100}
       </span>
       <MethodNote
@@ -106,7 +125,11 @@ export interface CandidateCardProps {
  * headline is not. A card whose only supporting statistic *is* the headline renders no list rather
  * than an empty one.
  */
-export function CandidateCard({ candidate, criterion, sharesRank }: CandidateCardProps): ReactNode {
+export function CandidateCard({
+  candidate,
+  criterion,
+  sharesRank,
+}: CandidateCardProps): ReactNode {
   const figure = comparableFigure(candidate);
   const composite = isComposite(candidate);
 
@@ -117,10 +140,17 @@ export function CandidateCard({ candidate, criterion, sharesRank }: CandidateCar
    */
   const supporting = candidate.supporting ?? [];
   const promoted = composite || figure === null ? null : supporting[0];
-  const remaining = promoted === undefined || promoted === null ? supporting : supporting.slice(1);
+  const remaining =
+    promoted === undefined || promoted === null
+      ? supporting
+      : supporting.slice(1);
 
   return (
-    <article className={styles.candidate} data-candidate="true" data-rank={candidate.rank}>
+    <article
+      className={styles.candidate}
+      data-candidate="true"
+      data-rank={candidate.rank}
+    >
       {/*
         `04-compare-cities.png` gives each compared city a photographic banner with its name and
         status on it. `LocationImage` holds that frame whether a photograph is present or not — see
@@ -137,7 +167,9 @@ export function CandidateCard({ candidate, criterion, sharesRank }: CandidateCar
             #{candidate.rank}
           </span>
           <h3 className={styles.candidateName}>{candidate.label}</h3>
-          {sharesRank || candidate.tied ? <Badge tone="neutral">Tied</Badge> : null}
+          {sharesRank || candidate.tied ? (
+            <Badge tone="neutral">Tied</Badge>
+          ) : null}
         </header>
       </LocationImage>
 
@@ -149,7 +181,9 @@ export function CandidateCard({ candidate, criterion, sharesRank }: CandidateCar
         <p className={styles.candidateFigure}>
           <span className={styles.figureValue}>
             {Math.round(figure.value * 10) / 10}
-            {figure.unit ? <span className={styles.figureUnit}> {figure.unit}</span> : null}
+            {figure.unit ? (
+              <span className={styles.figureUnit}> {figure.unit}</span>
+            ) : null}
           </span>
           <span className={styles.note}>
             {/*
@@ -185,7 +219,10 @@ export function CandidateCard({ candidate, criterion, sharesRank }: CandidateCar
           <p className={styles.noteStrong}>What made up this score</p>
           <ul className={styles.contributions}>
             {(candidate.contributions ?? []).map((contribution, index) => (
-              <Contribution key={`${contribution.measure}-${index}`} contribution={contribution} />
+              <Contribution
+                key={`${contribution.measure}-${index}`}
+                contribution={contribution}
+              />
             ))}
           </ul>
         </>
@@ -196,11 +233,13 @@ export function CandidateCard({ candidate, criterion, sharesRank }: CandidateCar
             return (
               <li className={styles.figure} key={`${entry.statistic}-${index}`}>
                 <span className={styles.figureLabel}>
-                  {entry.statistic.replace(/_/g, " ")} · {measureLabel(entry.measure)}
+                  {entry.statistic.replace(/_/g, " ")} ·{" "}
+                  {measureLabel(entry.measure)}
                 </span>
                 {value === null ? (
                   <span className={styles.note}>
-                    Not computable: {entry.reason ?? "the backend reported no value."}
+                    Not computable:{" "}
+                    {entry.reason ?? "the backend reported no value."}
                   </span>
                 ) : (
                   <span className={styles.figureValue}>{value}</span>
@@ -239,7 +278,10 @@ export function Ranking({ result, children }: RankingProps): ReactNode {
   const shared = new Set(
     (result.candidates ?? [])
       .map((candidate) => candidate.rank)
-      .filter((rank, _index, ranks) => ranks.filter((other) => other === rank).length > 1),
+      .filter(
+        (rank, _index, ranks) =>
+          ranks.filter((other) => other === rank).length > 1,
+      ),
   );
 
   return (
@@ -276,13 +318,22 @@ export function Ranking({ result, children }: RankingProps): ReactNode {
 /* ---------------------------------------------------------------- the shared basis */
 
 /** What every candidate was measured by, so the ranking can be checked for fairness. */
-export function SharedBasis({ result }: { readonly result: ComparisonResult }): ReactNode {
+export function SharedBasis({
+  result,
+}: {
+  readonly result: ComparisonResult;
+}): ReactNode {
   const sourceClass = dataClassFor(result.data_class);
 
   return (
-    <section className={styles.basis} aria-label="The basis every candidate shares">
+    <section
+      className={styles.basis}
+      aria-label="The basis every candidate shares"
+    >
       <p className={styles.basisHead}>
-        <span className={styles.noteStrong}>Every candidate was measured the same way</span>
+        <span className={styles.noteStrong}>
+          Every candidate was measured the same way
+        </span>
         {sourceClass ? <DataClassBadge dataClass={sourceClass} /> : null}
       </p>
 
@@ -332,15 +383,23 @@ export function SharedBasis({ result }: { readonly result: ComparisonResult }): 
  * Rendered whenever there is one, and never folded into a footnote: a reader who asked about three
  * places and is shown two has to be told which one is missing and why.
  */
-export function Excluded({ result }: { readonly result: ComparisonResult }): ReactNode {
+export function Excluded({
+  result,
+}: {
+  readonly result: ComparisonResult;
+}): ReactNode {
   const excluded = result.excluded ?? [];
   if (excluded.length === 0) return null;
 
   return (
-    <section className={styles.excluded} aria-label="Locations left out of the ranking">
+    <section
+      className={styles.excluded}
+      aria-label="Locations left out of the ranking"
+    >
       {/* Announced when it appears, without the section ceasing to be a landmark to navigate to. */}
       <p className={styles.noteStrong} role="status">
-        {excluded.length} {excluded.length === 1 ? "location was" : "locations were"} left out of
+        {excluded.length}{" "}
+        {excluded.length === 1 ? "location was" : "locations were"} left out of
         this ranking
       </p>
       {/*
@@ -361,9 +420,12 @@ export function Excluded({ result }: { readonly result: ComparisonResult }): Rea
           </li>
         ))}
       </ul>
-      <AttributionFooter attribution={{ provider: result.provider, location: null }}>
+      <AttributionFooter
+        attribution={{ provider: result.provider, location: null }}
+      >
         <p className={styles.note}>
-          These places are not in the ranking above. Nothing has been estimated in their place.
+          These places are not in the ranking above. Nothing has been estimated
+          in their place.
         </p>
       </AttributionFooter>
     </section>
@@ -391,7 +453,11 @@ export function Excluded({ result }: { readonly result: ComparisonResult }): Rea
  * It scrolls inside its own container, because a matrix is exactly the wide content
  * `specs/web-ui` requires to stay reachable at 360 pixels without the page scrolling sideways.
  */
-export function DifferentialMatrix({ result }: { readonly result: ComparisonResult }): ReactNode {
+export function DifferentialMatrix({
+  result,
+}: {
+  readonly result: ComparisonResult;
+}): ReactNode {
   const candidates = result.candidates ?? [];
 
   /*
@@ -403,10 +469,13 @@ export function DifferentialMatrix({ result }: { readonly result: ComparisonResu
    */
   const fromCandidates = new Set<string>();
   for (const candidate of candidates) {
-    for (const entry of candidate.supporting ?? []) fromCandidates.add(entry.statistic);
+    for (const entry of candidate.supporting ?? [])
+      fromCandidates.add(entry.statistic);
   }
   const statistics =
-    fromCandidates.size > 0 ? [...fromCandidates] : (result.statistics_applied ?? []);
+    fromCandidates.size > 0
+      ? [...fromCandidates]
+      : (result.statistics_applied ?? []);
 
   return (
     <ProvenanceSection
@@ -428,52 +497,58 @@ export function DifferentialMatrix({ result }: { readonly result: ComparisonResu
     >
       {statistics.length === 0 || candidates.length === 0 ? (
         <p className={styles.note}>
-          This comparison reported no supporting figures to lay out, so there is nothing to tabulate
-          beneath the ranking.
+          This comparison reported no supporting figures to lay out, so there is
+          nothing to tabulate beneath the ranking.
         </p>
       ) : (
-      // The box is the screen's to supply: `ScrollRegion` measures and adds the tab stop, and
-      // without a container the table widens the page instead of scrolling in its card.
-      <ScrollRegion label="Figures behind the ranking" className={styles.tableScroll}>
-        <table className={styles.matrix}>
-          <caption className={styles.matrixCaption}>
-            Each statistic the comparison applied, for each place, over the shared window.
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col">Statistic</th>
-              {candidates.map((candidate) => (
-                <th scope="col" key={candidate.label}>
-                  {candidate.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {statistics.map((statistic) => (
-              <tr key={statistic}>
-                <th scope="row">{statistic}</th>
-                {candidates.map((candidate) => {
-                  const found = candidate.supporting?.find(
-                    (entry) => entry.statistic === statistic,
-                  );
-                  const value = formatStatistic(found);
-                  return (
-                    <td key={`${candidate.label}-${statistic}`}>
-                      {value === null ? (
-                        <span className={styles.matrixAbsent}>{unavailableReason(found)}</span>
-                      ) : (
-                        // `formatStatistic` already carries the unit; appending it printed "°C °C".
-                        value
-                      )}
-                    </td>
-                  );
-                })}
+        // The box is the screen's to supply: `ScrollRegion` measures and adds the tab stop, and
+        // without a container the table widens the page instead of scrolling in its card.
+        <ScrollRegion
+          label="Figures behind the ranking"
+          className={styles.tableScroll}
+        >
+          <table className={styles.matrix}>
+            <caption className={styles.matrixCaption}>
+              Each statistic the comparison applied, for each place, over the
+              shared window.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Statistic</th>
+                {candidates.map((candidate) => (
+                  <th scope="col" key={candidate.label}>
+                    {candidate.label}
+                  </th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </ScrollRegion>
+            </thead>
+            <tbody>
+              {statistics.map((statistic) => (
+                <tr key={statistic}>
+                  <th scope="row">{statistic}</th>
+                  {candidates.map((candidate) => {
+                    const found = candidate.supporting?.find(
+                      (entry) => entry.statistic === statistic,
+                    );
+                    const value = formatStatistic(found);
+                    return (
+                      <td key={`${candidate.label}-${statistic}`}>
+                        {value === null ? (
+                          <span className={styles.matrixAbsent}>
+                            {unavailableReason(found)}
+                          </span>
+                        ) : (
+                          // `formatStatistic` already carries the unit; appending it printed "°C °C".
+                          value
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </ScrollRegion>
       )}
     </ProvenanceSection>
   );
@@ -517,7 +592,11 @@ function modeLabel(mode: string): string {
   return mode.replace(/_/g, " ");
 }
 
-export function ComparisonSummary({ result }: { readonly result: ComparisonResult }): ReactNode {
+export function ComparisonSummary({
+  result,
+}: {
+  readonly result: ComparisonResult;
+}): ReactNode {
   const compared = (result.candidates ?? []).length;
 
   return (
@@ -527,9 +606,10 @@ export function ComparisonSummary({ result }: { readonly result: ComparisonResul
       attribution={null}
     >
       <p className={styles.note}>
-        Deterministic: {compared} {compared === 1 ? "candidate" : "candidates"} ranked by{" "}
-        {criterionLabel(result.criterion).toLowerCase()}, over {periodLabel(result.period)}. No
-        model interpretation, no confidence score.
+        Deterministic: {compared} {compared === 1 ? "candidate" : "candidates"}{" "}
+        ranked by {criterionLabel(result.criterion).toLowerCase()}, over{" "}
+        {periodLabel(result.period)}. No model interpretation, no confidence
+        score.
       </p>
 
       {/*
@@ -537,7 +617,9 @@ export function ComparisonSummary({ result }: { readonly result: ComparisonResul
         checking a ranking wants and nobody reading one does — which is what a disclosure is for.
       */}
       <details className={styles.summaryDisclosure}>
-        <summary className={styles.summarySummary}>The fields this comparison reported</summary>
+        <summary className={styles.summarySummary}>
+          The fields this comparison reported
+        </summary>
         <dl className={styles.summaryFacts}>
           <div className={styles.summaryFact}>
             <dt>Criterion</dt>
@@ -571,7 +653,10 @@ export interface ForecastDeltaProps {
   /** One entry per compared place, in rank order, with whatever forecast was retrieved for it. */
   readonly rows: readonly {
     readonly label: string;
-    readonly days: readonly { readonly date: string; readonly high: string | null }[];
+    readonly days: readonly {
+      readonly date: string;
+      readonly high: string | null;
+    }[];
   }[];
   readonly dates: readonly string[];
 }
@@ -587,11 +672,20 @@ export interface ForecastDeltaProps {
  * Seven rows because the artifact has seven; the horizon is what the person asked for, so a shorter
  * answer leaves the later rows unreported rather than inventing them.
  */
-export function ForecastDeltaExplorer({ rows, dates }: ForecastDeltaProps): ReactNode {
+export function ForecastDeltaExplorer({
+  rows,
+  dates,
+}: ForecastDeltaProps): ReactNode {
   return (
-    <ProvenanceSection dataClass="forecast" title="Forecast delta explorer" attribution={null}>
+    <ProvenanceSection
+      dataClass="forecast"
+      title="Forecast delta explorer"
+      attribution={null}
+    >
       {rows.length === 0 || dates.length === 0 ? (
-        <p className={styles.note}>No forecast was retrieved for the compared places.</p>
+        <p className={styles.note}>
+          No forecast was retrieved for the compared places.
+        </p>
       ) : (
         <ScrollRegion label="Forecast by day and place">
           <table className={styles.matrix}>
@@ -616,7 +710,11 @@ export function ForecastDeltaExplorer({ rows, dates }: ForecastDeltaProps): Reac
                     const cell = row.days.find((day) => day.date === date);
                     return (
                       <td key={`${row.label}-${date}`}>
-                        {cell?.high ?? <span className={styles.matrixAbsent}>Not forecast</span>}
+                        {cell?.high ?? (
+                          <span className={styles.matrixAbsent}>
+                            Not forecast
+                          </span>
+                        )}
                       </td>
                     );
                   })}
@@ -640,23 +738,340 @@ export function ForecastDeltaExplorer({ rows, dates }: ForecastDeltaProps): Reac
  * is retrieved by this screen's endpoints, so each frame carries its reason rather than a curve
  * built from something else. The geometry is the artifact's; the emptiness is the truth.
  */
-export function ComparisonCharts(): ReactNode {
+export interface PulseSeries {
+  readonly label: string;
+  readonly points: readonly { readonly at: string; readonly value: number | null }[];
+}
+
+/**
+ * "Climate Pulse Differential" — the artifact's intra-day plot with one line per compared place.
+ *
+ * This was an empty frame with the reason "no hourly series is retrieved for a comparison", and
+ * that reason had stopped being true. The comparison *response* carries no series — it carries
+ * ranked figures and, since this pass, two derived statistics — but the screen already fetches
+ * each compared place's own forecast to build the day matrix below, and those forecasts carry the
+ * hourly series. The data was one component away the whole time.
+ *
+ * Each line is one place's `hourly` temperature, from its own `GET /weather/forecast`, plotted
+ * against the instant. No resampling and no interpolation: an hour a provider did not report is a
+ * gap in that line, which is what makes two places of unequal coverage legible rather than
+ * silently smoothed into agreement.
+ *
+ * Up to four lines, matching the four forecasts the matrix already asks for. The artifact draws
+ * two; beyond four the plot stops being readable and the ranking above is the answer anyway.
+ */
+function PulseTooltip({
+  active,
+  payload,
+  label,
+}: {
+  readonly active?: boolean;
+  readonly payload?: readonly { readonly name?: string; readonly value?: number | null }[];
+  readonly label?: string | number;
+}): ReactNode {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className={styles.tooltip}>
+      <p className={styles.tooltipName}>{String(label)}</p>
+      {payload.map((entry) => (
+        <p className={styles.tooltipValue} key={entry.name}>
+          {entry.name}: {typeof entry.value === "number" ? entry.value.toFixed(1) : "not reported"}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+export function ClimatePulseDifferential({
+  series,
+  unit,
+}: {
+  readonly series: readonly PulseSeries[];
+  readonly unit: string | null;
+}): ReactNode {
+  const described = useId();
+  const drawable = series.filter((entry) =>
+    entry.points.some((point) => point.value !== null),
+  );
+
+  if (drawable.length === 0) {
+    return (
+      <EmptyChart
+        title="Intra-day temperature by place"
+        reason="No place's provider reported an hourly series for this window."
+        height={200}
+      />
+    );
+  }
+
+  // One row per instant any place reported, so two lines of unequal coverage stay aligned by time.
+  const instants = [
+    ...new Set(drawable.flatMap((entry) => entry.points.map((point) => point.at))),
+  ].sort();
+  const rows = instants.map((at) => {
+    const row: Record<string, string | number | null> = { at, label: hourLabel(at) };
+    for (const entry of drawable) {
+      row[entry.label] = entry.points.find((point) => point.at === at)?.value ?? null;
+    }
+    return row;
+  });
+
+  return (
+    <figure className={styles.pulse}>
+      <div
+        className={styles.pulsePlot}
+        role="img"
+        aria-label={`Intra-day temperature for ${drawable.map((entry) => entry.label).join(" and ")}. The figures are in the matrix below.`}
+        aria-describedby={described}
+      >
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+            <CartesianGrid stroke="var(--color-border-subtle)" strokeDasharray="0" vertical={false} />
+            <XAxis dataKey="label" {...PULSE_AXIS} minTickGap={28} />
+            <YAxis
+              {...PULSE_AXIS}
+              width={52}
+              label={
+                unit
+                  ? {
+                      value: unit,
+                      angle: -90,
+                      position: "insideLeft",
+                      fill: "var(--color-text-muted)",
+                      fontSize: 11,
+                    }
+                  : undefined
+              }
+            />
+            <Tooltip cursor={{ stroke: "var(--color-border-strong)" }} content={<PulseTooltip />} />
+            <Legend wrapperStyle={{ fontSize: 11, color: "var(--color-text-muted)" }} iconType="plainline" />
+            {drawable.map((entry, index) => (
+              <Line
+                key={entry.label}
+                type="monotone"
+                dataKey={entry.label}
+                name={entry.label}
+                stroke={PULSE_COLOURS[index % PULSE_COLOURS.length]}
+                strokeWidth={2}
+                dot={false}
+                // A reported gap stays a gap: joining across it would draw a reading nobody made.
+                connectNulls={false}
+                isAnimationActive={false}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      <figcaption className={styles.pulseNote} id={described}>
+        One line per place, from each place&rsquo;s own hourly forecast. An hour a provider did not
+        report is a gap in that line rather than a value between its neighbours.
+      </figcaption>
+    </figure>
+  );
+}
+
+export function ComparisonCharts({
+  pulse = [],
+  pulseUnit = null,
+}: {
+  readonly pulse?: readonly PulseSeries[];
+  readonly pulseUnit?: string | null;
+} = {}): ReactNode {
   return (
     <div className={styles.chartRow}>
-      <ProvenanceSection dataClass="forecast" title="Climate pulse differential" attribution={null}>
-        <EmptyChart
-          title="Intra-day temperature by place"
-          reason="No hourly series is retrieved for a comparison."
-          height={200}
-        />
+      <ProvenanceSection
+        dataClass="forecast"
+        title="Climate pulse differential"
+        attribution={null}
+      >
+        <ClimatePulseDifferential series={pulse} unit={pulseUnit} />
       </ProvenanceSection>
-      <ProvenanceSection dataClass="historical" title="Decadal climate baseline" attribution={null}>
+      <ProvenanceSection
+        dataClass="historical"
+        title="Decadal climate baseline"
+        attribution={null}
+      >
+        {/*
+          Still a frame, and the reason is now what it would take rather than what is absent. The
+          artifact draws a candlestick over thirty-year normals per city; Weathra's baseline is
+          computed from the archive years it can actually fetch, and a decade-over-decade series
+          for two places is two more multi-year fan-outs on a screen that already makes one
+          retrieval per place. `screens.md` §5 records the candlestick itself as mockup filler.
+        */}
         <EmptyChart
           title="Decade-over-decade baseline"
-          reason="No multi-decade archive series is retrieved for a comparison."
+          reason="A multi-decade baseline per place is not retrieved for a comparison. Historical Analytics computes one place's baseline over the years the archive holds."
           height={200}
         />
       </ProvenanceSection>
     </div>
+  );
+}
+
+/** Axis styling, shared with every other chart in the product so the set reads as one. */
+const PULSE_AXIS = {
+  stroke: "var(--color-border-strong)",
+  tick: { fill: "var(--color-text-muted)", fontSize: 11 },
+  tickLine: false,
+  axisLine: false,
+} as const;
+
+/** One per compared place, in rank order. Four, because the matrix asks for four forecasts. */
+const PULSE_COLOURS = [
+  "var(--color-accent)",
+  "var(--color-class-analytics)",
+  "var(--color-class-historical)",
+  "var(--color-class-forecast)",
+] as const;
+
+/** An instant as a short axis label, in the reader's locale, at the resolution a day needs. */
+function hourLabel(at: string): string {
+  const parsed = new Date(at);
+  return Number.isNaN(parsed.getTime())
+    ? at
+    : parsed.toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit" });
+}
+
+/* ------------------------------------------------- the artifact's two deterministic bars */
+
+/**
+ * "Correlation score" and "Data density" — the two bars `04-compare-cities.png` draws in its
+ * "Synthesis confidence" panel.
+ *
+ * The artifact puts them inside its Comparison Intelligence card, under a heading that attributes
+ * them to a model's synthesis. They are not that. Both are properties of the retrieved data,
+ * computed by `weathra/analytics/association.py` and returned on the comparison itself, so they
+ * live in a panel of their own badged ANALYTICS — the same figures, at the same place in the
+ * reading order, without the borrowed authority of the word *confidence*.
+ *
+ * # Where each figure comes from
+ *
+ * * **Correlation** — Pearson's *r* between the two compared places' temperature trajectories,
+ *   paired on UTC instant, over the hourly series where the provider supplied one. `result.correlation`.
+ * * **Data density** — the instants every candidate reported a value for, over the instants the
+ *   window asked for. `result.data_density`.
+ *
+ * # What the bars do with them
+ *
+ * The correlation bar's **length is |r|** and its **caption is the signed coefficient**, because
+ * a bar cannot show a negative and a length alone cannot distinguish two places that move together
+ * from two that move oppositely. Both are shown; neither is shown alone. `r = -0.9` draws a long
+ * bar and reads "−0.90 · moves oppositely", which is the honest pair.
+ *
+ * A `not_computable` figure draws **no bar and the backend's own reason** — never a zero-length bar,
+ * which reads as "measured, and it is nothing". The correlation is *absent entirely* above two
+ * candidates, because a single coefficient describes one pair and three places have three; the
+ * panel says so rather than showing a refusal, since nothing was refused.
+ */
+function correlationSense(value: number): string {
+  // Wording only. The coefficient beside it is the figure; this says which way to read it.
+  if (value >= 0.7) return "move closely together";
+  if (value >= 0.3) return "move loosely together";
+  if (value > -0.3) return "move largely independently";
+  if (value > -0.7) return "move loosely opposite";
+  return "move closely opposite";
+}
+
+export function DeterministicAssociation({
+  result,
+}: {
+  readonly result: ComparisonResult;
+}): ReactNode {
+  const correlation = result.correlation ?? null;
+  const density = result.data_density ?? null;
+
+  // Nothing computed and nothing to explain: the panel is absent rather than empty. A card whose
+  // only content is "not available" twice is the shape `sections.tsx` already refuses elsewhere.
+  if (correlation === null && density === null) return null;
+
+  const coefficient =
+    correlation !== null && typeof correlation.value === "number"
+      ? correlation.value
+      : null;
+  const densityValue =
+    density !== null && typeof density.value === "number"
+      ? density.value
+      : null;
+
+  return (
+    <ProvenanceSection
+      dataClass="analytics"
+      title="How the places moved, and how much was reported"
+      headingLevel={2}
+    >
+      <ul className={styles.association}>
+        <li className={styles.associationItem}>
+          <Meter
+            label="Correlation"
+            /* |r|, because a bar has no direction. The sign is in the note beneath it. */
+            value={coefficient === null ? null : Math.abs(coefficient)}
+            valueLabel={
+              coefficient === null ? undefined : coefficient.toFixed(2)
+            }
+            unavailable={
+              correlation === null ? "Two places only" : "Not computable"
+            }
+            note={
+              coefficient !== null ? (
+                <>they {correlationSense(coefficient)}</>
+              ) : correlation === null ? (
+                // Not a refusal: a single coefficient is a pair statistic, and this comparison
+                // has more than one pair. Saying "not computable" would imply it was attempted.
+                "A correlation describes one pair of places. Compare two to see it."
+              ) : (
+                <span className={styles.associationReason}>
+                  {correlation.reason}
+                </span>
+              )
+            }
+          />
+          {correlation !== null && coefficient !== null ? (
+            /*
+             * Folded away. `specs/deterministic-analytics` requires the arithmetic to be
+             * *available* wherever the figure is, not printed beside it — and the Pearson formula
+             * is three lines of algebra, which next to a bar is the wall of prose the artifact's
+             * own composition does not have. One press, and it is the backend's own words.
+             */
+            <details className={styles.associationMethod}>
+              <summary>How it was computed</summary>
+              <MethodNote
+                method={correlation.method}
+                pointsUsed={correlation.points_used}
+                pointsExcluded={correlation.points_excluded}
+                compact
+              />
+            </details>
+          ) : null}
+        </li>
+
+        <li className={styles.associationItem}>
+          <Meter
+            label="Data density"
+            value={densityValue === null ? null : densityValue / 100}
+            unavailable="Not computable"
+            note={
+              densityValue !== null ? (
+                <>of the window every place reported</>
+              ) : (
+                <span className={styles.associationReason}>
+                  {density?.reason}
+                </span>
+              )
+            }
+          />
+          {density !== null && densityValue !== null ? (
+            <details className={styles.associationMethod}>
+              <summary>How it was computed</summary>
+              <MethodNote
+                method={density.method}
+                pointsUsed={density.points_used}
+                pointsExcluded={density.points_excluded}
+                compact
+              />
+            </details>
+          ) : null}
+        </li>
+      </ul>
+    </ProvenanceSection>
   );
 }
