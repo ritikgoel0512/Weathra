@@ -1136,7 +1136,7 @@ first's data; verify each and record the results.* Eight criteria, verified one 
 
 | # | Criterion | Verdict | Evidence |
 |---|---|---|---|
-| 1 | Create an account and verify it by code | **BLOCKED** — restated 2026-09-11, re-examined the same day | The account exists and is verified: `/me` answers `email_verified: true` for the live account, and the owner's browser sign-up with the emailed code is recorded under *What the product owner verified by hand*. Neither is what this criterion asks for. The task's verb is an instruction to the smoke check — *run the live smoke check … create an account and verify it by code* — and an existing verified account is evidence that a signup once happened, not evidence that the run performed one. Closing it needs a fresh signup and a real inbox inside the automation; the suite provisions no account, and creating a third one to satisfy a checkbox was ruled out. Recorded as blocked rather than passed by reinterpretation. |
+| 1 | Create an account and verify it by code | **PASS** — performed by the product owner against the deployed pair, 2026-09-11 | A **fresh** address, never previously registered with Weathra, taken through the deployed frontend at `https://weathra-bice.vercel.app`: Create Account accepted the sign-up and issued no session → Choose Plan → Verify Email, which stated *"We sent a 6-digit verification code…"* and offered the code field → the six-digit code arrived by email → **the code was entered and submitted** → verification succeeded, the account was confirmed, and the authenticated application was reached. **Verification was by code, not by the link** — the link was deliberately not used as the acceptance action. No address, password, code, token or message content was recorded, here or anywhere in the repository; the evidence is the observed outcome, which is what a later reader needs. |
 | 2 | Sign in | **PASS** — verified by automation 2026-09-11 | Supabase's password grant with the public client key, the way the browser does it, then `GET /api/v1/me` → 200 naming that subject, its own address, and `email_verified: true`. The whole chain — identity provider, bearer token, deployed backend, Row Level Security — answering as one subject. Previously recorded as a manual pass; it is now automated. |
 | 3 | Readiness all-reachable | **PASS** — re-verified 2026-09-11 | `/api/v1/ready` → 200, `ready: true`, `environment: production`, `version 0.1.0`. All seven dependencies `configured: true`; `database`, `vector_store`, `mcp_server` and `conversation_memory` each `reachable: true`. `weather_provider`, `authentication_provider` and `inference_provider` report `reachable: null` **by design**, each with its reason in `detail` — a readiness probe that called Open-Meteo on every hit would spend the provider's rate limit on liveness. |
 | 4 | An attributed public forecast without a session | **PASS** — re-verified 2026-09-11 | `/weather/forecast?location=Berlin&days=3` → 200 with no credential, `provider: open-meteo`, the resolved location (`Berlin`, *State of Berlin*, `DE`, 52.52437/13.41053, `Europe/Berlin`, 74 m), `units: metric`, and `retrieved_at: 2026-09-11T04:41:50Z`. |
@@ -1145,16 +1145,27 @@ first's data; verify each and record the results.* Eight criteria, verified one 
 | 7 | An authenticated SSE stream completing | **PASS** — verified 2026-09-11 | One request, no retry. Authorization succeeded, **200 `text/event-stream`**, events arrived, and the stream reached **exactly one terminal event: `final`** — no `event: error`. The `final` payload carried both the answer envelope and the evidence record's identifier, and the bearer token appeared in no frame. |
 | 8 | A second account seeing none of the first's data | **PASS** — verified by automation 2026-09-11 | A genuinely second account, confirmed before anything ran: B's subject and address both differ from A's as the deployment itself reports them. B is served none of A's saved locations and none of A's threads, by listing and by identifier, and cannot delete either — and the same holds in the other direction, over records created for the check and removed afterwards. The deployed RLS gate asks the same question of the database directly, with one subject's claims against another's rows, across all nine user-owned tables. |
 
-Seven of eight pass. **The task stays unchecked, on exactly one blocker — criterion 1.**
+**Eight of eight pass. The task is complete.**
 
-* **Criterion 1** is blocked on what the criterion asks of the *automation*. Production's own
-  metadata says what it can: the account was created on 2026-09-05, a confirmation was sent at
-  06:37:05Z and the account was confirmed fifteen seconds later at 06:37:20Z, `provider: email`,
-  and it is verified today. What no field records is the **method** — Supabase sets
-  `email_confirmed_at` identically whether a six-digit code or a link was used, and there is no
-  `otp`-shaped field anywhere on the user object. So the metadata proves an account created in the
-  test period and verified; it cannot prove *verified by code*, and calling it that would be
-  reading a fact the system does not store. Blocked, not weakened.
+Criterion 1 was the last, and it closed the only way it could: by somebody performing it. The
+distinction that kept it open for three passes is worth preserving, because it is the reason the
+task was not closed earlier on evidence that looked sufficient:
+
+* **An account that is verified is not proof of how it was verified.** Supabase sets
+  `email_confirmed_at` identically whether a six-digit code or a link was used, and carries no
+  `otp`-shaped field anywhere on the user object. `confirmation_sent_at` and `confirmed_at` bound
+  *when* it happened and say nothing about *how*. So no amount of reading production metadata could
+  have established "verified by code", and reading it that way would have been asserting a fact the
+  system does not store.
+* **The earlier passing run was against a different surface.** *Verified against the project* above
+  records a real signup-by-code on 2026-09-05 — but for task 23.2, against the frontend served from
+  Cloud Shell Web Preview with the backend deliberately not running. 25.4 asks for the smoke check
+  *against the deployed pair*, and that is the delta today's run closed.
+* **The flow itself was never in doubt.** `/create-account` calls `signUp` with no
+  `emailRedirectTo`, so the code path consults no redirect URL — which is why it worked on the
+  deployed origin with no Supabase configuration change. `/verify-email` calls
+  `verifyOtp({email, token, type: "signup"})` for a typed code and `verifyOtp({token_hash, type})`
+  for a followed link, and both converge on one success state.
 * **Criteria 6 and 7** now **pass**. The `OPENROUTER_API_KEY` on the Render service was corrected
   to the credential this project already held — nothing created, purchased or rotated — and the
   deployment rebuilt. The first authenticated request after it answered 200.
@@ -1164,12 +1175,7 @@ had already moved from a manual pass to an automated one. The scoped suite — `
 tests/deployed/test_deployed_acceptance.py tests/deployed/test_deployed_rls_gate.py -m deployed` —
 now reports **83 passed, 0 failed, 0 errors, 0 skipped**.
 
-Criterion 1 is the whole of what remains. It is not blocked on a credential, a deployment or a
-check that has not been written: it is blocked on the difference between *an account that was
-verified by code* and *an automated run that performs a signup and confirms it by code*. Closing it
-needs a fresh signup and a real inbox inside the automation. Creating a third account to satisfy a
-checkbox was ruled out, and reading the existing account's metadata as proof would be reading a fact
-Supabase does not store.
+Nothing remains. **Task 25.4 is checked.**
 
 **A gap this pass found, and closed.** The record above used to say the suite implemented criterion
 6. It did not. `test_an_authenticated_stream_completes` covered criterion 7, and 34.7's module has
