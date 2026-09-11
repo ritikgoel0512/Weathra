@@ -14,7 +14,7 @@ import pytest
 
 from weathra.analytics.association import align, correlation, data_density
 from weathra.analytics.support import MINIMUM_POINTS
-from weathra.domain.analytics import Provenance, Statistic
+from weathra.domain.analytics import Provenance, Statistic, StatisticResult
 from weathra.domain.location import Location
 from weathra.domain.weather import (
     DataClass,
@@ -75,7 +75,7 @@ def _series(values: list[float | None], *, offset_hours: int = 0) -> Series:
     )
 
 
-def _correlate(left: Series, right: Series):
+def _correlate(left: Series, right: Series) -> StatisticResult:
     return correlation(
         left=left,
         right=right,
@@ -187,7 +187,9 @@ class TestWhenThereIsNoCoefficient:
 
 
 class TestDataDensity:
-    def _density(self, *series: Series, expected: int, measure: Measure = Measure.TEMPERATURE):
+    def _density(
+        self, *series: Series, expected: int, measure: Measure = Measure.TEMPERATURE
+    ) -> StatisticResult:
         return data_density(
             series=series,
             measure=measure,
