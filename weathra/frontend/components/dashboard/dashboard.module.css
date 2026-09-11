@@ -108,6 +108,30 @@
  * The body: the briefing surface beside the analytics column, as the artifact lays them out, and a
  * single column below the tablet breakpoint (design-system.md §13).
  */
+/*
+ * The artifact's two-column bands, and why they are `start` rather than `stretch`.
+ *
+ * `stretch` with the last card taking the slack is what `evidence.module.css` does for finding 5.5
+ * of the 2026-09-08 audit, and what Historical Analytics did for 3.5. It was applied here for the
+ * three voids the 2026-09-10 production capture found, and **the capture of that change is the
+ * argument against it**: the left column's last panel is "What Changed?", a fixed list of the days
+ * that moved, and stretched to the height of the analytics column beside it it drew about 390
+ * pixels of its own card background between its last line and its provenance footer.
+ *
+ * A column that simply ends reads as a column that ended. A bordered card with 390 pixels of
+ * nothing inside it reads as a panel that failed to load — which is the defect the stretch existed
+ * to prevent, moved inside the border. Between the two states, both photographed, this one is the
+ * better picture.
+ *
+ * The rule this settles is stated once in `design-system.md` §13 rather than three times here:
+ * **a column stretches only where its last panel holds something that can use the height.**
+ * Evidence's two do — they are long lists that genuinely fill, and its capture ends level.
+ * This one's does not.
+ *
+ * The height difference is addressed where it comes from instead: `.findings` below is a grid
+ * rather than a column, which halves the analytics panel it belongs to. What is left after that is
+ * one side of the band holding less data than the other, which is not a layout defect.
+ */
 .columns {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
@@ -185,13 +209,27 @@
 }
 
 /* A list of computed figures, each with its own provenance line. */
+/*
+ * The computed figures, as a grid rather than a column.
+ *
+ * Same thin-data repair as `historical.module.css`'s `.figures`, for the same reason and in the
+ * same shape. Stacked, a window that produced five statistics ran the analytics panel to roughly
+ * twice the height of the "What Changed?" panel beside it, and the band's `align-items: stretch`
+ * put the difference inside the shorter card as empty space. Two columns of figures halve it.
+ *
+ * `auto-fit` with a floor of 150: this panel sits in the *narrow* column of the band — about 330
+ * pixels at 1440 — so the floor has to be under half of that for two to fit at all, and above it on
+ * a small viewport, where the panel stays a single column rather than crushing each figure to a few
+ * words a line.
+ */
 .findings {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
   gap: var(--space-3);
   list-style: none;
   margin: 0;
   padding: 0;
+  min-width: 0;
 }
 
 .finding {
@@ -717,17 +755,23 @@
 }
 
 /* The wide lower band: narrative left, figures right — `01-dashboard.png`'s baseline section. */
+/*
+ * The closing baseline band.
+ *
+ * It was a two-column grid whose left cell held the band's heading and nothing else, so at 1440 a
+ * two-line title occupied 38% of the row and left the rest of that column empty for the height of
+ * the panel beside it — the largest of the three voids in the 2026-09-10 capture, and the one that
+ * least looked deliberate.
+ *
+ * The heading now sits above the band, which is how "The days ahead" on this same screen already
+ * introduces its own, so the two read as one pattern rather than two. The panel takes the full
+ * width it was always going to need.
+ */
 .baselineRow {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-4);
+  gap: var(--space-3);
   align-items: start;
-}
-
-@media (min-width: 1024px) {
-  .baselineRow {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
-  }
 }
 
 /* Weathra Intelligence with the confidence bars beside it, as the artifact pairs them. */

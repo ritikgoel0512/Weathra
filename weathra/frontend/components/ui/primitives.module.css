@@ -801,11 +801,25 @@ input.controlBare[type="date"]::-webkit-calendar-picker-indicator:hover {
   color: var(--color-text-primary);
 }
 
+/*
+ * The body grows with its section.
+ *
+ * `align-items: stretch` on a two-column band makes the shorter column's last card as tall as the
+ * row — which is what closes the row level, and which on its own only moves the void from *beside*
+ * the card to *inside* it. With the body growable, a screen that wants the slack to become content
+ * can say so: the card's own stylesheet gives its chart or list `flex: 1 1 auto` and the extra
+ * height lands there instead of under the last line.
+ *
+ * Harmless where nothing stretches: in a section sized by its content there is no free space to
+ * distribute, so `1 1 auto` and `0 1 auto` compute the same height.
+ */
 .provenanceBody {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
 }
 
 .provenanceFooter {

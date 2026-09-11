@@ -373,11 +373,15 @@ function Briefing({
         beside it. It used to be a card in the right rail, which is a different composition.
       */}
       <div className={styles.baselineRow}>
-        <div className={styles.column}>
-          <div className={styles.bandHeading}>
-            <h2 className={styles.bandTitle}>Climate baseline</h2>
-            <p className={styles.bandMeta}>This window against the years behind it.</p>
-          </div>
+        {/*
+          The heading introduces the band from above rather than from a column beside it. As a
+          column it was a two-line title holding 38% of a 1440-pixel row open for the height of the
+          panel next to it, which the 2026-09-10 production capture photographed as the screen's
+          largest void. "The days ahead" already introduces its band this way.
+        */}
+        <div className={styles.bandHeading}>
+          <h2 className={styles.bandTitle}>Climate baseline</h2>
+          <p className={styles.bandMeta}>This window against the years behind it.</p>
         </div>
         <div className={styles.column}>
           {baseline.state.kind === "loading" ? (

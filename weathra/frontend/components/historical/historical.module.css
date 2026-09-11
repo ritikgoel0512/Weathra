@@ -201,14 +201,31 @@
 
 /* ---------------------------------------------------------------------- figures */
 
+/*
+ * The baseline's own four figures, and the period-comparison deltas.
+ *
+ * A grid rather than a column, which is the thin-data repair the 2026-09-10 production capture
+ * asked for. Stacked, the four baseline statistics and their method lines ran about 300 pixels
+ * down the right column of the main row, and the chart card beside them — three days wide, because
+ * that is what the window held — was stretched to match and carried 460 pixels of empty card
+ * beneath its plot. Two columns of figures halve that height, so the row is closer to level before
+ * any stretching happens at all.
+ *
+ * `auto-fit` with a floor, not a fixed two: one figure fills the width, four make two rows of two,
+ * and a narrow column keeps them stacked rather than crushing a method line to three words a line.
+ * The floor is 150 rather than 200 because this panel lives in the *narrow* column of `.mainRow` —
+ * about 340 pixels at 1440 — and a 200-pixel floor never fits two of anything in it, which is what
+ * the first attempt photographed.
+ */
 .figures,
 .deltas {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
   gap: var(--space-3);
   list-style: none;
   margin: 0;
   padding: 0;
+  min-width: 0;
 }
 
 .figure {
@@ -438,21 +455,42 @@
  * makes the two read as a pair of equals.
  */
 /*
- * The two-column rows. `stretch` rather than `start`, which is finding 3.5: with `start` the
- * shorter column ended wherever its content did and left a column-tall void beside the other. The
- * last panel in a column takes the slack instead, so the row closes level — the artifact's own
- * geometry, where the right-hand card runs the full height of the chart beside it.
+ * The two-column rows, and the reversal of finding 3.5.
+ *
+ * 3.5 read `start` as the defect — the shorter column ended wherever its content did and left a
+ * column-tall void beside the other — and the repair was `stretch` with the last panel taking the
+ * slack. The 2026-09-10 production capture is the evidence that the repair was worse here. This
+ * row's left panel is the combined plot, whose height is fixed and cannot be handed the slack (see
+ * the note below, which is a second attempt that failed for a different reason), so stretching it
+ * to the baseline column's height drew about 430 pixels of empty card between the plot and its
+ * provenance footer. That was the largest void anywhere in the set, and it was inside a border.
+ *
+ * So the rule of `design-system.md` §13: a column stretches only where its last panel holds
+ * something that can use the height. Agent Evidence's columns do, and keep `stretch`. This one's
+ * does not, and ends where its content ends.
+ *
+ * The difference in height is still worth shortening, and `.figures` above does that — but it is
+ * shortened, not hidden.
  */
 .mainRow {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   gap: var(--space-4);
-  align-items: stretch;
+  align-items: start;
 }
 
-.mainRow .column > :last-child {
-  flex: 1 1 auto;
-}
+/*
+ * The plot keeps a definite height, and that is not negotiable.
+ *
+ * An attempt to hand a stretched card's slack to its chart — `block-size: auto` with a flexible
+ * min and max — erased the plot: `ResponsiveContainer` measures its parent, and a parent whose
+ * height is resolved by flex against an `auto` basis measures zero on the pass that matters. The
+ * 1440 capture of that attempt is a chart card containing no chart. Recorded here because the
+ * change looks obviously right and is obviously wrong the moment it is photographed.
+ *
+ * So the void inside a stretched card is addressed by making the *other* column shorter — see
+ * `.figures` above — rather than by making this one taller.
+ */
 
 @media (max-width: 1023px) {
   .mainRow {

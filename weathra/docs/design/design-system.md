@@ -350,6 +350,31 @@ found a screen breaking both while every `min-width: 0` in its stylesheet was co
 The capture harness logs any screen whose document is wider than its viewport, at each of the four
 widths, which is how both were found and how a third would be.
 
+**A two-column band stretches only where its last panel can use the height.** A grid band whose
+columns hold different amounts of content has two honest states, and the choice between them is
+one rule rather than a judgement per screen.
+
+* `align-items: stretch`, with `.column > :last-child { flex: 1 1 auto }`, closes the row level.
+  Use it **only** where the last panel in each column holds content that grows — a long list, a
+  trace, a table. Agent Evidence's two columns are that, and finding 5.5 of the 2026-09-08 audit is
+  why they are stretched.
+* `align-items: start` everywhere else. The column ends where its content ends.
+
+The reason the choice matters is what `stretch` does when the last panel *cannot* grow: the slack
+becomes the panel's own card background. The 2026-09-10 production capture photographed 390 pixels
+of it inside the Dashboard's "What Changed?" card and 430 inside Historical Analytics' plot card,
+and an empty bordered region reads as a panel that failed to load — which is the defect stretching
+was adopted to prevent, relocated inside the border. A column that simply ends reads as a column
+that ended.
+
+A panel's height cannot be handed to a Recharts plot to absorb, either: `ResponsiveContainer`
+measures its parent, and a parent whose height is resolved by flex against an `auto` basis measures
+zero on the pass that matters, so the plot disappears. That was tried and photographed too.
+Difference in column height is reduced by making the **taller** column shorter — the figure lists
+on both screens are `repeat(auto-fit, minmax(min(150px, 100%), 1fr))` grids rather than single
+columns for that reason — and what remains after that is one side holding less data than the other,
+which is not a layout defect.
+
 A container that scrolls is **reachable from the keyboard while it has something to scroll**, and
 not otherwise. `ScrollRegion` is the primitive: it measures its own overflow and becomes a named,
 focusable group only when there is content past an edge. Both halves of that are the requirement.
