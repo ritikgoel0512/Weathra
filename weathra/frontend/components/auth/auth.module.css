@@ -492,7 +492,9 @@
 
 .planGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  /* The cards carry bars now, not one-line allowances, so they need more room before they sit side
+     by side. Below this they stack, which is the phone layout and also the narrow-card layout. */
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: var(--space-3);
   margin: 0;
   padding: 0;
@@ -513,8 +515,21 @@
   background: var(--color-surface-raised);
 }
 
+/*
+ * The two states a card can be in, kept visually distinct from each other.
+ *
+ * `data-default` is a statement of fact — this is the tier the account is already on. `data-chosen`
+ * is the person's own selection, and it is the stronger treatment of the two because it is the only
+ * thing on this screen that responds to them.
+ */
+.planCard[data-default="true"] {
+  border-color: var(--color-border-strong, var(--color-border-subtle));
+  background: var(--color-surface-base);
+}
+
 .planCard[data-chosen="true"] {
   border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
 }
 
 .planHead {
@@ -538,10 +553,17 @@
   padding: 0;
   list-style: none;
   display: grid;
-  gap: var(--space-1);
+  /* Each row is a `Meter` — a label, the real figure, and a bar — so the rows need more separation
+     than the single text lines they replaced. */
+  gap: var(--space-3);
+  min-width: 0;
   color: var(--color-text-secondary);
   font-size: var(--type-ui-size);
   font-variant-numeric: tabular-nums;
+}
+
+.planAllowances > li {
+  min-width: 0;
 }
 
 .planNote {

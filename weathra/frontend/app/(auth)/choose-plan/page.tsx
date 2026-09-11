@@ -12,6 +12,13 @@
  * a row in `usage_limits`.
  *
  * Static; the cards inside are the client component, and the tiers they draw are public.
+ *
+ * **`PublicDataBoundary` is not optional furniture.** It is the query layer and the API client, and
+ * `(auth)` has no other source of either — `SessionBoundary` provides them for `(app)` and stops at
+ * that group's edge. Without it `PlanChoice` threw during hydration and a person who had just
+ * created an account met "Application error: a client-side exception has occurred" instead of the
+ * tiers. The client it mounts is anonymous by design: `GET /plans` is public, and whoever is
+ * reading this screen has not confirmed their address yet.
  */
 
 import type { Metadata } from "next";
@@ -21,6 +28,7 @@ import { Suspense, type ReactNode } from "react";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { PlanChoice } from "@/components/auth/plan-choice";
 import { LoadingState } from "@/components/ui";
+import { PublicDataBoundary } from "@/lib/query/public-boundary";
 import { SIGN_IN_PATH } from "@/lib/routes";
 
 export const metadata: Metadata = { title: "Choose Your Plan" };
@@ -37,7 +45,9 @@ export default function Page(): ReactNode {
       }
     >
       <Suspense fallback={<LoadingState label="Reading the plans" lines={4} />}>
-        <PlanChoice />
+        <PublicDataBoundary>
+          <PlanChoice />
+        </PublicDataBoundary>
       </Suspense>
     </AuthShell>
   );
