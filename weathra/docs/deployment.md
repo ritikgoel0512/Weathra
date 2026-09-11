@@ -764,8 +764,25 @@ deliberate; the wording is what should change if this is ever revisited.
 Tasks 25.3, 25.4 and 34.7 ask for the deployed pair to be exercised and the results recorded. This
 is the record. `backend/tests/deployed/` is the suite — `test_deployed_acceptance.py` for 25.3 and
 25.4, `test_saas_acceptance.py` for 34.7's SaaS layer. It runs from a Codespace or from
-`live-acceptance.yml` with `pytest -m deployed`, and its last run reported **84 passed, 28 skipped,
-0 failed** (2026-09-09, against `weathra-backend.onrender.com` and `weathra-bice.vercel.app`).
+`live-acceptance.yml` with `pytest -m deployed`, and its last full run reported **84 passed, 28
+skipped, 0 failed** (2026-09-09, against `weathra-backend.onrender.com` and
+`weathra-bice.vercel.app`).
+
+**Re-verified 2026-09-11, after the visual product-gap pass redeployed both halves.** The 25.3/25.4
+module was re-run against the same pair at commit `602fb33`:
+`pytest tests/deployed/test_deployed_acceptance.py -m deployed` → **59 passed, 5 skipped, 0
+failed**. The five skips are the session tier, unchanged and named below. Nothing in the
+credential-free half regressed across the redeploy, and the run needed no credential of any kind.
+
+**A gap that run found, and closed.** `test_every_protected_path_has_a_credential_free_check`
+failed, naming three protected paths no deployed check had ever probed: `/me/watches`,
+`/me/watches/{watch_id}` and `/me/watches/{watch_id}/evaluate`. Weather Watch was added to the
+protected surface without being added to either module's list, so five production operations —
+`GET` and `POST` on the collection, `PATCH` and `DELETE` on the member, and `POST …/evaluate` —
+had never been confirmed to refuse an unauthenticated caller. All five are now checked and all five
+answer 401. This is the second time that assertion has caught a protected surface nobody was
+probing; the first was group 31's administrative paths. It is the reason the check list is asserted
+against the contract rather than maintained by hand.
 
 ### What automation proved (task 25.4)
 
@@ -774,10 +791,11 @@ is the record. `backend/tests/deployed/` is the suite — `test_deployed_accepta
 | Readiness all-reachable | `/api/v1/ready` → `ready: true`, `environment: production`, no required dependency unreachable, and database, authentication_provider and weather_provider each named |
 | An attributed public forecast without a session | `/weather/forecast` → 200 carrying an `attribution` block with the provider, the resolved location and the fetch time |
 | A baseline comparison with both sides labelled | `/weather/history/baseline/comparison` → 200 with the baseline's `labelling`, the observed side's data class, and a characterisation |
-| The frontend serves | `/sign-in` → 200, titled *Sign in · Weathra* |
-| The route gate holds | `/`, `/dashboard`, `/settings`, `/locations`, `/historical` → 307 to `/sign-in`, destination preserved |
+| The frontend serves | `/sign-in` → 200, titled *Sign in · Weathra* (re-verified 2026-09-11) |
+| The route gate holds | `/`, `/dashboard`, `/settings`, `/locations`, `/historical`, `/analyst`, `/report`, `/evidence` → 307 to `/sign-in`, each carrying its own `?next=` (re-verified 2026-09-11, after the visual pass rebuilt three of those screens) |
 | No 5xx on any public surface | every path in `PUBLIC_PATHS`, swept |
-| The frontend carries no private credential | the served page mentions no `SERVICE_ROLE`, `DATABASE_URL` or `OPENROUTER` |
+| The frontend carries no private credential | the served page mentions no `SERVICE_ROLE`, `DATABASE_URL`, `OPENROUTER`, `sk-or-` or `SUPABASE_SERVICE` (re-verified 2026-09-11) |
+| Every protected endpoint refuses an unauthenticated caller | eighteen operations now, the five Weather Watch ones included — see the gap above |
 
 ### What automation proved (task 25.3)
 
@@ -911,16 +929,20 @@ first's data; verify each and record the results.* Eight criteria, verified one 
 
 | # | Criterion | Verdict | Evidence |
 |---|---|---|---|
-| 1 | Create an account and verify it by code | **PASS** | The owner, in the browser, against production — recorded under *What the product owner verified by hand*. Not automatable: it needs a real inbox, and the suite provisions no account. |
-| 2 | Sign in | **PASS** | Same pass. The authenticated Dashboard rendered live Berlin weather, which is the whole chain — Supabase session, bearer token, deployed backend, Open-Meteo — answering at once. |
-| 3 | Readiness all-reachable | **PASS** | `/api/v1/ready` → 200, `ready: true`, `environment: production`, `version 0.1.0`. Every required dependency `configured: true`; `database`, `vector_store` (pgvector, BAAI/bge-small-en-v1.5, 384 dimensions) and `mcp_server` (7 tools) reachable. `weather_provider`, `authentication_provider` and `inference_provider` report `reachable: null` **by design**, each with its reason in `detail` — a readiness probe that called Open-Meteo on every hit would spend the provider's rate limit on liveness. |
-| 4 | An attributed public forecast without a session | **PASS** | `/weather/forecast?location=Berlin&days=3` → 200 with no credential, carrying `provider: open-meteo`, the resolved location (`Berlin`, 52.52437/13.41053, `Europe/Berlin`, 74 m), `retrieved_at`, `data_class: forecast` and `units_source`. |
-| 5 | A baseline comparison with both sides labelled | **PASS** | `/weather/history/baseline/comparison` → 200 with the baseline's labelling, the observed side's data class and a characterisation. An instantaneous measure is refused clearly rather than averaged. |
-| 6 | A question through `/ask` whose every figure appears in its evidence | **BLOCKED** | Needs a signed-in session: `/agent/ask` is protected, so no automation without an account can reach it. Implemented as of this pass and skipping — see below. |
+| 1 | Create an account and verify it by code | **PASS** (manual) | The owner, in the browser, against production — recorded under *What the product owner verified by hand*. Not automatable: it needs a real inbox, and the suite provisions no account. Account creation is a one-time fact and is not re-asserted per deployment. |
+| 2 | Sign in | **PASS** (manual) | Same pass. The authenticated Dashboard rendered live Berlin weather, which is the whole chain — Supabase session, bearer token, deployed backend, Open-Meteo — answering at once. Not re-run on 2026-09-11: re-confirming it needs the account password, which is deliberately not stored here. |
+| 3 | Readiness all-reachable | **PASS** — re-verified 2026-09-11 | `/api/v1/ready` → 200, `ready: true`, `environment: production`, `version 0.1.0`. All seven dependencies `configured: true`; `database`, `vector_store`, `mcp_server` and `conversation_memory` each `reachable: true`. `weather_provider`, `authentication_provider` and `inference_provider` report `reachable: null` **by design**, each with its reason in `detail` — a readiness probe that called Open-Meteo on every hit would spend the provider's rate limit on liveness. |
+| 4 | An attributed public forecast without a session | **PASS** — re-verified 2026-09-11 | `/weather/forecast?location=Berlin&days=3` → 200 with no credential, `provider: open-meteo`, the resolved location (`Berlin`, *State of Berlin*, `DE`, 52.52437/13.41053, `Europe/Berlin`, 74 m), `units: metric`, and `retrieved_at: 2026-09-11T04:41:50Z`. |
+| 5 | A baseline comparison with both sides labelled | **PASS** — re-verified 2026-09-11 | `/weather/history/baseline/comparison` → 200 carrying `baseline.data_class: computed_statistic` with its calendar period and `years_used: [2021, 2022, 2023, 2024, 2025]`, the observed side's own `observed_data_class`, a `characterization`, a `z_score`, and a `forecast_side_caveat`. Both sides labelled, and an instantaneous measure is still refused clearly rather than averaged. |
+| 6 | A question through `/ask` whose every figure appears in its evidence | **BLOCKED** | Needs a signed-in session: `/agent/ask` is protected, so no automation without an account can reach it. Implemented in the suite and skipping, naming its four variables. |
 | 7 | An authenticated SSE stream completing | **BLOCKED** | Needs a signed-in session. Implemented and skipping. |
 | 8 | A second account seeing none of the first's data | **BLOCKED** | Needs two live production accounts, and the owner has declined to create a second. |
 
-Five of eight pass. The scoped suite — `pytest tests/deployed/test_deployed_acceptance.py -m
+Five of eight pass, and the three that do not are blocked on credentials rather than on behaviour.
+**The task stays unchecked.** Two of the five passes are the owner's manual browser pass rather
+than automation, which is the honest reading of criteria a repository cannot produce — but a task
+that reads *verify each* is not satisfied while three of its eight criteria have no production
+evidence at all. The scoped suite — `pytest tests/deployed/test_deployed_acceptance.py -m
 deployed` — reported **52 passed, 5 skipped, 0 failed**; the five skips are criteria 6, 7 and 8
 plus group 18's valid-request case, each naming the exact variables it wants.
 
@@ -939,8 +961,10 @@ when they follow an answer's evidence link.
 
 **No inference call was made, and none could be.** Criterion 6 is the only one that would reach
 OpenRouter, and it is protected. The production configuration is intact and untouched:
-`/api/v1/ready` reports `inference_provider` as `configured: true` on `openrouter` with its model
-named. Nothing in this pass sent a prompt, changed a key, or retried a provider.
+`/api/v1/ready` reports `inference_provider` as `configured: true`. Nothing in either pass sent a
+prompt, changed a key, or retried a provider — **re-affirmed on 2026-09-11**, where the whole
+re-verification was GETs plus method-only refusal probes that are answered at the authentication
+boundary before any handler runs.
 
 **What production discloses when it refuses.** Six read-only probes across the public and
 unauthenticated-protected surface — `/ready`, `/me`, `/me/usage`, `/evidence/{unknown}`, a baseline
