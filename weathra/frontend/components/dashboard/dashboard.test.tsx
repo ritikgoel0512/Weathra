@@ -22,7 +22,7 @@ import type { WhatChangedReport } from "@/lib/dashboard/briefing";
 import { SessionBoundary } from "@/lib/session/provider";
 
 import { Dashboard } from "./dashboard";
-import { WhatChanged } from "./sections";
+import { PrecipitationOutlook, WhatChanged } from "./sections";
 
 vi.mock("@/lib/supabase/browser", () => ({
   browserAccessToken: async () => "test-access-token",
@@ -852,6 +852,89 @@ describe("the error state", () => {
     expect(await screen.findByRole("region", { name: "Current conditions" })).toBeInTheDocument();
     expect(await screen.findByText(/No fixture for/, undefined, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Forecast Explorer" })).toBeInTheDocument();
+  });
+});
+
+/**
+ * The three drawings this Dashboard owns — task 34.30.
+ *
+ * They are the last thing the customer-level review of 2026-09-11 recorded against the screen, and
+ * they are the easiest thing on it to lose to a careless edit: nothing else asserts a decorative
+ * `<svg>`, and a deleted one leaves a layout that still passes every other test. So each is pinned
+ * where it renders, along with the two properties that make it legitimate — it is `aria-hidden`,
+ * and the figure beside it is text.
+ */
+describe("the card treatments the artifact heads its regions with", () => {
+  it("heads the intelligence card with a band carrying a mark, hidden from assistive technology", async () => {
+    const { container } = renderDashboard();
+    await screen.findByRole("region", { name: "Weathra Intelligence" });
+
+    // The band repeats the panel's own heading for the eye, so it is hidden rather than read twice.
+    const band = container.querySelector('[aria-hidden="true"] svg');
+    expect(band).toBeInTheDocument();
+
+    /*
+     * And the heading itself is still in the document at its own level. Painting it is the band's
+     * job now; being in the heading list is still this element's, which is task 21.8's requirement
+     * and is not something a visual treatment may take away.
+     */
+    const heading = screen.getByRole("heading", { name: "Weathra Intelligence", level: 2 });
+    expect(heading).toBeInTheDocument();
+  });
+
+  it("marks the anomaly status by shape as well as by tone, from the state the analysis found", async () => {
+    renderDashboard();
+    const card = await screen.findByRole("region", { name: "Anomaly detection" });
+
+    /*
+     * The wording is whichever of the states this window is in — above, within or below its usual
+     * range where a baseline came back, and the analysis's own finding where none did. What is
+     * pinned is that whichever it is arrives with a tone *and* a drawing, so neither colour nor
+     * shape is carrying the meaning alone.
+     */
+    const box = card.querySelector("[data-tone]");
+    expect(box).toBeInTheDocument();
+    expect(["calm", "flag"]).toContain(box?.getAttribute("data-tone"));
+    expect(box?.querySelector("svg")).toBeInTheDocument();
+    expect(box?.querySelector('[aria-hidden="true"]')).toBeInTheDocument();
+    // And the state is said in words, for anyone the drawing does not reach.
+    expect((box?.textContent ?? "").trim().length).toBeGreaterThan(0);
+  });
+
+  it("draws the precipitation card's graphic without putting a figure in it", () => {
+    /*
+     * Rendered directly with a window that has an hourly chance of rain in it. The briefing fixture
+     * this file drives the whole screen with carries no hourly probability, so on the Dashboard
+     * this card is in its no-reading state — which is a real state and the one `sections` renders
+     * an empty frame for. The graphic belongs to the *populated* state, so that is the state it is
+     * asserted in.
+     */
+    render(
+      <PrecipitationOutlook
+        forecast={
+          {
+            hourly: {
+              granularity: "hourly",
+              units: { precipitation: "mm", precipitation_probability: "%" },
+              entries: [
+                {
+                  time_utc: "2026-09-04T11:00:00Z",
+                  time_local: "2026-09-04T13:00:00+02:00",
+                  values: { precipitation: 1.2, precipitation_probability: 76 },
+                },
+              ],
+            },
+          } as never
+        }
+      />,
+    );
+    const card = screen.getByRole("region", { name: "Precipitation Outlook" });
+
+    const drawing = card.querySelector('svg[aria-hidden="true"]');
+    expect(drawing).toBeInTheDocument();
+    // Nothing in the drawing is legible as a reading: the percentage beside it is text.
+    expect(drawing?.textContent ?? "").toBe("");
+    expect(card.querySelector("[class*=riskFigure]")?.textContent).toMatch(/^\d+$/);
   });
 });
 

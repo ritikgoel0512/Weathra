@@ -52,6 +52,7 @@ import type {
 } from "@/lib/api/schema";
 import { FixtureDashboard } from "@/components/dashboard/fixture-dashboard";
 import { GettingStarted } from "./getting-started";
+import { IntelligenceMark } from "./marks";
 import { PLACE_PARAM } from "@/components/shell/top-bar";
 import { briefingLocationFrom, calendarWindowFrom } from "@/lib/dashboard/briefing";
 import { placeLabel, qualifiedName } from "@/lib/locations/place";
@@ -139,6 +140,7 @@ function WeathraIntelligence({ units }: { readonly units: PreferenceView["unit_s
     return (
       <InterpretationPanel
         title="Weathra Intelligence"
+        titleVisible={false}
         eyebrow="Current interpretation"
         density="compact"
         provider={inference?.provider ?? null}
@@ -186,6 +188,7 @@ function WeathraIntelligence({ units }: { readonly units: PreferenceView["unit_s
   return (
     <InterpretationPanel
       title="Weathra Intelligence"
+      titleVisible={false}
       eyebrow="Current interpretation"
       density="compact"
     >
@@ -358,6 +361,24 @@ function Briefing({
       */}
       <div className={styles.intelligenceBand}>
         <div className={styles.intelligenceMain}>
+          {/*
+            **The card's header band.** `01-dashboard.png` heads this card with a tinted rule
+            carrying a circular mark and the card's name; ours had the name as a heading two lines
+            into the left column and no band at all, which is what the customer-level review of
+            2026-09-11 recorded as the composition's last visible gap.
+
+            It is `aria-hidden` on purpose. The words in it belong to the interpretation panel's own
+            `<h2>`, which is still in the document at the same level and still names the region —
+            it is simply not painted twice. The mark carries no version, no agent name and no claim
+            about what produced anything; `marks.tsx` says why.
+          */}
+          <div className={styles.intelligenceHead} aria-hidden="true">
+            <span className={styles.intelligenceMark}>
+              <IntelligenceMark />
+            </span>
+            <p className={styles.intelligenceHeadTitle}>Weathra Intelligence</p>
+          </div>
+
           <div className={styles.intelligencePrimary}>
             <WeathraIntelligence units={units} />
 

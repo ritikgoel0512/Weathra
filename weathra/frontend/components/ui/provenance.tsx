@@ -581,6 +581,21 @@ export interface InterpretationPanelProps {
    * the same constant either way.
    */
   readonly density?: "comfortable" | "compact";
+  /**
+   * Whether the panel paints its own title, or a card around it already does.
+   *
+   * `01-dashboard.png` heads its Weathra Intelligence card with a tinted band carrying an icon and
+   * the card's name, and the interpretation sits *inside* that card. Painting the name twice — once
+   * in the band and once on the panel two lines below it — is worse than either alone, so the
+   * Dashboard passes `false` and the band shows it.
+   *
+   * **The heading does not go away, it stops being painted.** It stays in the document as the same
+   * `<h2>` at the same level, visually hidden, so a heading-list navigation is unchanged (task
+   * 21.8) and the region keeps the accessible name `aria-label` gives it. Nothing about the badge,
+   * the boundary sentence or the tier changes; the band itself is `aria-hidden`, because its words
+   * are this heading's, repeated for the eye.
+   */
+  readonly titleVisible?: boolean;
 }
 
 /**
@@ -606,6 +621,7 @@ export function InterpretationPanel({
   prominence = "panel",
   eyebrow,
   density = "comfortable",
+  titleVisible = true,
 }: InterpretationPanelProps): ReactNode {
   const attributed = [provider?.trim(), model?.trim()].filter(Boolean).join(" · ");
   const Heading = headingLevel === 2 ? "h2" : "h3";
@@ -624,7 +640,11 @@ export function InterpretationPanel({
     >
       <header className={styles.interpretationHeader}>
         <DataClassBadge dataClass="interpretation" />
-        <Heading className={styles.interpretationTitle}>{title}</Heading>
+        <Heading
+          className={titleVisible ? styles.interpretationTitle : "weathra-visually-hidden"}
+        >
+          {title}
+        </Heading>
         {/*
           The boundary sentence rides the header in the compact treatment and sits on its own line
           above the prose in the comfortable one. Same constant, same region, same guarantee — what

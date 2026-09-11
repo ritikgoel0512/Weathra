@@ -67,6 +67,7 @@ import {
 } from "@/lib/dashboard/briefing";
 
 import { BaselineYearsChart } from "./baseline-years";
+import { PrecipitationMark, StatusMark } from "./marks";
 import { IntradayChart, intradayHours, peakOf } from "./intraday";
 
 import styles from "./dashboard.module.css";
@@ -845,23 +846,38 @@ export function DeterministicAnalytics({
         Where no baseline came back the card still states what the analysis found on its own —
         whether anything in the window stood out against the rest of it — rather than going quiet.
       */}
+      {/*
+        **The status reads as a status** — task 34.30. `01-dashboard.png` draws this slot as a
+        tinted alert with a warning mark beside two lines of text, and the mark is most of what
+        makes it legible in a glance from across the rail. Ours had the two lines and no mark, so
+        every state looked like the same quiet box whichever one it was.
+        The mark is chosen by the state, never by a colour alone: a window outside its usual spread
+        gets the warning triangle, one inside it gets the settled check. `StatusMark` draws both.
+      */}
       {band ? (
         <p className={styles.anomalyHeadline} data-tone={band.tone}>
-          <span className={styles.anomalyHeadlineTitle}>{band.title}</span>
-          <span className={styles.anomalyHeadlineDetail}>{band.detail}</span>
+          <StatusMark tone={band.tone} />
+          <span className={styles.anomalyHeadlineText}>
+            <span className={styles.anomalyHeadlineTitle}>{band.title}</span>
+            <span className={styles.anomalyHeadlineDetail}>{band.detail}</span>
+          </span>
         </p>
       ) : analysis.anomalies ? (
         <p
           className={styles.anomalyHeadline}
           data-tone={anomalies.length > 0 ? "flag" : "calm"}
         >
-          <span className={styles.anomalyHeadlineTitle}>
-            {anomalies.length === 0
-              ? "Nothing unusual"
-              : `${anomalies.length} ${anomalies.length === 1 ? "day" : "days"} stood out`}
-          </span>
-          <span className={styles.anomalyHeadlineDetail}>
-            {measureLabel(analysis.anomalies.measure)} against this window's own distribution.
+          <StatusMark tone={anomalies.length > 0 ? "flag" : "calm"} />
+          <span className={styles.anomalyHeadlineText}>
+            <span className={styles.anomalyHeadlineTitle}>
+              {anomalies.length === 0
+                ? "Nothing unusual"
+                : `${anomalies.length} ${anomalies.length === 1 ? "day" : "days"} stood out`}
+            </span>
+            <span className={styles.anomalyHeadlineDetail}>
+              {measureLabel(analysis.anomalies.measure)} against this window&rsquo;s own
+              distribution.
+            </span>
           </span>
         </p>
       ) : null}
@@ -1543,15 +1559,18 @@ export function PrecipitationOutlook({
         <div className={styles.riskPanel}>
           {/*
             **The focal graphic the artifact builds this card around.** `01-dashboard.png` fills the
-            top half of it with a large rendered rain cloud and a lightning disc on its shoulder;
-            ours was a 68-pixel outline icon with a large empty field under it, which finding 18
-            of the customer-level review of 2026-09-11 calls out by name. That artwork is not ours
-            to copy, so the focal point is built from what is: the project's own weather glyph at
-            three times the size, on a radial wash of the accent, with the condition disc beside it.
-            It is decoration; every figure on the card is the provider's.
+            top half of it with a large rendered rain cloud and a disc on its shoulder. That
+            rendering is somebody else's and is not part of this project's asset set, so what is
+            here is an original drawing at the same visual mass — a gradient-lit cloud with its own
+            underside, a cast shadow and teardrops falling from it. It replaces a line glyph scaled
+            to 104 pixels, which task 34.30 records as still visually weaker than the artifact.
+
+            `PrecipitationMark` draws more drops for a wet window than a quiet one, from the same
+            provider figure the percentage below it is rendered from. The drawing is decoration;
+            every figure on this card is the provider's and is text.
           */}
-          <span className={styles.riskGlyph} aria-hidden="true" data-level={peak.value >= 50 ? "wet" : "possible"}>
-            <WeatherIcon condition={conditionFor(peak.value >= 50 ? 61 : 3)} size={104} />
+          <span className={styles.riskGlyph} data-level={peak.value >= 50 ? "wet" : "possible"}>
+            <PrecipitationMark level={peak.value >= 50 ? "wet" : "possible"} />
           </span>
 
           <p className={styles.riskReadout}>

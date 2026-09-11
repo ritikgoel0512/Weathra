@@ -1503,6 +1503,72 @@
 }
 
 /*
+ * **The card's header band** — task 34.30, and the last composition gap the customer-level review
+ * of 2026-09-11 recorded against this card.
+ *
+ * `01-dashboard.png` heads Weathra Intelligence with a tinted rule across the whole card: a
+ * circular mark, the card's name beside it, a hairline under it. Ours started straight into the
+ * interpretation, so the screen's signature surface had no title treatment at all while every band
+ * below it did.
+ *
+ * The tint is the overlay surface over the card's own raised ground — one step, not a colour — so
+ * the band reads as the top of this card rather than as a panel parked on it. The bleed is what
+ * makes it a band: negative margins take it out to the card's padding edge on three sides, which is
+ * where the artifact's runs to.
+ */
+.intelligenceHead {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-3)) 0;
+  padding: var(--space-2) var(--space-3);
+  border-block-end: 1px solid var(--color-border-subtle);
+  border-start-start-radius: var(--radius-lg);
+  border-start-end-radius: var(--radius-lg);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-accent) 7%, var(--color-surface-overlay)) 0%,
+    var(--color-surface-raised) 100%
+  );
+}
+
+/* The ring around the mark, so the drawing sits on something rather than floating on the band. */
+.intelligenceMark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-pill);
+  background: radial-gradient(
+    70% 70% at 50% 40%,
+    color-mix(in srgb, var(--color-accent) 18%, transparent) 0%,
+    transparent 72%
+  );
+}
+
+.intelligenceHeadTitle {
+  font-family: var(--family-display);
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
+  /*
+   * The artifact sets the card's name in the accent, which is the one place on this screen a title
+   * takes it — the card is the product's own capability rather than a region of weather data.
+   */
+  color: var(--color-accent-strong);
+  min-width: 0;
+}
+
+.markSvg {
+  flex: none;
+  display: block;
+}
+
+/*
  * **The artifact's two sub-cards, side by side.** `01-dashboard.png` puts "WHAT CHANGED?" and
  * "WHY?" under the interpretation as two small inset panels of two or three lines each. Ours had
  * one of them, full width, with a frame and a provenance footer — which is why the left column ran
@@ -1653,10 +1719,16 @@
  * something in it and takes the warning role; `calm` is the state with nothing in it and must not,
  * because a panel that looks like an alert on a quiet day teaches a reader to ignore it.
  */
+/*
+ * **The status line, with its mark** — task 34.30. The artifact's version is a tinted alert with a
+ * warning triangle beside two lines of text, and the mark is what makes it readable as a status
+ * from across the rail rather than as another quiet box. The two states take different marks and
+ * different tones, so neither shape nor colour is carrying the meaning alone.
+ */
 .anomalyHeadline {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+  align-items: flex-start;
+  gap: var(--space-3);
   margin: 0;
   padding: var(--space-3);
   border-radius: var(--radius-md);
@@ -1664,9 +1736,43 @@
   background: var(--color-surface-inset);
 }
 
+.anomalyHeadlineText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* A window inside its usual spread. Restrained: this is the ordinary answer, not a result. */
+.anomalyHeadline[data-tone="calm"] {
+  border-color: color-mix(in srgb, var(--color-status-ok) 34%, transparent);
+  background: color-mix(in srgb, var(--color-status-ok-surface) 62%, var(--color-surface-inset));
+}
+
 .anomalyHeadline[data-tone="flag"] {
   border-color: color-mix(in srgb, var(--color-status-warning) 46%, transparent);
   background: var(--color-status-warning-surface);
+}
+
+/* The mark's own disc, so it sits on the tint rather than in it. */
+.anomalyMark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-pill);
+  border: 1px solid currentcolor;
+  background: color-mix(in srgb, var(--color-surface-base) 40%, transparent);
+}
+
+.anomalyMark[data-tone="calm"] {
+  color: var(--color-status-ok);
+}
+
+.anomalyMark[data-tone="flag"] {
+  color: var(--color-status-warning);
 }
 
 .anomalyHeadlineTitle {
@@ -1674,6 +1780,10 @@
   line-height: var(--type-card-line);
   font-weight: var(--type-card-weight);
   color: var(--color-text-primary);
+}
+
+.anomalyHeadline[data-tone="calm"] .anomalyHeadlineTitle {
+  color: var(--color-status-ok);
 }
 
 .anomalyHeadline[data-tone="flag"] .anomalyHeadlineTitle {
@@ -1900,42 +2010,42 @@
 }
 
 /*
- * **The card's focal point** — finding 19 of the customer-level review of 2026-09-11.
+ * **The card's focal point** — finding 19 of the customer-level review of 2026-09-11, and task
+ * 34.30's correction to it.
  *
- * The artifact fills the top half of this card with a large rendered rain cloud under a lightning
- * disc; that artwork is not in this project's asset set and is not copied. What is here is built
- * entirely from things that are: the project's own weather glyph at 104px, on a radial wash of the
- * accent token, inside a disc of the inset surface. Purely decorative — the percentage beneath it
- * is the provider's figure and the glyph encodes nothing.
+ * The artifact fills the top half of this card with a large rendered rain cloud under a disc on its
+ * shoulder; that rendering is not in this project's asset set and is not copied. The first attempt
+ * put the project's own line glyph at 104px inside a bordered disc, which was honest and still read
+ * as an icon in a circle rather than as the artifact's object. `PrecipitationMark` draws the cloud
+ * instead — gradients, an underside, a lit edge and falling drops — so the slot carries the mass
+ * the artifact gives it, and the frame here is a soft ground under it rather than a ring around it.
  */
 .riskGlyph {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 148px;
-  height: 148px;
-  border-radius: var(--radius-pill);
+  width: 100%;
+  padding-block: var(--space-2);
   color: var(--color-accent);
-  background:
-    radial-gradient(
-      70% 70% at 50% 38%,
-      color-mix(in srgb, var(--color-accent) 24%, transparent) 0%,
-      transparent 72%
-    ),
-    var(--color-surface-inset);
-  border: 1px solid color-mix(in srgb, var(--color-accent) 28%, transparent);
+  /* The shadow the object casts, which is what keeps it from floating on the card. */
+  background: radial-gradient(
+    54% 26% at 50% 84%,
+    color-mix(in srgb, var(--color-surface-base) 62%, transparent) 0%,
+    transparent 70%
+  );
 }
 
-/* A heavier wash where the provider's own chance of rain is the higher of the two states. */
+/*
+ * The level is drawn, not tinted: `PrecipitationMark` puts eight drops under a wet window and five
+ * under a quieter one, and carries its own accent wash. What is left here is a slightly deeper cast
+ * for the wet state, so the two read apart at a glance as well as in the count.
+ */
 .riskGlyph[data-level="wet"] {
-  background:
-    radial-gradient(
-      70% 70% at 50% 38%,
-      color-mix(in srgb, var(--color-accent) 38%, transparent) 0%,
-      transparent 74%
-    ),
-    var(--color-surface-inset);
-  border-color: color-mix(in srgb, var(--color-accent) 46%, transparent);
+  background: radial-gradient(
+    58% 28% at 50% 84%,
+    color-mix(in srgb, var(--color-surface-base) 78%, transparent) 0%,
+    transparent 72%
+  );
 }
 
 .riskReadout {
@@ -1948,6 +2058,7 @@
   color: var(--color-text-primary);
 }
 
+/* The card's one dominant figure — the provider's own highest hourly chance of rain. */
 .riskFigure {
   font-size: var(--type-readout-size);
   line-height: 1;
