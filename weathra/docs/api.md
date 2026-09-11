@@ -62,6 +62,30 @@ FastAPI's own 422 validation failures are re-mapped to **400** with the offendin
 from the response, because echoing a rejected body back is how a validation error becomes a
 reflection vector.
 
+**The agent surface's failure classes.** `/agent/ask` and `/agent/stream` are the only endpoints
+that depend on an inference gateway, and a caller has to be able to tell *which* way that dependency
+failed without being shown anything about how it is configured. Every one of these carries the same
+person-facing sentence — what is unavailable, and what still works — and differs only in its `code`
+and its `details`.
+
+| Code | Status | What happened |
+|---|---|---|
+| `agent_not_configured` | 503 | No inference credential is configured at all |
+| `provider_authentication_failed` | 503 | A credential *is* configured and the gateway rejected it |
+| `provider_unavailable` | 502 | The gateway refused the request, or could not be reached after its retries |
+| `provider_timeout` | 504 | The gateway did not answer in time |
+| `provider_rate_limited` | 429 | The gateway rate-limited the request. Clears on its own |
+| `quota_exceeded` | 429 | The *caller's* plan allowance is exhausted. Does not clear until the window turns over |
+| `no_eligible_model` | 503 | No catalog entry satisfies the resolved policy for this call role |
+| `policy_unavailable` | 503 | The model policy itself could not be resolved |
+| `validation_failed` | 400 | The model answered and its output did not satisfy the schema |
+
+The first two are one condition to a visitor and two to an operator, which is why they share a
+status and a sentence and not a code: readiness can only see that a credential string exists, and
+only a call finds out whether the gateway accepts it. `details` carries the operator's half — the
+provider and the status it returned — and never the gateway's own body, a configuration identifier,
+or the credential.
+
 ## Every endpoint
 
 | Method | Path | Access | Success | Response model |

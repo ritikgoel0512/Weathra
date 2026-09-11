@@ -145,10 +145,19 @@ class Credentials:
         return self.user_b_email.strip().casefold() != self.user_a_email.strip().casefold()
 
     @property
-    def secrets(self) -> tuple[str, ...]:
-        """Everything that must never appear in output."""
+    def secrets(self) -> tuple[Secret, ...]:
+        """Everything that must never appear in output, in a wrapper that will not print itself.
+
+        `Secret` rather than `str`, and the reason is a leak this suite actually produced. Every
+        assertion helper below takes these as `*secrets`, and pytest renders each frame's arguments
+        into the traceback of a failed check — so the first real failure printed the client key and
+        both account passwords into the run log, by the one route `repr=False` on the fields above
+        does not cover. The fields are never rendered; the tuple built from them was.
+        """
         return tuple(
-            value for value in (self.anon_key, self.user_a_password, self.user_b_password) if value
+            Secret(value)
+            for value in (self.anon_key, self.user_a_password, self.user_b_password)
+            if value
         )
 
 
@@ -198,6 +207,20 @@ def credentials_from_env(
         ),
         second,
     )
+
+
+class Secret(str):
+    """A credential that does not print itself.
+
+    ``str`` everywhere it is *used* — compared, searched for, passed to `redact` — and opaque
+    everywhere it is *shown*. Declared above `Credentials.secrets`, which is the tuple that reaches
+    a traceback; see that property for the failure this exists to stop.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "«secret»"
 
 
 class Token(str):

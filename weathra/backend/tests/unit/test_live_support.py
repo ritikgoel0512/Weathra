@@ -329,6 +329,24 @@ def test_a_token_does_not_print_itself_but_is_still_the_token() -> None:
     assert token == "header.payload.signature"
 
 
+def test_the_secrets_tuple_does_not_print_itself_either() -> None:
+    """The route the object's own `repr` does not cover, and the one that actually leaked.
+
+    Every assertion helper takes these as `*secrets`, and pytest renders each frame's arguments into
+    the traceback of a failed check. On 2026-09-11 the first genuine failure in the authenticated
+    tier printed the client key and both account passwords into the run log that way — past
+    `repr=False` on the fields, past `redact`, which only sees text that reaches it.
+    """
+    found, _ = credentials_from_env(CREDENTIALS)
+    assert found is not None
+    rendered = repr(found.secrets)
+    for secret in found.secrets:
+        assert str(secret) not in rendered, "a credential is rendered into every traceback"
+    # Still the credential everywhere it is used, or `redact` would stop redacting.
+    assert found.secrets[0] == CREDENTIALS["WEATHRA_LIVE_SUPABASE_ANON_KEY"]
+    assert redact(f"key={found.secrets[0]}", *found.secrets) == "key=«redacted»"
+
+
 def test_credentials_do_not_print_themselves() -> None:
     """Same route, the other object: a failed check must not print an account or a client key."""
     found, _ = credentials_from_env(CREDENTIALS)
