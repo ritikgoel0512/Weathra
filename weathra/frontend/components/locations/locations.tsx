@@ -29,6 +29,10 @@
  */
 
 import Link from "next/link";
+
+import { PLACE_PARAM } from "@/components/shell/top-bar";
+import { LocationImage } from "@/components/ui/location-image";
+
 import { useCallback, useState, type FormEvent, type ReactNode } from "react";
 
 import {
@@ -146,6 +150,19 @@ function NamePlace({
  * A place whose provider reports nothing renders nothing rather than a row of dashes. The card is
  * still a card; it simply has no weather to show yet.
  */
+/**
+ * Where "Open" goes: the Dashboard, briefing on this place.
+ *
+ * `?place=` carries a *name* for the backend's resolver to turn into a location, which is the one
+ * path that resolves — so a place whose only name is its coordinates sends none, and the Dashboard
+ * opens on the person's default rather than asking the geocoder to geocode a coordinate string.
+ * `sendableName` is the same guard Settings uses for the same reason.
+ */
+function briefingHref(record: SavedLocationRecord): string {
+  const name = sendableName(record.location);
+  return name ? `/?${PLACE_PARAM}=${encodeURIComponent(name)}` : "/";
+}
+
 function CardWeather({ location }: { readonly location: Location }): ReactNode {
   const { state } = useApiQuery<CurrentResponse>({
     key: ["weather", "current", placeKey(location)],
@@ -221,6 +238,19 @@ function LocationCard({
 
   return (
     <li className={styles.card} data-saved-location={record.id}>
+      {/*
+        The place, pictured. `06-saved-locations.png` identifies a saved place by its city before it
+        identifies it by its name, and the same generated-fallback architecture the Dashboard hero
+        and Compare Cities already use costs nothing to reach for here. Decorative: the name is
+        right underneath, so the image is described by the place rather than describing it.
+      */}
+      <LocationImage
+        displayName={canonical}
+        latitude={record.location.latitude}
+        longitude={record.location.longitude}
+        variant="banner"
+        scrim="soft"
+      />
       <span className={styles.cardName}>{shown}</span>
       {/*
         The person's label never replaces the canonical name — it sits above it. Except where the
@@ -237,20 +267,21 @@ function LocationCard({
       <CardWeather location={record.location} />
 
       {/*
-        Where the place is, under what it is called and what the weather is doing there. Coordinates
-        are how Weathra identifies a point and are kept visible for that reason — but they are the
-        card's smallest print, not its subject.
+        The time zone stays on the card: it is what the place's own day is measured in, and every
+        figure above is stamped in it. The coordinates move behind a disclosure — they are how
+        Weathra identifies a point, not what a person calls one, and a card that leads with
+        `52.5200, 13.4050` is a database row with a picture on it.
       */}
       <dl className={styles.cardFacts}>
-        <div className={styles.cardRow}>
-          <dt className={styles.cardTerm}>Coordinates</dt>
-          <dd className={styles.cardValue}>{coordinatesOf(record.location)}</dd>
-        </div>
         <div className={styles.cardRow}>
           <dt className={styles.cardTerm}>Time zone</dt>
           <dd className={styles.cardValue}>{record.location.timezone}</dd>
         </div>
       </dl>
+      <details className={styles.cardCoordinates}>
+        <summary className={styles.cardCoordinatesSummary}>Coordinates</summary>
+        <span className={styles.cardValue}>{coordinatesOf(record.location)}</span>
+      </details>
 
       {/*
         A small control with a full accessible name.
@@ -263,6 +294,16 @@ function LocationCard({
         nothing about which place.
       */}
       <div className={styles.cardActions}>
+        {/*
+          The way in, beside the way out. A saved place whose only control removed it made the
+          loudest thing about it the way to lose it; opening one brings up its briefing, which is
+          what somebody saved it for.
+        */}
+        <Link className={styles.cardOpen} href={briefingHref(record)}>
+          <Button variant="secondary" size="sm">
+            Open
+          </Button>
+        </Link>
         <Button
           variant="danger"
           size="sm"
