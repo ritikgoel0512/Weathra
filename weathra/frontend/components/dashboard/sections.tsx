@@ -21,7 +21,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { RecordedAgainstBaselineChart } from "@/components/historical/charts";
 import {
   Button,
   Card,
@@ -67,6 +66,7 @@ import {
   type WhatChangedReport,
 } from "@/lib/dashboard/briefing";
 
+import { BaselineYearsChart } from "./baseline-years";
 import { IntradayChart, intradayHours, peakOf } from "./intraday";
 
 import styles from "./dashboard.module.css";
@@ -956,11 +956,6 @@ export function HistoricalContext({ baseline }: HistoricalContextProps): ReactNo
    * EXTREME" callout on it. That is not imitated: `screens.md` §5 refuses the mockup's filler
    * across the set, and there is no market in a climate baseline.
    */
-  const points = yearly.map((entry) => ({
-    date: String(entry.year),
-    values: { [baseline.measure]: entry.value },
-  }));
-
   return (
     <ProvenanceSection
       dataClass="historical"
@@ -1004,18 +999,13 @@ export function HistoricalContext({ baseline }: HistoricalContextProps): ReactNo
         </div>
 
         <div className={styles.baselineChart}>
-          {points.length > 0 ? (
-            <RecordedAgainstBaselineChart
-              points={points}
-              measure={baseline.measure}
-              unit={unit}
-              seriesLabel="Each year's own mean"
-              title="The reference years behind this baseline"
-              missing={0}
+          <h3 className={styles.baselineChartTitle}>The reference years behind this baseline</h3>
+          {yearly.length > 0 ? (
+            <BaselineYearsChart
+              years={yearly}
               baselineValue={mean}
-              baselineLabel={mean === null ? null : `${years.length}-year average`}
-              referenceLabel="Baseline"
-              sourceLabel="the archive"
+              unit={unit}
+              measureLabel={statisticPhrase("mean", baseline.measure)}
             />
           ) : (
             <EmptyChart

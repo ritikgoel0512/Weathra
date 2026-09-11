@@ -1876,3 +1876,131 @@
 .baselineFiguresSummary:hover {
   color: var(--color-text-primary);
 }
+
+/* ========================================================== the reference-years plot
+ *
+ * `components/dashboard/baseline-years.tsx` — the Dashboard's own, for the four reasons that file
+ * records. The treatment deliberately mirrors `.intraday*` above, so the screen's two charts read
+ * as one pattern: a caption carrying the unit, a plot, one note, and the figures behind a
+ * disclosure rather than behind a full-width button.
+ */
+.baselineChartTitle {
+  margin-bottom: var(--space-2);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+}
+
+.years {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  min-width: 0;
+}
+
+.yearsLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+/* The swatch is the series' own colour, so the chart and its key cannot disagree about a line. */
+.yearsLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.yearsLegendItem::before {
+  content: "";
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--color-class-historical);
+}
+
+/* Dashed, as the reference line is drawn, so the key says which mark is which. */
+.yearsLegendItem[data-series="baseline"]::before {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--color-class-analytics) 0 4px,
+    transparent 4px 7px
+  );
+}
+
+.yearsScroll {
+  min-width: 0;
+}
+
+/* Matching `.intradayPlot`: the 320 floor is `design-rules.test.ts`'s, and the chart scrolls
+   inside its own container on a phone rather than pinning the page open. */
+.yearsPlot {
+  width: 100%;
+  height: 212px;
+  min-width: 320px;
+}
+
+.yearsPlot :global(svg) {
+  display: block;
+}
+
+.yearsNote {
+  margin: 0;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.yearsFigures {
+  min-width: 0;
+}
+
+.yearsFiguresSummary {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.yearsFiguresSummary:hover {
+  color: var(--color-text-primary);
+}
+
+.yearsTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--space-2);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  font-variant-numeric: tabular-nums;
+}
+
+.yearsTableCaption {
+  text-align: left;
+  padding-bottom: var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.yearsTable th,
+.yearsTable td {
+  padding: var(--space-1) var(--space-3);
+  text-align: right;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text-primary);
+}
+
+.yearsTable thead th {
+  color: var(--color-text-muted);
+  font-weight: var(--type-label-weight);
+}
+
+.yearsTable tbody th {
+  text-align: left;
+  color: var(--color-text-secondary);
+  font-weight: var(--type-body-weight);
+}
