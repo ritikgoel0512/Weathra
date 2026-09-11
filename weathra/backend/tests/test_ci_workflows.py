@@ -236,12 +236,12 @@ def test_the_workflow_guards_run_when_the_files_they_guard_change(
     """
     for event in ("pull_request", "push"):
         paths = _triggers(backend_workflow)[event]["paths"]
-        assert any(
-            path.startswith(".github/workflows/") for path in paths
-        ), f"a change to a workflow file does not run its own guard on {event}"
-        assert any(
-            path.startswith(".github/scripts/") for path in paths
-        ), f"a change to a release script does not run its guard on {event}"
+        assert any(path.startswith(".github/workflows/") for path in paths), (
+            f"a change to a workflow file does not run its own guard on {event}"
+        )
+        assert any(path.startswith(".github/scripts/") for path in paths), (
+            f"a change to a release script does not run its guard on {event}"
+        )
 
 
 def test_both_workflows_run_on_pull_requests_and_on_main(
