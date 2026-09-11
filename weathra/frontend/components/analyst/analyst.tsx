@@ -39,6 +39,10 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import { Button, ErrorState, Field, QuotaState } from "@/components/ui";
+import type { PreferenceView } from "@/lib/api/schema";
+import { briefingLocationFrom } from "@/lib/dashboard/briefing";
+import { useApiQuery } from "@/lib/query/hooks";
+import { PREFERENCES_KEY } from "@/lib/query/keys";
 import { AGENT_NOT_CONFIGURED_CODE, presentableMessage } from "@/lib/api/errors";
 import { quotaRefusalFrom } from "@/lib/api/quota";
 import type { AskRequest } from "@/lib/api/schema";
@@ -46,8 +50,9 @@ import { runStepsFrom } from "@/lib/analyst/run";
 import { useSession } from "@/lib/session/provider";
 import { useAgentStream, type AgentStreamState } from "@/hooks/use-agent-stream";
 
+import { AnalystFocus } from "./focus";
 import { AnalystRail } from "./rail";
-import { AnalystIntroduction, AnswerView, QuestionTurn, RunProgress } from "./sections";
+import { AnalystIntroduction, AnswerSkeleton, AnswerView, QuestionTurn, RunProgress } from "./sections";
 import styles from "./analyst.module.css";
 
 import { FixtureAnalyst } from "./fixture-analyst";
@@ -65,6 +70,9 @@ const STARTERS: readonly string[] = [
   "What should I expect over the next few days?",
   "How does this week compare with the same week last year?",
   "Why is the forecast uncertain further out?",
+  // The fourth is the artifact's 2×2 grid rather than a short row, and it names a capability
+  // Weathra genuinely has: `/weather/changes` is what a run answering it would read.
+  "Has the forecast for this week moved since it was last retrieved?",
 ];
 
 /** One exchange: what was asked, and the run that answered it. */
@@ -200,7 +208,11 @@ function TurnView({
             the only thing there is to see, and moves below the answer once one exists.
           */}
           {run.status === "streaming" ? (
-            <RunProgress steps={runStepsFrom(run.events)} streaming gap={run.gap} />
+            <>
+              <RunProgress steps={runStepsFrom(run.events)} streaming gap={run.gap} />
+              {/* The shape the answer will take, so the region is never blank mid-run. */}
+              <AnswerSkeleton />
+            </>
           ) : null}
 
           {run.terminal?.kind === "final" ? (
@@ -232,6 +244,22 @@ export function Analyst(): ReactNode {
   // same expired-session state a refused REST call does.
   const { markExpired } = useSession();
   const { state, ask, busy } = useAgentStream({ onSessionExpired: markExpired });
+
+  /*
+   * The context the question will be answered in — task 21.2's focus band.
+   *
+   * Read here rather than inside `AnalystFocus` so the composer's own FOCUS/UNITS row and the band
+   * above it cannot disagree about the same three facts. Cached under the shared preferences key,
+   * so arriving from any other screen spends no request. A failure is not handled: without
+   * preferences the band degrades to its no-default state and the composer to its "from your
+   * preferences" wording, and neither blocks asking a question.
+   */
+  const preferences = useApiQuery<PreferenceView>({
+    key: PREFERENCES_KEY,
+    request: (client) => client.preferences(),
+  });
+  const preferred = preferences.state.kind === "ready" ? preferences.state.data : null;
+  const focusLocation = briefingLocationFrom(preferred ?? undefined);
 
   const [question, setQuestion] = useState("");
   const [turns, setTurns] = useState<readonly Turn[]>([]);
@@ -376,6 +404,20 @@ export function Analyst(): ReactNode {
 
       <div className={styles.workspace}>
         <div className={styles.main}>
+      {/*
+        The location context, before and after a run alike.
+
+        `02-ai-weather-analyst.png` anchors its workspace on the place under discussion; without
+        this the screen opened on a composer over an empty ground, which is what the 2026-09-10
+        review graded. It stays once a conversation exists, updated to whatever the last answer
+        actually resolved to rather than continuing to assert the default.
+      */}
+      <AnalystFocus
+        location={focusLocation}
+        preferences={preferred}
+        resolved={placeLabel(answer?.resolved?.locations?.[0])}
+      />
+
       <div className={styles.transcript}>
         {turns.length === 0 ? (
           <AnalystIntroduction />

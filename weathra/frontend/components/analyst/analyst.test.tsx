@@ -202,6 +202,75 @@ function refusal(
 
 let fetchMock: Mock;
 
+/**
+ * The two reads the focus band makes, answered as themselves.
+ *
+ * The screen now shows the context a question will be answered in — the default location, the unit
+ * system, the horizon, and the current reading there — before anything is asked. Those are ordinary
+ * authenticated GETs, so the harness answers them rather than handing them the SSE body every call
+ * used to get. Everything else still goes to the stream.
+ *
+ * Returning JSON here is what keeps the assertions below about *the stream*: `streamCalls()` is the
+ * count that matters to every case that counts calls, and a context read is not one.
+ */
+const PREFERENCES = {
+  unit_system: "metric",
+  forecast_horizon_days: 3,
+  default_location: BERLIN,
+  sources: { unit_system: "chosen", default_location: "chosen", forecast_horizon_days: "default" },
+};
+
+const CURRENT = {
+  attribution: { ...FORECAST_SOURCE, data_class: "current" },
+  observed_at_utc: "2026-09-04T06:15:00Z",
+  observed_at_local: "2026-09-04T08:15:00+02:00",
+  units: { temperature: "°C", relative_humidity: "%" },
+  values: { temperature: 15.3, relative_humidity: 68 },
+};
+
+function json(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+/** The default handler: context reads answered, the question streamed. */
+function defaultFetch(input: unknown): Response {
+  const path = new URL(String(input)).pathname;
+  if (path === "/api/v1/me/preferences") return json(PREFERENCES);
+  if (path === "/api/v1/weather/current") return json(CURRENT);
+  return streaming(runFrames());
+}
+
+/**
+ * A fetch that answers the context reads and gives the stream to the handlers, in order.
+ *
+ * Cases that need a particular stream outcome used to replace `fetchMock` outright, which worked
+ * while every call this screen made *was* the stream. It no longer is — a blanket handler would
+ * hand the preferences read an SSE body, and a `mockImplementationOnce` chain would be consumed by
+ * it before the question was ever asked. So the routing lives here, and a case names only the
+ * stream responses it cares about; the last one repeats for any further question.
+ */
+function respondingWith(...handlers: readonly (() => Response)[]): Mock {
+  let asked = 0;
+  return vi.fn(async (input: unknown) => {
+    const path = new URL(String(input)).pathname;
+    if (path === "/api/v1/me/preferences") return json(PREFERENCES);
+    if (path === "/api/v1/weather/current") return json(CURRENT);
+    const handler = handlers[Math.min(asked, handlers.length - 1)];
+    asked += 1;
+    return handler?.() ?? streaming(runFrames());
+  }) as unknown as Mock;
+}
+
+/** Every call to the agent stream. What "did it ask?" means, now that context is read too. */
+function streamCalls(): unknown[][] {
+  return fetchMock.mock.calls.filter(
+    ([url]) => new URL(String(url)).pathname === "/api/v1/agent/stream",
+  );
+}
+
 function renderAnalyst() {
   return render(
     <SessionBoundary initialStatus="active" accessToken={() => "t"} fetch={(input, init) => fetchMock(input, init)}>
@@ -219,9 +288,9 @@ async function ask(question: string): Promise<void> {
 
 /** The bodies of every stream request made, parsed. */
 function askedBodies(): Record<string, unknown>[] {
-  return fetchMock.mock.calls
-    .filter(([, init]) => (init as RequestInit | undefined)?.method === "POST")
-    .map(([, init]) => JSON.parse(String((init as RequestInit).body)) as Record<string, unknown>);
+  return streamCalls().map(
+    ([, init]) => JSON.parse(String((init as RequestInit).body)) as Record<string, unknown>,
+  );
 }
 
 const originalEnv = { ...process.env };
@@ -232,7 +301,7 @@ beforeEach(() => {
   process.env.NEXT_PUBLIC_SUPABASE_URL = "https://project.supabase.co";
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "public-anon-key";
   window.localStorage.clear();
-  fetchMock = vi.fn(async () => streaming(runFrames())) as unknown as Mock;
+  fetchMock = vi.fn(async (input: unknown) => defaultFetch(input)) as unknown as Mock;
 });
 
 afterEach(() => {
@@ -250,12 +319,48 @@ describe("asking a question", () => {
     expect(screen.getByLabelText("Your weather question")).toBeInTheDocument();
   });
 
+  it("shows the context a question will be answered in, before anything is asked", async () => {
+    renderAnalyst();
+
+    // The band the 2026-09-10 fidelity review found missing: which place, in which units, over
+    // what horizon, and what the weather there is now. All retrieved, none of it inferred.
+    const context = await screen.findByRole("region", { name: "Question context" });
+    // The reading arrives last of the three, so waiting on it settles the whole band. It is the
+    // readout over the photograph and appears once: the row beneath carries the other measures.
+    expect(await within(context).findByText("15.3 °C")).toBeInTheDocument();
+    // The place is named twice on purpose: over the photograph, and as the resolved focus.
+    expect(within(context).getAllByText("Berlin, Germany").length).toBeGreaterThan(1);
+    expect(within(context).getByText("metric")).toBeInTheDocument();
+    expect(within(context).getByText("3 days")).toBeInTheDocument();
+    expect(within(context).getByText("68 %")).toBeInTheDocument();
+
+    // And opening the screen has still asked nothing of a language model.
+    expect(streamCalls()).toHaveLength(0);
+  });
+
+  it("keeps its workspace when there is no default location to photograph", async () => {
+    fetchMock = vi.fn(async (input: unknown) => {
+      const path = new URL(String(input)).pathname;
+      if (path === "/api/v1/me/preferences") {
+        return json({ ...PREFERENCES, default_location: null });
+      }
+      return defaultFetch(input);
+    }) as unknown as Mock;
+
+    renderAnalyst();
+
+    const context = await screen.findByRole("region", { name: "Question context" });
+    // No place, so no photograph — and the facts row survives rather than the band collapsing.
+    expect(await within(context).findByText("No default location set")).toBeInTheDocument();
+    expect(screen.getByLabelText("Your weather question")).toBeEnabled();
+  });
+
   it("sends the question to the agent stream and shows it in the transcript", async () => {
     renderAnalyst();
     await ask("What should I expect over the next few days in Berlin?");
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    await waitFor(() => expect(streamCalls()).toHaveLength(1));
+    const [url, init] = streamCalls()[0] as [string, RequestInit];
 
     expect(new URL(url).pathname).toBe("/api/v1/agent/stream");
     expect(init.method).toBe("POST");
@@ -276,7 +381,7 @@ describe("asking a question", () => {
     const composer = screen.getByLabelText("Your weather question");
     await userEvent.type(composer, "Why is the forecast uncertain further out?{Enter}");
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(streamCalls()).toHaveLength(1));
     expect(askedBodies()[0]?.question).toBe("Why is the forecast uncertain further out?");
   });
 
@@ -287,7 +392,7 @@ describe("asking a question", () => {
     expect(screen.getByRole("button", { name: "Ask Weathra" })).toBeDisabled();
 
     await userEvent.type(composer, "   {Enter}");
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(streamCalls()).toHaveLength(0);
   });
 
   it("fills the composer from a starter question rather than asking on its behalf", async () => {
@@ -298,7 +403,8 @@ describe("asking a question", () => {
     expect(screen.getByLabelText("Your weather question")).toHaveValue(
       "What should I expect over the next few days?",
     );
-    expect(fetchMock).not.toHaveBeenCalled();
+    // Filling the composer is not asking: no model call, no allowance spent.
+    expect(streamCalls()).toHaveLength(0);
   });
 });
 
@@ -490,7 +596,7 @@ describe("a streamed answer", () => {
 
 describe("one question at a time", () => {
   it("disables the submit control while a run is in flight", async () => {
-    fetchMock = vi.fn(async () => streaming(runFrames().slice(0, 2), { close: false })) as unknown as Mock;
+    fetchMock = respondingWith(() => streaming(runFrames().slice(0, 2), { close: false }));
     renderAnalyst();
 
     await ask("What should I expect?");
@@ -504,7 +610,7 @@ describe("one question at a time", () => {
   });
 
   it("prevents a duplicate submission of the same question", async () => {
-    fetchMock = vi.fn(async () => streaming(runFrames().slice(0, 2), { close: false })) as unknown as Mock;
+    fetchMock = respondingWith(() => streaming(runFrames().slice(0, 2), { close: false }));
     renderAnalyst();
 
     const composer = screen.getByLabelText("Your weather question");
@@ -516,7 +622,7 @@ describe("one question at a time", () => {
     await userEvent.type(composer, "{Enter}");
 
     // One run, one inference call against somebody's allowance.
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(streamCalls()).toHaveLength(1));
   });
 });
 
@@ -528,7 +634,7 @@ describe("a follow-up", () => {
     await screen.findByRole("region", { name: "AI interpretation" });
 
     await ask("Which day is warmer?");
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(streamCalls()).toHaveLength(2));
 
     const [first, second] = askedBodies();
     // The first question opens a thread; the second is asked inside it.
@@ -573,7 +679,7 @@ describe("when a run does not complete", () => {
     expect(within(progress).queryByText("Running")).not.toBeInTheDocument();
 
     const retry = screen.getByRole("button", { name: "Try again" });
-    fetchMock.mockImplementation(async () => streaming(runFrames()));
+    fetchMock.mockImplementation(async (input: unknown) => defaultFetch(input));
     await userEvent.click(retry);
 
     expect(await screen.findByRole("region", { name: "AI interpretation" })).toBeInTheDocument();
@@ -673,9 +779,9 @@ describe("when the agent surface is not configured", () => {
 
 describe("when the session ends", () => {
   it("routes a refused stream to the shared expired-session state, not to a question failure", async () => {
-    fetchMock = vi.fn(async () =>
-      refusal(401, "token_expired", "The access token has expired."),
-    ) as unknown as Mock;
+    // Only the stream refuses. The context reads succeed, so what reaches the boundary is
+    // unambiguously the question's own 401 rather than any read the screen happens to make.
+    fetchMock = respondingWith(() => refusal(401, "token_expired", "The access token has expired."));
 
     renderAnalyst();
     await ask("What should I expect?");
@@ -822,7 +928,7 @@ function quotaRefusal(): Response {
 
 describe("an exhausted allowance", () => {
   it("is its own state, naming the limit and when it resets", async () => {
-    fetchMock = vi.fn(async () => quotaRefusal()) as unknown as Mock;
+    fetchMock = respondingWith(() => quotaRefusal());
     renderAnalyst();
     await ask("What should I expect tomorrow?");
 
@@ -843,7 +949,7 @@ describe("an exhausted allowance", () => {
   });
 
   it("is not a weather error and not a failed run", async () => {
-    fetchMock = vi.fn(async () => quotaRefusal()) as unknown as Mock;
+    fetchMock = respondingWith(() => quotaRefusal());
     renderAnalyst();
     await ask("What should I expect tomorrow?");
 
@@ -865,7 +971,7 @@ describe("an exhausted allowance", () => {
   });
 
   it("is not an expired session: the person stays signed in", async () => {
-    fetchMock = vi.fn(async () => quotaRefusal()) as unknown as Mock;
+    fetchMock = respondingWith(() => quotaRefusal());
     renderAnalyst();
     await ask("What should I expect tomorrow?");
 
@@ -877,7 +983,7 @@ describe("an exhausted allowance", () => {
   });
 
   it("names no configuration and offers no retry that would be refused again", async () => {
-    fetchMock = vi.fn(async () => quotaRefusal()) as unknown as Mock;
+    fetchMock = respondingWith(() => quotaRefusal());
     renderAnalyst();
     await ask("What should I expect tomorrow?");
 
@@ -918,10 +1024,10 @@ describe("an exhausted allowance", () => {
 
   it("leaves the thread and the answer already on screen intact", async () => {
     // One answered question, then a refusal. The spec requires the person's thread to survive.
-    fetchMock = vi
-      .fn()
-      .mockImplementationOnce(async () => streaming(runFrames()))
-      .mockImplementationOnce(async () => quotaRefusal()) as unknown as Mock;
+    fetchMock = respondingWith(
+      () => streaming(runFrames()),
+      () => quotaRefusal(),
+    );
 
     renderAnalyst();
     await ask("What should I expect over the next few days in Berlin?");
@@ -939,9 +1045,9 @@ describe("an exhausted allowance", () => {
 
   it("still distinguishes a gateway rate limit from a plan limit", async () => {
     // Same 429. Different code, different meaning, different state.
-    fetchMock = vi.fn(async () =>
+    fetchMock = respondingWith(() =>
       refusal(429, "provider_rate_limited", "The inference gateway is rate limiting requests."),
-    ) as unknown as Mock;
+    );
     renderAnalyst();
     await ask("What should I expect tomorrow?");
 

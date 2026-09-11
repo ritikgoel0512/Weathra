@@ -67,6 +67,21 @@ function agentsFrom(live: AgentStreamState | null): readonly string[] {
   return [...seen];
 }
 
+/**
+ * The four regions the artifact stacks in this column, and what each is filled from.
+ *
+ * The order is the artifact's — status, sources, context, confidence — so the empty rail and the
+ * populated one are the same column rather than two different ones. Each note names a *record*,
+ * never a capability: "the providers the answer cites" is a fact about where the panel's content
+ * comes from, and makes no claim that any provider has been read.
+ */
+const RAIL_REGIONS: readonly { readonly name: string; readonly fills: string }[] = [
+  { name: "Active data sources", fills: "The providers the answer cites" },
+  { name: "Analyst context", fills: "The place, window and units it resolved to" },
+  { name: "Confidence and grounding", fills: "The backend's uncertainty statement" },
+  { name: "Evidence record", fills: "The stored trace of the run" },
+];
+
 export interface AnalystRailProps {
   /** The run the rail describes: the one in flight, or the last one that finished. */
   readonly live: AgentStreamState | null;
@@ -95,15 +110,41 @@ export function AnalystRail({ live, answer, evidenceId, memory }: AnalystRailPro
   const described = live !== null || answer !== null;
 
   if (!described) {
+    /*
+     * Before the first question: the status, and the four regions named — not explained.
+     *
+     * The first version of this state gave each of the artifact's four panels a paragraph about
+     * what it would eventually contain, and the runtime audit of 2026-09-08 photographed four
+     * paragraphs of the interface describing itself. The correction went the other way and left one
+     * sentence in an otherwise empty column, which the 2026-09-10 fidelity review photographed
+     * beside an equally empty workspace.
+     *
+     * This is the middle: one status card carrying the artifact's own status geometry, and the
+     * regions as a labelled list — a name and four words each, in the order they will fill. It is
+     * shorter than the paragraph it replaces and it holds the rail's shape, which is what the
+     * artifact fixes about this column.
+     */
     return (
       <aside className={styles.rail} aria-label="Run detail">
         <Card aria-labelledby="analyst-rail-waiting">
-          <CardHeader headingLevel={2} title="Run detail" titleId="analyst-rail-waiting" />
+          <CardHeader
+            headingLevel={2}
+            title="Agent status"
+            titleId="analyst-rail-waiting"
+            badge={<Badge tone="neutral">Idle</Badge>}
+          />
           <CardBody>
             <p className={styles.note}>
-              Ask a question and this fills in with the agents that ran, the providers they read,
-              what the answer resolved to, and the evidence record behind it.
+              No run yet. These fill from the run itself, in this order.
             </p>
+            <ol className={styles.railPlan}>
+              {RAIL_REGIONS.map((region) => (
+                <li className={styles.railPlanRow} key={region.name}>
+                  <span className={styles.railPlanName}>{region.name}</span>
+                  <span className={styles.railPlanNote}>{region.fills}</span>
+                </li>
+              ))}
+            </ol>
           </CardBody>
         </Card>
       </aside>

@@ -32,8 +32,8 @@ import {
   AttributionFooter,
   Badge,
   DataClassBadge,
-  EmptyState,
   InterpretationPanel,
+  Skeleton,
   MethodNote,
   ProvenanceSection,
   UncertaintyIndicator,
@@ -41,6 +41,7 @@ import {
   formatLocalStamp,
 } from "@/components/ui";
 import type { AnswerEnvelope, EvidenceAttribution, Finding } from "@/lib/api/schema";
+import type { DataClassName } from "@/lib/design/tokens";
 import {
   agentLabel,
   confidenceOf,
@@ -499,14 +500,79 @@ function EvidenceSummary({
 
 /* ------------------------------------------------------------------- empty state */
 
-/** What the screen says before anything has been asked. */
+/**
+ * What the screen shows before anything has been asked.
+ *
+ * It was an `EmptyState` — a heading over one four-line paragraph, which is what the production
+ * fidelity review of 2026-09-10 photographed sitting alone in an otherwise empty workspace. The
+ * replacement makes the same claim graphically: the four agents the supervisor can route to, as
+ * labelled chips in their own data classes, over one line rather than four.
+ *
+ * The four are not a decorative list. They are `AgentName`'s own routable members, and the class
+ * on each chip is the class of the figures that agent produces — which is the same colour the
+ * answer's own panels will carry when one of them runs. Nothing here is a status: none of them has
+ * run, and none of them claims to have.
+ */
+const ROUTABLE: readonly {
+  readonly name: string;
+  readonly dataClass: DataClassName;
+  readonly reads: string;
+}[] = [
+  { name: "Forecast", dataClass: "forecast", reads: "The days ahead, with their uncertainty" },
+  { name: "Historical", dataClass: "historical", reads: "The archive record and its baselines" },
+  { name: "Analytics", dataClass: "analytics", reads: "Statistics computed from what was retrieved" },
+  { name: "Knowledge", dataClass: "interpretation", reads: "Passages from the weather corpus" },
+];
+
 export function AnalystIntroduction(): ReactNode {
   return (
-    <EmptyState title="Ask Weathra a weather question">
-      Weathra routes the question to its forecast, historical, analytics and knowledge agents, shows
-      each step as it runs, and answers with the figures it retrieved or computed — each labelled
-      with what it is and where it came from.
-    </EmptyState>
+    <section className={styles.introduction} aria-labelledby="analyst-introduction">
+      <h2 className={styles.introductionTitle} id="analyst-introduction">
+        Ask Weathra a weather question
+      </h2>
+      <p className={styles.introductionLede}>
+        The supervisor routes it to whichever of these it needs, shows each step as it runs, and
+        answers with the figures they retrieved or computed.
+      </p>
+
+      <ul className={styles.introductionAgents}>
+        {ROUTABLE.map((agent) => (
+          <li className={styles.introductionAgent} key={agent.name} data-class={agent.dataClass}>
+            <span className={styles.introductionAgentMark} aria-hidden="true" />
+            <span className={styles.introductionAgentName}>{agent.name}</span>
+            <span className={styles.introductionAgentReads}>{agent.reads}</span>
+          </li>
+        ))}
+      </ul>
+
+      <p className={styles.note}>
+        Every figure in the answer carries what it is and where it came from, and the run is kept as
+        an evidence record you can open.
+      </p>
+    </section>
+  );
+}
+
+/**
+ * The answer's shape while the run is still producing it.
+ *
+ * `RunProgress` reports the steps, which is the honest live signal — but on its own it left the
+ * answer region blank for the whole of a run, and a blank region beside a progress list reads as a
+ * screen that has stopped. This holds the geometry the answer will occupy, hidden from assistive
+ * technology because `RunProgress` is the live region and two announcements of the same event is
+ * one too many.
+ *
+ * It claims nothing. No badge, no attribution line, no placeholder figure — only the block shapes
+ * of prose, which is the one thing every answer has.
+ */
+export function AnswerSkeleton(): ReactNode {
+  return (
+    <div className={styles.answerSkeleton} aria-hidden="true" data-answer-skeleton="true">
+      <Skeleton width="34%" height="var(--space-5)" />
+      <Skeleton width="100%" />
+      <Skeleton width="92%" />
+      <Skeleton width="74%" />
+    </div>
   );
 }
 

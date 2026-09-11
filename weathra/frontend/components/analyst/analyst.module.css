@@ -835,3 +835,275 @@
   border-bottom: 1px solid var(--color-border-subtle);
   margin-bottom: var(--space-3);
 }
+
+/* ------------------------------------------------------------- the focus band
+ *
+ * `02-ai-weather-analyst.png` anchors its workspace on the place under discussion. This is that
+ * anchor: the location banner, the three context facts the composer's own row restates, and the
+ * readings the provider reported. See `components/analyst/focus.tsx` for why it is here at all.
+ *
+ * Every grid below is `auto-fit` + `minmax`, so a place reporting two measures fills the band as
+ * honestly as one reporting six — `design-system.md` §13's thin-data rule.
+ */
+
+.focus {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-raised);
+  min-width: 0;
+}
+
+.focusOverlay {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.focusPlace {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
+}
+
+.focusReadout {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line);
+  font-weight: var(--type-display-weight);
+  font-variant-numeric: tabular-nums;
+}
+
+.focusBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  min-width: 0;
+}
+
+.focusFacts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  min-width: 0;
+}
+
+.focusFact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.focusFact dt {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+}
+
+.focusFact dd {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  overflow-wrap: anywhere;
+}
+
+.focusReadings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--color-border-subtle);
+  min-width: 0;
+}
+
+.focusReading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.focusReadingLabel {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+}
+
+.focusReadingValue {
+  color: var(--color-text-primary);
+  font-size: var(--type-card-size);
+  font-weight: var(--type-card-weight);
+  font-variant-numeric: tabular-nums;
+}
+
+.focusProvider {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  margin-inline-start: auto;
+}
+
+/* ---------------------------------------------------------- the empty transcript
+ *
+ * The four routable agents as chips rather than the paragraph that stood here. Each chip's mark
+ * wears the data class of the figures that agent produces, which is the colour the answer's own
+ * panels will carry — so the empty state and the populated one share a vocabulary.
+ */
+
+.introduction {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  min-width: 0;
+}
+
+.introductionTitle {
+  margin: 0;
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-primary);
+}
+
+.introductionLede {
+  margin: 0;
+  color: var(--color-text-secondary);
+  max-width: 68ch;
+}
+
+.introductionAgents {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.introductionAgent {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.introductionAgentMark {
+  grid-row: 1 / span 2;
+  inline-size: 4px;
+  block-size: 100%;
+  min-block-size: var(--space-6);
+  border-radius: var(--radius-pill);
+  background: var(--color-border-strong);
+}
+
+.introductionAgent[data-class="forecast"] .introductionAgentMark {
+  background: var(--color-class-forecast);
+}
+
+.introductionAgent[data-class="historical"] .introductionAgentMark {
+  background: var(--color-class-historical);
+}
+
+.introductionAgent[data-class="analytics"] .introductionAgentMark {
+  background: var(--color-class-analytics);
+}
+
+.introductionAgent[data-class="interpretation"] .introductionAgentMark {
+  background: var(--color-class-interpretation);
+}
+
+.introductionAgentName {
+  color: var(--color-text-primary);
+  font-size: var(--type-card-size);
+  font-weight: var(--type-card-weight);
+}
+
+.introductionAgentReads {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------ the run skeleton */
+
+.answerSkeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  min-width: 0;
+}
+
+/* ------------------------------------------------------- the rail before a run */
+
+.railPlan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.railPlanRow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-block-start: var(--space-2);
+  border-block-start: 1px solid var(--color-border-subtle);
+  min-width: 0;
+}
+
+.railPlanName {
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+}
+
+.railPlanNote {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  overflow-wrap: anywhere;
+}
+
+/* The starters as the artifact's grid rather than a wrapping row of four. */
+@media (min-width: 720px) {
+  .starters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
