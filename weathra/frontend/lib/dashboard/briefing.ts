@@ -300,6 +300,36 @@ export function forecastDaysFrom(series: Series | undefined): ForecastDay[] {
   });
 }
 
+/**
+ * Which of a day's remaining readings belong on the card, and which belong behind it.
+ *
+ * A forecast card carried every measure the provider reported for that day — mean temperature,
+ * feels-like high and low, precipitation hours, mean probability, mean wind, gust, prevailing
+ * direction, UV — one line each, seven days across. That is fifty-odd figures on a strip whose job
+ * is to answer "what are the next few days like", and the two that answer it were buried among
+ * them.
+ *
+ * So the card keeps the day, the high, the low and whether it rains; everything else is still
+ * there, one interaction away. Nothing is dropped and nothing is recomputed — this only decides
+ * what is shown first.
+ */
+const DAY_HEADLINE_KEYS = new Set([
+  "precipitation_sum",
+  "precipitation_probability_max",
+]);
+
+export function dayHeadline(day: ForecastDay): readonly Reading[] {
+  const headline = day.other.filter((reading) => DAY_HEADLINE_KEYS.has(reading.key));
+  // Prefer the total over the probability when both are reported: one card, one rain figure.
+  const total = headline.find((reading) => reading.key === "precipitation_sum");
+  return total ? [total] : headline.slice(0, 1);
+}
+
+export function dayDetails(day: ForecastDay): readonly Reading[] {
+  const shown = new Set(dayHeadline(day).map((reading) => reading.key));
+  return day.other.filter((reading) => !shown.has(reading.key));
+}
+
 /* ------------------------------------------------------------------ preferences */
 
 /**

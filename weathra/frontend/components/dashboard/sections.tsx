@@ -51,6 +51,8 @@ import { confidenceLevelFor } from "@/lib/design/data-class";
 import { resolvedPlaceLabel } from "@/lib/locations/place";
 import { useResolvedPlace } from "@/lib/locations/resolved-place";
 import {
+  dayDetails,
+  dayHeadline,
   dayPrecipitationFrom,
   formatReading,
   forecastDaysFrom,
@@ -412,14 +414,29 @@ export function ForecastMovement({ forecast, location }: ForecastMovementProps):
                   </span>
                 ) : null}
               </span>
-              {day.other.length > 0 ? (
-                <span className={styles.dayOther}>
-                  {day.other.map((reading) => (
-                    <span key={reading.key}>
-                      {reading.label}: {formatReading(reading)}
-                    </span>
-                  ))}
+              {/*
+                The card answers "what is this day like": the temperatures, and whether it rains.
+                Every other measure the provider reported is still here, behind the disclosure —
+                see `dayHeadline` for what this strip looked like when it showed them all at once.
+              */}
+              {dayHeadline(day).map((reading) => (
+                <span className={styles.dayOther} key={reading.key}>
+                  <span>
+                    {reading.label}: {formatReading(reading)}
+                  </span>
                 </span>
+              ))}
+              {dayDetails(day).length > 0 ? (
+                <details className={styles.dayDetails}>
+                  <summary className={styles.dayDetailsSummary}>View details</summary>
+                  <span className={styles.dayOther}>
+                    {dayDetails(day).map((reading) => (
+                      <span key={reading.key}>
+                        {reading.label}: {formatReading(reading)}
+                      </span>
+                    ))}
+                  </span>
+                </details>
               ) : null}
             </li>
           ))}

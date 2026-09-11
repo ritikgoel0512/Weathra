@@ -16,6 +16,8 @@ import {
   forecastDaysFrom,
   formatReading,
   localDateOf,
+  dayDetails,
+  dayHeadline,
   measureLabel,
   statisticPhrase,
   preferenceSource,
@@ -191,5 +193,58 @@ describe("statisticPhrase — what a computed figure is called on a consumer scr
     // A statistic the table does not cover still reads as words, never as a key.
     expect(statisticPhrase("mean", "soil_moisture_0_to_7cm")).toBe("Average soil moisture 0 to 7cm");
     expect(statisticPhrase("kurtosis", "temperature_max")).toBe("Kurtosis high");
+  });
+});
+
+describe("what a forecast card shows first", () => {
+  function day(values: Record<string, number>) {
+    return forecastDaysFrom({
+      granularity: "daily",
+      units: {
+        temperature_max: "°C",
+        temperature_min: "°C",
+        precipitation_sum: "mm",
+        precipitation_probability_max: "%",
+        wind_gust_max: "km/h",
+        uv_index_max: "index",
+      },
+      entries: [{ time_local: "2026-09-11T00:00:00+02:00", time_utc: "2026-09-10T22:00:00Z", values }],
+    } as never)[0]!;
+  }
+
+  it("keeps the temperatures and the rain on the card, and nothing else", () => {
+    // Seven days of every reported measure is fifty-odd figures on a strip whose job is to answer
+    // "what are the next few days like".
+    const subject = day({
+      temperature_max: 21.5,
+      temperature_min: 11.6,
+      precipitation_sum: 6.4,
+      precipitation_probability_max: 63,
+      wind_gust_max: 32.4,
+      uv_index_max: 4.25,
+    });
+
+    expect(dayHeadline(subject).map((reading) => reading.key)).toEqual(["precipitation_sum"]);
+    expect(dayDetails(subject).map((reading) => reading.key)).toEqual(
+      expect.arrayContaining(["precipitation_probability_max", "wind_gust_max", "uv_index_max"]),
+    );
+  });
+
+  it("drops nothing — every measure is on the card or behind it, never neither", () => {
+    const subject = day({
+      temperature_max: 21.5,
+      temperature_min: 11.6,
+      precipitation_sum: 6.4,
+      wind_gust_max: 32.4,
+    });
+    const shown = [...dayHeadline(subject), ...dayDetails(subject)].map((reading) => reading.key);
+    expect([...shown].sort()).toEqual([...subject.other.map((r) => r.key)].sort());
+  });
+
+  it("falls back to the chance of rain when no total is reported", () => {
+    const subject = day({ temperature_max: 21.5, precipitation_probability_max: 63 });
+    expect(dayHeadline(subject).map((reading) => reading.key)).toEqual([
+      "precipitation_probability_max",
+    ]);
   });
 });

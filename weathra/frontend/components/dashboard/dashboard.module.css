@@ -208,6 +208,26 @@
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * The rest of the day's measures, one interaction away. The summary is deliberately quiet: it is
+ * the least important thing on a card whose job is the temperatures and the rain.
+ */
+.dayDetails {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.dayDetailsSummary {
+  cursor: pointer;
+  color: var(--color-text-muted);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.dayDetails[open] .dayDetailsSummary {
+  margin-bottom: var(--space-1);
+}
+
 /* A list of computed figures, each with its own provenance line. */
 /*
  * The computed figures, as a grid rather than a column.
