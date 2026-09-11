@@ -1,14 +1,26 @@
 # Production fidelity review — the fifteen screens against their artifacts
 
-**Date:** 2026-09-11, fourth revision · **Reviewer:** Claude Opus 5 · **Method:** screenshots of the
+**Date:** 2026-09-11, fifth revision · **Reviewer:** Claude Opus 5 · **Method:** screenshots of the
 real production build, compared against the approved PNG, one screen at a time.
 
 Captured by `frontend/tests/e2e/capture.spec.ts`, which runs `next build` and drives the shipping
 bundle against the two offline stubs. `WEATHRA_SCREENS` takes a subset and `WEATHRA_WIDTHS` a width,
 so a targeted check after one change does not re-run the matrix.
 
-**The third revision graded harder and sent three rows down to NOT CLOSE. This one closes all
-three, and the standard it grades against is unchanged:** a screen is not close because its
+**The fifth revision asks a different question of every remaining divergence.** The fourth reached
+zero NOT CLOSE and left seven ACCEPTABLE DIVERGENCE rows, each with a reason. This revision tests
+those reasons: *can the difference be closed with real data — obtained, aggregated, derived,
+cached or exposed through the architecture this product already has?* Where the answer was yes, the
+data path was built and the row re-graded. Where it is no, the row now records the exact missing
+data and what would have to exist to get it, rather than "refused (§5)".
+
+**Five reasons turned out to be wrong**, and the pattern in all five is the same: the figure was
+already in the database or already returned by the provider, and nothing had aggregated or exposed
+it. Those are in *What the parity pass built* below. **Eight kinds of data are genuinely
+unobtainable** and are now documented as such — one row each, naming the provider or the
+infrastructure it would take, rather than the "refused (§5)" that stood there before.
+
+**The standard is unchanged:** a screen is not close because its
 sections have similar names, because the ground is the right dark, or because the route works. It
 is close when a person looking at the two images sees the same screen. Where production reads as
 text and the artifact reads as graphics, the row says NOT CLOSE however good the reasons are.
@@ -50,33 +62,106 @@ Graded against the PNG, from the 1440 capture of this revision. A row whose verd
 
 | # | Screen | Fidelity | Functional | Live data | What the capture shows | What is still short of the artifact |
 |---|---|---|---|---|---|---|
-| 01 | Dashboard | **ACCEPTABLE DIVERGENCE** | correct | full | Photographic hero with the readout over it, confidence matrix, anomalies column, seven-day strip, the temperature line and precipitation bars. The computed figures are a two-column grid this revision, which halves the analytics panel, and the closing baseline band's empty heading column is gone | The columns still end at different heights where one holds less than the other — page ground below the shorter one, not an empty card: see *The void that was moved rather than removed*. The artifact's station id, neural agent, convergence and reliability figures are refused (§5) |
-| 02 | AI Weather Analyst | **ACCEPTABLE DIVERGENCE** — was NOT CLOSE | correct | full | Photographed with an answer in it for the first time: the place's imagery with its readout and context row, the question, the agent's interpretation with its model line, observed/forecast/computed figure cards each carrying its own provenance, the banded confidence statement, and the rail beside it live — agent status complete over its four stages, the sources the run read, the resolved context and the grounding result | The artifact's rail lists named third-party feeds with latencies and an agent version string; ours lists the provider the run actually read (§5). No evidence-node count |
-| 03 | Historical Analytics | **ACCEPTABLE DIVERGENCE** | correct | thin | The combined plot (temperature line, dashed normal, precipitation bars on their own axis), the statistics row, the baseline panel as a two-column figure grid this revision, deviation, period-against-period | The stub's window fills one metric card where the artifact has six, and the baseline column runs about 400px past the plot card beside it. That is the window's length, not the layout's — and it is now page ground rather than an empty card |
-| 04 | Compare Cities | **ACCEPTABLE DIVERGENCE** | correct | full | City cards with imagery, ranked bars, the delta chart, the figures matrix | The artifact's synthesis-confidence, correlation-score and data-density bars are refused (§5); no candlestick panel |
-| 05 | Agent Evidence | **ACCEPTABLE DIVERGENCE** — was NOT CLOSE | correct | full | Photographed as a run record: the summary strip, the six-step execution flow with each agent's timing and one skipped with its reason, the grounded-sources table, three MCP tool calls with their arguments and returns, the deterministic analytics tiles with their methods, the retrieved passage, and the final synthesis with its grounding verdict. The empty workspace is photographed separately as `05-evidence-empty-1440.png`, and is now a compact field grid rather than seven empty cards | The artifact's providers, station identifiers and node counts are invented and refused (§5). The grounded-sources table scrolls in its own container at 1440, so the capture shows it mid-column |
+| 01 | Dashboard | **CLOSE** — was ACCEPTABLE DIVERGENCE | correct | full | Photographic hero with the readout over it and its four secondary measures, the interpretation panel with its confidence matrix, What Changed?, the computed figures as their own panel in the wide column, the anomaly rail with the historical average and spread beneath it, saved snapshots, the seven-day strip, the temperature line, the precipitation bars, forecast movement and the closing baseline band | Nothing structural. The artifact's station id, neural agent version, model-convergence and provider-reliability figures are unobtainable — see *What cannot be closed* |
+| 02 | AI Weather Analyst | **ACCEPTABLE DIVERGENCE** | correct | full | Photographed with an answer in it: the place's imagery with its readout and context row, the question, the agent's interpretation with its model line, observed/forecast/computed figure cards each carrying its own provenance, the banded confidence statement, and the rail live — agent status over its four stages, the sources the run read, the resolved context and the grounding result | The artifact's rail lists named third-party feeds with per-feed latencies and an agent version string. Weathra reads one provider and versions no agent, so the rail lists the provider that answered — see *What cannot be closed* |
+| 03 | Historical Analytics | **CLOSE** — was ACCEPTABLE DIVERGENCE | correct | full | Six metric cards in one row as the artifact draws them, each with its delta against the earlier period; the combined plot at full content width; the baseline panel with the deviation bars under it; and the anomaly panel now carrying a real **percentile** with the distribution it was ranked against drawn as a number line | Nothing structural. The artifact's station id and its model-written anomaly narrative are refused (§5, §8) |
+| 04 | Compare Cities | **ACCEPTABLE DIVERGENCE** | correct | full | City cards with imagery, ranked bars, the delta chart, the figures matrix | The artifact's synthesis-confidence bar needs a confidence a model does not report. Its correlation score and data-density bar **are** derivable and are not built — see *What was not reached* |
+| 05 | Agent Evidence | **ACCEPTABLE DIVERGENCE** | correct | full | Photographed as a run record: the summary strip, the six-step execution flow with each agent's timing and one skipped with its reason, the grounded-sources table, three MCP tool calls with their arguments and returns, the deterministic analytics tiles with their methods, the retrieved passage, and the final synthesis with its grounding verdict. The empty workspace is photographed separately and is a compact field grid rather than seven empty cards | The artifact's station identifiers and sensor-node counts describe hardware Weathra does not read — see *What cannot be closed*. The grounded-sources table scrolls in its own container at 1440, so the capture shows it mid-column |
 | 06 | Saved Locations | **CLOSE** | correct | full | Cards with the live reading, and — new this revision — the artifact's three labelled chips for precipitation, humidity and wind, allowance meter, workspace summary | No map. The artifact's node-health, telemetry-sync and model-consensus panels are refused (§5) |
 | 07 | Settings | **CLOSE** | correct | full | Tabs, segmented unit control, selects, save/discard/reset | Only supported preferences are offered |
 | 08 | Authentication | **CLOSE** | correct | full | The centred card on the light ground the artifact uses, mark in its accent tile, one primary action, reveal control, the way out beneath | No photographic backdrop; the accent is the product's teal rather than the artifact's cyan |
-| 09 | Admin Model & AI Usage | **CLOSE** | correct | full | Five KPIs, the usage chart with a measure switch, the full-width figures table, product/internal meter, failures, catalog — and, new this revision, the routing panel and the principals-and-plans table | The artifact's composite scores, per-tier headcounts, export and audit controls and status footer are refused (§5). One chart rather than two: the endpoint aggregates a period into groups and returns no time series |
-| 10 | Plan & Usage | **CLOSE** | correct | full | Metric tiles, allowance meters, tier list, reset schedule | The whole billing half is refused — no subscription id, interval, payment method, invoice or upgrade, because Weathra bills nobody |
-| 11 | Forecast Explorer | **CLOSE** | correct | full | Location band, observed metric row, the temperature chart with its gap drawn as a gap, confidence, computed findings, and the full hour-by-hour matrix | The artifact's ECMWF line, neural agent, convergence and grounding scores, sensor nodes and encryption banner are refused (§5) |
-| 12 | Weather Intelligence Report | **ACCEPTABLE DIVERGENCE** — was NOT CLOSE | correct | full but for the synthesis | Rebuilt this revision as a report with charts through it: photographic hero carrying the reading and its three computed figures, the outlook as day cards with their own range bars, the forecast window plotted with the archive baseline drawn through it as a reference line, the entries that stood out as a deviation plot against their threshold, the confidence bands as a meter, and the sources as a footer | The synthesis is a control rather than something spent on opening the page. The artifact's agent version, evidence-node count, PDF export, narrative confidence percentage, decadal stability index and model-alignment score are refused (§5) |
+| 09 | Admin Model & AI Usage | **CLOSE** | correct | full | Five KPIs; **the token-and-cost trend over time the artifact leads with**, dual-axis with a product/internal toggle and its totals strip; the grouped chart with its measure switch and period; the full-width figures table; the product/internal meter; failures, now groupable by failure class; the catalog; the routing panel; and the principals-and-plans table | The artifact's composite reasoning and cost-efficiency scores, per-tier user headcounts, export and audit controls and status footer are refused (§5) — a headcount against a user cap is a quantity Weathra neither stores nor limits |
+| 10 | Plan & Usage | **CLOSE** | correct | full | The tier card with the three canonical plans, four metric tiles, the allowance rows at the artifact's own density — consumed figure at metric size, its allowance and unit, the share, the bar, and consumed/remaining beneath — **the recent-activity area chart** over the thirty-day series with a peak-day and a week-on-week tile, and the reset windows | The whole billing half is refused — no subscription id, interval, payment method, invoice or upgrade, because Weathra bills nobody. Its vector-storage-node quota and usage export are refused with it (§5) |
+| 11 | Forecast Explorer | **CLOSE** | correct | full | Location band, observed metric row, the temperature chart with its gap drawn as a gap, confidence, computed findings, the full hour-by-hour matrix, and a place control of its own — the screen no longer needs a default location configured elsewhere before it will show anything | The artifact's second named forecast model is unobtainable from one provider — see *What cannot be closed*. Its neural agent, convergence and grounding scores, sensor nodes and encryption banner are refused (§5) |
+| 12 | Weather Intelligence Report | **CLOSE** — was ACCEPTABLE DIVERGENCE | correct | full but for the synthesis | A report with charts through it: photographic hero carrying the reading and its three computed figures, the outlook as day cards with their own range bars, the forecast window plotted with the archive baseline drawn through it as a reference line, the entries that stood out as a deviation plot against their threshold, the confidence bands as a meter, the sources as a footer, and a place control under the heading | The synthesis is a control rather than something spent on opening the page, which is a deliberate difference and not a shortfall: the artifact's is free, Weathra's costs a real model call. Its agent version, PDF export, narrative confidence percentage, stability index and alignment score are refused (§5) |
 | 13 | Weather Scenario Lab | **CLOSE** | correct | full | New this revision, once the stub modelled the endpoint: the assumption panel, the scenario-against-forecast line chart with the forecast mean as a reference, and the delta cards with the arithmetic named | Inputs are numeric fields rather than the artifact's sliders. Its session id, engine version, station id, stability index and node counts are refused (§5) |
-| 14 | Weather Watch | **ACCEPTABLE DIVERGENCE** | correct | full | Summary tiles, the watch list with its three distinct states, the create form, the disclaimer | No graphical weather context beside the list, and no evaluation history — there is no scheduler, so there is no history to draw |
+| 14 | Weather Watch | **ACCEPTABLE DIVERGENCE** | correct | full | Summary tiles, **the forecast the watches are checked against with the threshold drawn through it**, the watch list with its three distinct states, the create form, a place control and the disclaimer | No evaluation history. It is the one row on this screen that needs infrastructure rather than a query — see *What cannot be closed* |
 | 15 | Travel Intelligence | **CLOSE** | correct | full | New this revision: the destination photographed, the trip controls, and the ranked day cards with score meters and their contributions | The artifact's flight stability, airline operations, departure boards and booking are refused — Weathra knows none of them |
 
-**Totals.** Visual: 6 CLOSE · 9 ACCEPTABLE DIVERGENCE · **0 NOT CLOSE** · 0 NOT REVIEWED.
-Functional: 15 correct. Live data: 13 full, 1 full but for one control, 1 thin, 0 empty-state only.
+**Totals.** Visual: **11 CLOSE · 4 ACCEPTABLE DIVERGENCE · 0 NOT CLOSE** · 0 NOT REVIEWED.
+Functional: 15 correct. Live data: 14 full, 1 full but for one control, 0 thin, 0 empty-state only.
 
-**Only five rows were re-graded.** 01, 02, 03, 05 and 12 are the screens this revision rebuilt, and
-they are the only ones re-photographed for it. The other ten carry the third revision's verdicts
-unchanged, from that revision's captures — they are not re-assertions made here.
+Three rows moved up this revision — 01, 03 and 12, all AD to CLOSE — and 03 moved from thin to full
+live data. The four that remain ACCEPTABLE DIVERGENCE are **02, 04, 05 and 14**. Nine screens were
+re-photographed: 01, 03, 09, 10, 11, 12, 13, 14 and 15. The other six carry their previous verdicts
+from the captures those revisions took; they are not re-assertions made here.
 
-**No row claims CLOSE that was NOT CLOSE.** All three moved to ACCEPTABLE DIVERGENCE, which is the
-honest grade: each now reads as the artifact's screen, and each still departs where the artifact
-draws infrastructure Weathra does not own. A NOT CLOSE that becomes CLOSE in one pass would be a
-grader being kind to their own work.
+> **Correction: the totals line was wrong in the third and fourth revisions, and this one counted
+> its own table before trusting itself.** The third revision reported "6 CLOSE · 6 ACCEPTABLE
+> DIVERGENCE · 3 NOT CLOSE" against a table that actually held 8, 4 and 3. The fourth moved the
+> three NOT CLOSE rows to ACCEPTABLE DIVERGENCE and did the arithmetic on the stated figures rather
+> than on the table, carrying the error forward as "6 CLOSE · 9 ACCEPTABLE DIVERGENCE" when its
+> table held 8 and 7. Both totals summed to fifteen, which is exactly why neither was caught. The
+> verdicts in the tables were right throughout — every row is a screen and a picture — and only the
+> tally was wrong, but a tally is the one line a reviewer reads first, and this document is about
+> not overstating. The figures above were counted from the rows.
+
+**Every remaining divergence names its missing data.** That is what distinguishes this revision from
+its predecessors: "refused (§5)" is a pointer to a policy, and what a reviewer needs is the sentence
+that policy produces for that screen — which datum is absent, and what would have to exist to
+supply it. *What cannot be closed, and what it would take* is that, one row per kind of data.
+
+## What the parity pass built
+
+Five divergences were recorded as refusals and were not. In each, the figure was already in the
+database or already returned by the provider, and nothing had aggregated or exposed it. Each row
+below is *element → data → source → what was missing → what was built*.
+
+| Visily element | Data it needs | Where that data was | What was missing | What was built |
+|---|---|---|---|---|
+| `09` "Token usage & estimated cost" over a clock | tokens and cost per time bucket | `llm_usage_events.created_at`, `total_tokens`, `estimated_cost` | `GET /admin/usage` groups a period by dimension and returns no time axis at all | `aggregate_usage_series` + `GET /admin/usage/series`, bucketed by `date_trunc`, product and internal split, gap-filled with zeros |
+| `10` "Recent usage activity" area chart | the caller's own calls per day | the same table, scoped by Row Level Security | `GET /me/usage` returned the window's totals and no series | `recent.series` on the same route. Subject-free aggregation, so one function serves both screens and `/me/usage` gains no parameter that would need an authorization check |
+| `10` "Peak volume" and "Weekly delta" | the daily series | as above | nothing to derive them from | `peakOf` and `deltaOf`, both over the new series. The delta is null against an empty earlier week rather than `+∞%` or a confident `+100%` |
+| `09` "Errors & reliability" split by kind | failure counts per classification | `llm_usage_events.failure_class` | `status` separates success from failure only, so a rate could not distinguish a gateway rate limit from a schema validation | `failure_class` added to `GROUPINGS` |
+| `03` "Percentile" beside the z-score | the distribution the baseline was drawn from | the archive years the baseline already fetched | `BaselineComparison` carried the mean, the spread and the extremes — no distribution | `Baseline.yearly_means` (each reference year's own mean for the window) + `percentile_rank`, mid-rank convention, with the distribution drawn as a number line beside the figure |
+
+Two more were layout rather than data, and are in *The void that was moved rather than removed* and
+*The row that should not have been a row* below.
+
+**And one was neither.** `01`, `04`, `11`, `12` and `15` all lead with imagery of the place, and the
+last tier of that chain was eight hand-drawn cities plus one shared `generic.svg`. Weathra resolves
+any location Open-Meteo can geocode, so every customer city outside those eight got the same
+picture. The fallback is now drawn from the place's own name — a graded sky, a horizon glow, two
+rows of buildings, lit windows, a moon or stars, all seeded by the key so the same place draws the
+same picture on every capture. `docs/city-imagery.md` has the chain and the four properties it is
+held to.
+
+## What cannot be closed, and what it would take
+
+Each of these is a *kind* of data rather than a formatting choice, and each names the provider or
+infrastructure that would have to exist first. None is a gap in the implementation.
+
+| Screen | What the artifact has | What production has | Exactly what is missing | Where it could come from |
+|---|---|---|---|---|
+| `01`, `05`, `11`, `14` | "STATION ID: BER-CENTRAL-09", sensor-node counts, node health | the provider that answered and when | a **station-level observation network**: per-station identifiers, locations and health. Open-Meteo serves a reanalysis grid, not stations, and exposes no station identity | a station-data provider — NOAA/ISD, DWD open data, or a commercial station API. A new provider behind `WeatherProvider`, plus a station table to key readings on |
+| `01`, `02`, `11`, `12` | "NEURAL AGENT V4.2", agent version strings, "MODEL ALIGNMENT SCORE" | the gateway and model key the run resolved to | a **model Weathra trains and versions**. There is none: Weathra routes to third-party models through one gateway | nothing short of training a model. This is not a roadmap item; it is a different product |
+| `01`, `11` | "MODEL CONVERGENCE 94%", a second named forecast line (ECMWF) | one provider's forecast with its own banded confidence | **two or more independent forecast models** to disagree. Convergence is a measure of spread across models, and one model has none | a second forecast provider. `specs/weather-providers` already has the interface; `docs/roadmap.md` lists multi-provider consensus as post-MVP, and the confidence signal derived from disagreement with it |
+| `01` | "DATA RELIABILITY (PROVIDER) 82%" | the provider named on every figure | a **measured reliability history** per provider — uptime, completeness, and agreement with later observations, over months | forecast-accuracy scoring, which needs stored forecast snapshots compared against subsequent observations. Post-MVP in `docs/roadmap.md`; the snapshot table exists, the scheduled capture does not |
+| `02`, `05` | named third-party feeds with per-feed millisecond latencies | the provider each figure came from, with its retrieval time | **several feeds to compare**, and per-feed timing. Weathra reads one weather provider and one model gateway; the run record already carries per-agent and per-tool timings | the same second provider as above. The timing half is already recorded and would need no new work |
+| `14` | "ANOMALIES LOGGED 02", an activity feed of past breaches | each watch's latest evaluation | an **evaluation history**, which needs something to write it. A table is trivial; the scheduler is the missing part, and without one the table would record *when somebody opened the screen* — a chart of that looks like a record of the weather while being a record of visits | a scheduler. `docs/roadmap.md` lists Weather Watch's notification and scheduling infrastructure as post-MVP; the history table should land with it, not before |
+| `10` | subscription id, billing interval, payment method, invoices, upgrade | administratively assigned plans | a **billing relationship**. Weathra bills nobody; `subscription_plans` carries an unused external reference so a payment integration has somewhere to land | a payment provider. Deliberately out of scope: drawing any of it would be an invented commercial relationship |
+| `06` | a map of saved locations | typographic cards with the live reading and three labelled chips | a **map tile provider**. Every saved place already has coordinates, so the data is present and the renderer is not | a tile provider — MapLibre with OpenStreetMap tiles needs no key; a styled basemap does. The artifact for `06` draws no map, so this is the artifact's own composition rather than a gap against it |
+
+**Two the artifacts draw that are refused on principle rather than for want of data.** The
+compliance and audit-lock apparatus on `05` and `06` — "cryptographically signed and immutable for
+compliance auditing", `ISO-MET-COMPLIANT` — would be a false claim about a security property, and
+the "Recommendations for city planners" narrative on `04` is operational advice Weathra is not
+positioned to give. Both are recorded in `screens.md` §5 and neither would be built if the data
+arrived tomorrow.
+
+## What was not reached
+
+* **`04`'s correlation score and data-density bar.** Both are genuinely derivable and neither is
+  built. A correlation between two places' series over the compared window is the same class of
+  deterministic statistic as the z-score and the Theil-Sen slope already in
+  `weathra/analytics/`, and data density is `points_used / points_expected`, which every
+  `StatisticResult` already carries half of. This is the clearest remaining *closeable* gap in the
+  set, and it is named here rather than left for a reviewer to notice.
+* **A four-width re-run.** This revision graded at 1440. Nothing built here is width-specific and
+  `tests/design-rules.test.ts` plus the harness's per-width overflow log still cover the rules, but
+  the nine re-photographed screens are photographed at one width.
+* **Historical's remaining column difference**, now much smaller than it was, since the plot took
+  the full width and the metric row filled.
 
 ## The void that was moved rather than removed
 
@@ -104,6 +189,26 @@ What is left is height the data owns. Both screens shorten the taller column at 
 figure lists are `auto-fit` grids rather than single columns, which halves them — and the Dashboard's
 closing baseline band no longer spends 38% of a row on a two-line heading with nothing under it.
 Past that, one side of a band holding less than the other is the stub's window, not the layout.
+
+## The row that should not have been a row
+
+Historical Analytics' combined plot sat in the wide column of a two-column row with the baseline
+panel beside it, and two revisions tried to close the void under it by adjusting alignment. Both
+were treating a symptom. `03-historical-analytics.png` gives its plot the **full content width**,
+with the metric row above it and the comparison band below — and the baseline panel is naturally
+about twice the plot's height, so as a row it could never have been level. The band below now holds
+the baseline and the deviation bars together, which is also where the artifact puts them; before,
+the deviation was a screen away from the figures it is computed from.
+
+The Dashboard had the same shape of error one level down. Its narrow column carried the anomaly
+alert, the trend *and* six computed statistics with their methods and provenance, while the wide
+column beside it held two short panels — so the rail ran twice the height of the column it was
+beside. The artifact's rail is short: an alert, a historical average, a variance, three snapshots.
+The figures were the wrong half to put there, and they are now their own panel in the wide column.
+
+Neither was a data problem and neither was visible in a component test. Both were visible in the
+first capture taken after the change, which is the argument for photographing a screen rather than
+reading it.
 
 ## What the review changed
 
@@ -153,6 +258,26 @@ precipitation lag, atmospheric instability — drawn empty with the reason state
 capability in order to deny it, which is internal reasoning on a customer's screen. Each panel now
 carries only the rows that carry figures, and `lib/design/product-copy.test.ts` refuses the names.
 
+## The finding that was not about pixels
+
+All five Intelligence screens — Forecast Explorer, the Intelligence Report, the Scenario Lab,
+Weather Watch and Travel Intelligence — read the default location from `/me/preferences` and offered
+no way to look at anywhere else. **With no default set, each one rendered an empty state and a link
+to Settings.** A customer who signed up and pressed *Forecast Explorer* got a sentence and a link
+where the artifact has a screen: five of the fifteen screens were reachable only by first
+configuring a preference somewhere else.
+
+That is not a fidelity defect and a screenshot of the populated state would never have shown it. It
+was found by asking what each screen does when it has nothing, which is the question the fourth
+revision's "photograph the empty state too" discipline turns into a habit.
+
+Each now carries the same place control, under its own heading, folded away once there is something
+to read. Two more defects fell out of wiring it: Forecast Explorer and the Intelligence Report each
+replaced their *whole screen* with one sentence while loading and on a provider error — so a
+provider hiccup took the heading, the controls and the place chooser with it, and the chooser is the
+one control that would let a person try somewhere else. Both keep their shell now, which is what
+the Dashboard, Historical and Compare Cities already did.
+
 ## The standing rule about the artifacts
 
 Every screen's divergences are refusals of content Weathra does not have, and they are recorded per
@@ -163,45 +288,31 @@ own. Weathra reads one weather provider and one model gateway. Where a panel's s
 content is not, the slot is filled with what Weathra actually knows; where the whole panel is
 invented, it is absent rather than styled out of sight.
 
-## What the third revision listed, and what became of it
+## What each revision left, and what became of it
 
-* ~~**The Analyst and Agent Evidence populated states.** Both need a live model call.~~ **Done, and
-  the premise was wrong.** The stub models the agent stream, so both were photographed populated
-  with no model call and no allowance spent.
-* ~~**The Intelligence Report's graphics.**~~ **Done.** Rebuilt around the forecast-window plot, the
-  deviation plot, the day cards and the hero, with the baseline drawn through the window as a
-  reference rather than described beside it.
-* ~~**Column balance on the Dashboard and Historical.**~~ **Addressed, and one attempt at it
-  reversed** — see *The void that was moved rather than removed*. What remains is the window's
-  length rather than the band's geometry.
-* **A responsive re-run.** Still open. This revision graded at 1440, as the third did. The
-  four-width pass of the second revision stands for the screens it covered; the five rebuilt here
-  are photographed at 1440 only, and the drawer at 375.
-
-## What this revision did not reach
-
-* **A four-width re-run of the five rebuilt screens.** 1024, 768 and 375 for 01, 02, 03, 05 and 12
-  carry the previous revision's captures, which predate the rebuild. Nothing in the rebuild is
-  width-specific, and `tests/design-rules.test.ts` plus the harness's per-width overflow log still
-  cover the rules — but these five are not *photographed* narrow.
-* **A populated Analyst and Evidence against the real model.** What is photographed is the real
-  components rendering a real streamed run; the stream came from the stub. That is the right
-  evidence for composition and it is not evidence about a live provider's latency or prose.
-* **Historical's remaining column difference.** The baseline panel outruns the plot card by about
-  400 pixels because the baseline holds four statistics, their methods and the years it used, and
-  the plot holds a window the stub made three days long. A masonry band would close it; that is a
-  layout this design system does not have and should not grow for one screen.
+| Left by | Item | Now |
+|---|---|---|
+| 3rd | The Analyst and Agent Evidence populated states | **Done, and the premise was wrong.** The stub models the agent stream, so both were photographed populated with no model call and no allowance spent |
+| 3rd | The Intelligence Report's graphics | **Done.** Rebuilt around the forecast-window plot, the deviation plot, the day cards and the hero |
+| 3rd | Column balance on the Dashboard and Historical | **Done**, after one attempt was reversed and one row turned out not to be a row — see the two sections above. Both screens now close their bands |
+| 4th | Historical's remaining column difference | **Mostly gone.** The plot took the full content width and the metric row filled to six, so the difference is now a fraction of the 400 pixels it was |
+| 4th | A populated Analyst and Evidence against the real model | **Still open, and correctly so.** What is photographed is the real components rendering a real streamed run; the stream came from the stub. That is the right evidence for composition and is not evidence about a live provider's latency or prose |
+| 4th, 5th | A four-width re-run | **Still open.** Both graded at 1440. The second revision's four-width pass stands for the screens it covered; the nine re-photographed here are photographed at one width, and the drawer at 375 |
+| 5th | `04`'s correlation score and data-density bar | **Open and closeable** — see *What was not reached* |
 
 ## Known limits of this review
 
-* **Populated states for the Analyst and Agent Evidence need a live model run** and were not
-  captured. Both screens are photographed in the state a person sees before they ask anything.
-* **The stub's data is thinner than production's**, so empty states appear more often here than a
-  person with real saved places would see. The hourly series the third revision added fixed the two
-  worst cases — the Dashboard's Climate pulse and Precipitation outlook are plots now, not empty
-  frames — but the archive window is still short: Historical's statistics row fills one card of six
-  and its plot covers three days. Every "Not computed" and "Not reported" in these captures is the
-  stub declining to answer, stated in the words the backend would use, and not a missing panel.
+* **The Analyst and Agent Evidence captures are of a stubbed run**, not a live model's. Real
+  components, real streaming, real grounding check — and a stub behind it, which is the right
+  evidence for composition and none at all about a provider's latency or prose.
+* **The stub's data was thinner than production's, and that mattered more than it looked.** Two
+  rounds of grading were partly grading the fixture. The third revision's hourly series turned the
+  Dashboard's two empty chart frames into plots; this one added the five daily aggregates
+  Open-Meteo's archive actually returns, which turned Historical's metric row from one card and a
+  five-measure "Not computed" footnote into the artifact's six — **the product computed all six all
+  along**. The lesson is the general one: before recording "the backend computed nothing here",
+  check whether the fixture asked it to. What remains is a short window, three days of archive and
+  six of forecast, so some panels are less dense than a real account's.
 * **Chromium only.** The suite runs Firefox too; the captures are one engine.
 * **The 375 captures are a phone width, not a phone.** No touch target was measured, and no gesture
   was tested.

@@ -797,6 +797,51 @@ against the contract rather than maintained by hand.
 | The frontend carries no private credential | the served page mentions no `SERVICE_ROLE`, `DATABASE_URL`, `OPENROUTER`, `sk-or-` or `SUPABASE_SERVICE` (re-verified 2026-09-11) |
 | Every protected endpoint refuses an unauthenticated caller | eighteen operations now, the five Weather Watch ones included — see the gap above |
 
+### What was verified in production after the Visily parity pass (2026-09-11)
+
+The pass of 2026-09-11 added a backend endpoint, two response fields and one deterministic
+calculation. Each was checked against the deployed pair after `release` and `frontend-release`
+succeeded on `d3e4a57`, read-only and with no credential:
+
+| What | Evidence |
+|---|---|
+| The new endpoint is live and classified | `/api/v1/admin/usage/series` is present in the deployed `openapi.json` and answers **401 `token_missing`** with no token — verified before anything is looked up |
+| The new response fields reached the contract | `RecentUsage.series` and `BaselineComparison.percentile_rank` are both in the deployed schema, not only in the working tree |
+| Every administrative operation still refuses | `pytest tests/deployed -m deployed` → **97 passed, 32 skipped, 0 failed**, which now includes the new series endpoint and the two 34.22 reads whose absence that run found |
+| Readiness unchanged | `/ready` → `ready: true`, `environment: production`, `version 0.1.0` |
+
+**The percentile rank, computed by production from real archive data.** This is the one new
+*calculation*, so it was checked end to end rather than by contract. `/weather/history/baseline/comparison`
+is public, so it needed no session:
+
+```
+GET /weather/history/baseline/comparison?location=Lisbon&start=2026-09-01&end=2026-09-05
+    &measure=temperature_mean&years=6
+```
+
+Lisbon, Portugal — deliberately a city with no committed artwork and no fixture, so nothing about
+the answer could have come from this repository. Six real archive years, each with its own mean for
+the calendar window and six usable days behind it: 2020 23.95, 2021 21.63, 2022 20.83, 2023 20.10,
+2024 19.95, 2025 21.42 °C. Baseline mean 21.31 °C; the compared window 26.0 °C.
+
+    percentile_rank = (years below + half the years equal) / years × 100
+                    = (6 + 0) / 6 × 100
+                    = 100.0
+
+Returned as **100.0 percentile**, `status: computed`, with the convention (`mid-rank; no
+interpolation`), the counts it used (`years_below: 6`, `years_equal: 0`) and its own resolution
+stated in the method: *"6 years, so the finest distinction is 17 points"*. The arithmetic is
+checkable by hand from the figures in the same response, which is the property
+`specs/deterministic-analytics` exists to require.
+
+**What was not captured, and why.** §16 of the parity brief asks for production *screenshots* of the
+populated states. Every product screen is behind `/sign-in`, so photographing one needs an account
+password — the same blocker as 25.4's criteria 6 to 8, and the owner has declined to store one
+here. The captures in `frontend/capture/` are of the real shipping bundle driven against the offline
+stubs, which is honest evidence about composition and no evidence about production data. The
+production checks above are what can be verified without a credential, and the percentile above is
+production computing a real figure from a real provider.
+
 ### What automation proved (task 25.3)
 
 Group 18's suite splits into cases that need a session and cases that do not. The second half runs
