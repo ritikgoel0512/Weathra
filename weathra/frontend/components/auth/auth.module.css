@@ -532,6 +532,51 @@
   box-shadow: 0 0 0 1px var(--color-accent);
 }
 
+/*
+ * The selected card lifts, so "which one did I pick" is answered before the badge is read. A plan
+ * grid where selection is carried by a border alone reads as three equal cards with one slightly
+ * different edge, which is what the signup step used to look like.
+ */
+.planCard[data-chosen="true"] {
+  background: var(--color-surface-raised);
+  transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .planCard[data-chosen="true"] {
+    transform: none;
+  }
+}
+
+/* The one-line value proposition under the tier name. Derived from allowances, never written. */
+.planValue {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+
+/*
+ * The truthful commercial boundary, stated once under the grid rather than inside the card that
+ * was pressed — it is about the account, not about that tier, and it must not make one card taller
+ * than its neighbours the moment it is chosen.
+ */
+.planNotice {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
+.planNoticeTitle {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-section-size);
+  font-weight: 600;
+}
+
 .planHead {
   display: flex;
   flex-wrap: wrap;

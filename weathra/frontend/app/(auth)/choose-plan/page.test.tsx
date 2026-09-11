@@ -217,23 +217,26 @@ describe("what the tiers show", () => {
     await screen.findByRole("heading", { name: "Free" });
 
     const free = document.querySelector<HTMLElement>('[data-plan="free"]')!;
-    expect(within(free).getByText("Your plan")).toBeTruthy();
-    // Nothing to activate, so no control claiming to.
-    expect(within(free).queryByRole("button")).toBeNull();
+    expect(within(free).getByText("Current plan")).toBeTruthy();
+    // Free is chosen the way the other tiers are, and its button says what it does: a new account
+    // is already on it, so starting is all there is to do. Nothing claims to activate anything.
+    expect(within(free).getByRole("button", { name: "Start free" })).toBeTruthy();
   });
 
-  it("records a request for a higher tier without claiming it was granted", async () => {
+  it("selects a higher tier without claiming it was granted", async () => {
     render(<ChoosePlanPage />);
     await screen.findByRole("heading", { name: "Pro" });
 
     const pro = document.querySelector<HTMLElement>('[data-plan="pro"]')!;
-    const ask = within(pro).getByRole("button", { name: "Ask about Pro" });
-    await userEvent.click(ask);
+    await userEvent.click(within(pro).getByRole("button", { name: "Choose Pro" }));
 
-    expect(within(pro).getByRole("button", { name: "Requested" }).getAttribute("aria-pressed")).toBe(
+    expect(within(pro).getByRole("button", { name: "Selected" }).getAttribute("aria-pressed")).toBe(
       "true",
     );
     expect(pro.getAttribute("data-chosen")).toBe("true");
     expect(window.localStorage.getItem("weathra.requested-plan")).toBe("pro");
+    // The entitlement is untouched, and the screen says so rather than implying a purchase.
+    expect(screen.getByText("Pro selected")).toBeTruthy();
+    expect(screen.getByText(/Paid checkout is not enabled yet/)).toBeTruthy();
   });
 });

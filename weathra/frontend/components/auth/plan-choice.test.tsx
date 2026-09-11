@@ -117,7 +117,7 @@ describe("the tiers", () => {
 describe("what the screen does not claim", () => {
   it("marks the default tier as the one the account is already on, with nothing to activate", async () => {
     mount();
-    expect(await screen.findByText("Your plan")).toBeInTheDocument();
+    expect(await screen.findByText("Current plan")).toBeInTheDocument();
     expect(screen.getByText(/Every new account starts here/)).toBeInTheDocument();
   });
 
@@ -129,15 +129,28 @@ describe("what the screen does not claim", () => {
     }
   });
 
-  it("says a request changes nothing until somebody assigns the tier", async () => {
+  it("chooses a paid tier the way a product does, and says what that does and does not do", async () => {
+    // The previous interaction was "Ask about Pro" → "Requested", which is truthful and reads as an
+    // internal approval queue. The truth is unchanged; only the way it is said is.
     const person = userEvent.setup();
     mount();
-    await person.click(await screen.findByRole("button", { name: "Ask about Pro" }));
+    await person.click(await screen.findByRole("button", { name: "Choose Pro" }));
 
-    expect(screen.getByRole("button", { name: "Requested" })).toBeInTheDocument();
-    expect(
-      screen.getAllByText(/charges nothing and changes nothing until somebody at Weathra/)[0],
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Selected" })).toBeInTheDocument();
+    expect(screen.getByText("Pro selected")).toBeInTheDocument();
+    expect(screen.getByText(/Paid checkout is not enabled yet/)).toBeInTheDocument();
+    // The commercial boundary is stated, and no entitlement is implied.
+    expect(screen.getByText(/stays on Free/)).toBeInTheDocument();
+  });
+
+  it("names the chosen tier on the step's primary action", async () => {
+    const person = userEvent.setup();
+    mount();
+    await screen.findByText("Free");
+    expect(screen.getByRole("link", { name: "Continue" })).toBeInTheDocument();
+
+    await person.click(screen.getByRole("button", { name: "Choose Premium" }));
+    expect(screen.getByRole("link", { name: "Continue with Premium" })).toBeInTheDocument();
   });
 
   it("carries the address forward so verification does not ask for it again", async () => {

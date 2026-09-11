@@ -31,6 +31,13 @@ import { useSearchParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
 import { Badge, Button, ErrorState, LoadingState, Meter } from "@/components/ui";
+import {
+  continueLabel,
+  planActionLabel,
+  pricingPublished,
+  selectionNotice,
+  valueProposition,
+} from "@/lib/plan/commerce";
 import type { PlanAllowanceView, PlanOfferView, PlansResponse } from "@/lib/api/schema";
 import { useApiQuery } from "@/lib/query/hooks";
 import { VERIFY_EMAIL_PATH } from "@/lib/routes";
@@ -141,19 +148,25 @@ function allowancesOf(plan: PlanOfferView): readonly PlanAllowanceView[] {
 
 function PlanCard({
   plan,
+  plans,
   isDefault,
   chosen,
   onChoose,
-  selfService,
   highest,
 }: {
   readonly plan: PlanOfferView;
+  readonly plans: PlansResponse;
   readonly isDefault: boolean;
   readonly chosen: boolean;
   readonly onChoose: (code: string) => void;
-  readonly selfService: boolean;
   readonly highest: ReadonlyMap<string, number>;
 }): ReactNode {
+  const proposition = valueProposition(plan, plans);
+  const actionLabel = planActionLabel(plan, plans);
+  // Stated, not guessed: no price exists in the plans contract, so none is rendered.
+  const pricingNote = pricingPublished()
+    ? ""
+    : "Pricing is not published yet. Selecting this charges nothing.";
   const allowances = [...allowancesOf(plan)].sort(
     (left, right) =>
       rankOf(left.dimension) - rankOf(right.dimension) ||
@@ -169,8 +182,15 @@ function PlanCard({
     >
       <div className={styles.planHead}>
         <h2 className={styles.planName}>{plan.display_name}</h2>
-        {isDefault ? <Badge tone="ok">Your plan</Badge> : <Badge tone="neutral">On request</Badge>}
+        {isDefault ? (
+          <Badge tone="ok">Current plan</Badge>
+        ) : chosen ? (
+          <Badge tone="accent">Selected</Badge>
+        ) : null}
       </div>
+
+      {/* Derived from the allowances rather than written here — see `lib/plan/commerce`. */}
+      <p className={styles.planValue}>{proposition}</p>
 
       {allowances.length === 0 ? (
         <p className={styles.planNote}>No allowance is configured for this tier, so nothing caps it.</p>
@@ -195,25 +215,20 @@ function PlanCard({
         </ul>
       )}
 
+      <Button
+        size="sm"
+        variant={chosen ? "primary" : "secondary"}
+        onClick={() => onChoose(plan.plan_code)}
+        aria-pressed={chosen}
+        fullWidth
+      >
+        {chosen ? "Selected" : actionLabel}
+      </Button>
+
       {isDefault ? (
-        <p className={styles.planNote}>
-          Every new account starts here. There is nothing to activate.
-        </p>
-      ) : selfService ? null : (
-        <>
-          <Button
-            size="sm"
-            variant={chosen ? "primary" : "secondary"}
-            onClick={() => onChoose(plan.plan_code)}
-            aria-pressed={chosen}
-          >
-            {chosen ? "Requested" : `Ask about ${plan.display_name}`}
-          </Button>
-          <p className={styles.planNote}>
-            Noting your interest. It charges nothing and changes nothing until somebody at Weathra
-            assigns the tier.
-          </p>
-        </>
+        <p className={styles.planNote}>Every new account starts here. There is nothing to activate.</p>
+      ) : (
+        <p className={styles.planNote}>{pricingNote}</p>
       )}
     </li>
   );
@@ -297,6 +312,11 @@ export function PlanChoice(): ReactNode {
   }
 
   const highest = ceilings(offered);
+  const response = envelope as PlansResponse;
+  const selected = offered.find((plan) => plan.plan_code === chosen) ?? null;
+  // The truthful state after choosing a tier that cannot be bought yet. Null for the current plan,
+  // and null again the day a payment provider makes `self_service` true.
+  const notice = selected ? selectionNotice(selected, response) : null;
 
   return (
     <div className={styles.planStep}>
@@ -305,18 +325,26 @@ export function PlanChoice(): ReactNode {
           <PlanCard
             key={plan.plan_code}
             plan={plan}
+            plans={response}
             isDefault={plan.plan_code === defaultPlan}
             chosen={chosen === plan.plan_code}
             onChoose={choose}
-            selfService={envelope?.self_service === true}
             highest={highest}
           />
         ))}
       </ul>
 
+      {notice ? (
+        <div className={styles.planNotice} role="status">
+          <p className={styles.planNoticeTitle}>{notice.title}</p>
+          <p className={styles.planNote}>{notice.detail}</p>
+        </div>
+      ) : null}
+
       {note === "" ? null : <p className={styles.planNote}>{note}</p>}
 
-      {continueOn("Continue")}
+      {/* The step's one primary action, naming the tier the person picked. */}
+      {continueOn(continueLabel(selected))}
     </div>
   );
 }
