@@ -514,16 +514,48 @@ def test_ordinary_questions_are_not_treated_as_safety_questions(question: str) -
 # =========================================================================== 17.4 severity
 
 
-def test_no_currently_normalized_measure_describes_severity() -> None:
-    """Recorded deliberately: the guard fires on every answer because the data has no such field.
+def test_the_provider_condition_code_is_what_supports_a_severity_statement() -> None:
+    """The revisiting this test's previous version said it would need.
 
-    Every measure in Weathra's normalized model is a *measurement*. If a provider is added that
-    supplies an alerts block, this assertion is what will need revisiting — and the guard will
-    already handle it.
+    It used to assert that *no* normalized measure describes severity, and recorded why: every
+    measure was a measurement, so the guard fired on every answer. Its own docstring named the
+    condition for change — "if a provider is added that supplies an alerts block, this assertion is
+    what will need revisiting — and the guard will already handle it".
+
+    Open-Meteo's `weather_code` is now requested and carried. It is a published condition code, not
+    a measurement, and it is the field `specs/safety-grounding` has a supported scenario for: "the
+    answer may report it with the provider attributed and the fields named". So the guard now
+    reports severity as *supported* when a run retrieved one, which is the difference between
+    Weathra refusing to characterise conditions and Weathra saying what the provider said.
+
+    Nothing about the referral changes — see the test below.
     """
     measure_names = {measure.value for measure in Measure}
-    assert measure_names & SEVERITY_FIELD_NAMES == set()
-    assert not describes_severity(measure_names)
+    assert measure_names & SEVERITY_FIELD_NAMES == {"weather_code"}
+    assert describes_severity(measure_names)
+
+    # And every *other* measure still describes nothing: the support comes from the code alone.
+    without_code = measure_names - {"weather_code"}
+    assert not describes_severity(without_code)
+
+
+def test_the_authority_referral_is_unchanged_by_the_condition_code() -> None:
+    """A code Weathra can read is not a warning Weathra may issue.
+
+    `specs/safety-grounding` makes the two independent: a severe-weather question is referred to the
+    official local authority *whatever* the data shows. Carrying a condition code removes the
+    "cannot characterise severity" note — Weathra can now say what the provider reported — and
+    removes nothing else.
+    """
+    with_code = assess("Is there a dangerous storm coming?", retrieved_fields={"weather_code"})
+    assert with_code.refer_to_authority is True
+    assert with_code.severity_supported is True
+    assert with_code.notes == ()
+
+    without = assess("Is there a dangerous storm coming?", retrieved_fields={"temperature"})
+    assert without.refer_to_authority is True
+    assert without.severity_supported is False
+    assert without.notes  # the "cannot characterize" note, as before
 
 
 def test_a_payload_with_no_severity_field_does_not_support_a_claim() -> None:
