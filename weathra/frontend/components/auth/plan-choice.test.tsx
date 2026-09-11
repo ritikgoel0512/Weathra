@@ -90,9 +90,27 @@ describe("the tiers", () => {
 
   it("reads each allowance off the response, and calls an absent cap unlimited", async () => {
     mount();
-    expect(await screen.findByText("Requests: 30 a day")).toBeInTheDocument();
-    expect(screen.getByText("Requests: 300 a day")).toBeInTheDocument();
-    expect(screen.getByText("Requests: Unlimited a day")).toBeInTheDocument();
+
+    /*
+     * Each allowance is now a `Meter` — the measure and window name it, the figure is printed
+     * beside the bar — rather than one "Requests: 30 a day" line. The assertion is the same
+     * question asked of the new shape: the figures are the backend's, and an absent cap reads as
+     * unlimited rather than as zero or as a missing value.
+     */
+    const bars = await screen.findAllByRole("meter", { name: "Requests a day" });
+    expect(bars.map((bar) => bar.getAttribute("aria-valuetext"))).toEqual([
+      "30",
+      "300",
+      "Unlimited",
+    ]);
+  });
+
+  it("draws each tier's allowance against the highest tier's, so the bars compare", async () => {
+    mount();
+
+    const bars = await screen.findAllByRole("meter", { name: "Requests a day" });
+    // 30 against the 300 ceiling, then the ceiling itself, then an uncapped tier at full track.
+    expect(bars.map((bar) => bar.getAttribute("aria-valuenow"))).toEqual(["10", "100", "100"]);
   });
 });
 
