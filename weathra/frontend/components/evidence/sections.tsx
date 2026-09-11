@@ -212,6 +212,12 @@ export function RunHeader({ record }: { readonly record: RunRecord }): ReactNode
  * than decorative.
  */
 export function ExecutionFlow({ record }: { readonly record: RunRecord }): ReactNode {
+  /** The slowest recorded step, which is what every bar below is a share of. */
+  const longest = record.agents.reduce(
+    (slowest, step) =>
+      typeof step.duration_ms === "number" ? Math.max(slowest, step.duration_ms) : slowest,
+    0,
+  );
   const routing = record.routingSource
     ? (ROUTING_SOURCE_LABELS[record.routingSource] ?? humanize(record.routingSource))
     : null;
@@ -235,26 +241,49 @@ export function ExecutionFlow({ record }: { readonly record: RunRecord }): React
         <p className={styles.note}>This run recorded no agent steps.</p>
       ) : (
         <ol className={styles.steps} data-agent-sequence="true">
-          {record.agents.map((step: AgentStep, index) => (
-            <li
-              className={styles.step}
-              key={`${step.sequence ?? index}-${step.agent}`}
-              data-status={step.status}
-              data-agent={step.agent}
-            >
-              <span className={styles.stepHead}>
-                <span className={styles.stepName}>
-                  {index + 1}. {agentLabel(step.agent)}
+          {record.agents.map((step: AgentStep, index) => {
+            /*
+             * The step's own duration as a share of the longest step in this run.
+             *
+             * `05-agent-evidence.png` draws the execution as a connected timeline where each node
+             * carries a latency; production drew the same figures as a list of lines, which is the
+             * gap the 2026-09-10 fidelity review named. The bar is the recorded `duration_ms` and
+             * nothing else — scaled against the slowest recorded step, so the geometry compares
+             * steps within one run and makes no claim about any other. A step the backend recorded
+             * no duration for gets no bar; the figure beside it says `not reported`, which is not
+             * the same fact as zero milliseconds and is not drawn as one.
+             */
+            const share =
+              longest > 0 && typeof step.duration_ms === "number"
+                ? Math.max((step.duration_ms / longest) * 100, 2)
+                : null;
+
+            return (
+              <li
+                className={styles.step}
+                key={`${step.sequence ?? index}-${step.agent}`}
+                data-status={step.status}
+                data-agent={step.agent}
+              >
+                <span className={styles.stepHead}>
+                  <span className={styles.stepName}>
+                    {index + 1}. {agentLabel(step.agent)}
+                  </span>
+                  <span className={styles.stepMeta}>{stepStatusLabel(step.status)}</span>
                 </span>
-                <span className={styles.stepMeta}>{stepStatusLabel(step.status)}</span>
-              </span>
-              <span className={styles.stepMeta}>
-                {formatDurationMs(step.duration_ms) ?? NOT_REPORTED}
-                {step.started_at ? ` · started ${formatInstant(step.started_at)}` : null}
-              </span>
-              {step.reason ? <span className={styles.stepReason}>{step.reason}</span> : null}
-            </li>
-          ))}
+                <span className={styles.stepMeta}>
+                  {formatDurationMs(step.duration_ms) ?? NOT_REPORTED}
+                  {step.started_at ? ` · started ${formatInstant(step.started_at)}` : null}
+                </span>
+                {share === null ? null : (
+                  <span className={styles.stepBar} aria-hidden="true">
+                    <span className={styles.stepBarFill} style={{ inlineSize: `${share}%` }} />
+                  </span>
+                )}
+                {step.reason ? <span className={styles.stepReason}>{step.reason}</span> : null}
+              </li>
+            );
+          })}
         </ol>
       )}
     </section>
@@ -840,14 +869,27 @@ export function RecordProvenance({ record }: { readonly record: RunRecord }): Re
 
 /* -------------------------------------------------------- the empty workspace */
 
-/** One region of the workspace, drawn with nothing in it. */
-function EmptyPanel({ title, note }: { readonly title: string; readonly note: string }): ReactNode {
+/**
+ * One region of the workspace, drawn with nothing in it.
+ *
+ * A mark in the region's own class, its name, and one line naming the record field it holds. The
+ * mark is what makes a column of these read as a designed preview rather than as seven panels that
+ * failed to load — and it is the same colour the populated panel's own figures will carry.
+ */
+function EmptyPanel({
+  title,
+  note,
+  dataClass,
+}: {
+  readonly title: string;
+  readonly note: string;
+  readonly dataClass: "observed" | "forecast" | "historical" | "analytics" | "interpretation";
+}): ReactNode {
   return (
-    <section className={styles.panel} aria-label={title}>
-      <header className={styles.panelHeader}>
-        <h2 className={styles.panelTitle}>{title}</h2>
-      </header>
-      <p className={styles.note}>{note}</p>
+    <section className={styles.emptyPanel} aria-label={title} data-class={dataClass}>
+      <span className={styles.emptyPanelMark} aria-hidden="true" />
+      <h2 className={styles.emptyPanelTitle}>{title}</h2>
+      <p className={styles.emptyPanelNote}>{note}</p>
     </section>
   );
 }
@@ -856,39 +898,68 @@ function EmptyPanel({ title, note }: { readonly title: string; readonly note: st
  * The evidence workspace with no run selected.
  *
  * Same regions, same two columns, same order as a populated record — `05-agent-evidence.png` is a
- * workspace and this keeps its silhouette. Each panel says what it will hold rather than explaining
- * the feature: a person arriving from the navigation learns the shape of an evidence record by
- * looking at it.
+ * workspace and this keeps its silhouette.
+ *
+ * **Twice now the correction has been about density rather than about content.** The first version
+ * collapsed to a paragraph, so `/evidence` and `/evidence/{id}` were differently shaped pages. The
+ * second drew seven bordered cards each holding one sentence, and the 2026-09-10 fidelity review
+ * photographed the result as seven sections that had failed to load. This is the third: the same
+ * seven regions, each a rule in its own data class with a name and one short line, in a grid rather
+ * than a column of full-height cards. It is shorter than the page it replaces, and it reads as a
+ * contents page for a record — which is what it is.
+ *
+ * Nothing here is a status. No region claims to be waiting on anything, because nothing has been
+ * asked; they are the fields a stored record has.
  */
 export function EvidenceWorkspaceSkeleton(): ReactNode {
   return (
-    <>
-      {/*
-        Named as a preview, because it does not look like one.
-
-        Seven headings each followed by one sentence and nothing else is the shape of the populated
-        screen, which is why it is drawn — but the runtime audit of 2026-09-08 photographed the
-        result, and it reads as seven sections that failed to load rather than as seven sections
-        waiting for a run. One line naming what follows is the difference between a preview and an
-        outage.
-      */}
+    <div className={styles.preview} data-evidence-preview="true">
       <p className={styles.previewLead}>
-        These are the sections a run&rsquo;s record fills. They stay empty until you open one.
+        These are the fields a run&rsquo;s record holds. Open one from the answer that produced it.
       </p>
 
-      <div className={styles.columns}>
-        <div className={styles.column}>
-          <EmptyPanel title="Execution flow" note="The agents a run took, in order, with their timings." />
-          <EmptyPanel title="MCP evidence" note="Every tool call the run made, and what each returned." />
-          <EmptyPanel title="Context used" note="The location, period and units the run resolved to." />
-        </div>
-        <div className={styles.column}>
-          <EmptyPanel title="Grounded data sources" note="Each provider read, with the window it covered." />
-          <EmptyPanel title="Deterministic analytics" note="Figures Weathra computed, with their methods." />
-          <EmptyPanel title="Retrieved knowledge" note="Passages cited from the weather-knowledge corpus." />
-          <EmptyPanel title="Final grounded synthesis" note="The model's reading, checked against the figures above." />
-        </div>
+      <div className={styles.previewGrid}>
+        <EmptyPanel
+          title="Execution flow"
+          note="The agents that ran, in order, with their timings."
+          dataClass="analytics"
+        />
+        <EmptyPanel
+          title="Grounded data sources"
+          note="Each provider read, with the window it covered."
+          dataClass="observed"
+        />
+        <EmptyPanel
+          title="Tool activity"
+          note="Every tool call the run made, and what each returned."
+          dataClass="forecast"
+        />
+        <EmptyPanel
+          title="Deterministic analytics"
+          note="Figures Weathra computed, with their methods."
+          dataClass="analytics"
+        />
+        <EmptyPanel
+          title="Uncertainty"
+          note="The confidence the backend stated, and its basis."
+          dataClass="forecast"
+        />
+        <EmptyPanel
+          title="Retrieved knowledge"
+          note="Passages cited from the weather-knowledge corpus."
+          dataClass="historical"
+        />
+        <EmptyPanel
+          title="Final grounded synthesis"
+          note="The model's reading, checked against the figures above."
+          dataClass="interpretation"
+        />
+        <EmptyPanel
+          title="Context used"
+          note="The location, period and units the run resolved to."
+          dataClass="observed"
+        />
       </div>
-    </>
+    </div>
   );
 }
