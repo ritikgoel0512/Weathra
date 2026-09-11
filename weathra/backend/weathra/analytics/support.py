@@ -55,6 +55,10 @@ MINIMUM_POINTS: dict[Statistic, int] = {
     Statistic.PREVAILING_DIRECTION: 1,
     Statistic.ROLLING_MEAN: 2,
     Statistic.PERCENTILE: 2,
+    # A rank needs reference *years*, not points: over two the only answers are 0, 50 and
+    # 100, which is a verdict rather than a position. `distribution.MINIMUM_RANK_YEARS`
+    # holds the same three and is what the function checks; this entry is what declares it.
+    Statistic.PERCENTILE_RANK: 3,
     Statistic.DELTA: 1,
     Statistic.Z_SCORE: 1,
     Statistic.STANDARD_DEVIATION: 2,

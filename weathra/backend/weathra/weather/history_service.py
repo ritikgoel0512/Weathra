@@ -24,7 +24,7 @@ from datetime import UTC, date, datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from weathra.analytics import descriptive, precipitation
-from weathra.analytics.distribution import z_score
+from weathra.analytics.distribution import percentile_rank, z_score
 from weathra.analytics.rolling import delta, percentage_change
 from weathra.analytics.support import require_usable
 from weathra.config import Settings
@@ -98,6 +98,24 @@ class PeriodComparison(BaseModel):
     basis: str = Field(min_length=1, description="The shared basis, stated in the result.")
 
 
+class YearlyMean(BaseModel):
+    """One reference year's mean for the baseline's calendar window.
+
+    Kept alongside the pooled statistics because two questions need different shapes of the same
+    data: the baseline's own mean and spread come from every observation pooled, while a percentile
+    rank has to compare a window mean against *window means*. Ranking a mean against the individual
+    days inside it would report almost every period as unremarkable — right arithmetic, false
+    statement. These are also what lets a screen draw the years behind a baseline rather than
+    stating how many there were.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    year: int
+    value: float
+    points_used: int = Field(ge=1, description="Days from that year that carried the measure.")
+
+
 class Baseline(BaseModel):
     """A multi-year baseline for one location and calendar period, computed by Weathra."""
 
@@ -113,6 +131,10 @@ class Baseline(BaseModel):
     standard_deviation: StatisticResult
     minimum: StatisticResult
     maximum: StatisticResult
+    yearly_means: tuple[YearlyMean, ...] = Field(
+        default=(),
+        description="Each reference year's own mean for this window, ascending by year.",
+    )
     provider: str = Field(min_length=1)
     unit_system: UnitSystem
     labelling: str = Field(min_length=1)
@@ -141,6 +163,12 @@ class BaselineComparison(BaseModel):
     observed_data_class: DataClass
     difference: StatisticResult
     z_score: StatisticResult
+    percentile_rank: StatisticResult = Field(
+        description=(
+            "Where the compared value sits among the baseline's per-year means, as a percentile. "
+            "Not computable, with its reason, where too few years are available to rank against."
+        )
+    )
     characterization: str = Field(min_length=1)
     forecast_side_caveat: str | None = Field(
         default=None,
@@ -457,6 +485,20 @@ class HistoryService:
             standard_deviation=descriptive.standard_deviation(merged, measure, provenance),
             minimum=descriptive.minimum(merged, measure, provenance),
             maximum=descriptive.maximum(merged, measure, provenance),
+            # Per year, through the same mean as everything else rather than by summing here. A
+            # year whose mean is not computable is dropped rather than carried as a null: these
+            # are reference values for a rank, and a null is not a position in a distribution.
+            yearly_means=tuple(
+                YearlyMean(year=year, value=result.value, points_used=result.points_used)
+                for year, result in (
+                    (
+                        year,
+                        descriptive.mean(observations.daily, measure, provenance_for(observations)),
+                    )
+                    for year, observations in sorted(collected, key=lambda pair: pair[0])
+                )
+                if result.value is not None and result.points_used >= 1
+            ),
             provider=collected[0][1].provider,
             unit_system=unit_system,
             labelling=(
@@ -562,6 +604,22 @@ class HistoryService:
             provenance=baseline.mean.provenance,
         )
 
+        # Where this window sits among the years behind it, which is a different question from
+        # how far it is from their mean: a value one degree above a tight baseline and one degree
+        # above a scattered one have the same difference and very different ranks. `03`'s artifact
+        # asks for both, and the z-score alone was answering only the second.
+        rank = percentile_rank(
+            measure=baseline.measure,
+            unit=baseline.mean.unit,
+            value=value,
+            reference_values=tuple(entry.value for entry in baseline.yearly_means),
+            reference_label=(
+                f"the {baseline.years_count}-year baseline for "
+                f"{_period_label(baseline.calendar_period)}"
+            ),
+            provenance=baseline.mean.provenance,
+        )
+
         caveat = None
         if value_data_class is DataClass.FORECAST:
             caveat = (
@@ -577,6 +635,7 @@ class HistoryService:
             observed_data_class=value_data_class,
             difference=difference,
             z_score=score,
+            percentile_rank=rank,
             characterization=_characterize(baseline, value, difference, score),
             forecast_side_caveat=caveat,
         )

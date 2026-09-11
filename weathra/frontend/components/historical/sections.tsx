@@ -616,6 +616,22 @@ export function AnomalyIntelligence({ comparison }: DeviationAnalysisProps): Rea
   const zResult = comparison?.z_score;
   const z = isComputed(zResult) ? (zResult?.value ?? null) : null;
   const difference = comparison ? formatSigned(comparison.difference) : null;
+  const rankResult = comparison?.percentile_rank;
+
+  // The distribution the rank was taken against. Sorted by value rather than by year, because the
+  // track is a number line: the years are marks on it, not a sequence along it.
+  const years = [...(comparison?.baseline.yearly_means ?? [])].sort(
+    (left, right) => left.value - right.value,
+  );
+  const compared = comparison?.observed_or_forecast_value ?? null;
+  const unit = comparison?.baseline.mean.unit ?? "";
+  // The track spans the reference years, extended to include the compared value when it falls
+  // outside them — otherwise a record-breaking window would sit exactly on an end and read as
+  // merely equal to the extreme it beat.
+  const bounds = years.map((entry) => entry.value);
+  const low = Math.min(...bounds, compared ?? Number.POSITIVE_INFINITY);
+  const high = Math.max(...bounds, compared ?? Number.NEGATIVE_INFINITY);
+  const span = high - low;
 
   return (
     <section className={styles.anomaly} aria-label="Anomaly intelligence">
@@ -640,14 +656,77 @@ export function AnomalyIntelligence({ comparison }: DeviationAnalysisProps): Rea
         <div className={styles.anomalyFact}>
           <dt>Percentile</dt>
           {/*
-            The artifact shows one. A percentile needs the ranked distribution the baseline was
-            drawn from, and `BaselineComparison` carries the mean, the deviation and the extremes
-            only — so it is stated as not reported rather than derived from figures that cannot
-            support it.
+            The artifact shows one, and this used to say "Not reported" for a stated reason: a
+            rank needs the distribution the baseline was drawn from, and `BaselineComparison`
+            carried the mean, the deviation and the extremes only. The baseline now carries each
+            reference year's own mean, so the rank is computed against those — like with like, a
+            window mean against window means — and the backend states its convention and its
+            resolution in the method. Where there are too few years to rank, the reason it gives
+            is shown instead of the number.
           */}
-          <dd>Not reported</dd>
+          <dd>
+            {isComputed(rankResult) ? (
+              `${Math.round(rankResult!.value as number)}th`
+            ) : (
+              <span className={styles.anomalyReason}>
+                {rankResult?.reason ?? "Not computed"}
+              </span>
+            )}
+          </dd>
         </div>
       </dl>
+
+      {/*
+        The years behind the baseline, and where this window falls among them.
+
+        `03-historical-analytics.png` states its percentile as a bare figure. A rank over four or
+        five years is coarse enough that the figure alone overstates its own precision, so the
+        distribution it came from is drawn beside it: one mark per reference year at its own mean,
+        and the compared window on the same scale. Every mark is an archive observation mean — no
+        curve is fitted and no density is estimated, because five points do not support either.
+      */}
+      {years.length >= 2 && span > 0 ? (
+        <figure className={styles.spread}>
+          <figcaption className={styles.spreadCaption}>
+            Each reference year&rsquo;s mean for this window, and this window against them.
+          </figcaption>
+          <div
+            className={styles.spreadTrack}
+            role="img"
+            aria-label={
+              `${years.length} reference years, from ${low.toFixed(1)} to ${high.toFixed(1)} ` +
+              `${unit}. This window is ${compared === null ? "not computed" : compared.toFixed(1) + " " + unit}.`
+            }
+          >
+            {years.map((entry) => (
+              <span
+                key={entry.year}
+                className={styles.spreadYear}
+                style={{ left: `${((entry.value - low) / span) * 100}%` }}
+                title={`${entry.year}: ${entry.value.toFixed(1)} ${unit}`}
+              />
+            ))}
+            {compared === null ? null : (
+              <span
+                className={styles.spreadValue}
+                style={{
+                  // Clamped, so a window outside every reference year still lands on the track
+                  // rather than off the end of it. The figures above carry the real distance.
+                  left: `${Math.min(100, Math.max(0, ((compared - low) / span) * 100))}%`,
+                }}
+              />
+            )}
+          </div>
+          <p className={styles.spreadScale}>
+            <span>
+              {low.toFixed(1)} {unit}
+            </span>
+            <span>
+              {high.toFixed(1)} {unit}
+            </span>
+          </p>
+        </figure>
+      ) : null}
     </section>
   );
 }

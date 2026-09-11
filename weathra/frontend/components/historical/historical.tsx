@@ -394,14 +394,17 @@ function Analysis({
       <ClassKey />
 
       {/*
-        The artifact's main row: the archive chart occupying the wide left column, and the
-        baseline comparison — its "Anomaly Intelligence" slot — beside it rather than beneath. The
-        panel there is deterministic: a z-score and the baseline it is against, which is what
-        Weathra actually computes. The artifact's own panel is a model narrative about the same
-        figures, and this screen consults no model (`docs/design/screens.md` §8).
+        The chart, at the full width the artifact gives it.
+
+        It used to sit in the wide column of a two-column row with the baseline panel beside it,
+        and that was a misreading of `03-historical-analytics.png`: the artifact's plot spans the
+        whole content width, with the metric row above it and the comparison band below. The
+        misreading cost more than fidelity — the baseline panel is naturally about twice the plot's
+        height, so the row left roughly 390 pixels of empty page beneath the chart at desk width,
+        which is the void two previous passes tried to close by adjusting alignment. There was
+        never a column to balance; there was a row that should not have been one.
       */}
-      <div className={styles.mainRow}>
-        <div className={styles.column}>
+      <div className={styles.chartRow}>
       {history.state.kind === "loading" ? (
         <LoadingState label="Retrieving the archive" lines={6} />
       ) : history.state.kind === "error" ? (
@@ -445,8 +448,15 @@ function Analysis({
           )}
         </Observations>
       ) : null}
-        </div>
+      </div>
 
+      {/*
+        The artifact's comparison band: "Selected Period vs Historical Normal" on the left with its
+        deviation bars inside it, and the anomaly panel on the right. The two were separate rows
+        here — the baseline beside the chart, the deviation bars beside the anomaly panel — which
+        put the baseline's figures a full screen away from the deviation computed from them.
+      */}
+      <div className={styles.mainRow}>
         <div className={styles.column}>
           {baseline.state.kind === "loading" ? (
             <LoadingState label="Building the baseline" lines={4} />
@@ -455,12 +465,6 @@ function Analysis({
           ) : baseline.state.kind === "ready" ? (
             <BaselinePanel comparison={baseline.state.data} />
           ) : null}
-        </div>
-      </div>
-
-      {/* The artifact's lower row: deviation bars on the left, the anomaly panel on the right. */}
-      <div className={styles.mainRow}>
-        <div className={styles.column}>
           <DeviationAnalysis
             comparison={baseline.state.kind === "ready" ? baseline.state.data : null}
           />

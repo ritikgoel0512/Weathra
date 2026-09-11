@@ -850,6 +850,15 @@
           "unit_system": {
             "$ref": "#/components/schemas/UnitSystem"
           },
+          "yearly_means": {
+            "default": [],
+            "description": "Each reference year's own mean for this window, ascending by year.",
+            "items": {
+              "$ref": "#/components/schemas/YearlyMean"
+            },
+            "title": "Yearly Means",
+            "type": "array"
+          },
           "years_requested": {
             "minimum": 1.0,
             "title": "Years Requested",
@@ -921,6 +930,10 @@
             "title": "Observed Or Forecast Value",
             "type": "number"
           },
+          "percentile_rank": {
+            "$ref": "#/components/schemas/StatisticResult",
+            "description": "Where the compared value sits among the baseline's per-year means, as a percentile. Not computable, with its reason, where too few years are available to rank against."
+          },
           "z_score": {
             "$ref": "#/components/schemas/StatisticResult"
           }
@@ -933,6 +946,7 @@
           "observed_data_class",
           "difference",
           "z_score",
+          "percentile_rank",
           "characterization"
         ],
         "title": "BaselineComparison",
@@ -5323,6 +5337,7 @@
           "prevailing_direction",
           "rolling_mean",
           "percentile",
+          "percentile_rank",
           "delta",
           "z_score",
           "standard_deviation",
@@ -6664,6 +6679,33 @@
           "statement"
         ],
         "title": "WhatChanged",
+        "type": "object"
+      },
+      "YearlyMean": {
+        "additionalProperties": false,
+        "description": "One reference year's mean for the baseline's calendar window.\n\nKept alongside the pooled statistics because two questions need different shapes of the same\ndata: the baseline's own mean and spread come from every observation pooled, while a percentile\nrank has to compare a window mean against *window means*. Ranking a mean against the individual\ndays inside it would report almost every period as unremarkable \u2014 right arithmetic, false\nstatement. These are also what lets a screen draw the years behind a baseline rather than\nstating how many there were.",
+        "properties": {
+          "points_used": {
+            "description": "Days from that year that carried the measure.",
+            "minimum": 1.0,
+            "title": "Points Used",
+            "type": "integer"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          },
+          "year": {
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "year",
+          "value",
+          "points_used"
+        ],
+        "title": "YearlyMean",
         "type": "object"
       },
       "weathra__api__routers__weather__Attribution": {

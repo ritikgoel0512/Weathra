@@ -514,12 +514,34 @@
 }
 
 /*
- * The metric row across the top of the artifact is one row. `auto-fill` at a narrower track keeps
- * it one row at the desktop widths the artifact is drawn at, and lets it wrap rather than squeeze
- * below them — the same reasoning as the Dashboard's forecast strip.
+ * The metric row across the top of the artifact is **one row of six**, and at 1440 it has to be
+ * said explicitly.
+ *
+ * `auto-fill` at a 190-pixel floor fits five in the content width beside the rail and wraps the
+ * sixth onto a line of its own, which the capture of the six-statistic window showed: five cards
+ * and a stray. Six explicit tracks at the widths the artifact is drawn at is the artifact's own
+ * row; `auto-fill` still governs below them, where wrapping is right and a 160-pixel card is not.
  */
 .tiles {
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+}
+
+@media (min-width: 1280px) {
+  .tiles {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  /* The side column keeps one per row whatever the viewport: see `.column .tiles` below. */
+  .column .tiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1279px) {
+  /* Three and three rather than four and two: two equal rows read as a block, not as a remainder. */
+  .tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 /*
@@ -705,4 +727,96 @@
   gap: var(--space-1);
   padding-top: var(--space-3);
   border-top: 1px solid var(--color-border-subtle);
+}
+
+/* --------------------------------- the baseline's own years, as a number line */
+
+/*
+ * `03-historical-analytics.png` prints a percentile as a bare figure. Over four or five archive
+ * years a rank's finest distinction is twenty to twenty-five points, so the figure alone claims
+ * more precision than it has — this is the distribution it was taken against, drawn so the reader
+ * can see how coarse it is. One mark per reference year at its own mean, the compared window on
+ * the same scale, and the two ends labelled. Nothing is fitted or smoothed.
+ */
+.spread {
+  margin: var(--space-4) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.spreadCaption {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.spreadTrack {
+  position: relative;
+  height: 26px;
+  /* The line itself, drawn as a centred rule so the marks sit on it rather than beside it. */
+  background:
+    linear-gradient(
+      to bottom,
+      transparent calc(50% - 1px),
+      var(--color-border-strong) calc(50% - 1px),
+      var(--color-border-strong) calc(50% + 1px),
+      transparent calc(50% + 1px)
+    );
+}
+
+.spreadYear,
+.spreadValue {
+  position: absolute;
+  top: 50%;
+  /* `left` is a percentage of the track, so the mark is centred on its own position. */
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+
+.spreadYear {
+  width: 8px;
+  height: 8px;
+  background: var(--color-text-muted);
+}
+
+/*
+ * The compared window: larger, in the historical class's own colour, and ringed so it still reads
+ * as the distinguished mark where it lands on top of a reference year.
+ */
+.spreadValue {
+  width: 14px;
+  height: 14px;
+  background: var(--color-class-historical, var(--color-accent));
+  box-shadow: 0 0 0 2px var(--color-surface-raised);
+}
+
+.spreadScale {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A reason where a figure would be: smaller, because it is an explanation and not a measurement. */
+.anomalyReason {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  font-family: var(--font-sans, inherit);
+}
+
+/*
+ * The chart's own row, spanning the content width as `03-historical-analytics.png` draws it.
+ *
+ * A row of one, deliberately: it replaces the two-column row the plot used to share with the
+ * baseline panel. See `.mainRow` above for what that cost and why the alignment fixes that
+ * preceded this were treating a symptom.
+ */
+.chartRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
 }

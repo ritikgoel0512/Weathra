@@ -233,6 +233,18 @@ const BASELINE = {
   standard_deviation: statistic("standard_deviation", "temperature_mean", 1.4, "°C", "population standard deviation"),
   minimum: statistic("minimum", "temperature_mean", 13.1, "°C", "minimum of usable points"),
   maximum: statistic("maximum", "temperature_mean", 19.4, "°C", "maximum of usable points"),
+  /*
+   * Each reference year's own mean for this window — the distribution a percentile rank is taken
+   * against, and what the anomaly panel's number line is drawn from. Chosen to average to the
+   * 16.2 stated above rather than to plausible-looking numbers, because a fixture whose parts do
+   * not reconcile is a capture that proves the layout and hides the arithmetic.
+   */
+  yearly_means: [
+    { year: 2021, value: 14.8, points_used: 3 },
+    { year: 2022, value: 15.6, points_used: 3 },
+    { year: 2023, value: 16.9, points_used: 3 },
+    { year: 2024, value: 17.5, points_used: 3 },
+  ],
 };
 
 const EVIDENCE_RECORD = {
@@ -1322,7 +1334,14 @@ const FIXTURES = {
     retrieved_at: RETRIEVED_AT,
     partial: false,
     unavailable_note: null,
-    daily: dailySeries({ temperature_mean: "°C", precipitation_sum: "mm" }),
+    daily: dailySeries({
+      temperature_mean: "°C",
+      temperature_min: "°C",
+      temperature_max: "°C",
+      precipitation_sum: "mm",
+      wind_speed_max: "km/h",
+      relative_humidity: "%",
+    }),
     hourly: null,
   },
 
@@ -1333,10 +1352,49 @@ const FIXTURES = {
     later_period: PERIOD,
     provider: "stub-provider",
     unit_system: "metric",
-    statistics_applied: ["temperature_mean: mean"],
-    earlier: [statistic("mean", "temperature_mean", 15.1, "°C", "arithmetic mean of usable points")],
-    later: [statistic("mean", "temperature_mean", 17.9, "°C", "arithmetic mean of usable points")],
-    deltas: [statistic("delta", "temperature_mean", 2.8, "°C", "later minus earlier")],
+    /*
+     * All six statistics `03-historical-analytics.png` puts in its metric row, with a delta each
+     * so every tile carries the artifact's "vs earlier" caption.
+     *
+     * This fixture used to carry `temperature_mean` alone, and the screen behaved correctly on it:
+     * one tile, and a footnote naming the five the backend did not compute. That was a picture of
+     * the *stub* rather than of the product — Open-Meteo's archive returns daily minima, maxima,
+     * precipitation sums, wind maxima and humidity for every location, so production computes all
+     * six. The capture now shows what production shows; the one-statistic case it used to show is
+     * still exercised, by `historical.test.tsx`, where it belongs.
+     */
+    statistics_applied: [
+      "temperature_mean: mean",
+      "temperature_min: minimum",
+      "temperature_max: maximum",
+      "precipitation_sum: total",
+      "wind_speed_max: mean",
+      "relative_humidity: mean",
+    ],
+    earlier: [
+      statistic("mean", "temperature_mean", 15.1, "°C", "arithmetic mean of usable points"),
+      statistic("minimum", "temperature_min", 10.2, "°C", "minimum of usable points"),
+      statistic("maximum", "temperature_max", 20.4, "°C", "maximum of usable points"),
+      statistic("total", "precipitation_sum", 11.8, "mm", "sum of usable points"),
+      statistic("mean", "wind_speed_max", 12.9, "km/h", "arithmetic mean of usable points"),
+      statistic("mean", "relative_humidity", 71.5, "%", "arithmetic mean of usable points"),
+    ],
+    later: [
+      statistic("mean", "temperature_mean", 17.9, "°C", "arithmetic mean of usable points"),
+      statistic("minimum", "temperature_min", 11.4, "°C", "minimum of usable points"),
+      statistic("maximum", "temperature_max", 24.1, "°C", "maximum of usable points"),
+      statistic("total", "precipitation_sum", 9.6, "mm", "sum of usable points"),
+      statistic("mean", "wind_speed_max", 14.2, "km/h", "arithmetic mean of usable points"),
+      statistic("mean", "relative_humidity", 68.3, "%", "arithmetic mean of usable points"),
+    ],
+    deltas: [
+      statistic("delta", "temperature_mean", 2.8, "°C", "later minus earlier"),
+      statistic("delta", "temperature_min", 1.2, "°C", "later minus earlier"),
+      statistic("delta", "temperature_max", 3.7, "°C", "later minus earlier"),
+      statistic("delta", "precipitation_sum", -2.2, "mm", "later minus earlier"),
+      statistic("delta", "wind_speed_max", 1.3, "km/h", "later minus earlier"),
+      statistic("delta", "relative_humidity", -3.2, "%", "later minus earlier"),
+    ],
     percentage_changes: { temperature_mean: 18.5 },
     lengths_differ: false,
     basis: "Both periods: archive observations, metric units, the same statistics.",
@@ -1351,6 +1409,13 @@ const FIXTURES = {
     forecast_side_caveat: null,
     difference: statistic("delta", "temperature_mean", 1.7, "°C", "the value being compared minus the baseline"),
     z_score: statistic("z_score", "temperature_mean", 1.21, "", "value minus reference mean, divided by the reference standard deviation"),
+    /*
+     * 17.9 against 14.8, 15.6, 16.9 and 17.5: four years below it, none equal, so
+     * (4 + 0) / 4 = 100th. The warmest such window in the archive Weathra has, which is the case
+     * worth photographing — the mark sits past every reference year, which is exactly why the
+     * track extends to include it rather than clamping it onto the last one.
+     */
+    percentile_rank: statistic("percentile_rank", "temperature_mean", 100, "percentile", "(years below + half the years equal) / years, as a percentage, against the per-year means of the 4-year baseline; 4 years, so the finest distinction is 25 points"),
     baseline: BASELINE,
   },
 

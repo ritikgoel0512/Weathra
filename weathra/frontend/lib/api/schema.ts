@@ -193,6 +193,8 @@ export interface Baseline {
   readonly provider: string;
   readonly standard_deviation: StatisticResult;
   readonly unit_system: UnitSystem;
+  /** Each reference year's own mean for this window, ascending by year. */
+  readonly yearly_means?: YearlyMean[];
   readonly years_requested: number;
   readonly years_used: number[];
 }
@@ -208,6 +210,8 @@ export interface BaselineComparison {
   readonly measure: Measure;
   readonly observed_data_class: DataClass;
   readonly observed_or_forecast_value: number;
+  /** Where the compared value sits among the baseline's per-year means, as a percentile. Not computable, with its reason, where too few years are available to rank against. */
+  readonly percentile_rank: StatisticResult;
   readonly z_score: StatisticResult;
 }
 
@@ -1135,7 +1139,7 @@ export interface SpreadPoint {
 }
 
 /** Every statistic the deterministic engine produces. */
-export type Statistic = "minimum" | "maximum" | "mean" | "range" | "total" | "daily_totals" | "wet_entry_count" | "probability_maximum" | "probability_mean" | "probability_exceedance" | "mean_speed" | "maximum_sustained_speed" | "maximum_gust" | "prevailing_direction" | "rolling_mean" | "percentile" | "delta" | "z_score" | "standard_deviation" | "anomalies" | "trend" | "baseline";
+export type Statistic = "minimum" | "maximum" | "mean" | "range" | "total" | "daily_totals" | "wet_entry_count" | "probability_maximum" | "probability_mean" | "probability_exceedance" | "mean_speed" | "maximum_sustained_speed" | "maximum_gust" | "prevailing_direction" | "rolling_mean" | "percentile" | "percentile_rank" | "delta" | "z_score" | "standard_deviation" | "anomalies" | "trend" | "baseline";
 
 /** One computed — or explicitly not-computable — statistic, fully self-describing. */
 export interface StatisticResult {
@@ -1435,6 +1439,14 @@ export interface WhatChanged {
   readonly provider: string;
   readonly statement: string;
   readonly unit_system: UnitSystem;
+}
+
+/** One reference year's mean for the baseline's calendar window. */
+export interface YearlyMean {
+  /** Days from that year that carried the measure. */
+  readonly points_used: number;
+  readonly value: number;
+  readonly year: number;
 }
 
 /** A parameter an operation accepts, as the contract declares it. */

@@ -62,6 +62,10 @@ class Statistic(StrEnum):
     # derived
     ROLLING_MEAN = "rolling_mean"
     PERCENTILE = "percentile"
+    # Where one value sits *within* a reference distribution, as opposed to PERCENTILE, which
+    # is the value at a requested level. The two are inverses and are easy to confuse, so they
+    # are named apart rather than sharing one statistic with a parameter.
+    PERCENTILE_RANK = "percentile_rank"
     DELTA = "delta"
     Z_SCORE = "z_score"
     STANDARD_DEVIATION = "standard_deviation"
