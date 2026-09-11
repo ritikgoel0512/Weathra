@@ -56,9 +56,37 @@ const FREE: UsageResponse = {
   recent: { days: 7, calls: 41, failures: 2, total_tokens: 31925 },
 };
 
+const TIERS = {
+  default_plan: "free",
+  self_service: false,
+  assignment_note: "",
+  count: 3,
+  plans: [
+    {
+      plan_code: "free",
+      display_name: "Free",
+      rank: 1,
+      allowances: [{ dimension: "requests_per_day", window: "day", allowance: 30 }],
+    },
+    {
+      plan_code: "pro",
+      display_name: "Pro",
+      rank: 2,
+      allowances: [{ dimension: "requests_per_day", window: "day", allowance: 300 }],
+    },
+    {
+      plan_code: "premium",
+      display_name: "Premium",
+      rank: 3,
+      allowances: [{ dimension: "requests_per_day", window: "day", allowance: 1000 }],
+    },
+  ],
+};
+
 function client(usage: UsageResponse | Error = FREE): ApiClient {
   return {
     usage: vi.fn(() => (usage instanceof Error ? Promise.reject(usage) : Promise.resolve(usage))),
+    plans: vi.fn(() => Promise.resolve(TIERS)),
   } as unknown as ApiClient;
 }
 
@@ -245,5 +273,48 @@ describe("the states", () => {
 
     expect(await screen.findByText("Your plan is not available")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
+  });
+});
+
+describe("comparing tiers, changing plan, and what billing may claim", () => {
+  it("compares the tiers on figures the database holds, not on promises", async () => {
+    mount(client());
+    const table = await screen.findByRole("table");
+
+    // Every column is a configured tier and every cell an allowance, so nothing here is a claim
+    // about a capability no row supports.
+    expect(within(table).getByText("Daily questions")).toBeInTheDocument();
+    expect(within(table).getByText("30")).toBeInTheDocument();
+    expect(within(table).getByText("300")).toBeInTheDocument();
+    expect(within(table).getByText("1,000")).toBeInTheDocument();
+  });
+
+  it("offers a plan change without a checkout that does not exist", async () => {
+    mount(client());
+    await screen.findByRole("heading", { name: "Change your plan" });
+
+    // The action is named the way a product names it, and it is inert because `self_service` is
+    // false — the backend saying there is no payment integration.
+    const choose = screen.getByRole("button", { name: "Choose Pro" });
+    expect(choose).toBeDisabled();
+    expect(screen.getByText(/Pricing is not published yet/)).toBeInTheDocument();
+  });
+
+  it("states the billing position plainly and invents none of it", async () => {
+    mount(client());
+    await screen.findByRole("heading", { name: "Billing" });
+
+    expect(screen.getByText(/Weathra is not billing you/)).toBeInTheDocument();
+
+    // The artifact's commercial furniture, none of which Weathra has. Asserted as *controls and
+    // values*, not as words: the copy above says "no invoices" on purpose, and a test forbidding
+    // the word would push the screen toward saying nothing rather than saying where it stands.
+    for (const forbidden of [/download invoices/i, /manage payment/i, /upgrade plan/i]) {
+      expect(screen.queryByRole("button", { name: forbidden })).toBeNull();
+      expect(screen.queryByRole("link", { name: forbidden })).toBeNull();
+    }
+    for (const fabricated of [/ending in \d/i, /next billing date/i, /subscription id/i, /WX-/]) {
+      expect(screen.queryByText(fabricated)).toBeNull();
+    }
   });
 });

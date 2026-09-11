@@ -34,6 +34,7 @@ import {
 import { useApiQuery } from "@/lib/query/hooks";
 
 import { ActivityChart, deltaOf, peakOf, pointsOf, type Delta } from "./activity";
+import { PlanComparison } from "./comparison";
 import styles from "./plan.module.css";
 
 const USAGE_KEY = ["me", "usage"] as const;
@@ -326,6 +327,13 @@ function Ready({ usage }: { usage: UsageResponse }): ReactNode {
               </div>
             </CardBody>
           </Card>
+
+          {/*
+            The commercial half of the account page: what the other tiers allow, how to move, and
+            the truth about billing. Its own component because every claim it makes goes through
+            `lib/plan/commerce`, which is the seam a payment provider replaces.
+          */}
+          <PlanComparison currentPlan={usage.plan_code ?? null} />
 
           <Card aria-labelledby="resets">
             <CardHeader title="Reset windows" titleId="resets" />

@@ -400,3 +400,100 @@
   font-size: var(--type-meta-size);
   overflow-wrap: anywhere;
 }
+
+/* ------------------------------------------------------- comparison, upgrade, billing */
+
+/*
+ * A tier comparison is the one table on this screen, and a narrow viewport must scroll it rather
+ * than squeeze four columns into a phone. `21.8` will judge the breakpoints; this keeps the page
+ * from overflowing sideways in the meantime.
+ */
+.comparisonScroll {
+  overflow-x: auto;
+}
+
+.comparison {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.comparisonCaption {
+  margin-bottom: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  text-align: left;
+}
+
+.comparison th,
+.comparison td {
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--color-border-subtle);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.comparison thead th {
+  color: var(--color-text-primary);
+}
+
+.comparison tbody th {
+  color: var(--color-text-secondary);
+  font-weight: var(--type-ui-weight);
+}
+
+.comparisonTier {
+  display: block;
+}
+
+.upgradeList {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.upgradeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.upgradeRow[data-current] {
+  border-color: var(--color-accent);
+}
+
+.upgradeText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.upgradeName {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  color: var(--color-text-primary);
+}
+
+.upgradeValue {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.billingState {
+  margin: 0;
+  color: var(--color-text-primary);
+}
+
+.billingNote {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+}
