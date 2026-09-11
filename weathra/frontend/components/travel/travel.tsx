@@ -19,7 +19,7 @@
  */
 
 import { PlaceChooser } from "@/components/locations/place-chooser";
-import Link from "next/link";
+import { ScreenPreview } from "@/components/locations/screen-preview";
 import { useState, type ReactNode } from "react";
 
 import {
@@ -336,11 +336,28 @@ export function TravelIntelligence(): ReactNode {
       {location === null ? (
         <>
           {chooser}
-          <EmptyState title="Name a destination">
-            Travel Intelligence ranks the days at your default location. Name
-            one above, or set a default in{" "}
-            <Link href="/settings">Settings</Link>.
-          </EmptyState>
+          <ScreenPreview
+            title="Travel Intelligence ranks the days at one destination"
+            lead="Name a place above, or set a default in Settings and every screen opens on it. Nothing below is filled in yet because no place has been chosen."
+            regions={[
+              {
+                title: "What you want from the weather",
+                blurb:
+                  "Warm and dry, cool and still, whatever the trip is for — stated as preferences rather than as a score Weathra invented.",
+              },
+              {
+                title: "The days, ranked",
+                blurb:
+                  "Each day in the horizon scored against what you asked for, with the figures the score came from shown beside it.",
+                chart: 150,
+              },
+              {
+                title: "Why a day ranked where it did",
+                blurb:
+                  "The measure that decided it, so a ranking is something you can check rather than something you have to trust.",
+              },
+            ]}
+          />
         </>
       ) : (
         <TravelFor

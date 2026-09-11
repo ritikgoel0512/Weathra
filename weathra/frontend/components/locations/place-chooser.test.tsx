@@ -95,13 +95,22 @@ describe("every Intelligence screen can be pointed at a place on the screen itse
     it(`${name} still shows its control, and no dead end, with no default set`, async () => {
       mount(node, null);
 
-      const disclosure = await screen.findByText(summary);
-      expect(disclosure).toBeInTheDocument();
-
-      // The field is reachable without pressing anything: with no place, the chooser opens itself.
+      // The field is reachable without pressing anything.
       expect(await screen.findByRole("textbox")).toBeInTheDocument();
 
-      // And the way out is not "go to Settings and come back".
+      /*
+       * And it is not inside a disclosure at all.
+       *
+       * This assertion used to be its opposite — it required the summary to be present with no
+       * default set, and the chooser to have opened itself. That encoded the defect: every one of
+       * these summaries reads "…another place", which is what the screen asks somebody who has had
+       * none, and a disclosure presents the only thing to do on the screen as an aside. With no
+       * place the control is now the screen's subject, headed for what it is.
+       */
+      expect(screen.queryByText(summary)).toBeNull();
+      expect(screen.getByText("Choose a place to begin")).toBeInTheDocument();
+
+      // The way out is still not "go to Settings and come back".
       expect(screen.queryByRole("link", { name: /open settings/i })).toBeNull();
     });
   }

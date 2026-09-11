@@ -26,7 +26,6 @@
  * without being asked.
  */
 
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
@@ -51,6 +50,7 @@ import type {
   UnitSystem,
 } from "@/lib/api/schema";
 import { FixtureDashboard } from "@/components/dashboard/fixture-dashboard";
+import { GettingStarted } from "./getting-started";
 import { PLACE_PARAM } from "@/components/shell/top-bar";
 import { briefingLocationFrom, calendarWindowFrom } from "@/lib/dashboard/briefing";
 import { placeLabel, qualifiedName } from "@/lib/locations/place";
@@ -519,15 +519,22 @@ function LocationChoice({ preferences }: { readonly preferences: PreferenceView 
    */
   const entryOpen = location === null || settling || chosen !== null;
 
-  return (
-    <DashboardFrame>
-      <details className={styles.entryDisclosure} open={entryOpen}>
-        {/*
-          One wording in every state. The note under the briefing already says which place is
-          being briefed on and whether it is the default, and a summary that repeated it would put
-          the same sentence on the screen twice — finding 2.3's mistake on the Analyst.
-        */}
-        <summary className={styles.entrySummary}>Brief on another place</summary>
+  /**
+   * Whether this is the Dashboard of somebody who has not chosen a place yet.
+   *
+   * It is a different screen, not a smaller one — `GettingStarted` below. The disclosure is wrong
+   * for it in both directions: a collapsed form hides the only thing to do, and an open one headed
+   * "Brief on another place" asks somebody to brief on *another* place when they have had none.
+   */
+  const onboarding = location === null;
+
+  /*
+   * The form itself, built once and placed in whichever frame the state calls for. The populated
+   * Dashboard folds it into a disclosure; the new-account Dashboard puts it in the hero. Same
+   * field, same resolver, same candidate chooser — the alternative was a second form to keep right.
+   */
+  const entryForm = (
+    <>
       <form className={styles.entry} onSubmit={submit} aria-label="Choose a place to brief on">
         <div className={styles.entryField}>
           <Input
@@ -557,24 +564,27 @@ function LocationChoice({ preferences }: { readonly preferences: PreferenceView 
         onChoose={choose}
         label="Places matching what you entered"
       />
-      </details>
+    </>
+  );
+
+  return (
+    <DashboardFrame>
+      {onboarding ? (
+        <GettingStarted>{entryForm}</GettingStarted>
+      ) : (
+        <details className={styles.entryDisclosure} open={entryOpen}>
+          {/*
+            One wording in every state. The note under the briefing already says which place is
+            being briefed on and whether it is the default, and a summary that repeated it would put
+            the same sentence on the screen twice — finding 2.3's mistake on the Analyst.
+          */}
+          <summary className={styles.entrySummary}>Brief on another place</summary>
+          {entryForm}
+        </details>
+      )}
 
       {/* Nothing location-dependent while the entry has not settled on one place. */}
-      {settling ? null : location === null ? (
-        <EmptyState
-          title="No default location saved"
-          action={
-            <Link className={styles.actions} href="/settings">
-              <Button variant="primary" size="sm">
-                Choose a default location
-              </Button>
-            </Link>
-          }
-        >
-          The Dashboard briefs you on one place. Choose a default location in Settings, save one from
-          Saved Locations, or name a place above.
-        </EmptyState>
-      ) : (
+      {settling || location === null ? null : (
         <>
           {chosen === null ? null : (
             <p className={styles.note} data-briefing-place="chosen">

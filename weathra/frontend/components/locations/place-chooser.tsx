@@ -113,15 +113,19 @@ export function PlaceChooser({
   const settling = entry.resolution.kind !== "unresolved" && entry.resolution.kind !== "resolved";
   const open = current === null || settling || !usingDefault;
 
-  return (
-    <details className={styles.disclosure} open={open}>
-      {/*
-        One wording in every state. Each screen already says which place it is about, and a summary
-        that repeated it would put the same sentence on the screen twice — finding 2.3's mistake on
-        the Analyst.
-      */}
-      <summary className={styles.summary}>{summary}</summary>
+  /**
+   * Whether this screen has no place at all — which makes the chooser the screen's subject rather
+   * than an adjustment to it.
+   *
+   * A disclosure is the wrong shape twice over here. Its summary says "another place" to somebody
+   * who has had none, and even held open it presents the only thing to do on the screen as an
+   * aside. So with no place the frame is dropped and the form is a titled panel; with a place it
+   * folds away exactly as before, which is finding 1.7's requirement and unchanged.
+   */
+  const introducing = current === null;
 
+  const body = (
+    <>
       <form className={styles.form} onSubmit={submit} aria-label={label}>
         <div className={styles.field}>
           <Input
@@ -166,6 +170,33 @@ export function PlaceChooser({
         onChoose={choose}
         label="Places matching what you entered"
       />
+    </>
+  );
+
+  if (introducing) {
+    /*
+     * No `aria-label` naming it, and no repeat of the field's own label above the field: the
+     * heading here says what the panel is *for*, and the control inside it already says what it
+     * does. Naming both "Explore a place" put the same name on two nested elements, which is one
+     * name too many for anybody navigating by them.
+     */
+    return (
+      <section className={styles.panel}>
+        <p className={styles.panelTitle}>Choose a place to begin</p>
+        {body}
+      </section>
+    );
+  }
+
+  return (
+    <details className={styles.disclosure} open={open}>
+      {/*
+        One wording in every state. Each screen already says which place it is about, and a summary
+        that repeated it would put the same sentence on the screen twice — finding 2.3's mistake on
+        the Analyst.
+      */}
+      <summary className={styles.summary}>{summary}</summary>
+      {body}
     </details>
   );
 }

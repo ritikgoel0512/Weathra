@@ -23,10 +23,10 @@
  * nodes", a "Weathra Analysis Kernel", 124 active nodes and a scenario lock. None of it exists.
  */
 
-import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
 import { PlaceChooser } from "@/components/locations/place-chooser";
+import { ScreenPreview } from "@/components/locations/screen-preview";
 
 import { RecordedAgainstBaselineChart } from "@/components/historical/charts";
 import {
@@ -377,11 +377,29 @@ export function WeatherScenarioLab(): ReactNode {
       {location === null ? (
         <>
           {chooser}
-          <EmptyState title="Name a place to experiment on">
-            The lab applies your assumptions to the forecast for your default
-            location. Name one above, or set a default in{" "}
-            <Link href="/settings">Settings</Link>.
-          </EmptyState>
+          <ScreenPreview
+            title="The lab experiments on one place"
+            lead="Name a place above, or set a default in Settings and every screen opens on it. Nothing below is filled in yet because no place has been chosen."
+            regions={[
+              {
+                title: "The forecast it starts from",
+                blurb:
+                  "The retrieved forecast for the place, which is the baseline every assumption is applied to.",
+                chart: 150,
+              },
+              {
+                title: "Your assumptions",
+                blurb:
+                  "Suppose it were warmer, or wetter, or windier — stated as an adjustment rather than as a prediction.",
+              },
+              {
+                title: "What that would mean",
+                blurb:
+                  "The adjusted figures beside the retrieved ones, so what Weathra measured and what you supposed never merge.",
+                chart: 150,
+              },
+            ]}
+          />
         </>
       ) : (
         <ScenarioFor

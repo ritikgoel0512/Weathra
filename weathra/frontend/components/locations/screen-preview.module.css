@@ -1,0 +1,82 @@
+/*
+ * The waiting state of an Intelligence screen.
+ *
+ * Deliberately the same card rhythm as the Dashboard's onboarding state in `dashboard.module.css`:
+ * a person moving between them should see one product, not two conventions. It is its own module
+ * rather than an import because these are five screens with their own stylesheets, and the shared
+ * thing between them is this component.
+ */
+
+.preview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  max-width: 68ch;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
+  color: var(--color-text-primary);
+}
+
+.lead {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-body-size);
+  line-height: 1.6;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  align-content: start;
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: var(--type-ui-size);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-primary);
+}
+
+.cardBlurb {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-size);
+  line-height: 1.55;
+}
+
+/* A card without a plot still ends on the baseline a plotted one does. */
+.rule {
+  height: 1px;
+  margin-top: var(--space-2);
+  background: linear-gradient(90deg, var(--color-border-subtle) 0%, transparent 100%);
+}

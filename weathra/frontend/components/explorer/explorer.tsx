@@ -22,10 +22,10 @@
  * rather than as a percentage nobody can source.
  */
 
-import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
 import { PlaceChooser } from "@/components/locations/place-chooser";
+import { ScreenPreview } from "@/components/locations/screen-preview";
 import { RecordedAgainstBaselineChart } from "@/components/historical/charts";
 import {
   Badge,
@@ -34,7 +34,6 @@ import {
   CardHeader,
   DataClassBadge,
   EmptyChart,
-  EmptyState,
   ErrorState,
   LoadingState,
   LocationImage,
@@ -530,10 +529,34 @@ export function ForecastExplorer(): ReactNode {
       {location === null ? (
         <>
           {chooser}
-          <EmptyState title="Name a place to explore">
-            Forecast Explorer opens on your default location. Name one above, or
-            set a default in <Link href="/settings">Settings</Link>.
-          </EmptyState>
+          <ScreenPreview
+            title="Forecast Explorer opens on one place"
+            lead="Name a place above, or set a default in Settings and every screen opens on it. Nothing below is filled in yet because no place has been chosen."
+            regions={[
+              {
+                title: "Day by day",
+                blurb:
+                  "Each day ahead with its range and its expected conditions, as the provider reported them.",
+                chart: 150,
+              },
+              {
+                title: "Hour by hour",
+                blurb:
+                  "The intra-day movement behind each day, so a mild average with a cold morning in it is visible as one.",
+                chart: 150,
+              },
+              {
+                title: "Spread and confidence",
+                blurb:
+                  "How far the models disagree about each day, and how that disagreement narrows as the day approaches.",
+              },
+              {
+                title: "Provenance",
+                blurb:
+                  "Which provider supplied the figures, when they were retrieved, and what Weathra computed from them rather than received.",
+              },
+            ]}
+          />
         </>
       ) : (
         <ExplorerFor

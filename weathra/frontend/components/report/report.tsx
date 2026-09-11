@@ -41,6 +41,7 @@
  */
 
 import { PlaceChooser } from "@/components/locations/place-chooser";
+import { ScreenPreview } from "@/components/locations/screen-preview";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
@@ -52,7 +53,6 @@ import {
   CardHeader,
   DataClassBadge,
   EmptyChart,
-  EmptyState,
   ErrorState,
   LoadingState,
   formatInstant,
@@ -713,10 +713,33 @@ export function WeatherIntelligenceReport(): ReactNode {
       {location === null ? (
         <>
           {chooser}
-          <EmptyState title="Name a place to report on">
-            The report covers your default location. Name one above, or set a
-            default in <Link href="/settings">Settings</Link>.
-          </EmptyState>
+          <ScreenPreview
+            title="The report covers one place"
+            lead="Name a place above, or set a default in Settings and every screen opens on it. Nothing below is filled in yet because no place has been chosen."
+            regions={[
+              {
+                title: "Conditions now",
+                blurb:
+                  "Temperature, wind, humidity and pressure as retrieved, with the moment they were observed.",
+              },
+              {
+                title: "The days ahead",
+                blurb: "The forecast horizon your preferences ask for, day by day.",
+                chart: 150,
+              },
+              {
+                title: "Against the record",
+                blurb:
+                  "How this period compares with the climate baseline for the same place and time of year.",
+                chart: 150,
+              },
+              {
+                title: "What the model reads into it",
+                blurb:
+                  "An interpretation of the figures above, clearly separated from them, asked for rather than spent on arrival.",
+              },
+            ]}
+          />
         </>
       ) : (
         <ReportFor

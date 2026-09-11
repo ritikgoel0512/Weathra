@@ -254,3 +254,71 @@ describe("what the explorer never claims", () => {
     expect(ask).not.toHaveBeenCalled();
   });
 });
+
+/*
+ * The screen a customer meets when they press *Forecast Explorer* before setting a default.
+ *
+ * This used to be the chooser folded into a disclosure headed "Explore another place" — another
+ * than none — above a one-sentence empty state and an otherwise black screen. Both halves are
+ * asserted here: that the way in is the screen's subject, and that what waits under it is the
+ * screen's own regions rather than nothing. The third test is the one that keeps the fix honest.
+ */
+describe("before a place has been chosen", () => {
+  const noDefault = () =>
+    client({
+      preferences: vi.fn().mockResolvedValue({
+        unit_system: "metric",
+        forecast_horizon_days: 7,
+        default_location: null,
+        sources: {},
+      }),
+    });
+
+  it("puts the place entry on the screen rather than behind a disclosure", async () => {
+    mount(noDefault());
+
+    // By role: the form around it carries the same accessible name, so a label query matches both.
+    const field = await screen.findByRole("textbox", { name: "Explore a place" });
+    expect(field).toBeVisible();
+    expect(screen.getByRole("button", { name: "Show this place" })).toBeVisible();
+    // "Explore another place" is the folded wording, and it is wrong for somebody with none.
+    expect(screen.queryByText("Explore another place")).toBeNull();
+  });
+
+  it("previews the screen's own regions instead of leaving the viewport empty", async () => {
+    mount(noDefault());
+    await screen.findByRole("textbox", { name: "Explore a place" });
+
+    expect(
+      screen.getByRole("heading", { name: "Forecast Explorer opens on one place" }),
+    ).toBeInTheDocument();
+    for (const region of ["Day by day", "Hour by hour", "Spread and confidence", "Provenance"]) {
+      expect(screen.getByRole("heading", { name: region })).toBeInTheDocument();
+    }
+  });
+
+  it("retrieves nothing, and invents no figure to fill the preview", async () => {
+    const forecast = vi.fn();
+    const current = vi.fn();
+    mount(
+      client({
+        preferences: vi.fn().mockResolvedValue({
+          unit_system: "metric",
+          forecast_horizon_days: 7,
+          default_location: null,
+          sources: {},
+        }),
+        forecast,
+        current,
+      }),
+    );
+    await screen.findByRole("textbox", { name: "Explore a place" });
+
+    // Nothing was asked for about a place Weathra does not have.
+    expect(forecast).not.toHaveBeenCalled();
+    expect(current).not.toHaveBeenCalled();
+    // And nothing that looks like a reading was drawn to fill the space.
+    const text = document.body.textContent ?? "";
+    expect(text).not.toMatch(/-?\d+(\.\d+)?\s*°/);
+  });
+});

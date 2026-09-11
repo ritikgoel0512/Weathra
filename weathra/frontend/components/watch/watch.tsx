@@ -21,11 +21,11 @@
  * thing this product could do.
  */
 
-import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
 import { RecordedAgainstBaselineChart } from "@/components/historical/charts";
 import { PlaceChooser } from "@/components/locations/place-chooser";
+import { ScreenPreview } from "@/components/locations/screen-preview";
 
 import {
   Badge,
@@ -486,10 +486,27 @@ export function WeatherWatch(): ReactNode {
       {location === null ? (
         <>
           {chooser}
-          <EmptyState title="Name a place to watch">
-            Weather Watch checks conditions at your default location. Name one
-            above, or set a default in <Link href="/settings">Settings</Link>.
-          </EmptyState>
+          <ScreenPreview
+            title="A watch is about one place"
+            lead="Name a place above, or set a default in Settings and every screen opens on it. Nothing below is filled in yet because no place has been chosen."
+            regions={[
+              {
+                title: "The condition you are watching for",
+                blurb:
+                  "A measure, a threshold and a direction — above 30 °C, below freezing, more than 10 mm of rain.",
+              },
+              {
+                title: "Whether it is met",
+                blurb:
+                  "Checked against the retrieved forecast for the place, with the day and the figure that met it.",
+              },
+              {
+                title: "Your watches",
+                blurb:
+                  "Every watch you have saved, with what each one is looking for and where it stands now.",
+              },
+            ]}
+          />
         </>
       ) : (
         <WatchList

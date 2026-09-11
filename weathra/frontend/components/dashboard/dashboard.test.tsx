@@ -461,8 +461,17 @@ describe("the person's own preferences decide the briefing", () => {
   });
 });
 
+/*
+ * The Dashboard of a brand-new account, which is the first screen Weathra ever shows anybody.
+ *
+ * It used to be a title, one sentence, a link to Settings and most of a black viewport. It is now
+ * `GettingStarted` — the same visual system as the populated screen, with the product in each
+ * region instead of measurements. What these assert is that it is *full and honest*: the thing to
+ * do is on screen, the regions describe themselves, and not one weather figure was invented to fill
+ * them.
+ */
 describe("a person with no saved default location", () => {
-  it("says so, and offers the way to set one, rather than choosing a place for them", async () => {
+  it("offers the way to choose a place rather than choosing one for them", async () => {
     fetchMock = backend({
       ...POPULATED,
       "/api/v1/me/preferences": preferences({ default_location: null }),
@@ -470,12 +479,64 @@ describe("a person with no saved default location", () => {
 
     renderDashboard();
 
-    expect(await screen.findByText("No default location saved")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Choose a default location" })).toBeInTheDocument();
+    // The thing to do, in the hero, not behind a disclosure.
+    expect(
+      await screen.findByRole("heading", { name: "Name a place, and the briefing fills in" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Brief me on a place")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Show briefing" })).toBeVisible();
+
     // Nothing was requested for a location Weathra does not have.
     const asked = fetchMock.mock.calls.map(([input]) => new URL(input as string).pathname);
     expect(asked).not.toContain("/api/v1/weather/current");
     expect(asked).not.toContain("/api/v1/weather/forecast");
+  });
+
+  it("previews every region of a briefing instead of leaving the viewport empty", async () => {
+    fetchMock = backend({
+      ...POPULATED,
+      "/api/v1/me/preferences": preferences({ default_location: null }),
+    }) as unknown as Mock;
+
+    renderDashboard();
+    await screen.findByRole("heading", { name: "Name a place, and the briefing fills in" });
+
+    // The five regions the populated Dashboard holds, each named and each explained.
+    for (const region of [
+      "Current conditions",
+      "Forecast",
+      "What changed?",
+      "Historical context",
+      "Weathra Intelligence",
+    ]) {
+      expect(screen.getByRole("heading", { name: region })).toBeInTheDocument();
+    }
+
+    // The two onward steps, and somewhere to start for somebody with no city in mind.
+    expect(screen.getByRole("link", { name: "London, United Kingdom" }).getAttribute("href")).toBe(
+      "/?place=London%2C%20United%20Kingdom",
+    );
+    expect(screen.getByRole("button", { name: "Saved locations" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "AI Weather Analyst" })).toBeInTheDocument();
+  });
+
+  it("invents no measurement to fill the regions it is previewing", async () => {
+    fetchMock = backend({
+      ...POPULATED,
+      "/api/v1/me/preferences": preferences({ default_location: null }),
+    }) as unknown as Mock;
+
+    renderDashboard();
+    await screen.findByRole("heading", { name: "Name a place, and the briefing fills in" });
+
+    /*
+     * The failure this guards against is a prettier one than the blank screen: filling the hero
+     * with 18° and the strip with a week of conditions. `screens.md` §5 forbids it, and a new
+     * account is precisely the audience with no way to tell a placeholder from a reading.
+     */
+    const text = document.body.textContent ?? "";
+    expect(text).not.toMatch(/-?\d+(\.\d+)?\s*°/);
+    expect(text).not.toMatch(/\d+\s*(km\/h|mph|hPa|mm)\b/);
   });
 });
 
@@ -506,9 +567,13 @@ describe("the place entry, folded (1.7)", () => {
 
     renderDashboard();
 
-    // The empty state points at this field, and a disclosure it pointed *into* would be finding
-    // 6.5's mistake on Saved Locations.
-    expect(await screen.findByText("No default location saved")).toBeInTheDocument();
+    // With no default there is no disclosure at all: the onboarding screen puts the field in its
+    // hero. A form folded away behind a summary would be finding 6.5's mistake on Saved Locations,
+    // and one headed "Brief on another place" would be asking for *another* than none.
+    expect(
+      await screen.findByRole("heading", { name: "Name a place, and the briefing fills in" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Brief on another place")).toBeNull();
     expect(screen.getByLabelText("Brief me on a place")).toBeVisible();
   });
 });

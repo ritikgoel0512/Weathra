@@ -72,3 +72,31 @@
   font-size: var(--type-meta-size);
   overflow-wrap: anywhere;
 }
+
+/*
+ * The chooser when the screen has no place at all.
+ *
+ * Same frame as the disclosure, without the disclosure: there is nothing to fold away from, and a
+ * summary reading "another place" is wrong for somebody who has had none. The accent border is the
+ * difference between a control a screen offers and the one thing a screen is currently for.
+ */
+.panel {
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  min-width: 0;
+}
+
+.panelTitle {
+  margin: 0;
+  padding: var(--space-3) var(--space-4) 0;
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+/* The label is the panel's heading here, so the field need not repeat it directly above itself. */
+.panel .form {
+  padding-top: var(--space-2);
+}
