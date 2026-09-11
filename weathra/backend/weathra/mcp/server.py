@@ -121,8 +121,22 @@ class ToolContext:
         return self.now or datetime.now(UTC)
 
     def weather(self, name: str | None = None) -> WeatherProvider:
-        """The provider for a call, cached, honouring a per-call provider name."""
-        if name is None and self.provider is not None:
+        """The provider for a call, cached, honouring a per-call provider name.
+
+        **A name that asks for the provider we already hold gets the one we already hold.** The
+        shared ``CachedProvider`` is built once in the application's lifespan and is the only thing
+        standing between ordinary navigation and Open-Meteo's rate limiter. Every weather tool
+        passes ``arguments.provider`` straight through, and that argument is a free-text field on
+        the tool schema — so a model naming the provider explicitly, which is exactly what the
+        field invites, used to build a brand-new cache, miss it by construction, issue an upstream
+        call, and then throw the populated cache away. Same provider, same coordinates, same
+        window: an upstream request that the shared cache already had an answer for.
+
+        Only a name for a *different* provider gets its own instance, which is the case the
+        argument exists for.
+        """
+        shared = name is None or name == self.settings.default_weather_provider
+        if shared and self.provider is not None:
             return self.provider
         return CachedProvider(
             build_provider(self.settings, self.client, name), settings=self.settings

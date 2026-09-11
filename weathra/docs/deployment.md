@@ -1274,3 +1274,87 @@ environment against the hosted Supabase project. The CI workflows assert their h
 on hosted `ubuntu-` runners, and a test rejects any step that reaches for a local install, a local
 Postgres, or a home directory. The end-to-end confirmation from a browser environment is task 23.7
 and will be recorded here when the cloud accounts are provisioned.
+
+## Open-Meteo request volume per screen
+
+Recorded 2026-09-11 against the production pair — frontend
+`https://weathra-bice.vercel.app`, backend `https://weathra-backend.onrender.com`.
+
+Written because ordinary, low-volume manual navigation was repeatedly producing
+`open-meteo rate-limited the request`. That is not something to attribute upstream without
+first knowing how many requests one screen actually causes.
+
+### What one screen costs
+
+Counts are upstream requests to Open-Meteo, derived from the route → service → provider call
+graph and checked against production where a response exposes `from_cache`. "Cold" means no
+entry in the process cache for that place; "cached" means a second load inside the TTL
+(current 900 s, forecast 3 600 s, history 30 d, geocoding 7 d).
+
+| Screen | Cold load | Cached load | Parallel | Can batch? | Can cache? | Can deduplicate? |
+| --- | --- | --- | --- | --- | --- | --- |
+| Dashboard | 3 — current, forecast, history | 0 | 2 (current ‖ forecast) | No — three different endpoints | Yes, already | Yes, already |
+| Forecast Explorer | 2 — current, forecast | 0 | 2 | No | Yes, already | Yes, already |
+| Weather Intelligence Report | 3 — current, forecast, history | 0 | 3 | No | Yes, already | Yes, already |
+| Historical Analytics | 1–3 archive calls, by range | 0 | up to 3 | Partly — adjacent ranges could merge | Yes, already | Yes, already |
+| Compare Cities (*N* cities) | ***N*** forecasts | 0 | ***N*** | **Yes — not yet done** | Yes, already | Yes, already |
+| Travel Intelligence | 1 forecast | 0 | 1 | n/a at one destination | Yes, already | Yes, already |
+| Weather Scenario Lab | 1 forecast | 0 | 1 | No | Yes, already | Yes, already |
+| Weather Watch | 1 forecast, whatever the number of watches | 0 | 1 | No | Yes, already | Yes, already |
+| Resolving a typed place name | 1 geocoding call | 0 | 1 | No | Yes, already | Yes, already |
+
+Two entries are worth reading twice. A Dashboard load is **three** calls rather than the six
+endpoints it hits, because `/weather/analysis` and `/weather/changes` ask for the same forecast the
+Dashboard already asked for and are served from the cache — verified in production: `/weather/forecast`
+for a cold place answered `from_cache: false`, and `/weather/analysis` for the same place and horizon
+immediately after answered `from_cache: true`. And a cached load of *any* screen is **zero** upstream
+calls, also verified: three consecutive `/weather/current` calls for the same place returned one
+`retrieved_at`, the first with `from_cache: false` and the rest `true`.
+
+### Why 429s were reached anyway
+
+The caching, the single-flight collapsing and the 429 handling are all in place and all working.
+What produces the refusals is the combination below, and none of it is fixed by caching harder:
+
+1. **The cache is process-local and the process is not long-lived.** `CachedProvider` is built once
+   per process in the lifespan, so it is exactly as durable as the Render instance. An instance that
+   has been idle and spun down starts empty, which means low-volume manual use — a few minutes of
+   clicking, then nothing for an hour — meets a cold cache almost every time. High-volume use would
+   hit the cache; occasional use is the pattern that misses it.
+2. **The egress IP is shared.** Open-Meteo's free tier limits by IP, and outbound requests from
+   Render leave through addresses shared with other tenants. Weathra's own volume is not the only
+   volume counted against it, which is why the refusals do not correlate with anything the product
+   owner did.
+3. **Compare Cities multiplies a cold load by the number of cities.** `ComparisonService.compare`
+   issues one forecast per location through `asyncio.gather` — four cities is four simultaneous
+   requests from one IP for one screen.
+
+A 429 is *not* retried on the weather path (`RetryPolicy.for_providers` leaves
+`rate_limit_max_wait_seconds` at zero), so a refusal costs one request rather than three. That was
+fixed earlier and is asserted by test; it is recorded here so the next reader does not re-fix it.
+
+### What changed now
+
+**The agent tool surface no longer discards the shared cache.** `ToolContext.weather(name)` returned
+the process-wide `CachedProvider` only when the provider argument was *omitted*. Every weather tool
+forwards `arguments.provider`, and that argument is a free-text field the tool schema openly invites
+a model to fill in — so a model naming `open-meteo` explicitly got a brand-new empty cache, missed it
+by construction, issued an upstream call the shared cache already had the answer for, and then threw
+the populated cache away. A name matching the configured default now resolves to the shared provider;
+a name for a genuinely different provider still gets its own, which is what the argument is for.
+
+### What is still open
+
+**Batching Compare Cities into one request.** Open-Meteo accepts several coordinates in a single
+call — `latitude=52.52,48.85&longitude=13.41,2.35` returns an array of per-location payloads — so an
+*N*-city comparison could cost one upstream request instead of *N*. It is not implemented here. The
+route is: a `forecast_many` on the `WeatherProvider` protocol with a default implementation that
+falls back to today's `asyncio.gather`, so no other provider has to change; `CachedProvider` splitting
+the request into the keys it already holds and the ones it does not, asking only for the misses;
+`OpenMeteoProvider` joining the misses into one query and un-interleaving the array by index.
+The fiddly part is partial failure — today one location failing is excluded from the ranking by name,
+and a batched call has to preserve that rather than failing the whole comparison.
+
+**A shared cache across instances.** Every point above about cold processes disappears with a cache
+that outlives one. `CachedProvider` is deliberately the seam where that drops in; nothing else would
+need to change.

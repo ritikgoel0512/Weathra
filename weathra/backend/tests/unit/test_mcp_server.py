@@ -32,6 +32,7 @@ from weathra.mcp.schemas import TOOL_NAMES
 from weathra.mcp.server import ToolContext, build_server
 from weathra.providers.base import WeatherProvider
 from weathra.providers.open_meteo import OpenMeteoProvider
+from weathra.providers.registry import ProviderNotFound
 
 NOW = datetime(2026, 3, 1, 12, 0, tzinfo=UTC)
 
@@ -946,3 +947,37 @@ def test_the_measure_vocabulary_is_the_domains_own() -> None:
     """A tool argument names a Weathra measure, not a provider field."""
     assert Measure.TEMPERATURE_MAX.value == "temperature_max"
     assert f.BERLIN.identifier.startswith("loc:")
+
+
+class TestSharedProviderCache:
+    """The tool surface must not throw away the cache the application built for it.
+
+    ``ToolContext.provider`` is the process-wide ``CachedProvider`` from the lifespan, and it is
+    the only thing between ordinary navigation and Open-Meteo's rate limiter. Every weather tool
+    forwards ``arguments.provider``, a free-text field the tool schema openly invites a model to
+    fill in — so naming the configured provider explicitly used to build a second, empty cache,
+    miss it by construction, and issue an upstream call the shared cache already had an answer for.
+    """
+
+    def test_omitting_the_provider_uses_the_shared_cache(self) -> None:
+        shared = StubProvider()
+        tools = context(provider=shared)
+
+        assert tools.weather(None) is shared
+
+    def test_naming_the_configured_provider_uses_the_shared_cache(self) -> None:
+        shared = StubProvider()
+        settings = provider_settings()
+        tools = context(provider=shared, settings=settings)
+
+        # The regression: the same provider, spelled out rather than omitted.
+        assert tools.weather(settings.default_weather_provider) is shared
+
+    def test_naming_a_different_provider_still_gets_its_own(self) -> None:
+        shared = StubProvider()
+        tools = context(provider=shared)
+
+        # The case the argument exists for. An unregistered name fails in the registry rather than
+        # quietly returning the shared provider, which is what proves the branch was taken.
+        with pytest.raises(ProviderNotFound):
+            tools.weather("not-a-registered-provider")
