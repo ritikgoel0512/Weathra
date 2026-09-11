@@ -3558,6 +3558,7 @@
           "surface_pressure",
           "cloud_cover",
           "uv_index",
+          "weather_code",
           "temperature_max",
           "temperature_min",
           "temperature_mean",
@@ -3574,7 +3575,8 @@
           "dew_point_mean",
           "surface_pressure_mean",
           "cloud_cover_mean",
-          "uv_index_max"
+          "uv_index_max",
+          "weather_code_dominant"
         ],
         "title": "Measure",
         "type": "string"
@@ -3820,7 +3822,7 @@
       },
       "PlanOfferView": {
         "additionalProperties": false,
-        "description": "A tier, its standing, and what it allows.",
+        "description": "A tier, its standing, what it allows, and which class of model answers on it.",
         "properties": {
           "allowances": {
             "items": {
@@ -3832,6 +3834,30 @@
           "display_name": {
             "title": "Display Name",
             "type": "string"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "That model's display name, so a comparison can say what actually differs.",
+            "title": "Model Name"
+          },
+          "model_tier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The capability tier of the first model this plan's synthesis policy would resolve \u2014 economy, standard or frontier. Null where the plan maps no synthesis policy, or where its policy names no enabled candidate. Read from the catalog, never asserted.",
+            "title": "Model Tier"
           },
           "plan_code": {
             "title": "Plan Code",

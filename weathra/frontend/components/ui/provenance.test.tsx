@@ -280,7 +280,7 @@ describe("the analytics method note", () => {
 
   it("says why a statistic was not computable instead of showing a figure", () => {
     render(<MethodNote method="trend" reason="fewer than the declared minimum points" />);
-    expect(screen.getByText(/Not computable: fewer than the declared minimum points\./)).toBeInTheDocument();
+    expect(screen.getByText(/Why: fewer than the declared minimum points\./)).toBeInTheDocument();
   });
 });
 

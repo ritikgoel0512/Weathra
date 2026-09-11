@@ -24,18 +24,24 @@ client can then say "unlimited" instead of guessing whether the field went missi
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from weathra.api.dependencies import CurrentSession, Inference, Quota
 from weathra.api.middleware import annotate
 from weathra.auth.deps import IsAdministrative, RequiredPrincipal
 from weathra.auth.profiles import ensure_profile
+from weathra.domain.entitlements import CallRole
+from weathra.entitlements.catalog import CatalogStore
 from weathra.entitlements.plans import PlanStore
+from weathra.entitlements.policies import PolicyStore
 from weathra.entitlements.quotas import QuotaSubject, UsageReport
+from weathra.entitlements.records import CatalogStatus, PlanRecord
 from weathra.entitlements.resolver import DEFAULT_PLAN
 from weathra.telemetry.aggregate import UsageWindow, aggregate_usage_series
 
@@ -236,7 +242,7 @@ class PlanAllowanceView(BaseModel):
 
 
 class PlanOfferView(BaseModel):
-    """A tier, its standing, and what it allows."""
+    """A tier, its standing, what it allows, and which class of model answers on it."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -244,6 +250,18 @@ class PlanOfferView(BaseModel):
     display_name: str
     rank: int = Field(description="Ascending entitlement. Free is the lowest.")
     allowances: tuple[PlanAllowanceView, ...]
+    model_tier: str | None = Field(
+        default=None,
+        description=(
+            "The capability tier of the first model this plan's synthesis policy would resolve — "
+            "economy, standard or frontier. Null where the plan maps no synthesis policy, or where "
+            "its policy names no enabled candidate. Read from the catalog, never asserted."
+        ),
+    )
+    model_name: str | None = Field(
+        default=None,
+        description="That model's display name, so a comparison can say what actually differs.",
+    )
 
 
 class PlansResponse(BaseModel):
@@ -298,6 +316,13 @@ async def list_offered_plans(request: Request, session: CurrentSession) -> Plans
             )
         )
 
+    # What actually differs between tiers, besides how much they allow: which model answers.
+    # `subscription_plans` maps each call role to a policy, the policy orders catalog candidates,
+    # and the catalog entry carries the capability tier. All three are rows; none of it is asserted
+    # here. A plan that maps no synthesis policy, or whose policy names nothing enabled, reports
+    # null rather than a guess.
+    headline = await _headline_model(session, plans)
+
     return PlansResponse(
         count=len(plans),
         plans=tuple(
@@ -306,6 +331,8 @@ async def list_offered_plans(request: Request, session: CurrentSession) -> Plans
                 display_name=plan.display_name,
                 rank=plan.rank,
                 allowances=tuple(by_plan.get(str(plan.plan_code), ())),
+                model_tier=headline.get(str(plan.plan_code), (None, None))[0],
+                model_name=headline.get(str(plan.plan_code), (None, None))[1],
             )
             for plan in sorted(plans, key=lambda plan: plan.rank)
         ),
@@ -313,3 +340,33 @@ async def list_offered_plans(request: Request, session: CurrentSession) -> Plans
         self_service=False,
         assignment_note=ASSIGNMENT_NOTE,
     )
+
+
+async def _headline_model(
+    session: AsyncSession, plans: Sequence[PlanRecord]
+) -> dict[str, tuple[str | None, str | None]]:
+    """Per plan, the tier and name of the first model its synthesis policy would resolve.
+
+    *Synthesis* rather than routing, because synthesis is the call that writes the answer a person
+    reads — it is the one whose model they would notice. The first *enabled* candidate, because a
+    disabled row is unavailable everywhere (`specs/model-catalog`) and naming it would describe a
+    model no call can reach.
+    """
+    policies = {str(record.policy_id): record for record in await PolicyStore(session).list()}
+    catalog = {entry.catalog_key: entry for entry in await CatalogStore(session).list()}
+
+    resolved: dict[str, tuple[str | None, str | None]] = {}
+    for plan in plans:
+        policy_id = plan.policy_for(CallRole.SYNTHESIS)
+        policy = policies.get(str(policy_id)) if policy_id else None
+        if policy is None:
+            resolved[str(plan.plan_code)] = (None, None)
+            continue
+        for key in policy.candidate_catalog_keys:
+            entry = catalog.get(key)
+            if entry is not None and entry.status is CatalogStatus.ENABLED:
+                resolved[str(plan.plan_code)] = (entry.capability_tier.value, entry.display_name)
+                break
+        else:
+            resolved[str(plan.plan_code)] = (None, None)
+    return resolved

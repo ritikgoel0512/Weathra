@@ -34,6 +34,7 @@ import {
   MethodNote,
   ProvenanceSection,
   UncertaintyIndicator,
+  WeatherIcon,
   type Attribution,
 } from "@/components/ui";
 import type {
@@ -50,6 +51,7 @@ import type { ViewState } from "@/lib/query/state";
 import { confidenceLevelFor } from "@/lib/design/data-class";
 import { resolvedPlaceLabel } from "@/lib/locations/place";
 import { useResolvedPlace } from "@/lib/locations/resolved-place";
+import { conditionFor } from "@/lib/weather/condition";
 import {
   dayDetails,
   dayPrecipitationFrom,
@@ -59,11 +61,17 @@ import {
   readingsFrom,
   statisticPhrase,
   type DayPrecipitation,
+  type ForecastDay,
   type Reading,
   type WhatChangedReport,
 } from "@/lib/dashboard/briefing";
 
 import styles from "./dashboard.module.css";
+
+/** One reported number, or null. The provider's condition code is a number in the values map. */
+function numberFrom(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
 
 /** A location as the attribution line names it. Never a station, never a coordinate pair alone. */
 function placeOf(
@@ -140,10 +148,20 @@ export interface CurrentConditionsProps {
  * `key` is the provider's own measure name, so a provider that *does* report wind fills the slot
  * with no change here.
  */
+/**
+ * The hero's secondary slots, and why these five.
+ *
+ * `01-dashboard.png` puts humidity, UV, wind and pressure beside the temperature. **UV is not in
+ * `current`**: the provider reports it hourly and daily only, so the slot rendered "Unavailable" on
+ * every load — a permanent gap advertising a field this series does not carry. It is replaced by
+ * feels-like and precipitation, which `current` does report and which the artifact also shows (it
+ * draws them in the same band). Five tiles, all populated, in the artifact's arrangement.
+ */
 const HERO_MEASURES: readonly { key: string; label: string }[] = [
+  { key: "apparent_temperature", label: "Feels like" },
   { key: "relative_humidity", label: "Humidity" },
-  { key: "uv_index", label: "UV index" },
   { key: "wind_speed", label: "Wind" },
+  { key: "precipitation", label: "Precipitation" },
   { key: "surface_pressure", label: "Pressure" },
 ];
 
@@ -163,9 +181,18 @@ export function CurrentConditions({ current, location }: CurrentConditionsProps)
   const known = useResolvedPlace();
 
   const temperature = readingFor("temperature", current.values, current.units);
+  const condition = conditionFor(numberFrom(current.values?.weather_code));
+  const placeName = resolvedPlaceLabel(current.attribution?.location ?? location, known);
   // Anything the provider reported that the hero's four slots do not already name. The slots are
   // the artifact's composition; this is the guarantee that the composition never hides a reading.
-  const named = new Set<string>(["temperature", ...HERO_MEASURES.map((measure) => measure.key)]);
+  // The condition code is rendered as the condition, above. It must never also appear as a figure:
+  // "Weather code 61" is the provider's identifier for "light rain", not a measurement, and a
+  // reader shown both is being shown the same fact twice, once in a form they cannot use.
+  const named = new Set<string>([
+    "temperature",
+    "weather_code",
+    ...HERO_MEASURES.map((measure) => measure.key),
+  ]);
   const extras = readingsFrom(current.values, current.units).filter(
     (reading) => !named.has(reading.key),
   );
@@ -197,7 +224,8 @@ export function CurrentConditions({ current, location }: CurrentConditionsProps)
       >
         <div className={styles.hero}>
           <div className={styles.heroPlace}>
-            <p className={styles.place}>{location.display_name}</p>
+            {/* The artifact names the city large and its region beneath, not the timezone. */}
+            <p className={styles.place}>{placeName}</p>
             <p className={styles.placeMeta}>
               <span>{location.timezone}</span>
               <span>Observed {current.observed_at_local}</span>
@@ -210,23 +238,40 @@ export function CurrentConditions({ current, location }: CurrentConditionsProps)
             ) : (
               <p className={styles.note}>No temperature reported</p>
             )}
+            {/*
+              The condition, under the temperature, exactly where the artifact puts "Light Rain".
+              It is the provider's own `weather_code` translated — never inferred from the figures
+              beside it. Absent when the provider reported no code.
+            */}
+            {condition ? (
+              <p className={styles.readoutCondition}>
+                <WeatherIcon condition={condition} size={28} />
+                <span>{condition.label}</span>
+              </p>
+            ) : null}
           </div>
 
+          {/*
+            Only the slots the provider actually reported. A tile reading "Unavailable" on every
+            load advertises a field this series does not carry — which is what the UV slot did
+            before it was removed, and what a fixed precipitation slot would do on a dry day.
+            `dashboard.test.tsx` holds this: an unreported measure is absent, not stated as absent.
+          */}
           <dl className={styles.heroMeasures}>
-            {HERO_MEASURES.map(({ key, label }) => {
-              const reading = readingFor(key, current.values, current.units);
-              return (
-                <div className={styles.heroMeasure} key={key}>
-                  <dt className={styles.heroMeasureTerm}>{label}</dt>
-                  <dd
-                    className={styles.heroMeasureValue}
-                    data-reported={reading ? "true" : "false"}
-                  >
-                    {reading ? formatReading(reading) : "Unavailable"}
+            {HERO_MEASURES.map(({ key, label }) => ({
+              key,
+              label,
+              reading: readingFor(key, current.values, current.units),
+            }))
+              .filter((slot) => slot.reading !== null)
+              .map((slot) => (
+                <div className={styles.heroMeasure} key={slot.key}>
+                  <dt className={styles.heroMeasureTerm}>{slot.label}</dt>
+                  <dd className={styles.heroMeasureValue} data-reported="true">
+                    {formatReading(slot.reading!)}
                   </dd>
                 </div>
-              );
-            })}
+              ))}
           </dl>
         </div>
       </LocationImage>
@@ -304,6 +349,11 @@ export interface ForecastStripProps {
  * own precipitation: the total, the maximum probability, and a glyph that is a picture of those two
  * figures. See `dayPrecipitationFrom`. A dry day is never drawn as a sunny one.
  */
+/** A day's condition, from the provider's dominant code for that day. */
+function conditionOf(day: ForecastDay): ReturnType<typeof conditionFor> {
+  return conditionFor(day.conditionCode);
+}
+
 /** `2026-09-12T00:00:00+02:00` → `Friday`, from the day's own local stamp. */
 function weekdayOf(day: { timeLocal: string; date: string }): string {
   const parsed = new Date(day.timeLocal);
@@ -337,7 +387,23 @@ export function ForecastStrip({ forecast }: ForecastStripProps): ReactNode {
                   the name for scanning, the date beneath it for certainty. */}
               <p className={styles.stripDayName}>{weekdayOf(day)}</p>
               <p className={styles.stripDayDate}>{day.date}</p>
-              <DayPrecipitationGlyph outlook={dayPrecipitationFrom(day)} />
+              {/*
+                The artifact's day card is an icon and a condition word over the temperatures. That
+                was a precipitation glyph until the provider's `weather_code` arrived, because
+                Weathra carried no condition and "a dry day is never drawn as a sunny one" was the
+                right call while that was true. It no longer is. The glyph stays as the fallback for
+                a day the provider reported no code for.
+              */}
+              {conditionOf(day) ? (
+                <>
+                  <span className={styles.stripIcon}>
+                    <WeatherIcon condition={conditionOf(day)} size={30} />
+                  </span>
+                  <p className={styles.stripCondition}>{conditionOf(day)?.label}</p>
+                </>
+              ) : (
+                <DayPrecipitationGlyph outlook={dayPrecipitationFrom(day)} />
+              )}
               <dl className={styles.stripFigures}>
                 <div className={styles.stripFigure}>
                   <dt className={styles.stripFigureTerm}>High</dt>
@@ -455,7 +521,10 @@ function Finding({ result }: { readonly result: StatisticResult }): ReactNode {
         {statisticPhrase(result.statistic, result.measure)}
       </span>
       {value === null ? (
-        <span className={styles.note}>Not computable.</span>
+        // "Not reported", not "Not computable": the arithmetic is fine, the provider sent nothing
+        // to do it with, and the second sentence — "Not computable: The provider reported no wind
+        // speed for this window.." — was the same fact said twice in a developer's words.
+        <span className={styles.note}>Not reported</span>
       ) : (
         <span className={styles.findingValue}>
           {formatReading({ value, unit: result.unit ?? null })}

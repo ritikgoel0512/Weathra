@@ -1,99 +1,91 @@
 /**
- * What the sky is doing, derived from the figures the provider actually reports.
+ * What the sky is doing, as the **provider** reports it.
  *
- * **Why this is derived rather than read.** `01-dashboard.png` labels its hero "Light Rain" and
- * every day card "SUNNY", "OVERCAST", "HEAVY RAIN". Weathra's provider integration carries no
- * condition code: `weather_code` is not in any response, and it is named in
- * `backend/weathra/agents/safety.py`'s severity-field guard, because a code that can encode a
- * thunderstorm is a severity claim and the project decided deliberately not to make one. So the
- * screens carried no condition at all, and a weather product whose hero cannot say whether it is
- * raining is not one.
+ * **This used to be inferred, and that was the defect.** Until the backend carried a condition, this
+ * module derived a sky state from cloud cover and precipitation. It was careful, it was documented,
+ * and it was still Weathra doing meteorology: `specs/safety-grounding` forbids characterising a
+ * condition the retrieved data does not describe, and a percentage of cloud is not a description of
+ * weather. `weather_code` is now requested from Open-Meteo and carried through the domain and the
+ * API, so every label below is a translation of the provider's own published code.
  *
- * What the provider *does* report is cloud cover as a percentage, precipitation as a depth, and
- * (hourly) the chance of it. Cloud cover in oktas is the standard basis for a sky state — it is
- * what "partly cloudy" means — so the sky half of this is a unit conversion rather than a guess,
- * and the wet half is read off the precipitation figure itself.
+ * The codes are WMO 4677 as Open-Meteo publishes them. Translating a code to words is not a claim:
+ * the provider said 61, and 61 means slight rain. What is *not* done is any judgement on top —
+ * nothing here decides a storm is dangerous, and the severity referral in
+ * `backend/weathra/agents/safety.py` remains the only thing that speaks to danger.
  *
- * **What it will not say.** No thunderstorm, no snow, no fog, no severity of any kind. Those need
- * either a condition code or fields Weathra does not carry, and inferring a thunderstorm from heavy
- * rain is exactly the confident wrong answer `specs/safety-grounding` exists to prevent. A reading
- * with no cloud cover reported produces `null`, and the screen shows nothing rather than a default.
- *
- * The thresholds are the conventional ones and are stated here rather than buried in a component,
- * so the same rain is described the same way on the hero, the hourly strip and a comparison.
+ * One mapping, used by the hero, the hourly strip, the daily cards, Compare, Explorer and Watch, so
+ * the same code is never described two ways on two screens.
  */
 
-export type ConditionKind = "clear" | "mostly-clear" | "partly-cloudy" | "cloudy" | "overcast" | "rain" | "heavy-rain";
+export type ConditionKind =
+  | "clear"
+  | "mostly-clear"
+  | "partly-cloudy"
+  | "overcast"
+  | "fog"
+  | "drizzle"
+  | "rain"
+  | "heavy-rain"
+  | "snow"
+  | "showers"
+  | "thunderstorm";
 
 export interface Condition {
+  readonly code: number;
   readonly kind: ConditionKind;
-  /** What a person reads. Sentence case, because it sits under a temperature. */
+  /** What a person reads, as the provider's own code means it. */
   readonly label: string;
-  /** Why it says that, for a title attribute — the figures, never a method. */
-  readonly basis: string;
-}
-
-/** Millimetres in the period that count as raining, and as raining hard. */
-const RAIN_MM = 0.1;
-const HEAVY_RAIN_MM = 2.5;
-
-/** Cloud cover percentages, on the conventional okta boundaries. */
-const MOSTLY_CLEAR = 25;
-const PARTLY_CLOUDY = 50;
-const CLOUDY = 87;
-
-const LABELS: Readonly<Record<ConditionKind, string>> = {
-  clear: "Clear",
-  "mostly-clear": "Mostly clear",
-  "partly-cloudy": "Partly cloudy",
-  cloudy: "Cloudy",
-  overcast: "Overcast",
-  rain: "Rain",
-  "heavy-rain": "Heavy rain",
-};
-
-export interface ConditionInput {
-  /** Percentage, as the provider reports it. */
-  readonly cloudCover?: number | null;
-  /** Depth over the period the reading covers. */
-  readonly precipitation?: number | null;
 }
 
 /**
- * The condition for one reading, or `null` when the provider reported nothing to derive it from.
+ * WMO 4677, grouped the way Open-Meteo documents its own values.
  *
- * Precipitation wins over cloud cover: an overcast sky that is raining is described as rain,
- * because that is the thing a person needs to know.
+ * Grouped rather than one label per code because "slight", "moderate" and "dense" drizzle are three
+ * codes and one thing to a reader; the distinction that survives is the one a person acts on.
  */
-export function conditionFor(input: ConditionInput): Condition | null {
-  const rain = numberOrNull(input.precipitation);
-  const cloud = numberOrNull(input.cloudCover);
+const CODES: readonly (readonly [readonly number[], ConditionKind, string])[] = [
+  [[0], "clear", "Clear"],
+  [[1], "mostly-clear", "Mostly clear"],
+  [[2], "partly-cloudy", "Partly cloudy"],
+  [[3], "overcast", "Overcast"],
+  [[45, 48], "fog", "Fog"],
+  [[51, 53, 55, 56, 57], "drizzle", "Drizzle"],
+  [[61, 66], "rain", "Light rain"],
+  [[63], "rain", "Rain"],
+  [[65, 67], "heavy-rain", "Heavy rain"],
+  [[71, 73, 75, 77, 85, 86], "snow", "Snow"],
+  [[80, 81], "showers", "Showers"],
+  [[82], "heavy-rain", "Violent showers"],
+  [[95, 96, 99], "thunderstorm", "Thunderstorm"],
+];
 
-  if (rain !== null && rain >= HEAVY_RAIN_MM) {
-    return make("heavy-rain", `${rain.toFixed(1)} mm of rain`);
-  }
-  if (rain !== null && rain >= RAIN_MM) {
-    return make("rain", `${rain.toFixed(1)} mm of rain`);
-  }
-  if (cloud === null) return null;
-
-  const basis = `${Math.round(cloud)}% cloud cover`;
-  if (cloud < MOSTLY_CLEAR) return make("clear", basis);
-  if (cloud < PARTLY_CLOUDY) return make("mostly-clear", basis);
-  if (cloud < CLOUDY) return make("partly-cloudy", basis);
-  if (cloud < 100) return make("cloudy", basis);
-  return make("overcast", basis);
+const BY_CODE = new Map<number, Condition>();
+for (const [codes, kind, label] of CODES) {
+  for (const code of codes) BY_CODE.set(code, { code, kind, label });
 }
 
-function make(kind: ConditionKind, basis: string): Condition {
-  return { kind, label: LABELS[kind], basis };
-}
-
-function numberOrNull(value: number | null | undefined): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
+/**
+ * The condition for a provider code, or `null` where none was reported.
+ *
+ * `null` for an unreported code *and* for a code this mapping does not know: inventing a label for
+ * an unrecognised number would be describing weather nobody reported. The screens render nothing
+ * rather than a guess, which is the same thing they did before any of this existed.
+ */
+export function conditionFor(code: number | null | undefined): Condition | null {
+  if (typeof code !== "number" || !Number.isFinite(code)) return null;
+  return BY_CODE.get(Math.trunc(code)) ?? null;
 }
 
 /** Whether a condition is a wet one, for a component choosing an emphasis. */
 export function isWet(condition: Condition | null): boolean {
-  return condition?.kind === "rain" || condition?.kind === "heavy-rain";
+  return (
+    condition !== null &&
+    (["drizzle", "rain", "heavy-rain", "showers", "thunderstorm"] as const).includes(
+      condition.kind as "drizzle" | "rain" | "heavy-rain" | "showers" | "thunderstorm",
+    )
+  );
 }
+
+/** The measure key the provider's code arrives under, instantaneous and daily. */
+export const WEATHER_CODE = "weather_code";
+export const WEATHER_CODE_DOMINANT = "weather_code_dominant";

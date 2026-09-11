@@ -226,6 +226,14 @@ export interface ForecastDay {
   readonly timeLocal: string;
   readonly high: Reading | null;
   readonly low: Reading | null;
+  /**
+   * The provider's dominant condition code for the day, or null where it reported none.
+   *
+   * Its own field rather than a member of `other`, because it is not a figure: it identifies a
+   * condition and is rendered as an icon and a word. Keeping it out of `other` is what stops
+   * "Weather code dominant: 61" appearing in a card's details list.
+   */
+  readonly conditionCode: number | null;
   /** Everything else the provider reported for the day. */
   readonly other: Reading[];
 }
@@ -289,6 +297,11 @@ export function localDateOf(timeLocal: string): string {
 }
 
 /** The daily series, read into rows. Entries the backend did not send produce no rows. */
+/** One reported number, or null. A code arrives in the values map like any other entry. */
+function numberOf(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
 export function forecastDaysFrom(series: Series | undefined): ForecastDay[] {
   return (series?.entries ?? []).map((entry) => {
     const readings = readingsFrom(entry.values, series?.units);
@@ -297,8 +310,14 @@ export function forecastDaysFrom(series: Series | undefined): ForecastDay[] {
       timeLocal: entry.time_local,
       high: readings.find((reading) => reading.key === "temperature_max") ?? null,
       low: readings.find((reading) => reading.key === "temperature_min") ?? null,
+      conditionCode: numberOf(entry.values?.weather_code_dominant),
       other: readings.filter(
-        (reading) => reading.key !== "temperature_max" && reading.key !== "temperature_min",
+        (reading) =>
+          reading.key !== "temperature_max" &&
+          reading.key !== "temperature_min" &&
+          // Rendered as the day's condition icon and word, never as a figure. See
+          // `lib/weather/condition`: the code identifies a condition, it does not measure one.
+          reading.key !== "weather_code_dominant",
       ),
     };
   });

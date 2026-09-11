@@ -98,6 +98,11 @@ class Measure(StrEnum):
     SURFACE_PRESSURE = "surface_pressure"
     CLOUD_COVER = "cloud_cover"
     UV_INDEX = "uv_index"
+    # The provider's own condition code (WMO 4677 as Open-Meteo publishes it). A *code*, not a
+    # measurement: it is carried so the product can say "light rain" with the provider attributed,
+    # instead of inferring a sky state from cloud cover and precipitation, which is the inference
+    # `specs/safety-grounding` exists to prevent. See `WEATHER_CODE_MEASURES` below.
+    WEATHER_CODE = "weather_code"
 
     # --- daily aggregates
     TEMPERATURE_MAX = "temperature_max"
@@ -117,6 +122,8 @@ class Measure(StrEnum):
     SURFACE_PRESSURE_MEAN = "surface_pressure_mean"
     CLOUD_COVER_MEAN = "cloud_cover_mean"
     UV_INDEX_MAX = "uv_index_max"
+    # The dominant code for a day, as the provider aggregates it.
+    WEATHER_CODE_DOMINANT = "weather_code_dominant"
 
 
 INSTANTANEOUS_MEASURES: tuple[Measure, ...] = (
@@ -185,6 +192,10 @@ _DIMENSION: dict[Measure, str] = {
     Measure.UV_INDEX: "index",
     Measure.UV_INDEX_MAX: "index",
     Measure.PRECIPITATION_HOURS: "duration",
+    # Dimensionless and unconvertible. A code is an identifier for a condition, so it carries no
+    # unit in either system, and nothing downstream may sum, average or interpolate it.
+    Measure.WEATHER_CODE: "code",
+    Measure.WEATHER_CODE_DOMINANT: "code",
 }
 
 _UNITS: dict[str, dict[UnitSystem, str]] = {
@@ -198,7 +209,17 @@ _UNITS: dict[str, dict[UnitSystem, str]] = {
     "direction": {UnitSystem.METRIC: "°", UnitSystem.IMPERIAL: "°"},
     "index": {UnitSystem.METRIC: "index", UnitSystem.IMPERIAL: "index"},
     "duration": {UnitSystem.METRIC: "h", UnitSystem.IMPERIAL: "h"},
+    # Not a quantity and not convertible: the "unit" names what the number *is*, so a reader of a
+    # units map is told it is a published code rather than a measurement in disguise.
+    "code": {UnitSystem.METRIC: "WMO code", UnitSystem.IMPERIAL: "WMO code"},
 }
+
+# The measures that carry a provider condition code rather than a quantity. Analytics must not
+# compute over these — a mean of WMO codes is a number with no meaning — and the deterministic
+# layer excludes them by asking this rather than by listing measures again.
+WEATHER_CODE_MEASURES: frozenset[Measure] = frozenset(
+    {Measure.WEATHER_CODE, Measure.WEATHER_CODE_DOMINANT}
+)
 
 
 def unit_for(measure: Measure, unit_system: UnitSystem) -> str:

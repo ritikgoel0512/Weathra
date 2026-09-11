@@ -104,6 +104,7 @@ CURRENT_FIELDS: dict[Measure, str] = {
     Measure.DEW_POINT: "dew_point_2m",
     Measure.SURFACE_PRESSURE: "surface_pressure",
     Measure.CLOUD_COVER: "cloud_cover",
+    Measure.WEATHER_CODE: "weather_code",
 }
 
 HOURLY_FIELDS: dict[Measure, str] = {
@@ -119,6 +120,7 @@ HOURLY_FIELDS: dict[Measure, str] = {
     Measure.SURFACE_PRESSURE: "surface_pressure",
     Measure.CLOUD_COVER: "cloud_cover",
     Measure.UV_INDEX: "uv_index",
+    Measure.WEATHER_CODE: "weather_code",
 }
 
 DAILY_FIELDS: dict[Measure, str] = {
@@ -135,6 +137,7 @@ DAILY_FIELDS: dict[Measure, str] = {
     Measure.WIND_GUST_MAX: "wind_gusts_10m_max",
     Measure.WIND_DIRECTION_DOMINANT: "wind_direction_10m_dominant",
     Measure.UV_INDEX_MAX: "uv_index_max",
+    Measure.WEATHER_CODE_DOMINANT: "weather_code",
 }
 
 # The archive is a reanalysis product: it has no forecast probability, and no UV index.

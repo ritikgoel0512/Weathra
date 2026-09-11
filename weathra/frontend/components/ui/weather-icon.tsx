@@ -76,16 +76,22 @@ const SHAPES: Readonly<Record<ConditionKind, ReactNode>> = {
       {CLOUD}
     </>
   ),
-  cloudy: (
-    <>
-      <path d="M5 13a3 3 0 0 1 2.6-3 4.5 4.5 0 0 1 8.4-1" opacity="0.55" />
-      {CLOUD}
-    </>
-  ),
   overcast: (
     <>
       <path d="M4 12a3 3 0 0 1 3-3h10a3 3 0 0 1 0 6H7a3 3 0 0 1-3-3Z" opacity="0.55" />
       {CLOUD}
+    </>
+  ),
+  fog: (
+    <>
+      {CLOUD}
+      <path d="M5 20h14M7 22.5h10" opacity="0.8" />
+    </>
+  ),
+  drizzle: (
+    <>
+      {CLOUD}
+      <path d="M9 20.5v1M13 20.5v1M17 20.5v1" />
     </>
   ),
   rain: (
@@ -98,6 +104,26 @@ const SHAPES: Readonly<Record<ConditionKind, ReactNode>> = {
     <>
       {CLOUD}
       <path d="M8.5 20l-1.2 2.5M12.5 20l-1.2 2.5M16.5 20l-1.2 2.5M10.5 20l-1.2 2.5M14.5 20l-1.2 2.5" />
+    </>
+  ),
+  showers: (
+    <>
+      {SMALL_SUN}
+      {CLOUD}
+      <path d="M10 20.5l-.7 1.5M14 20.5l-.7 1.5" />
+    </>
+  ),
+  snow: (
+    <>
+      {CLOUD}
+      <path d="M9 21h.01M13 21h.01M17 21h.01M11 22.5h.01M15 22.5h.01" strokeWidth="2" />
+    </>
+  ),
+  thunderstorm: (
+    <>
+      {CLOUD}
+      {/* The provider's own code says thunderstorm. Nothing here says dangerous. */}
+      <path d="M13 19.5l-2.5 3h3l-2 3" />
     </>
   ),
 };

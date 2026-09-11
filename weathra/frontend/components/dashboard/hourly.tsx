@@ -74,10 +74,8 @@ export function hoursFrom(forecast: ForecastResponse): readonly Hour[] {
       clock: clockOf(entry.time_local),
       temperature: numberOrNull(values.temperature),
       chance: numberOrNull(values.precipitation_probability),
-      condition: conditionFor({
-        cloudCover: numberOrNull(values.cloud_cover),
-        precipitation: numberOrNull(values.precipitation),
-      }),
+      // The provider's own code, not a sky state inferred from cloud cover.
+      condition: conditionFor(numberOrNull(values.weather_code)),
     };
   });
 }

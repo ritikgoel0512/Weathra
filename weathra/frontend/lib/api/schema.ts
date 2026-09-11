@@ -739,7 +739,7 @@ export interface Location {
 }
 
 /** Every measure the normalized model defines. */
-export type Measure = "temperature" | "apparent_temperature" | "precipitation" | "precipitation_probability" | "wind_speed" | "wind_gust" | "wind_direction" | "relative_humidity" | "dew_point" | "surface_pressure" | "cloud_cover" | "uv_index" | "temperature_max" | "temperature_min" | "temperature_mean" | "apparent_temperature_max" | "apparent_temperature_min" | "precipitation_sum" | "precipitation_hours" | "precipitation_probability_max" | "precipitation_probability_mean" | "wind_speed_max" | "wind_gust_max" | "wind_direction_dominant" | "relative_humidity_mean" | "dew_point_mean" | "surface_pressure_mean" | "cloud_cover_mean" | "uv_index_max";
+export type Measure = "temperature" | "apparent_temperature" | "precipitation" | "precipitation_probability" | "wind_speed" | "wind_gust" | "wind_direction" | "relative_humidity" | "dew_point" | "surface_pressure" | "cloud_cover" | "uv_index" | "weather_code" | "temperature_max" | "temperature_min" | "temperature_mean" | "apparent_temperature_max" | "apparent_temperature_min" | "precipitation_sum" | "precipitation_hours" | "precipitation_probability_max" | "precipitation_probability_mean" | "wind_speed_max" | "wind_gust_max" | "wind_direction_dominant" | "relative_humidity_mean" | "dew_point_mean" | "surface_pressure_mean" | "cloud_cover_mean" | "uv_index_max" | "weather_code_dominant";
 
 /** Who you are, as far as Weathra is concerned. No credential material. */
 export interface MeResponse {
@@ -811,10 +811,14 @@ export interface PlanMappingRequest {
   readonly policy_by_call_role: Record<string, string>;
 }
 
-/** A tier, its standing, and what it allows. */
+/** A tier, its standing, what it allows, and which class of model answers on it. */
 export interface PlanOfferView {
   readonly allowances: PlanAllowanceView[];
   readonly display_name: string;
+  /** That model's display name, so a comparison can say what actually differs. */
+  readonly model_name?: string | null;
+  /** The capability tier of the first model this plan's synthesis policy would resolve — economy, standard or frontier. Null where the plan maps no synthesis policy, or where its policy names no enabled candidate. Read from the catalog, never asserted. */
+  readonly model_tier?: string | null;
   readonly plan_code: string;
   /** Ascending entitlement. Free is the lowest. */
   readonly rank: number;

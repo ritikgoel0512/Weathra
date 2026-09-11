@@ -11,7 +11,8 @@
   "time": 1788365700,
   "wind_direction_10m": 249,
   "wind_gusts_10m": 20.2,
-  "wind_speed_10m": 8.9
+  "wind_speed_10m": 8.9,
+  "weather_code": 3
  },
  "current_units": {
   "apparent_temperature": "\u00b0C",
@@ -25,7 +26,8 @@
   "time": "unixtime",
   "wind_direction_10m": "\u00b0",
   "wind_gusts_10m": "km/h",
-  "wind_speed_10m": "km/h"
+  "wind_speed_10m": "km/h",
+  "weather_code": "wmo code"
  },
  "elevation": 38.0,
  "generationtime_ms": 0.26738643646240234,

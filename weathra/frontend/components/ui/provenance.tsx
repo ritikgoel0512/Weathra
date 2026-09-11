@@ -441,9 +441,12 @@ export function MethodNote({
           ) : null}
           {unit ? <span> Unit: {unit}.</span> : null}
         </p>
+        {/*
+          Inside the disclosure, not beside the value. It reads as a second sentence about the same
+          gap, and on a card whose figure already says "Not reported" it was the third.
+        */}
+        {reason ? <p className={styles.methodReason}>Why: {reason}.</p> : null}
       </details>
-
-      {reason ? <p className={styles.methodReason}>Not computable: {reason}.</p> : null}
     </div>
   );
 }
