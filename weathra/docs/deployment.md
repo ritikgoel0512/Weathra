@@ -834,6 +834,22 @@ stated in the method: *"6 years, so the finest distinction is 17 points"*. The a
 checkable by hand from the figures in the same response, which is the property
 `specs/deterministic-analytics` exists to require.
 
+**The correlation and the density, computed by production from two real forecasts.** The sixth
+revision's two new statistics, checked the same way — `/weather/comparison` is public, so it needed
+no session:
+
+```
+POST /weather/comparison  {"criterion":"warmest","locations":["Lisbon","Porto"],"days":5}
+```
+
+Two Portuguese cities about 270 km apart, neither in any fixture. Production aligned **120 hourly
+instants** — both providers reported every slot, so `data_density` is a genuine **100%** with
+`expected_instants: 120` and `usable_instants: 120` — and returned
+**r = 0.8236** as `correlation`, dimensionless, with `aligned_points: 120`, `common_instants: 120`
+and both sides' offered counts equal. A coefficient of 0.82 for two cities in the same country is
+the physically plausible answer, which is the sanity check a formula this easy to get wrong needs:
+paired by index instead of by instant, a five-day window would still have produced *a* number.
+
 **What was not captured, and why.** §16 of the parity brief asks for production *screenshots* of the
 populated states. Every product screen is behind `/sign-in`, so photographing one needs an account
 password — the same blocker as 25.4's criteria 6 to 8, and the owner has declined to store one
