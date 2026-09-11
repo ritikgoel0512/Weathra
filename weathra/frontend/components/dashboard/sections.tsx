@@ -48,7 +48,8 @@ import type {
 import { hasValues, missingCount, pointsFrom } from "@/lib/historical/analysis";
 import type { ViewState } from "@/lib/query/state";
 import { confidenceLevelFor } from "@/lib/design/data-class";
-import { placeLabel } from "@/lib/locations/place";
+import { resolvedPlaceLabel } from "@/lib/locations/place";
+import { useResolvedPlace } from "@/lib/locations/resolved-place";
 import {
   dayPrecipitationFrom,
   formatReading,
@@ -63,16 +64,23 @@ import {
 import styles from "./dashboard.module.css";
 
 /** A location as the attribution line names it. Never a station, never a coordinate pair alone. */
-function placeOf(location: Location | null | undefined): string | null {
-  // `placeLabel` rather than the raw `display_name`: a provider that named no point hands back its
-  // coordinates as the name, and `48.1374, 11.5755` in an attribution line is a pin, not a place.
-  return placeLabel(location);
+function placeOf(
+  location: Location | null | undefined,
+  known: Location | null | undefined,
+): string | null {
+  // `resolvedPlaceLabel` rather than the raw `display_name`: a provider that named no point hands
+  // back its coordinates as the name, and `48.1374, 11.5755` in an attribution line is a pin, not a
+  // place. `known` is the place this screen already resolved — every card here is about that one
+  // place, and every request after the first is made by coordinate, so without it these lines read
+  // `Unnamed place` under a header naming the city. See `lib/locations/resolved-place`.
+  return resolvedPlaceLabel(location, known);
 }
 
 function attributionOf(
   parts: {
     provider?: string | null;
     location?: Location | null;
+    known?: Location | null;
     retrievedAt?: string | null;
     period?: { start_local: string; end_local: string; timezone?: string | null } | null;
     units?: string | null;
@@ -81,7 +89,7 @@ function attributionOf(
 ): Attribution {
   return {
     provider: parts.provider ?? null,
-    location: placeOf(parts.location),
+    location: placeOf(parts.location, parts.known),
     retrievedAt: parts.retrievedAt ?? null,
     period: parts.period
       ? {
@@ -149,6 +157,9 @@ const HERO_MEASURES: readonly { key: string; label: string }[] = [
  * treatment the correction pass agreed for a hero with no approved asset behind it.
  */
 export function CurrentConditions({ current, location }: CurrentConditionsProps): ReactNode {
+  // The place this screen resolved, read before any early return so the hook order is fixed.
+  const known = useResolvedPlace();
+
   const temperature = readingFor("temperature", current.values, current.units);
   // Anything the provider reported that the hero's four slots do not already name. The slots are
   // the artifact's composition; this is the guarantee that the composition never hides a reading.
@@ -163,6 +174,7 @@ export function CurrentConditions({ current, location }: CurrentConditionsProps)
       dataClass="observed"
       title="Current conditions"
       attribution={attributionOf({
+        known,
         provider: current.attribution?.provider,
         location: current.attribution?.location ?? location,
         retrievedAt: current.attribution?.retrieved_at,
@@ -356,6 +368,9 @@ export interface ForecastMovementProps {
  * would advertise as built something that is not.
  */
 export function ForecastMovement({ forecast, location }: ForecastMovementProps): ReactNode {
+  // The place this screen resolved, read before any early return so the hook order is fixed.
+  const known = useResolvedPlace();
+
   const days = forecastDaysFrom(forecast.daily);
   const confidence = confidenceLevelFor(forecast.uncertainty?.horizon?.[0]?.confidence);
 
@@ -364,6 +379,7 @@ export function ForecastMovement({ forecast, location }: ForecastMovementProps):
       dataClass="forecast"
       title="Forecast movement"
       attribution={attributionOf({
+        known,
         provider: forecast.attribution?.provider,
         location: forecast.attribution?.location ?? location,
         retrievedAt: forecast.attribution?.retrieved_at,
@@ -482,6 +498,8 @@ export function DeterministicAnalytics({
   location,
   baseline = null,
 }: AnomalyDetectionProps): ReactNode {
+  // The place this screen resolved, read before any early return so the hook order is fixed.
+  const known = useResolvedPlace();
   const anomalies = analysis.anomalies?.anomalies ?? [];
   const trend = analysis.trend;
 
@@ -490,6 +508,7 @@ export function DeterministicAnalytics({
       dataClass="analytics"
       title="Anomaly detection"
       attribution={attributionOf({
+        known,
         provider: analysis.provider,
         location: analysis.location ?? location,
         period: analysis.period,
@@ -587,6 +606,8 @@ export function ComputedFigures({
   analysis,
   location,
 }: DeterministicAnalyticsProps): ReactNode {
+  // The place this screen resolved, read before any early return so the hook order is fixed.
+  const known = useResolvedPlace();
   if (analysis.findings.length === 0) return null;
 
   return (
@@ -594,6 +615,7 @@ export function ComputedFigures({
       dataClass="analytics"
       title="Computed figures"
       attribution={attributionOf({
+        known,
         provider: analysis.provider,
         location: analysis.location ?? location,
         period: analysis.period,
@@ -624,6 +646,9 @@ export interface HistoricalContextProps {
  * the reason no figure here is described as a "30-year norm" unless thirty years were used.
  */
 export function HistoricalContext({ baseline }: HistoricalContextProps): ReactNode {
+  // The place this screen resolved, read before any early return so the hook order is fixed.
+  const known = useResolvedPlace();
+
   const years = baseline.years_used ?? [];
 
   return (
@@ -631,6 +656,7 @@ export function HistoricalContext({ baseline }: HistoricalContextProps): ReactNo
       dataClass="historical"
       title="Historical context"
       attribution={attributionOf({
+        known,
         provider: baseline.provider,
         location: baseline.location,
         period: baseline.calendar_period,
@@ -697,6 +723,9 @@ export interface WhatChangedProps {
  * provider figures, and the backend labels it that way too.
  */
 export function WhatChanged({ report }: WhatChangedProps): ReactNode {
+  // The place this screen resolved, read before any early return so the hook order is fixed.
+  const known = useResolvedPlace();
+
   if (!report) {
     return (
       <ProvenanceSection dataClass="forecast" title="What Changed?">
@@ -715,6 +744,7 @@ export function WhatChanged({ report }: WhatChangedProps): ReactNode {
       dataClass="forecast"
       title="What Changed?"
       attribution={attributionOf({
+        known,
         provider: report.provider,
         location: report.location,
         period: report.period,
@@ -838,6 +868,9 @@ export function SavedSnapshots({
  * A panel that vanished would make the Dashboard a different shape depending on the provider.
  */
 export function ClimatePulse({ forecast }: { readonly forecast: ForecastResponse }): ReactNode {
+  // The place this screen resolved, read before any early return so the hook order is fixed.
+  const known = useResolvedPlace();
+
   const points = pointsFrom(forecast.hourly);
   const measure = "temperature";
   const drawable = hasValues(points, measure);
@@ -847,6 +880,7 @@ export function ClimatePulse({ forecast }: { readonly forecast: ForecastResponse
       dataClass="forecast"
       title="Climate pulse"
       attribution={attributionOf({
+        known,
         provider: forecast.attribution?.provider,
         location: forecast.attribution?.location,
         retrievedAt: forecast.attribution?.retrieved_at,
@@ -904,6 +938,9 @@ export function PrecipitationOutlook({
 }: {
   readonly forecast: ForecastResponse;
 }): ReactNode {
+  // The place this screen resolved, read before any early return so the hook order is fixed.
+  const known = useResolvedPlace();
+
   const days = forecastDaysFrom(forecast.daily);
   const wet = days
     .map((day) => ({
@@ -921,6 +958,7 @@ export function PrecipitationOutlook({
       dataClass="forecast"
       title="Precipitation outlook"
       attribution={attributionOf({
+        known,
         provider: forecast.attribution?.provider,
         location: forecast.attribution?.location,
         retrievedAt: forecast.attribution?.retrieved_at,

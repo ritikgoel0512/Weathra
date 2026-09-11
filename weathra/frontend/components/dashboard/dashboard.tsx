@@ -54,6 +54,7 @@ import { GettingStarted } from "./getting-started";
 import { PLACE_PARAM } from "@/components/shell/top-bar";
 import { briefingLocationFrom, calendarWindowFrom } from "@/lib/dashboard/briefing";
 import { placeLabel, qualifiedName } from "@/lib/locations/place";
+import { ResolvedPlaceProvider } from "@/lib/locations/resolved-place";
 import { useLocationResolution } from "@/hooks/use-location-resolution";
 import { usingVisilyFixtures } from "@/lib/fixtures/visily";
 import { useApiQuery } from "@/lib/query/hooks";
@@ -290,7 +291,12 @@ function Briefing({
    * the band widths rather than by the order alone.
    */
   return (
-    <div className={styles.dashboard}>
+    // Every card below is about this one place, and every request after the first is made by
+    // coordinate — so without this the attribution lines name it `Unnamed place`. Provided once
+    // here rather than threaded through eight components, two of which have no other reason to
+    // know which place the screen is about. See `lib/locations/resolved-place`.
+    <ResolvedPlaceProvider location={location}>
+      <div className={styles.dashboard}>
       {current.state.kind === "ready" ? (
         <CurrentConditions current={current.state.data} location={location} />
       ) : null}
@@ -423,7 +429,8 @@ function Briefing({
           <span className={styles.statusStripItem}>Units: {units}</span>
         </p>
       ) : null}
-    </div>
+      </div>
+    </ResolvedPlaceProvider>
   );
 }
 

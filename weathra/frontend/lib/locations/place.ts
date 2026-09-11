@@ -84,6 +84,44 @@ export function placeLabel(location: Location | null | undefined): string | null
 }
 
 /**
+ * The best name available for a place, given one the screen has already resolved.
+ *
+ * **The bug this exists to stop.** A screen resolves `Munich` once, gets back
+ * `Munich, Bavaria, Germany`, and then makes every other request for that place by *coordinate* —
+ * because a coordinate is unambiguous and re-sending a typed name would be asking the geocoder to
+ * agree with itself. The backend, handed a coordinate, has no name to return: Open-Meteo geocodes
+ * names to points and not the reverse, so it names the point after itself. Each card then derived
+ * its own label from its own response, `placeLabel` correctly refused to print `48.1374, 11.5755`
+ * as a name, and a Dashboard whose header said **Munich, Bavaria, Germany** carried cards reading
+ * **Unnamed place**. Nothing was wrong with the data and nothing was wrong with `placeLabel`: the
+ * identity was known by the caller and thrown away at the request boundary.
+ *
+ * So the name is resolved *here*, once, rather than re-derived per card. When a response names its
+ * own place, that name wins — it is the one the data actually came with. When it does not, and the
+ * place it describes is the one the screen resolved, the resolved name is used: identical
+ * coordinates are the same place, which is the rule `placeKey` and the backend's saved-location
+ * store already de-duplicate on. When the two are different places, `known` is ignored rather than
+ * borrowed, because labelling one place with another's name is the confident wrong answer.
+ *
+ * This is deliberately not a backend change. The backend is not withholding the name; it does not
+ * have one, and giving it one would mean either reverse-geocoding a point (which the provider
+ * cannot do) or trusting a name the caller typed (which would let an ambiguous entry name a
+ * coordinate it does not belong to).
+ */
+export function resolvedPlaceLabel(
+  location: Location | null | undefined,
+  known: Location | null | undefined,
+): string | null {
+  const own = placeLabel(location);
+  if (own !== null && own !== UNNAMED_PLACE) return own;
+  if (location && known && isSamePlace(location, known)) {
+    const better = placeLabel(known);
+    if (better !== null && better !== UNNAMED_PLACE) return better;
+  }
+  return own;
+}
+
+/**
  * A stable key for a place, from its coordinates.
  *
  * The same distinction the backend's saved-location store de-duplicates on: a place is where it is,

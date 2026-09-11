@@ -21,6 +21,7 @@ import {
   matchesFilter,
   placeKey,
   placeLabel,
+  resolvedPlaceLabel,
   qualifiedName,
   savedLocationDisplay,
   savedLocationLabel,
@@ -321,5 +322,53 @@ describe("placeLabel", () => {
   it("is null for no place at all, so a caller can fall back to its own words", () => {
     expect(placeLabel(null)).toBeNull();
     expect(placeLabel(undefined)).toBeNull();
+  });
+});
+
+describe("resolvedPlaceLabel — the name a card shows when it asked by coordinate", () => {
+  const munich: Location = {
+    display_name: "Munich",
+    latitude: 48.13743,
+    longitude: 11.57549,
+    timezone: "Europe/Berlin",
+    region: "Bavaria",
+    country: "Germany",
+  } as Location;
+
+  /** The same point, as the provider names it when asked by coordinate. */
+  const echoed: Location = {
+    display_name: "48.1374, 11.5755",
+    latitude: 48.13743,
+    longitude: 11.57549,
+    timezone: "Europe/Berlin",
+  } as Location;
+
+  it("names a coordinate-echoed place with the name the screen already resolved", () => {
+    // The production bug, exactly: the Dashboard header read "Munich, Bavaria, Germany" while the
+    // cards under it read "Unnamed place", because every request after the first is made by
+    // coordinate and Open-Meteo cannot geocode a point back to a name.
+    expect(placeLabel(echoed)).toBe("Unnamed place");
+    expect(resolvedPlaceLabel(echoed, munich)).toBe("Munich, Bavaria, Germany");
+  });
+
+  it("prefers the name a response carries over the resolved one", () => {
+    // The response's own name is the one its data actually came with.
+    const sameSpot = { ...munich, display_name: "M\u00fcnchen" } as Location;
+    expect(resolvedPlaceLabel(sameSpot, munich)).toBe("M\u00fcnchen, Bavaria, Germany");
+  });
+
+  it("does not borrow a name from a different place", () => {
+    // Identical coordinates are the same place; anything else is a different one, and labelling it
+    // with the screen's place would be the confident wrong answer.
+    expect(resolvedPlaceLabel(place({ display_name: "0, 0" }), munich)).toBe("Unnamed place");
+  });
+
+  it("is unchanged when the screen resolved nothing", () => {
+    expect(resolvedPlaceLabel(echoed, null)).toBe("Unnamed place");
+    expect(resolvedPlaceLabel(null, munich)).toBeNull();
+  });
+
+  it("does not rescue a place the screen itself could not name", () => {
+    expect(resolvedPlaceLabel(echoed, echoed)).toBe("Unnamed place");
   });
 });

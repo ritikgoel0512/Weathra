@@ -1376,3 +1376,37 @@ describe("an ambiguous place named on the Dashboard", () => {
     expect(screen.queryByText("Your access token has expired.")).toBeNull();
   });
 });
+
+describe("the place every card is about", () => {
+  /**
+   * The production bug of 2026-09-11: the Dashboard header read the resolved city while the cards
+   * under it read "Unnamed place".
+   *
+   * The screen resolves the place once by name and then asks for current conditions, the forecast,
+   * the analysis, the changes and the baseline by *coordinate*. Open-Meteo geocodes names to points
+   * and not the reverse, so each of those responses names the point after itself — and every card
+   * derived its own label from its own response. The data was right, `placeLabel` was right to
+   * refuse to print `52.5200, 13.4050` as a name, and the screen still told the person it did not
+   * know where they were looking.
+   */
+  it("names the resolved city on cards whose own response reported only coordinates", async () => {
+    const echoed = { ...LOCATION, display_name: "52.5200, 13.4050", country: undefined };
+    fetchMock = backend({
+      ...POPULATED,
+      // The forecast is fetched by coordinate, so it answers the way the provider really answers:
+      // the point named after itself, because there is no name to give back.
+      "/api/v1/weather/forecast": {
+        ...FORECAST,
+        attribution: { ...FORECAST.attribution, location: echoed },
+      },
+    }) as unknown as Mock;
+
+    renderDashboard();
+
+    // Wait for a forecast-backed section, so the assertion runs after the cards whose own
+    // attribution carries only coordinates have rendered.
+    await screen.findByRole("region", { name: /precipitation outlook/i });
+    expect(screen.getAllByText(/Berlin|Unnamed place/).length).toBeGreaterThan(1);
+    expect(screen.queryByText("Unnamed place")).toBeNull();
+  });
+});
