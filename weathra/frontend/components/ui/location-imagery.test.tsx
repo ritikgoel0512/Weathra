@@ -100,11 +100,12 @@ describe("the frame is stable whatever tier answers", () => {
     expect(image).toBeTruthy();
   });
 
-  it("gives an unlisted place the generic artwork rather than a hole", () => {
+  it("gives an unlisted place an atmosphere of its own rather than a hole", () => {
     render(<LocationImage displayName="Nowhere, Antarctica" />);
-    expect(
-      screen.getByRole("img", { name: /Nowhere, Antarctica/i }).getAttribute("src"),
-    ).toBe("/locations/generic.svg");
+    const src = screen.getByRole("img", { name: /Nowhere, Antarctica/i }).getAttribute("src");
+
+    // Drawn from the name, in the frame, on the first paint — no request and no shared stock image.
+    expect(src).toMatch(/^data:image\/svg\+xml/);
   });
 
   it("reports the tier it is showing, so a reviewer is not guessing", () => {

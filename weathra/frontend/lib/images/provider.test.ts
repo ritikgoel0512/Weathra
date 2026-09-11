@@ -55,7 +55,9 @@ describe("with no provider configured", () => {
     for (const place of ["Berlin, Germany", "Munich, Germany", "Nowhere-at-all"]) {
       const image = await resolveLocationImage(place);
       expect(image.source, place).toBe("generated");
-      expect(image.url, place).toMatch(/^\/locations\/[a-z-]+\.svg$/);
+      // A committed drawing for a listed place, an atmosphere derived from the name otherwise.
+      // Both are the generated tier, and neither needs a credential or a network request.
+      expect(image.url, place).toMatch(/^(\/locations\/[a-z-]+\.svg|data:image\/svg\+xml)/);
     }
   });
 

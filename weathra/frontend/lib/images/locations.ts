@@ -5,6 +5,8 @@
  * nothing server-only. The provider itself is `provider.server.ts`.
  */
 
+import { atmosphereFor } from "./atmosphere";
+
 /** How the image on screen was obtained. Reported so a reviewer is never guessing. */
 export type LocationImageSource =
   /** A photograph from the configured third-party provider. */
@@ -53,11 +55,12 @@ export function locationKey(displayName: string): string {
 }
 
 /**
- * The places whose generated artwork exists in `public/locations/`.
+ * The places whose hand-drawn artwork exists in `public/locations/`.
  *
- * Anything else falls back to `generic`, so an unlisted place still gets a frame rather than a hole.
- * Kept in step with `CITIES` in `scripts/generate-location-art.mjs` by
- * `lib/images/locations.test.ts`, which reads both rather than trusting this comment.
+ * These are *preferred* over the procedural drawing, not required by it: a place not listed here
+ * gets an atmosphere drawn from its own name rather than a shared `generic.svg`. Kept in step with
+ * `CITIES` in `scripts/generate-location-art.mjs` by `lib/images/locations.test.ts`, which reads
+ * both rather than trusting this comment.
  */
 export const DRAWN_LOCATIONS: ReadonlySet<string> = new Set([
   "berlin",
@@ -70,12 +73,28 @@ export const DRAWN_LOCATIONS: ReadonlySet<string> = new Set([
   "springfield",
 ]);
 
-/** The generated artwork for a place. The last resort, and the one that cannot fail. */
+/**
+ * The generated artwork for a place. The last resort, and the one that cannot fail.
+ *
+ * Two tiers inside this one. A place with hand-drawn artwork committed for it gets that, because
+ * it is better than anything derived from a string. Everything else gets an atmosphere drawn from
+ * the place's own key — see `atmosphere.ts`.
+ *
+ * **What that replaced, and why.** Every unlisted place used to get `generic.svg`: one identical
+ * drawing shared by Lisbon, Osaka, Nairobi and Reykjavík alike. Weathra resolves any location
+ * Open-Meteo can geocode, so "unlisted" is the normal case for a real customer, and a hero band
+ * repeating one stock picture across every place they save reads as a missing asset rather than as
+ * a deliberate fallback. The procedural drawing is per-place, deterministic, needs no credential
+ * and needs no asset committed for it.
+ *
+ * `generic.svg` stays on disk as the `<img>`'s own `onerror` target — the one case a data URI
+ * cannot cover is a browser that refuses to render it.
+ */
 export function generatedImageFor(displayName: string): ResolvedLocationImage {
   const key = locationKey(displayName);
-  const asset = DRAWN_LOCATIONS.has(key) ? key : "generic";
+  const url = DRAWN_LOCATIONS.has(key) ? `/locations/${key}.svg` : atmosphereFor(key).url;
   return {
-    url: `/locations/${asset}.svg`,
+    url,
     // Says what it is. It is not a photograph and does not claim to depict this place.
     description: `${displayName}, shown as generated decorative artwork`,
     source: "generated",

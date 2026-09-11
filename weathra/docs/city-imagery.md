@@ -16,12 +16,43 @@ One place, three tiers, first one that answers wins:
 | --- | --- | --- |
 | 1 | A provider photograph, from Pexels or Unsplash | a credential (below) |
 | 2 | A photograph committed to `frontend/public/locations/photos/<key>.jpg` | a licensed file |
-| 3 | The artwork `frontend/scripts/generate-location-art.mjs` draws | nothing |
+| 3a | Hand-drawn artwork in `frontend/public/locations/<key>.svg`, for the eight places that have it | nothing |
+| 3b | An atmosphere drawn from the place's own name, `frontend/lib/images/atmosphere.ts` | nothing |
 
 Tier 3 cannot fail, so **every screen always renders**. A provider outage, a rate limit, a revoked
 key, a place nobody has a photograph of — each falls through, and the layout does not move, because
 every tier returns the same shape into a frame whose height is fixed by its aspect ratio before
 anything loads.
+
+### Tier 3b, and why it replaced one shared image
+
+Tier 3 used to be the eight hand-drawn files plus `generic.svg` for everything else. That is a
+reasonable demo of eight cities and the wrong shape for a product: Weathra resolves **any** location
+Open-Meteo can geocode, so "not one of the eight" is the normal case for a real customer, and a hero
+band repeating one stock drawing across every place they save reads as a missing asset rather than
+as a deliberate fallback.
+
+So an unlisted place now gets an atmosphere derived from its own key — a graded night sky, a horizon
+glow, two depth-separated rows of buildings, lit windows, and a moon or stars, every one of them a
+function of the name. Four properties, each asserted in `lib/images/atmosphere.test.ts`:
+
+* **It always answers.** Any key, including an empty one.
+* **It answers the same way twice.** Seeded only by the key — never the clock, never `Math.random`.
+  This is what makes a capture of a hero band reproducible; a random drawing would make every
+  screenshot differ from the last and none of them evidence.
+* **It answers differently for different places.** Lisbon and Osaka are not the same picture.
+* **It stays in the palette.** Eight hues from petrol to muted violet, so a screen of location cards
+  reads as one set. The range stops short of magenta: the first version ran ten degrees further and
+  gave São Paulo a hot pink sky.
+
+It is a **data URI**, not a file: there is nothing to deploy, nothing to cache, and it renders on
+the first paint with no request, which is what keeps the hero from flashing an empty frame. A file
+per city would need a build step that enumerates cities, which is the problem this removes.
+
+It is **decoration and says so**. No shape encodes a temperature, a condition or a real skyline —
+the buildings are not Lisbon's buildings — and the `alt` text reads "shown as generated decorative
+artwork". `generic.svg` stays on disk as the `<img>`'s own `onerror` target, for the one case a data
+URI cannot cover: a browser that refuses to render it.
 
 `<key>` is `locationKey(displayName)` from `frontend/lib/images/locations.ts`: the place name's
 first segment, lower-cased, accents folded, non-letters collapsed to hyphens. `Berlin, Germany` →

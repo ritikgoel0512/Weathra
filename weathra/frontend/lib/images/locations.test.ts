@@ -44,9 +44,28 @@ describe("the generated fallback", () => {
     expect(image.source).toBe("generated");
   });
 
-  it("gives an unlisted place the generic skyline rather than an empty frame", () => {
-    const image = generatedImageFor("Ouagadougou, Burkina Faso");
-    expect(image.url).toBe("/locations/generic.svg");
+  it("gives an unlisted place an atmosphere of its own, not one shared with every other", () => {
+    /*
+     * The property that replaced `generic.svg`, and the one worth guarding: Weathra resolves any
+     * location the geocoder knows, so "unlisted" is the normal case for a real customer. One
+     * shared drawing across every place they save reads as a missing asset.
+     */
+    const ouagadougou = generatedImageFor("Ouagadougou, Burkina Faso");
+    const reykjavik = generatedImageFor("Reykjavík, Iceland");
+
+    expect(ouagadougou.url).toMatch(/^data:image\/svg\+xml/);
+    expect(ouagadougou.url).not.toBe(reykjavik.url);
+  });
+
+  it("draws the same place the same way every time, so a capture is reproducible", () => {
+    // Without this the screenshots would differ run to run and none of them would be evidence.
+    expect(generatedImageFor("Osaka, Japan").url).toBe(generatedImageFor("Osaka, Japan").url);
+  });
+
+  it("ignores the part of the name that varies with the resolver's locale", () => {
+    // `locationKey` keeps the first segment only, so a country rendered "Germany" or "DE" is the
+    // same place and gets the same drawing.
+    expect(generatedImageFor("Lisbon, Portugal").url).toBe(generatedImageFor("Lisbon, PT").url);
   });
 
   it("describes itself as artwork, never as a photograph of the place", () => {
