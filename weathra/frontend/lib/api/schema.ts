@@ -975,6 +975,8 @@ export interface RecentUsage {
   readonly days: number;
   /** How many of them failed. */
   readonly failures: number;
+  /** The same window, one point per day, oldest first and dense — a day with no calls is a zero rather than a missing point, because this table records every call. This is what a usage chart is drawn from; the totals above are its sum. */
+  readonly series?: UsageDay[];
   /** Tokens across those calls, or null where the gateway reported none. Null is not zero: zero would claim the calls used nothing. */
   readonly total_tokens?: number | null;
 }
@@ -1292,6 +1294,29 @@ export interface UsageAggregate {
   readonly total_tokens?: number | null;
 }
 
+/** One point on a usage trend. The same measures as `UsageAggregate`, cut by time instead. */
+export interface UsageBucket {
+  readonly calls: number;
+  readonly estimated_cost_total?: string | null;
+  readonly failures: number;
+  /** Internal usage stays separate here too, so a trend cannot blend the two. */
+  readonly is_internal: boolean;
+  readonly latency_p50_ms?: number | null;
+  /** The bucket's inclusive start, truncated to its width. */
+  readonly start: string;
+  readonly total_tokens?: number | null;
+}
+
+/** One day of the caller's own usage. The shape a trend is drawn from. */
+export interface UsageDay {
+  readonly calls: number;
+  /** The day this point covers, as an ISO date in UTC. */
+  readonly date: string;
+  readonly failures: number;
+  /** Tokens that day, or null where no gateway reported any. */
+  readonly total_tokens?: number | null;
+}
+
 /** The caller's plan, their standing in every dimension, and a bounded recent summary. */
 export interface UsageResponse {
   /** Every dimension, unlimited ones too. */
@@ -1305,6 +1330,15 @@ export interface UsageResponse {
   readonly recent: RecentUsage;
   /** The token subject. Never a value the request supplied. */
   readonly user_id: string;
+}
+
+/** The same measures as `/admin/usage`, cut by time rather than by dimension. */
+export interface UsageSeriesResponse {
+  /** The width of one point: 'hour' or 'day'. */
+  readonly bucket: string;
+  /** One entry per (bucket, internal) pair, dense across the window. A bucket with no calls is a zero rather than a gap: this table records every call, so an empty hour is an idle hour rather than an unobserved one. */
+  readonly points: UsageBucket[];
+  readonly window: UsageWindow;
 }
 
 /** Aggregate usage over one period, grouped one way, split internal from product. */
@@ -1735,6 +1769,20 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     parameters: [
       { name: "by", in: "query", required: false },
       { name: "days", in: "query", required: false },
+    ],
+  },
+  {
+    operationId: "read_usage_series_api_v1_admin_usage_series_get",
+    method: "GET",
+    path: "/api/v1/admin/usage/series",
+    requiresToken: true,
+    administrative: true,
+    request: null,
+    successStatus: 200,
+    response: "UsageSeriesResponse",
+    parameters: [
+      { name: "days", in: "query", required: false },
+      { name: "bucket", in: "query", required: false },
     ],
   },
   {

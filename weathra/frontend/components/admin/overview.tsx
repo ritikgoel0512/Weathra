@@ -43,11 +43,16 @@ import {
   Select,
 } from "@/components/ui";
 import { isForbiddenCode } from "@/lib/api/errors";
-import type { CatalogListResponse, UsageSummaryResponse } from "@/lib/api/schema";
+import type {
+  CatalogListResponse,
+  UsageSeriesResponse,
+  UsageSummaryResponse,
+} from "@/lib/api/schema";
 import { MEASURE_LABELS, usageBars, usageTotals, windowLabel, type UsageMeasure } from "@/lib/admin/usage";
 import { useApiQuery } from "@/lib/query/hooks";
 import type { ViewFailure } from "@/lib/query/state";
 
+import { UsageTrend } from "./trend";
 import styles from "./admin.module.css";
 
 /** The groupings the endpoint supports, in the order an operator would reach for them. */
@@ -59,6 +64,10 @@ const GROUPINGS = [
   { value: "plan", label: "By plan" },
   { value: "call_role", label: "By call role" },
   { value: "status", label: "By outcome" },
+  // Why a call failed rather than merely that it did — the artifact's "Errors & reliability"
+  // panel names timeouts, gateway rate limits and schema validations separately, and those
+  // are the recorded `failure_class` values rather than an invented taxonomy.
+  { value: "failure_class", label: "By failure class" },
 ] as const;
 
 /** Periods within the endpoint's own bounds. Its default is thirty days, so that is the default. */
@@ -318,6 +327,18 @@ export function AdminOverview(): ReactNode {
     request: (client) => client.adminUsage(by, Number(days)),
   });
 
+  /*
+   * The artifact's leading chart is a *time* axis, and the grouped endpoint has no time dimension
+   * at all. This is the other read: same table, same window, bucketed. An hour bucket is only
+   * legible over a short period — over ninety days it is 2,160 points — so the bucket follows the
+   * period rather than being a second control nobody would touch.
+   */
+  const bucket = Number(days) <= 2 ? "hour" : "day";
+  const series = useApiQuery<UsageSeriesResponse>({
+    key: ["admin", "usage", "series", days, bucket],
+    request: (client) => client.adminUsageSeries(Number(days), bucket),
+  });
+
   const summary = usage.state.kind === "ready" ? usage.state.data : null;
   const groups = summary?.groups ?? [];
   const totals = usageTotals(groups);
@@ -358,6 +379,13 @@ export function AdminOverview(): ReactNode {
           note="the highest per-group p50, not the estate's"
         />
       </div>
+
+      {/*
+        The artifact leads with this one. It sits above the grouped chart because that is where
+        `09-admin-model-ai-usage.png` puts it, and because "when" is the question an operator asks
+        before "which model".
+      */}
+      {series.state.kind === "ready" ? <UsageTrend series={series.state.data} /> : null}
 
       <div className={styles.overviewBody}>
         <Card aria-labelledby="admin-usage">

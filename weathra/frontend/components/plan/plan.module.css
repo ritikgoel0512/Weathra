@@ -73,11 +73,30 @@
 
 /* ----------------------------------------------------------- the metric tiles */
 
+/*
+ * Two by two beside the plan card, rather than one row of four.
+ *
+ * `10-plan-usage.png` puts its four metric tiles in a band of their own, under a full-width plan
+ * band — so at 1440 its tiles are one row and there is nothing beside them. Ours share the band
+ * with the tier card, and one row of four left about 145 pixels of page ground beneath them for
+ * the height of that card. Two rows of two is the same four tiles at the same density, ending
+ * level with the card instead.
+ *
+ * `auto-fit` with a 160 floor still governs the narrow tiers: below about 700 pixels of band the
+ * pair becomes one column, which is where the band has already stacked anyway.
+ */
 .tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
   gap: var(--space-3);
   min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+  }
 }
 
 .tile {
@@ -188,24 +207,51 @@
   font-size: var(--type-meta-size);
 }
 
-.allowanceFigures {
+/*
+ * The reading line of an allocation row, at the prominence `10-plan-usage.png` gives it: the
+ * consumed figure at metric size, its allowance and unit beside it in muted type, and the share
+ * pushed to the right edge. Previously this was one line of body text with the numbers inside it,
+ * which is the same information at a third of the weight and most of why the panel read as a list.
+ */
+.allowanceReading {
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
   gap: var(--space-2);
   margin: 0;
-  color: var(--color-text-secondary);
+}
+
+.allowanceValue {
+  color: var(--color-text-primary);
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-metric-size, 1.5rem);
+  line-height: 1.15;
+}
+
+.allowanceOf {
+  color: var(--color-text-muted);
   font-size: var(--type-meta-size);
 }
 
-.allowanceFigures strong {
-  color: var(--color-text-primary);
-  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+.allowanceShare {
+  margin-left: auto;
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-size);
+  font-variant-numeric: tabular-nums;
 }
 
-.allowanceRemaining {
-  margin-left: auto;
+/* The artifact's "Consumed: … / Remaining: …" pair beneath the bar. */
+.allowanceFoot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0;
   color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  font-variant-numeric: tabular-nums;
 }
+
 
 /* --------------------------------------------------------------- small cards */
 
@@ -257,4 +303,100 @@
   .columns {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* ------------------------------------------------- the activity chart and its derived tiles */
+
+/*
+ * `10-plan-usage.png` draws "RECENT USAGE ACTIVITY" as an area chart with two tiles beneath it.
+ * This is that region. The plot keeps a definite height for the reason `historical.module.css`
+ * records at length: `ResponsiveContainer` measures its parent, and a parent sized by flex against
+ * an `auto` basis measures zero on the pass that matters, so the chart disappears.
+ */
+.chart {
+  margin: 0 0 var(--space-3);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.chartPlot {
+  height: 180px;
+  width: 100%;
+}
+
+.chartNote {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+}
+
+.tooltip {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-overlay);
+}
+
+.tooltipName {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.tooltipValue {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-size);
+}
+
+/* The artifact's PEAK VOLUME and WEEKLY DELTA pair, at the density it draws them. */
+.derived {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(130px, 100%), 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.derivedTile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  min-width: 0;
+}
+
+.derivedLabel {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.derivedValue {
+  color: var(--color-text-primary);
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: var(--type-metric-size, 1.35rem);
+  line-height: 1.2;
+}
+
+/*
+ * Direction is colour *plus* the sign already in the text. Colour alone would carry the meaning
+ * for nobody who cannot see it, and `design-system.md` §14 does not allow that.
+ */
+.derivedValue[data-tone="up"] {
+  color: var(--color-class-forecast);
+}
+
+.derivedValue[data-tone="down"] {
+  color: var(--color-text-secondary);
+}
+
+.derivedNote {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  overflow-wrap: anywhere;
 }

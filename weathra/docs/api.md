@@ -122,6 +122,7 @@ reflection vector.
 | `DELETE` | `/api/v1/admin/principals/{subject_id}/role` | **protected** | 204 | `no body` |
 | `PUT` | `/api/v1/admin/principals/{subject_id}/role` | **protected** | 200 | `RoleGrantResponse` |
 | `GET` | `/api/v1/admin/usage` | **protected** | 200 | `UsageSummaryResponse` |
+| `GET` | `/api/v1/admin/usage/series` | **protected** | 200 | `UsageSeriesResponse` |
 | `GET` | `/api/v1/threads` | **protected** | 200 | `ThreadsResponse` |
 | `DELETE` | `/api/v1/threads/{thread_id}` | **protected** | 204 | `no body` |
 | `GET` | `/api/v1/threads/{thread_id}` | **protected** | 200 | `ThreadSummary` |
@@ -167,6 +168,7 @@ reflection vector.
 | `/admin/principals/{subject_id}/plan` | **protected**, administrative | Assigns a principal to a subscription plan. |
 | `/admin/principals/{subject_id}/role` | **protected**, administrative | Grants and revokes the administrative role. |
 | `/admin/usage` | **protected**, administrative | Aggregate language model usage by model, policy, plan, call role, status and period, with internal usage separated. Measures only — never a row, and never one person's. |
+| `/admin/usage/series` | **protected**, administrative | The same usage measures as a time series over the period, bucketed by hour or day, with internal usage separated. Measures only — never a row, and never one person's. |
 | `/evidence/{evidence_id}` | **protected** | One of the acting user's stored evidence records. |
 | `/me` | **protected** | The acting user's own profile and effective preferences. |
 | `/me/data` | **protected** | Deletes the acting user's Weathra application data. |

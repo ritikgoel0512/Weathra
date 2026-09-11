@@ -107,10 +107,21 @@ describe("consumption against allowance", () => {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
 
+    /*
+     * The row carries the artifact's four figures: the consumed value at metric size, the
+     * allowance it is against with its unit, the share, and the consumed/remaining pair beneath
+     * the bar. Asserted as facts rather than as one sentence, because the composition changed to
+     * `10-plan-usage.png`'s and the information is what has to survive that, not the phrasing.
+     */
     const rows = screen.getAllByRole("listitem");
-    const requests = rows.find((row) => /of 30 used/.test(row.textContent ?? ""));
+    const requests = rows.find((row) => /Remaining: 18/.test(row.textContent ?? ""));
     expect(requests, "no allowance row for requests_per_day").toBeDefined();
-    expect(within(requests as HTMLElement).getByText("18 left")).toBeInTheDocument();
+
+    const row = requests as HTMLElement;
+    expect(within(row).getByText("12")).toBeInTheDocument();
+    expect(within(row).getByText(/\/ 30 req/)).toBeInTheDocument();
+    expect(within(row).getByText("40% used")).toBeInTheDocument();
+    expect(within(row).getByText("Consumed: 12")).toBeInTheDocument();
   });
 
   it("states each window's reset instant", async () => {
@@ -151,7 +162,11 @@ describe("consumption against allowance", () => {
     );
     await screen.findByRole("heading", { name: "Allowances" });
 
-    expect(screen.getByText(/Unlimited on your plan/)).toBeInTheDocument();
+    // The consumed figure keeps its prominence; what is absent is a bar, because a share of an
+    // unlimited allowance is not a quantity and a full one would claim exhaustion.
+    expect(screen.getByText(/unlimited on your plan/i)).toBeInTheDocument();
+    expect(screen.getByText("900")).toBeInTheDocument();
+    expect(screen.queryByText(/% used/)).toBeNull();
   });
 
   it("points at a dimension close to its allowance", async () => {

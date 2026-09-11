@@ -29,7 +29,15 @@ from weathra.api.middleware import annotate
 from weathra.api.routers.admin.deps import AdministrativeSession
 from weathra.auth.deps import AdministrativePrincipal
 from weathra.domain.errors import ValidationFailed
-from weathra.telemetry.aggregate import GROUPINGS, UsageAggregate, UsageWindow, aggregate_usage
+from weathra.telemetry.aggregate import (
+    BUCKETS,
+    GROUPINGS,
+    UsageAggregate,
+    UsageBucket,
+    UsageWindow,
+    aggregate_usage,
+    aggregate_usage_series,
+)
 
 __all__ = ["router"]
 
@@ -62,7 +70,11 @@ async def read_usage(
     principal: AdministrativePrincipal,
     session: AdministrativeSession,
     by: Annotated[
-        str, Query(description="model, catalog_key, policy, plan, call_role, status, or provider.")
+        str,
+        Query(
+            description="model, catalog_key, policy, plan, call_role, status, provider "
+            "or failure_class."
+        ),
     ] = "model",
     days: Annotated[int, Query(ge=1, le=MAX_PERIOD_DAYS)] = DEFAULT_PERIOD_DAYS,
 ) -> UsageSummaryResponse:
@@ -85,3 +97,70 @@ async def read_usage(
     window = UsageWindow(start=end - timedelta(days=days), end=end)
     groups = await aggregate_usage(session, by=by, window=window)
     return UsageSummaryResponse(grouped_by=by, window=window, groups=groups)
+
+
+# How many points a trend may return. A day bucket over the maximum period is 400 points and an
+# hour bucket over two days is 48; an hour bucket over 400 days would be 9,600, which is not a
+# chart. The cap is enforced rather than documented, and it names the bucket that would fit.
+MAX_SERIES_POINTS = 800
+
+
+class UsageSeriesResponse(BaseModel):
+    """The same measures as `/admin/usage`, cut by time rather than by dimension."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    bucket: str = Field(description="The width of one point: 'hour' or 'day'.")
+    window: UsageWindow
+    points: tuple[UsageBucket, ...] = Field(
+        description=(
+            "One entry per (bucket, internal) pair, dense across the window. A bucket with no "
+            "calls is a zero rather than a gap: this table records every call, so an empty hour "
+            "is an idle hour rather than an unobserved one."
+        )
+    )
+
+
+@router.get(
+    "/usage/series",
+    response_model=UsageSeriesResponse,
+    summary="Language model usage over time",
+)
+async def read_usage_series(
+    request: Request,
+    principal: AdministrativePrincipal,
+    session: AdministrativeSession,
+    days: Annotated[int, Query(ge=1, le=MAX_PERIOD_DAYS)] = DEFAULT_PERIOD_DAYS,
+    bucket: Annotated[str, Query(description="hour or day.")] = "day",
+) -> UsageSeriesResponse:
+    """Calls, failures, tokens, estimated cost and median latency per bucket.
+
+    `/admin/usage` answers *which model, which plan, which policy*; this answers *when*, which is
+    the other half of what `specs/llm-telemetry` asks an administrative reader to be able to see
+    and the one the aggregate could not express. Same table, same internal split, same rule that a
+    measure leaves and a row never does.
+    """
+    annotate(request, acting_user_id=principal.user_id)
+    if bucket not in BUCKETS:
+        raise ValidationFailed(
+            f"{bucket!r} is not a bucket width this endpoint supports.",
+            details={"field": "bucket", "supported": sorted(BUCKETS)},
+        )
+
+    width = BUCKETS[bucket]
+    end = datetime.now(UTC)
+    window = UsageWindow(start=end - timedelta(days=days), end=end)
+
+    # Both halves of the internal split are returned for every bucket, so the point budget is
+    # twice the bucket count. Refused rather than truncated: a silently shortened window is a
+    # chart that says something other than what was asked for.
+    points = 2 * int(timedelta(days=days) / width)
+    if points > MAX_SERIES_POINTS:
+        raise ValidationFailed(
+            f"{days} days bucketed by {bucket} is {points} points, over the {MAX_SERIES_POINTS} "
+            "this endpoint returns. Ask for a shorter period or a wider bucket.",
+            details={"field": "bucket", "points": points, "maximum": MAX_SERIES_POINTS},
+        )
+
+    series = await aggregate_usage_series(session, bucket=bucket, window=window)
+    return UsageSeriesResponse(bucket=bucket, window=window, points=series)

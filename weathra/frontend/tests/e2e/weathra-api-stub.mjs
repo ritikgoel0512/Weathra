@@ -813,7 +813,46 @@ const FIXTURES = {
         resets_at: null,
       },
     ],
-    recent: { days: 7, calls: 41, failures: 2, total_tokens: 31925 },
+    /*
+     * The window `SUMMARY_DAYS` actually is, with the totals summed from the series rather
+     * than stated beside it — the two disagreeing is exactly the defect a chart drawn from one
+     * and captioned from the other would hide. Thirty points, one zero day, and a rising last
+     * week, so the capture exercises the empty-bucket case and the week-over-week delta.
+     */
+    recent: { days: 30, calls: 220, failures: 10, total_tokens: 291475,
+    series: [
+      { date: "2026-08-12", calls: 5, failures: 0, total_tokens: 7250 },
+      { date: "2026-08-13", calls: 6, failures: 0, total_tokens: 8700 },
+      { date: "2026-08-14", calls: 6, failures: 0, total_tokens: 8700 },
+      { date: "2026-08-15", calls: 7, failures: 0, total_tokens: 10150 },
+      { date: "2026-08-16", calls: 9, failures: 1, total_tokens: 13050 },
+      { date: "2026-08-17", calls: 8, failures: 0, total_tokens: 11600 },
+      { date: "2026-08-18", calls: 0, failures: 0, total_tokens: null },
+      { date: "2026-08-19", calls: 9, failures: 1, total_tokens: 13050 },
+      { date: "2026-08-20", calls: 7, failures: 0, total_tokens: 10150 },
+      { date: "2026-08-21", calls: 7, failures: 0, total_tokens: 10150 },
+      { date: "2026-08-22", calls: 5, failures: 0, total_tokens: 7250 },
+      { date: "2026-08-23", calls: 3, failures: 0, total_tokens: 4350 },
+      { date: "2026-08-24", calls: 2, failures: 0, total_tokens: 2900 },
+      { date: "2026-08-25", calls: 0, failures: 0, total_tokens: null },
+      { date: "2026-08-26", calls: 2, failures: 0, total_tokens: 2900 },
+      { date: "2026-08-27", calls: 2, failures: 0, total_tokens: 2900 },
+      { date: "2026-08-28", calls: 4, failures: 0, total_tokens: 5800 },
+      { date: "2026-08-29", calls: 3, failures: 0, total_tokens: 4350 },
+      { date: "2026-08-30", calls: 5, failures: 0, total_tokens: 7250 },
+      { date: "2026-08-31", calls: 7, failures: 0, total_tokens: 10150 },
+      { date: "2026-09-01", calls: 0, failures: 0, total_tokens: null },
+      { date: "2026-09-02", calls: 8, failures: 0, total_tokens: 11600 },
+      { date: "2026-09-03", calls: 9, failures: 1, total_tokens: 13050 },
+      { date: "2026-09-04", calls: 12, failures: 1, total_tokens: 17400 },
+      { date: "2026-09-05", calls: 13, failures: 1, total_tokens: 18850 },
+      { date: "2026-09-06", calls: 11, failures: 1, total_tokens: 15950 },
+      { date: "2026-09-07", calls: 13, failures: 1, total_tokens: 18850 },
+      { date: "2026-09-08", calls: 0, failures: 0, total_tokens: null },
+      { date: "2026-09-09", calls: 9, failures: 1, total_tokens: 13050 },
+      { date: "2026-09-10", calls: 7, failures: 0, total_tokens: 10150 },
+    ],
+  },
   },
 
   "/api/v1/me/watches": {
@@ -865,6 +904,159 @@ const FIXTURES = {
    * dashboard is most likely to get wrong: one group whose token and cost figures are null because
    * the gateway reported none, and one internal group, which is never counted against a plan.
    */
+  /*
+   * The trend `09-admin-model-ai-usage.png` leads with, shaped as `GET /admin/usage/series`
+   * returns it: one entry per (bucket, internal) pair, dense across the window. The internal
+   * side carries genuine zero days with null tokens, because that is the case a chart is most
+   * likely to draw wrongly — a bucket with no calls has no token report to sum, and null is
+   * not zero.
+   */
+  /*
+   * The two administrative surfaces task 34.22 built. Modelled here because without them the
+   * capture photographed two full-width refusal panels where the screen actually has a routing
+   * table and a principals table — a picture of the stub rather than of the product.
+   *
+   * The plan rows carry the mapping a policy is reached through, which is the panel's whole point:
+   * a plan resolves to a policy per call role, and the policy resolves to a model. No model string
+   * is written here, because none is written in the frontend at all (task 34.22).
+   */
+  "/api/v1/admin/plans": {
+    count: 3,
+    plans: [
+      {
+        plan_code: "free",
+        display_name: "Free",
+        rank: 1,
+        external_subscription_ref: null,
+        policy_by_call_role: { routing: "economy", synthesis: "economy", lab: "economy" },
+      },
+      {
+        plan_code: "pro",
+        display_name: "Pro",
+        rank: 2,
+        external_subscription_ref: null,
+        policy_by_call_role: { routing: "balanced", synthesis: "balanced", lab: "economy" },
+      },
+      {
+        plan_code: "premium",
+        display_name: "Premium",
+        rank: 3,
+        external_subscription_ref: null,
+        policy_by_call_role: { routing: "balanced", synthesis: "balanced", lab: "balanced" },
+      },
+    ],
+  },
+
+  /*
+   * Principals and the tier each is on. No contact detail, because none is stored — the subject is
+   * the Supabase id and nothing else, which is the property the panel exists to demonstrate.
+   * `administrative` is a role and deliberately independent of the tier: the last row is an
+   * administrator on the Free plan, which is exactly the pair a reader might assume cannot happen.
+   */
+  "/api/v1/admin/principals": {
+    count: 4,
+    principals: [
+      {
+        subject_id: "00000000-0000-4000-8000-000000000001",
+        plan_code: "premium",
+        plan_name: "Premium",
+        administrative: false,
+        assigned_at: "2026-09-02T10:14:00Z",
+        assigned_by: "00000000-0000-4000-8000-0000000000ad",
+      },
+      {
+        subject_id: "00000000-0000-4000-8000-000000000002",
+        plan_code: "pro",
+        plan_name: "Pro",
+        administrative: false,
+        assigned_at: "2026-08-28T16:40:00Z",
+        assigned_by: "00000000-0000-4000-8000-0000000000ad",
+      },
+      {
+        subject_id: "00000000-0000-4000-8000-000000000003",
+        plan_code: null,
+        plan_name: null,
+        administrative: false,
+        assigned_at: null,
+        assigned_by: null,
+      },
+      {
+        subject_id: "00000000-0000-4000-8000-0000000000ad",
+        plan_code: "free",
+        plan_name: "Free",
+        administrative: true,
+        assigned_at: "2026-08-01T09:00:00Z",
+        assigned_by: null,
+      },
+    ],
+  },
+
+  "/api/v1/admin/usage/series": {
+    bucket: "day",
+    window: { start: "2026-08-12T00:00:00Z", end: "2026-09-10T09:00:00Z" },
+    points: [
+      { start: "2026-08-12T00:00:00Z", is_internal: false, calls: 35, failures: 1, total_tokens: 51800, estimated_cost_total: "0.0218", latency_p50_ms: 1359 },
+      { start: "2026-08-12T00:00:00Z", is_internal: true, calls: 2, failures: 0, total_tokens: 4200, estimated_cost_total: "0.0018", latency_p50_ms: 1400 },
+      { start: "2026-08-13T00:00:00Z", is_internal: false, calls: 32, failures: 0, total_tokens: 47360, estimated_cost_total: "0.0199", latency_p50_ms: 1279 },
+      { start: "2026-08-13T00:00:00Z", is_internal: true, calls: 0, failures: 0, total_tokens: null, estimated_cost_total: null, latency_p50_ms: null },
+      { start: "2026-08-14T00:00:00Z", is_internal: false, calls: 39, failures: 0, total_tokens: 57720, estimated_cost_total: "0.0242", latency_p50_ms: 1138 },
+      { start: "2026-08-14T00:00:00Z", is_internal: true, calls: 4, failures: 0, total_tokens: 8400, estimated_cost_total: "0.0035", latency_p50_ms: 1400 },
+      { start: "2026-08-15T00:00:00Z", is_internal: false, calls: 42, failures: 0, total_tokens: 62160, estimated_cost_total: "0.0261", latency_p50_ms: 1259 },
+      { start: "2026-08-15T00:00:00Z", is_internal: true, calls: 2, failures: 0, total_tokens: 4200, estimated_cost_total: "0.0018", latency_p50_ms: 1400 },
+      { start: "2026-08-16T00:00:00Z", is_internal: false, calls: 41, failures: 0, total_tokens: 60680, estimated_cost_total: "0.0255", latency_p50_ms: 1179 },
+      { start: "2026-08-16T00:00:00Z", is_internal: true, calls: 1, failures: 0, total_tokens: 2100, estimated_cost_total: "0.0009", latency_p50_ms: 1400 },
+      { start: "2026-08-17T00:00:00Z", is_internal: false, calls: 44, failures: 1, total_tokens: 65120, estimated_cost_total: "0.0274", latency_p50_ms: 1188 },
+      { start: "2026-08-17T00:00:00Z", is_internal: true, calls: 4, failures: 0, total_tokens: 8400, estimated_cost_total: "0.0035", latency_p50_ms: 1400 },
+      { start: "2026-08-18T00:00:00Z", is_internal: false, calls: 40, failures: 0, total_tokens: 59200, estimated_cost_total: "0.0249", latency_p50_ms: 1273 },
+      { start: "2026-08-18T00:00:00Z", is_internal: true, calls: 3, failures: 0, total_tokens: 6300, estimated_cost_total: "0.0026", latency_p50_ms: 1400 },
+      { start: "2026-08-19T00:00:00Z", is_internal: false, calls: 40, failures: 0, total_tokens: 59200, estimated_cost_total: "0.0249", latency_p50_ms: 1353 },
+      { start: "2026-08-19T00:00:00Z", is_internal: true, calls: 4, failures: 0, total_tokens: 8400, estimated_cost_total: "0.0035", latency_p50_ms: 1400 },
+      { start: "2026-08-20T00:00:00Z", is_internal: false, calls: 45, failures: 0, total_tokens: 66600, estimated_cost_total: "0.0280", latency_p50_ms: 1308 },
+      { start: "2026-08-20T00:00:00Z", is_internal: true, calls: 3, failures: 0, total_tokens: 6300, estimated_cost_total: "0.0026", latency_p50_ms: 1400 },
+      { start: "2026-08-21T00:00:00Z", is_internal: false, calls: 44, failures: 0, total_tokens: 65120, estimated_cost_total: "0.0274", latency_p50_ms: 1367 },
+      { start: "2026-08-21T00:00:00Z", is_internal: true, calls: 4, failures: 0, total_tokens: 8400, estimated_cost_total: "0.0035", latency_p50_ms: 1400 },
+      { start: "2026-08-22T00:00:00Z", is_internal: false, calls: 42, failures: 1, total_tokens: 62160, estimated_cost_total: "0.0261", latency_p50_ms: 1421 },
+      { start: "2026-08-22T00:00:00Z", is_internal: true, calls: 4, failures: 0, total_tokens: 8400, estimated_cost_total: "0.0035", latency_p50_ms: 1400 },
+      { start: "2026-08-23T00:00:00Z", is_internal: false, calls: 37, failures: 0, total_tokens: 54760, estimated_cost_total: "0.0230", latency_p50_ms: 1283 },
+      { start: "2026-08-23T00:00:00Z", is_internal: true, calls: 0, failures: 0, total_tokens: null, estimated_cost_total: null, latency_p50_ms: null },
+      { start: "2026-08-24T00:00:00Z", is_internal: false, calls: 35, failures: 0, total_tokens: 51800, estimated_cost_total: "0.0218", latency_p50_ms: 1372 },
+      { start: "2026-08-24T00:00:00Z", is_internal: true, calls: 1, failures: 0, total_tokens: 2100, estimated_cost_total: "0.0009", latency_p50_ms: 1400 },
+      { start: "2026-08-25T00:00:00Z", is_internal: false, calls: 32, failures: 0, total_tokens: 47360, estimated_cost_total: "0.0199", latency_p50_ms: 1120 },
+      { start: "2026-08-25T00:00:00Z", is_internal: true, calls: 4, failures: 0, total_tokens: 8400, estimated_cost_total: "0.0035", latency_p50_ms: 1400 },
+      { start: "2026-08-26T00:00:00Z", is_internal: false, calls: 30, failures: 0, total_tokens: 44400, estimated_cost_total: "0.0186", latency_p50_ms: 1062 },
+      { start: "2026-08-26T00:00:00Z", is_internal: true, calls: 2, failures: 0, total_tokens: 4200, estimated_cost_total: "0.0018", latency_p50_ms: 1400 },
+      { start: "2026-08-27T00:00:00Z", is_internal: false, calls: 29, failures: 1, total_tokens: 42920, estimated_cost_total: "0.0180", latency_p50_ms: 1381 },
+      { start: "2026-08-27T00:00:00Z", is_internal: true, calls: 0, failures: 0, total_tokens: null, estimated_cost_total: null, latency_p50_ms: null },
+      { start: "2026-08-28T00:00:00Z", is_internal: false, calls: 26, failures: 0, total_tokens: 38480, estimated_cost_total: "0.0162", latency_p50_ms: 1170 },
+      { start: "2026-08-28T00:00:00Z", is_internal: true, calls: 4, failures: 0, total_tokens: 8400, estimated_cost_total: "0.0035", latency_p50_ms: 1400 },
+      { start: "2026-08-29T00:00:00Z", is_internal: false, calls: 21, failures: 0, total_tokens: 31080, estimated_cost_total: "0.0131", latency_p50_ms: 1144 },
+      { start: "2026-08-29T00:00:00Z", is_internal: true, calls: 0, failures: 0, total_tokens: null, estimated_cost_total: null, latency_p50_ms: null },
+      { start: "2026-08-30T00:00:00Z", is_internal: false, calls: 24, failures: 0, total_tokens: 35520, estimated_cost_total: "0.0149", latency_p50_ms: 1363 },
+      { start: "2026-08-30T00:00:00Z", is_internal: true, calls: 2, failures: 0, total_tokens: 4200, estimated_cost_total: "0.0018", latency_p50_ms: 1400 },
+      { start: "2026-08-31T00:00:00Z", is_internal: false, calls: 17, failures: 0, total_tokens: 25160, estimated_cost_total: "0.0106", latency_p50_ms: 1334 },
+      { start: "2026-08-31T00:00:00Z", is_internal: true, calls: 1, failures: 0, total_tokens: 2100, estimated_cost_total: "0.0009", latency_p50_ms: 1400 },
+      { start: "2026-09-01T00:00:00Z", is_internal: false, calls: 22, failures: 1, total_tokens: 32560, estimated_cost_total: "0.0137", latency_p50_ms: 1295 },
+      { start: "2026-09-01T00:00:00Z", is_internal: true, calls: 1, failures: 0, total_tokens: 2100, estimated_cost_total: "0.0009", latency_p50_ms: 1400 },
+      { start: "2026-09-02T00:00:00Z", is_internal: false, calls: 22, failures: 0, total_tokens: 32560, estimated_cost_total: "0.0137", latency_p50_ms: 1388 },
+      { start: "2026-09-02T00:00:00Z", is_internal: true, calls: 4, failures: 0, total_tokens: 8400, estimated_cost_total: "0.0035", latency_p50_ms: 1400 },
+      { start: "2026-09-03T00:00:00Z", is_internal: false, calls: 24, failures: 0, total_tokens: 35520, estimated_cost_total: "0.0149", latency_p50_ms: 1401 },
+      { start: "2026-09-03T00:00:00Z", is_internal: true, calls: 3, failures: 0, total_tokens: 6300, estimated_cost_total: "0.0026", latency_p50_ms: 1400 },
+      { start: "2026-09-04T00:00:00Z", is_internal: false, calls: 25, failures: 0, total_tokens: 37000, estimated_cost_total: "0.0155", latency_p50_ms: 1390 },
+      { start: "2026-09-04T00:00:00Z", is_internal: true, calls: 1, failures: 0, total_tokens: 2100, estimated_cost_total: "0.0009", latency_p50_ms: 1400 },
+      { start: "2026-09-05T00:00:00Z", is_internal: false, calls: 28, failures: 0, total_tokens: 41440, estimated_cost_total: "0.0174", latency_p50_ms: 1105 },
+      { start: "2026-09-05T00:00:00Z", is_internal: true, calls: 2, failures: 0, total_tokens: 4200, estimated_cost_total: "0.0018", latency_p50_ms: 1400 },
+      { start: "2026-09-06T00:00:00Z", is_internal: false, calls: 31, failures: 1, total_tokens: 45880, estimated_cost_total: "0.0193", latency_p50_ms: 1342 },
+      { start: "2026-09-06T00:00:00Z", is_internal: true, calls: 2, failures: 0, total_tokens: 4200, estimated_cost_total: "0.0018", latency_p50_ms: 1400 },
+      { start: "2026-09-07T00:00:00Z", is_internal: false, calls: 29, failures: 0, total_tokens: 42920, estimated_cost_total: "0.0180", latency_p50_ms: 1133 },
+      { start: "2026-09-07T00:00:00Z", is_internal: true, calls: 3, failures: 0, total_tokens: 6300, estimated_cost_total: "0.0026", latency_p50_ms: 1400 },
+      { start: "2026-09-08T00:00:00Z", is_internal: false, calls: 36, failures: 0, total_tokens: 53280, estimated_cost_total: "0.0224", latency_p50_ms: 1318 },
+      { start: "2026-09-08T00:00:00Z", is_internal: true, calls: 4, failures: 0, total_tokens: 8400, estimated_cost_total: "0.0035", latency_p50_ms: 1400 },
+      { start: "2026-09-09T00:00:00Z", is_internal: false, calls: 35, failures: 0, total_tokens: 51800, estimated_cost_total: "0.0218", latency_p50_ms: 1234 },
+      { start: "2026-09-09T00:00:00Z", is_internal: true, calls: 1, failures: 0, total_tokens: 2100, estimated_cost_total: "0.0009", latency_p50_ms: 1400 },
+      { start: "2026-09-10T00:00:00Z", is_internal: false, calls: 41, failures: 0, total_tokens: 60680, estimated_cost_total: "0.0255", latency_p50_ms: 1304 },
+      { start: "2026-09-10T00:00:00Z", is_internal: true, calls: 2, failures: 0, total_tokens: 4200, estimated_cost_total: "0.0018", latency_p50_ms: 1400 },
+    ],
+  },
   "/api/v1/admin/usage": {
     grouped_by: "model",
     window: { start: "2026-08-11T00:00:00Z", end: "2026-09-10T09:00:00Z" },

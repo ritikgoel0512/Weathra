@@ -330,6 +330,13 @@ _CLASSIFICATIONS: tuple[EndpointClassification, ...] = (
         administrative=True,
     ),
     EndpointClassification(
+        "/admin/usage/series",
+        Access.PROTECTED,
+        "The same usage measures as a time series over the period, bucketed by hour or day, "
+        "with internal usage separated. Measures only — never a row, and never one person's.",
+        administrative=True,
+    ),
+    EndpointClassification(
         "/evidence/{evidence_id}",
         Access.PROTECTED,
         "One of the acting user's stored evidence records.",

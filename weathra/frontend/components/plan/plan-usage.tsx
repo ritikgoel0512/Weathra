@@ -33,6 +33,7 @@ import {
 } from "@/lib/plan/usage";
 import { useApiQuery } from "@/lib/query/hooks";
 
+import { ActivityChart, deltaOf, peakOf, pointsOf, type Delta } from "./activity";
 import styles from "./plan.module.css";
 
 const USAGE_KEY = ["me", "usage"] as const;
@@ -53,6 +54,13 @@ function instant(value: string | null): string {
     minute: "2-digit",
   });
 }
+
+/** Up, down or level — for colour only; the number beside it carries the meaning. */
+function deltaTone(delta: Delta | null): "up" | "down" | "flat" {
+  if (delta === null || delta.percent === null || delta.percent === 0) return "flat";
+  return delta.percent > 0 ? "up" : "down";
+}
+
 
 function Tile({
   label,
@@ -77,7 +85,23 @@ function Tile({
   );
 }
 
+/**
+ * What the dimension counts, for the unit beside its figure.
+ *
+ * `10-plan-usage.png` prints "/ 10,000 REQ" and "/ 25,000,000 TOKENS", which is the artifact
+ * telling a reader what the big number *is* before they read the label. Derived from the
+ * dimension name rather than stored, because the backend's dimensions already say it —
+ * `requests_per_day`, `tokens_per_month` — and a second source would be one to keep in step.
+ */
+function unitOf(dimension: string): string | null {
+  if (dimension.startsWith("requests")) return "req";
+  if (dimension.startsWith("tokens")) return "tokens";
+  if (dimension.startsWith("concurrent")) return "at once";
+  return null;
+}
+
 function Allowance({ reading }: { reading: DimensionReading }): ReactNode {
+  const unit = unitOf(reading.dimension);
   return (
     <li className={styles.allowance}>
       <div className={styles.allowanceHead}>
@@ -92,18 +116,37 @@ function Allowance({ reading }: { reading: DimensionReading }): ReactNode {
 
       {reading.limited ? (
         <>
-          <p className={styles.allowanceFigures}>
-            <strong>{count(reading.consumed)}</strong> of {count(reading.allowance)} used
-            <span className={styles.allowanceRemaining}>{count(reading.remaining)} left</span>
+          {/*
+            The artifact's allocation row: the consumed figure at metric size, its allowance and
+            unit beside it, and the share right-aligned. It was one line of body text with the
+            numbers in it — the same figures at a third of the prominence the artifact gives them,
+            which is most of why this panel read as a list where the artifact reads as a meter.
+          */}
+          <p className={styles.allowanceReading}>
+            <span className={styles.allowanceValue}>{count(reading.consumed)}</span>
+            <span className={styles.allowanceOf}>
+              / {count(reading.allowance)}
+              {unit === null ? "" : ` ${unit}`}
+            </span>
+            <span className={styles.allowanceShare}>
+              {reading.percentUsed === null ? "—" : `${reading.percentUsed}% used`}
+            </span>
           </p>
           <Meter
             label={`${reading.label} used`}
             value={reading.percentUsed === null ? null : reading.percentUsed / 100}
           />
+          <p className={styles.allowanceFoot}>
+            <span>Consumed: {count(reading.consumed)}</span>
+            <span>Remaining: {count(reading.remaining)}</span>
+          </p>
         </>
       ) : (
-        <p className={styles.allowanceFigures}>
-          <strong>{count(reading.consumed)}</strong> used · Unlimited on your plan
+        <p className={styles.allowanceReading}>
+          <span className={styles.allowanceValue}>{count(reading.consumed)}</span>
+          <span className={styles.allowanceOf}>
+            {unit === null ? "used" : `${unit} used`} · unlimited on your plan
+          </span>
         </p>
       )}
     </li>
@@ -116,6 +159,9 @@ function Ready({ usage }: { usage: UsageResponse }): ReactNode {
   const resets = resetSchedule(usage.dimensions);
   const pressured = pressuredDimensions(usage.dimensions);
   const internal = isInternal(usage);
+  const points = pointsOf(usage.recent.series);
+  const peak = peakOf(points);
+  const delta = deltaOf(points);
 
   return (
     <div className={styles.screen}>
@@ -227,6 +273,12 @@ function Ready({ usage }: { usage: UsageResponse }): ReactNode {
               subtitle={`Your last ${usage.recent.days} days.`}
             />
             <CardBody>
+              {/*
+                The artifact's activity chart, over the series `/me/usage` now returns. What was
+                here was these same three totals as a definition list — the right figures with
+                none of the shape the artifact gives them.
+              */}
+              <ActivityChart points={points} days={usage.recent.days} />
               <dl className={styles.facts}>
                 <div>
                   <dt>Model calls</dt>
@@ -241,6 +293,37 @@ function Ready({ usage }: { usage: UsageResponse }): ReactNode {
                   <dd>{count(usage.recent.total_tokens)}</dd>
                 </div>
               </dl>
+              {/*
+                The artifact's two derived tiles. Both are arithmetic over the series above and
+                both state their basis: a peak with no day attached is a number rather than a
+                fact, and a percentage with no window named is not checkable.
+              */}
+              <div className={styles.derived}>
+                <div className={styles.derivedTile}>
+                  <span className={styles.derivedLabel}>Peak day</span>
+                  <span className={styles.derivedValue}>
+                    {peak === null ? "—" : count(peak.calls)}
+                  </span>
+                  <span className={styles.derivedNote}>
+                    {peak === null ? "No calls in this window" : peak.label}
+                  </span>
+                </div>
+                <div className={styles.derivedTile}>
+                  <span className={styles.derivedLabel}>Week on week</span>
+                  <span className={styles.derivedValue} data-tone={deltaTone(delta)}>
+                    {delta === null || delta.percent === null
+                      ? "—"
+                      : `${delta.percent >= 0 ? "+" : ""}${delta.percent.toFixed(1)}%`}
+                  </span>
+                  <span className={styles.derivedNote}>
+                    {delta === null
+                      ? "Needs two full weeks to compare"
+                      : delta.percent === null
+                        ? `${count(delta.recent)} this week, none the week before`
+                        : `${count(delta.recent)} against ${count(delta.earlier)} the week before`}
+                  </span>
+                </div>
+              </div>
             </CardBody>
           </Card>
 

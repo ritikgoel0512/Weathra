@@ -24,7 +24,7 @@ client can then say "unlimited" instead of guessing whether the field went missi
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
@@ -37,6 +37,7 @@ from weathra.auth.profiles import ensure_profile
 from weathra.entitlements.plans import PlanStore
 from weathra.entitlements.quotas import QuotaSubject, UsageReport
 from weathra.entitlements.resolver import DEFAULT_PLAN
+from weathra.telemetry.aggregate import UsageWindow, aggregate_usage_series
 
 __all__ = ["router"]
 
@@ -70,6 +71,19 @@ class DimensionView(BaseModel):
     )
 
 
+class UsageDay(BaseModel):
+    """One day of the caller's own usage. The shape a trend is drawn from."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    date: str = Field(description="The day this point covers, as an ISO date in UTC.")
+    calls: int = Field(ge=0)
+    failures: int = Field(ge=0)
+    total_tokens: int | None = Field(
+        default=None, description="Tokens that day, or null where no gateway reported any."
+    )
+
+
 class RecentUsage(BaseModel):
     """A bounded look back over the caller's own calls. Counts, never content and never cost."""
 
@@ -82,6 +96,14 @@ class RecentUsage(BaseModel):
         default=None,
         description="Tokens across those calls, or null where the gateway reported none. Null is "
         "not zero: zero would claim the calls used nothing.",
+    )
+    series: tuple[UsageDay, ...] = Field(
+        default=(),
+        description=(
+            "The same window, one point per day, oldest first and dense — a day with no calls is "
+            "a zero rather than a missing point, because this table records every call. This is "
+            "what a usage chart is drawn from; the totals above are its sum."
+        ),
     )
 
 
@@ -155,6 +177,33 @@ async def read_usage(
     ).first()
     calls, failures, tokens = (int(row[0]), int(row[1]), row[2]) if row else (0, 0, None)
 
+    # The same rows, per day, for the chart. Read under the caller's own session like the totals
+    # above, so Row Level Security scopes it — `aggregate_usage_series` takes no subject and needs
+    # none. The two halves of its internal split are summed here: this route has always reported
+    # the caller's own traffic as one number, and an ordinary account has no internal rows at all.
+    end = datetime.now(UTC)
+    buckets = await aggregate_usage_series(
+        session,
+        bucket="day",
+        window=UsageWindow(start=end - timedelta(days=SUMMARY_DAYS), end=end),
+    )
+    per_day: dict[str, UsageDay] = {}
+    for point in buckets:
+        key = point.start.date().isoformat()
+        seen = per_day.get(key)
+        tokens_so_far = seen.total_tokens if seen else None
+        combined = (
+            point.total_tokens
+            if tokens_so_far is None
+            else tokens_so_far + (point.total_tokens or 0)
+        )
+        per_day[key] = UsageDay(
+            date=key,
+            calls=(seen.calls if seen else 0) + point.calls,
+            failures=(seen.failures if seen else 0) + point.failures,
+            total_tokens=combined,
+        )
+
     return UsageResponse(
         user_id=principal.user_id,
         plan_code=plan.plan_code.value,
@@ -166,6 +215,7 @@ async def read_usage(
             calls=calls,
             failures=failures,
             total_tokens=int(tokens) if tokens is not None else None,
+            series=tuple(per_day[key] for key in sorted(per_day)),
         ),
     )
 

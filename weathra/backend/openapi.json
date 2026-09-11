@@ -4538,6 +4538,15 @@
             "title": "Failures",
             "type": "integer"
           },
+          "series": {
+            "default": [],
+            "description": "The same window, one point per day, oldest first and dense \u2014 a day with no calls is a zero rather than a missing point, because this table records every call. This is what a usage chart is drawn from; the totals above are its sum.",
+            "items": {
+              "$ref": "#/components/schemas/UsageDay"
+            },
+            "title": "Series",
+            "type": "array"
+          },
           "total_tokens": {
             "anyOf": [
               {
@@ -6047,6 +6056,115 @@
         "title": "UsageAggregate",
         "type": "object"
       },
+      "UsageBucket": {
+        "additionalProperties": false,
+        "description": "One point on a usage trend. The same measures as `UsageAggregate`, cut by time instead.\n\nCarries no grouping dimension and no subject, for the same reason `UsageAggregate` carries no\nsubject: a point on a chart is a measure, and this one is reachable by an administrator across\nevery account.",
+        "properties": {
+          "calls": {
+            "minimum": 0.0,
+            "title": "Calls",
+            "type": "integer"
+          },
+          "estimated_cost_total": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Cost Total"
+          },
+          "failures": {
+            "minimum": 0.0,
+            "title": "Failures",
+            "type": "integer"
+          },
+          "is_internal": {
+            "description": "Internal usage stays separate here too, so a trend cannot blend the two.",
+            "title": "Is Internal",
+            "type": "boolean"
+          },
+          "latency_p50_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency P50 Ms"
+          },
+          "start": {
+            "description": "The bucket's inclusive start, truncated to its width.",
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          },
+          "total_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Tokens"
+          }
+        },
+        "required": [
+          "start",
+          "is_internal",
+          "calls",
+          "failures"
+        ],
+        "title": "UsageBucket",
+        "type": "object"
+      },
+      "UsageDay": {
+        "additionalProperties": false,
+        "description": "One day of the caller's own usage. The shape a trend is drawn from.",
+        "properties": {
+          "calls": {
+            "minimum": 0.0,
+            "title": "Calls",
+            "type": "integer"
+          },
+          "date": {
+            "description": "The day this point covers, as an ISO date in UTC.",
+            "title": "Date",
+            "type": "string"
+          },
+          "failures": {
+            "minimum": 0.0,
+            "title": "Failures",
+            "type": "integer"
+          },
+          "total_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Tokens that day, or null where no gateway reported any.",
+            "title": "Total Tokens"
+          }
+        },
+        "required": [
+          "date",
+          "calls",
+          "failures"
+        ],
+        "title": "UsageDay",
+        "type": "object"
+      },
       "UsageResponse": {
         "additionalProperties": false,
         "description": "The caller's plan, their standing in every dimension, and a bounded recent summary.",
@@ -6092,6 +6210,35 @@
           "recent"
         ],
         "title": "UsageResponse",
+        "type": "object"
+      },
+      "UsageSeriesResponse": {
+        "additionalProperties": false,
+        "description": "The same measures as `/admin/usage`, cut by time rather than by dimension.",
+        "properties": {
+          "bucket": {
+            "description": "The width of one point: 'hour' or 'day'.",
+            "title": "Bucket",
+            "type": "string"
+          },
+          "points": {
+            "description": "One entry per (bucket, internal) pair, dense across the window. A bucket with no calls is a zero rather than a gap: this table records every call, so an empty hour is an idle hour rather than an unobserved one.",
+            "items": {
+              "$ref": "#/components/schemas/UsageBucket"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "window": {
+            "$ref": "#/components/schemas/UsageWindow"
+          }
+        },
+        "required": [
+          "bucket",
+          "window",
+          "points"
+        ],
+        "title": "UsageSeriesResponse",
         "type": "object"
       },
       "UsageSummaryResponse": {
@@ -7901,13 +8048,13 @@
         "operationId": "read_usage_api_v1_admin_usage_get",
         "parameters": [
           {
-            "description": "model, catalog_key, policy, plan, call_role, status, or provider.",
+            "description": "model, catalog_key, policy, plan, call_role, status, provider or failure_class.",
             "in": "query",
             "name": "by",
             "required": false,
             "schema": {
               "default": "model",
-              "description": "model, catalog_key, policy, plan, call_role, status, or provider.",
+              "description": "model, catalog_key, policy, plan, call_role, status, provider or failure_class.",
               "title": "By",
               "type": "string"
             }
@@ -7956,6 +8103,72 @@
           }
         ],
         "summary": "Aggregate language model usage",
+        "tags": [
+          "administration"
+        ]
+      }
+    },
+    "/api/v1/admin/usage/series": {
+      "get": {
+        "description": "**Protected. Administrative.** The same usage measures as a time series over the period, bucketed by hour or day, with internal usage separated. Measures only \u2014 never a row, and never one person's.\n\nCalls, failures, tokens, estimated cost and median latency per bucket.\n\n`/admin/usage` answers *which model, which plan, which policy*; this answers *when*, which is\nthe other half of what `specs/llm-telemetry` asks an administrative reader to be able to see\nand the one the aggregate could not express. Same table, same internal split, same rule that a\nmeasure leaves and a row never does.",
+        "operationId": "read_usage_series_api_v1_admin_usage_series_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 400,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "hour or day.",
+            "in": "query",
+            "name": "bucket",
+            "required": false,
+            "schema": {
+              "default": "day",
+              "description": "hour or day.",
+              "title": "Bucket",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageSeriesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Language model usage over time",
         "tags": [
           "administration"
         ]

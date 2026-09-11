@@ -70,6 +70,7 @@ import type {
   ThreadsResponse,
   UnitSystem,
   UsageResponse,
+  UsageSeriesResponse,
   UsageSummaryResponse,
   WatchEdit,
   WatchRecord,
@@ -305,6 +306,13 @@ export interface ApiClient {
    * name whose call a figure came from.
    */
   adminUsage(by?: string, days?: number): Promise<UsageSummaryResponse>;
+  /**
+   * The same measures over time rather than by dimension — what the trend chart is drawn from.
+   *
+   * Dense across the window: a bucket with no calls comes back as a zero, because the events
+   * table records every call and an empty hour is an idle one rather than an unobserved one.
+   */
+  adminUsageSeries(days?: number, bucket?: string): Promise<UsageSeriesResponse>;
   /** The model policies, each with its ordered candidate list. */
   adminPolicies(): Promise<PolicyListResponse>;
   /** The catalog, with the most recent evaluation recorded per entry where there is one. */
@@ -603,6 +611,8 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     plans: () => get<PlansResponse>("/api/v1/plans"),
 
     adminUsage: (by, days) => get<UsageSummaryResponse>("/api/v1/admin/usage", { by, days }),
+    adminUsageSeries: (days, bucket) =>
+      get<UsageSeriesResponse>("/api/v1/admin/usage/series", { days, bucket }),
     adminPolicies: () => get<PolicyListResponse>("/api/v1/admin/policies"),
     adminCatalog: () => get<CatalogListResponse>("/api/v1/admin/models"),
     adminComparisons: (limit) => get<LabRunListResponse>("/api/v1/admin/lab/comparisons", { limit }),
