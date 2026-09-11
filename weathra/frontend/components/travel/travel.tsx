@@ -18,6 +18,7 @@
  * is expected to do at a place over a window, which is what this screen says.
  */
 
+import { PlaceChooser } from "@/components/locations/place-chooser";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
@@ -242,6 +243,8 @@ export function TravelIntelligence(): ReactNode {
     key: PREFERENCES_KEY,
     request: (client) => client.preferences(),
   });
+  /** A place named on this screen. Outranks the default while it is set. */
+  const [chosen, setChosen] = useState<Location | null>(null);
 
   if (preferences.state.kind === "loading") {
     return <LoadingState label="Reading your preferences" lines={4} />;
@@ -251,15 +254,37 @@ export function TravelIntelligence(): ReactNode {
   }
   if (preferences.state.kind !== "ready") return null;
 
-  const location = briefingLocationFrom(preferences.state.data);
-  if (location === null) {
-    return (
-      <EmptyState title="Choose a destination" action={<Link href="/settings">Open Settings</Link>}>
-        Travel Intelligence ranks the days at your default location. Set one in Settings, or save a
-        place first.
-      </EmptyState>
-    );
-  }
+  const saved = briefingLocationFrom(preferences.state.data);
+  const location = chosen ?? saved;
 
-  return <TravelFor location={location} />;
+  return (
+    <>
+      {/*
+        The screen's own place control. With no default this used to be an empty state and a link
+        to Settings, which made the feature reachable only by configuring a preference somewhere
+        else first — see `PlaceChooser` for why that is not a substitute for a product.
+      */}
+      <PlaceChooser
+        summary="Travel to another place"
+        label="Travel to a place"
+        description="Weathra resolves the name before it retrieves anything. Leave it empty to use your default location."
+        current={location}
+        usingDefault={chosen === null}
+        hasDefault={saved !== null}
+        onChoose={setChosen}
+      />
+
+      {location === null ? (
+        <EmptyState title="Name a destination">
+          Travel Intelligence ranks the days at your default location. Name one above, or set a
+          default in <Link href="/settings">Settings</Link>.
+        </EmptyState>
+      ) : (
+        <TravelFor
+          key={`${location.latitude},${location.longitude}`}
+          location={location}
+        />
+      )}
+    </>
+  );
 }

@@ -21,7 +21,10 @@
  * thing this product could do.
  */
 
+import Link from "next/link";
 import { useState, type ReactNode } from "react";
+
+import { PlaceChooser } from "@/components/locations/place-chooser";
 
 import {
   Badge,
@@ -36,7 +39,13 @@ import {
   LoadingState,
   Select,
 } from "@/components/ui";
-import type { Measure, PreferenceView, WatchRecord, WatchesResponse } from "@/lib/api/schema";
+import type {
+  Location,
+  Measure,
+  PreferenceView,
+  WatchRecord,
+  WatchesResponse,
+} from "@/lib/api/schema";
 import { briefingLocationFrom, measureLabel } from "@/lib/dashboard/briefing";
 import { friendlyName } from "@/lib/locations/place";
 import { useApiMutation, useApiQuery } from "@/lib/query/hooks";
@@ -264,6 +273,8 @@ export function WeatherWatch(): ReactNode {
     key: PREFERENCES_KEY,
     request: (client) => client.preferences(),
   });
+  /** A place named on this screen. Outranks the default while it is set. */
+  const [chosen, setChosen] = useState<Location | null>(null);
 
   if (preferences.state.kind === "loading") {
     return <LoadingState label="Reading your preferences" lines={4} />;
@@ -273,15 +284,37 @@ export function WeatherWatch(): ReactNode {
   }
   if (preferences.state.kind !== "ready") return null;
 
-  const location = briefingLocationFrom(preferences.state.data);
-  if (location === null) {
-    return (
-      <EmptyState title="Choose a place to watch">
-        Weather Watch checks conditions at your default location. Set one in Settings, or save a
-        place first.
-      </EmptyState>
-    );
-  }
+  const saved = briefingLocationFrom(preferences.state.data);
+  const location = chosen ?? saved;
 
-  return <WatchList location={location} />;
+  return (
+    <>
+      {/*
+        The screen's own place control. With no default this used to be an empty state and a link
+        to Settings, which made the feature reachable only by configuring a preference somewhere
+        else first — see `PlaceChooser` for why that is not a substitute for a product.
+      */}
+      <PlaceChooser
+        summary="Watch another place"
+        label="Watch a place"
+        description="Weathra resolves the name before it retrieves anything. Leave it empty to use your default location."
+        current={location}
+        usingDefault={chosen === null}
+        hasDefault={saved !== null}
+        onChoose={setChosen}
+      />
+
+      {location === null ? (
+        <EmptyState title="Name a place to watch">
+          Weather Watch checks conditions at your default location. Name one above, or set a
+          default in <Link href="/settings">Settings</Link>.
+        </EmptyState>
+      ) : (
+        <WatchList
+          key={`${location.latitude},${location.longitude}`}
+          location={location}
+        />
+      )}
+    </>
+  );
 }

@@ -23,7 +23,10 @@
  * nodes", a "Weathra Analysis Kernel", 124 active nodes and a scenario lock. None of it exists.
  */
 
+import Link from "next/link";
 import { useState, type ReactNode } from "react";
+
+import { PlaceChooser } from "@/components/locations/place-chooser";
 
 import { RecordedAgainstBaselineChart } from "@/components/historical/charts";
 import {
@@ -267,6 +270,8 @@ export function WeatherScenarioLab(): ReactNode {
     key: PREFERENCES_KEY,
     request: (client) => client.preferences(),
   });
+  /** A place named on this screen. Outranks the default while it is set. */
+  const [chosen, setChosen] = useState<Location | null>(null);
 
   if (preferences.state.kind === "loading") {
     return <LoadingState label="Reading your preferences" lines={4} />;
@@ -276,15 +281,37 @@ export function WeatherScenarioLab(): ReactNode {
   }
   if (preferences.state.kind !== "ready") return null;
 
-  const location = briefingLocationFrom(preferences.state.data);
-  if (location === null) {
-    return (
-      <EmptyState title="Choose a place to experiment on">
-        The lab applies your assumptions to the forecast for your default location. Set one in
-        Settings, or save a place first.
-      </EmptyState>
-    );
-  }
+  const saved = briefingLocationFrom(preferences.state.data);
+  const location = chosen ?? saved;
 
-  return <ScenarioFor location={location} />;
+  return (
+    <>
+      {/*
+        The screen's own place control. With no default this used to be an empty state and a link
+        to Settings, which made the feature reachable only by configuring a preference somewhere
+        else first — see `PlaceChooser` for why that is not a substitute for a product.
+      */}
+      <PlaceChooser
+        summary="Experiment on another place"
+        label="Experiment on a place"
+        description="Weathra resolves the name before it retrieves anything. Leave it empty to use your default location."
+        current={location}
+        usingDefault={chosen === null}
+        hasDefault={saved !== null}
+        onChoose={setChosen}
+      />
+
+      {location === null ? (
+        <EmptyState title="Name a place to experiment on">
+          The lab applies your assumptions to the forecast for your default location. Name one
+          above, or set a default in <Link href="/settings">Settings</Link>.
+        </EmptyState>
+      ) : (
+        <ScenarioFor
+          key={`${location.latitude},${location.longitude}`}
+          location={location}
+        />
+      )}
+    </>
+  );
 }

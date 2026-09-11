@@ -25,6 +25,7 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
+import { PlaceChooser } from "@/components/locations/place-chooser";
 import { RecordedAgainstBaselineChart } from "@/components/historical/charts";
 import {
   Badge,
@@ -380,17 +381,20 @@ function ExplorerFor({ location }: ExplorerForProps): ReactNode {
 }
 
 /**
- * The screen, on the place the person opens Weathra on.
+ * The screen, on the place the person opens Weathra on — or on any place they name.
  *
- * The same default location the Dashboard uses, read from `/me/preferences`, so the two screens
- * open on the same place. Somebody with no default is told how to choose one rather than being
- * shown an empty explorer.
+ * It opens on the same default location the Dashboard uses, read from `/me/preferences`, so the two
+ * screens agree. **With no default it is still the explorer**, with its chooser open: this used to
+ * be an empty state and a link to Settings, which made the feature reachable only by configuring a
+ * preference on a different screen first. A configuration step is not a substitute for a product.
  */
 export function ForecastExplorer(): ReactNode {
   const preferences = useApiQuery<PreferenceView>({
     key: PREFERENCES_KEY,
     request: (client) => client.preferences(),
   });
+  /** A place named on this screen. Outranks the default while it is set. */
+  const [chosen, setChosen] = useState<Location | null>(null);
 
   if (preferences.state.kind === "loading") {
     return <LoadingState label="Reading your preferences" lines={4} />;
@@ -400,17 +404,29 @@ export function ForecastExplorer(): ReactNode {
   }
   if (preferences.state.kind !== "ready") return null;
 
-  const location = briefingLocationFrom(preferences.state.data);
-  if (location === null) {
-    return (
-      <EmptyState
-        title="Choose a place to explore"
-        action={<Link href="/settings">Open Settings</Link>}
-      >
-        Forecast Explorer opens on your default location. Set one in Settings, or save a place first.
-      </EmptyState>
-    );
-  }
+  const saved = briefingLocationFrom(preferences.state.data);
+  const location = chosen ?? saved;
 
-  return <ExplorerFor location={location} />;
+  return (
+    <>
+      <PlaceChooser
+        summary="Explore another place"
+        label="Explore a place"
+        description="Weathra resolves the name before it retrieves anything. Leave it empty to use your default location."
+        current={location}
+        usingDefault={chosen === null}
+        hasDefault={saved !== null}
+        onChoose={setChosen}
+      />
+
+      {location === null ? (
+        <EmptyState title="Name a place to explore">
+          Forecast Explorer opens on your default location. Name one above, or set a default in{" "}
+          <Link href="/settings">Settings</Link>.
+        </EmptyState>
+      ) : (
+        <ExplorerFor key={`${location.latitude},${location.longitude}`} location={location} />
+      )}
+    </>
+  );
 }

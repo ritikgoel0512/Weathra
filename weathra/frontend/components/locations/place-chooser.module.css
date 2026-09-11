@@ -1,0 +1,74 @@
+/*
+ * The shared place chooser.
+ *
+ * Deliberately the same shape as the Dashboard's own entry disclosure in `dashboard.module.css` —
+ * same frame, same summary weight, same folded-away default — because the two do the same thing and
+ * a person moving between the Dashboard and an Intelligence screen should not have to recognise a
+ * second control. The Dashboard keeps its copy: it carries a `?place=` URL parameter and a
+ * "resolve once per name" effect this one has no use for, and merging them would put that
+ * complexity on five screens to save thirty lines of CSS.
+ *
+ * The marker is the browser's own triangle. `specs/web-ui` wants every control keyboard-operable,
+ * and a native `<summary>` is one for free on every platform with its open state announced.
+ */
+
+.disclosure {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  min-width: 0;
+}
+
+.summary {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.summary:hover {
+  color: var(--color-text-primary);
+}
+
+.disclosure[open] .summary {
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  min-width: 0;
+}
+
+/* `1 1 260px` rather than a width: the field takes the row on a phone and shares it on a desk. */
+.field {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+/*
+ * Which place is on screen, stated inside the control that changed it.
+ *
+ * Only when it is *not* the default: every screen already names its own place in its header, and
+ * repeating that under the chooser on every visit would be the same sentence twice. What is worth
+ * saying is that the screen is about somewhere other than where it usually opens.
+ */
+.showing {
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  overflow-wrap: anywhere;
+}
