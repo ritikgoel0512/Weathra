@@ -68,6 +68,7 @@ import {
   ForecastStrip,
   PrecipitationOutlook,
   SavedSnapshots,
+  ComputedFigures,
   DeterministicAnalytics,
   ForecastMovement,
   HistoricalContext,
@@ -314,6 +315,15 @@ function Briefing({
               report={changes.state.kind === "ready" ? changes.state.data : null}
             />
           )}
+
+          {/*
+            The computed statistics, in the column with room for them. They were in the narrow
+            column with the anomaly alert, which is not how `01-dashboard.png` divides this band —
+            see `ComputedFigures` for what that cost.
+          */}
+          {analysis.state.kind === "ready" ? (
+            <ComputedFigures analysis={analysis.state.data} location={location} />
+          ) : null}
         </div>
 
         <div className={styles.column}>
@@ -322,7 +332,11 @@ function Briefing({
           ) : analysis.state.kind === "error" ? (
             <ErrorState failure={analysis.state.failure} onRetry={analysis.retry} />
           ) : analysis.state.kind === "ready" ? (
-            <DeterministicAnalytics analysis={analysis.state.data} location={location} />
+            <DeterministicAnalytics
+              analysis={analysis.state.data}
+              location={location}
+              baseline={baseline.state.kind === "ready" ? baseline.state.data : null}
+            />
           ) : null}
 
           {/* The artifact's panel beneath the anomaly panel, in the same column. */}

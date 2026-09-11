@@ -455,6 +455,22 @@ export interface DeterministicAnalyticsProps {
   readonly location: Location;
 }
 
+export interface AnomalyDetectionProps extends DeterministicAnalyticsProps {
+  /**
+   * The multi-year baseline, where the screen has one.
+   *
+   * `01-dashboard.png`'s anomaly panel closes on "HISTORICAL AVG (OCT) 14.2°C" and
+   * "VARIANCE +3.8°C". The first is the baseline's own mean and is passed straight through. The
+   * second is a *deviation* in the artifact, and no endpoint on this screen computes one — the
+   * analysis and the baseline are two separate reads, and subtracting one from the other here
+   * would make the Dashboard the first place in Weathra that does arithmetic on a figure. So the
+   * slot carries the baseline's own spread instead, which is a statistic the backend computed and
+   * stated a method for. Historical Analytics is where a real deviation lives, over an endpoint
+   * built to compute it.
+   */
+  readonly baseline?: Baseline | null;
+}
+
 /**
  * The figures Weathra computed, badged ANALYTICS — anomalies, trend, and the findings.
  *
@@ -464,14 +480,15 @@ export interface DeterministicAnalyticsProps {
 export function DeterministicAnalytics({
   analysis,
   location,
-}: DeterministicAnalyticsProps): ReactNode {
+  baseline = null,
+}: AnomalyDetectionProps): ReactNode {
   const anomalies = analysis.anomalies?.anomalies ?? [];
   const trend = analysis.trend;
 
   return (
     <ProvenanceSection
       dataClass="analytics"
-      title="Anomalies and computed figures"
+      title="Anomaly detection"
       attribution={attributionOf({
         provider: analysis.provider,
         location: analysis.location ?? location,
@@ -520,13 +537,75 @@ export function DeterministicAnalytics({
         </div>
       ) : null}
 
-      {analysis.findings.length > 0 ? (
+      {/*
+        The artifact's closing pair in this panel: the historical average, and the spread beside
+        it. Both are the baseline's own statistics with their own methods — see
+        `AnomalyDetectionProps.baseline` for why the second is a spread rather than a deviation.
+      */}
+      {baseline ? (
         <ul className={styles.findings}>
-          {analysis.findings.map((result, index) => (
-            <Finding key={`${result.statistic}-${result.measure}-${index}`} result={result} />
-          ))}
+          {(
+            [
+              ["Historical average", baseline.mean],
+              ["Baseline spread", baseline.standard_deviation],
+            ] as const
+          ).map(([label, result]) =>
+            result && typeof result.value === "number" ? (
+              <li className={styles.finding} key={label}>
+                <span className={styles.findingLabel}>
+                  {label} · {(baseline.years_used ?? []).length} years
+                </span>
+                <span className={styles.findingValue}>
+                  {formatReading({ value: result.value, unit: result.unit ?? null })}
+                </span>
+                <MethodNote method={result.method} pointsUsed={result.points_used} />
+              </li>
+            ) : null,
+          )}
         </ul>
       ) : null}
+    </ProvenanceSection>
+  );
+}
+
+/**
+ * The computed figures, as their own panel in the wide column.
+ *
+ * Split out of `DeterministicAnalytics` above, and the split is the artifact's own.
+ * `01-dashboard.png`'s right-hand column is short — an anomaly alert, a historical average and a
+ * variance, then three saved snapshots — while its wide left column carries the interpretation and
+ * its two nested cards. Ours had the anomaly, the trend *and* six computed statistics with their
+ * methods and provenance all in the narrow column, which made that column about twice the height
+ * of the one beside it and left roughly 360 pixels of page ground under "What Changed?".
+ *
+ * The figures were the wrong half to put there. An anomaly alert is a short statement and belongs
+ * in a rail; six statistics with their arithmetic named are the screen's substance and belong in
+ * the column with room for them. Both keep their own provenance, because they are read separately
+ * now and an attribution that only appeared on one of them would leave the other unsourced.
+ */
+export function ComputedFigures({
+  analysis,
+  location,
+}: DeterministicAnalyticsProps): ReactNode {
+  if (analysis.findings.length === 0) return null;
+
+  return (
+    <ProvenanceSection
+      dataClass="analytics"
+      title="Computed figures"
+      attribution={attributionOf({
+        provider: analysis.provider,
+        location: analysis.location ?? location,
+        period: analysis.period,
+        units: analysis.units,
+        fromCache: analysis.from_cache,
+      })}
+    >
+      <ul className={styles.findings}>
+        {analysis.findings.map((result, index) => (
+          <Finding key={`${result.statistic}-${result.measure}-${index}`} result={result} />
+        ))}
+      </ul>
     </ProvenanceSection>
   );
 }

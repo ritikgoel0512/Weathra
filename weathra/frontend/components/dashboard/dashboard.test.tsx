@@ -327,7 +327,10 @@ describe("a populated briefing", () => {
       "Current conditions",
       "Forecast movement",
       "What Changed?",
-      "Anomalies and computed figures",
+      // Two panels since the 2026-09-11 parity pass, split the way `01-dashboard.png` splits
+      // this band: the alert in the rail, the statistics in the wide column beside it.
+      "Anomaly detection",
+      "Computed figures",
       "Historical context",
       "Weathra Intelligence",
     ]) {
@@ -376,14 +379,23 @@ describe("a populated briefing", () => {
 
   it("renders the anomalies, the trend, and the computed figures with their methods", async () => {
     renderDashboard();
-    const analytics = await screen.findByRole("region", { name: "Anomalies and computed figures" });
 
-    expect(within(analytics).getByText(/1 entry stood out/)).toBeInTheDocument();
-    expect(within(analytics).getByText(/median absolute deviation/)).toBeInTheDocument();
-    expect(within(analytics).getByText("rising")).toBeInTheDocument();
-    expect(within(analytics).getByText(/least-squares slope/)).toBeInTheDocument();
-    expect(within(analytics).getByText("17.9 °C")).toBeInTheDocument();
-    expect(within(analytics).getAllByText(/Computed by Weathra/).length).toBeGreaterThan(0);
+    /*
+     * Two regions, one band. The anomaly and the trend are the alert half and stay in the rail;
+     * the statistics are the substance half and moved to the wide column. Both still carry their
+     * method, which is the assertion that matters — `specs/deterministic-analytics` requires the
+     * arithmetic to be named wherever the figure is shown, and the split created a second place
+     * for it to be forgotten.
+     */
+    const alert = await screen.findByRole("region", { name: "Anomaly detection" });
+    expect(within(alert).getByText(/1 entry stood out/)).toBeInTheDocument();
+    expect(within(alert).getByText(/median absolute deviation/)).toBeInTheDocument();
+    expect(within(alert).getByText("rising")).toBeInTheDocument();
+    expect(within(alert).getByText(/least-squares slope/)).toBeInTheDocument();
+
+    const figures = await screen.findByRole("region", { name: "Computed figures" });
+    expect(within(figures).getByText("17.9 °C")).toBeInTheDocument();
+    expect(within(figures).getAllByText(/Computed by Weathra/).length).toBeGreaterThan(0);
   });
 
   it("renders the historical baseline stating the years it actually used", async () => {
@@ -759,7 +771,7 @@ describe("data classes, provenance, and the line the model does not cross", () =
       within(screen.getByRole("region", { name: "What Changed?" })).getByText("FORECAST"),
     ).toBeInTheDocument();
     expect(
-      within(screen.getByRole("region", { name: "Anomalies and computed figures" })).getByText("ANALYTICS"),
+      within(screen.getByRole("region", { name: "Computed figures" })).getByText("ANALYTICS"),
     ).toBeInTheDocument();
     expect(within(screen.getByRole("region", { name: "Historical context" })).getByText("HISTORICAL")).toBeInTheDocument();
     expect(
@@ -772,7 +784,14 @@ describe("data classes, provenance, and the line the model does not cross", () =
     await screen.findByRole("region", { name: "Historical context" });
 
     expect(container.querySelectorAll('[data-tier="retrieved"]').length).toBeGreaterThanOrEqual(3);
-    expect(container.querySelectorAll('[data-tier="computed"]')).toHaveLength(1);
+    /*
+     * Two computed regions, and the count stays exact rather than becoming a floor: the analytics
+     * band was split in two on 2026-09-11 — the anomaly alert in the rail, the statistics in the
+     * wide column — and an exact count is what would catch a third appearing by accident. One
+     * interpretation region, which is the tier that must never multiply: every model-written
+     * sentence on this screen belongs to the one panel that says a model wrote it.
+     */
+    expect(container.querySelectorAll('[data-tier="computed"]')).toHaveLength(2);
     expect(container.querySelectorAll('[data-tier="interpretation"]')).toHaveLength(1);
 
     // The model's region contains none of the figures, and none of the figure regions contains it.
@@ -790,7 +809,8 @@ describe("data classes, provenance, and the line the model does not cross", () =
       "Current conditions",
       "Forecast movement",
       "What Changed?",
-      "Anomalies and computed figures",
+      "Anomaly detection",
+      "Computed figures",
       "Historical context",
     ]) {
       const region = screen.getByRole("region", { name: title });
@@ -888,7 +908,7 @@ describe("data classes, provenance, and the line the model does not cross", () =
     expect(screen.getByRole("region", { name: "Current conditions" })).toBeInTheDocument();
     expect(screen.getByText("18.2 °C")).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Saved snapshots" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Anomalies and computed figures" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Anomaly detection" })).toBeInTheDocument();
   });
 
   it("shows the provider, model and policy that actually served the briefing", async () => {
@@ -958,7 +978,7 @@ describe("data classes, provenance, and the line the model does not cross", () =
     // Every retrieved and computed surface is untouched.
     expect(screen.getByRole("region", { name: "Current conditions" })).toBeInTheDocument();
     expect(screen.getByText("18.2 °C")).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Anomalies and computed figures" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Anomaly detection" })).toBeInTheDocument();
   });
 });
 
