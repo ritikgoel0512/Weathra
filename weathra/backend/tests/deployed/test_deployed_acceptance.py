@@ -516,6 +516,12 @@ def location_of_b(
         headers=_auth(token_b),
         json={"latitude": 35.6895, "longitude": 139.6917, "label": "live-acceptance"},
     )
+    if upstream_refused(created):
+        pytest.skip(
+            "the weather provider rate-limited the request that saves a location, so there is no "
+            "record to ask an isolation question about. Not an isolation failure: nothing was "
+            "asked. Re-run when the provider's window has turned over"
+        )
     assert_status(created, (200, 201), *credentials.secrets)
     record = json_body(created, *credentials.secrets)
     try:
@@ -785,6 +791,12 @@ def location_of_a(
         headers=_auth(token_a),
         json={"latitude": -33.8688, "longitude": 151.2093, "label": "live-acceptance-a"},
     )
+    if upstream_refused(created):
+        pytest.skip(
+            "the weather provider rate-limited the request that saves a location, so there is no "
+            "record to ask an isolation question about. Not an isolation failure: nothing was "
+            "asked. Re-run when the provider's window has turned over"
+        )
     assert_status(created, (200, 201), *credentials.secrets)
     record = json_body(created, *credentials.secrets)
     try:
@@ -867,13 +879,64 @@ def test_neither_account_is_served_the_other_s_evidence_record(
     )
 
 
+@pytest.fixture(scope="module")
+def thread_of_a(
+    writer: httpx.Client, target: Target, token_a: Token, credentials: Credentials
+) -> Iterator[str]:
+    """One thread genuinely owned by account A, opened without needing an answer.
+
+    Thread *ownership* has nothing to do with the inference provider, and until 2026-09-11 this
+    suite proved it with a thread that came back from `/ask` — so a deployment whose gateway was
+    refusing credentials could not be asked whether one account's conversations are visible to
+    another. That is the wrong dependency: it made an authorization property untestable for a
+    reason that is not about authorization, and 25.3's isolation cases errored at setup rather than
+    reporting anything.
+
+    `/agent/stream` opens the thread before it reaches inference — deliberately, because
+    `specs/usage-limits` and the ownership check both have to refuse *before* a response starts —
+    so a run that then fails at the gateway still leaves a real, owned row behind. This asks for
+    exactly that and does not care how the run ends: the assertion is about who can see the thread,
+    not what was said in it.
+
+    Identified by comparing A's listing before and after, because a stream that fails at its first
+    event never emits the thread event that would otherwise name it. Removed on the way out,
+    whatever the assertions did, and nothing pre-existing is touched.
+    """
+    before = _thread_ids(
+        fetch(writer, "GET", target.api("/threads"), headers=_auth(token_a)), credentials
+    )
+    with writer.stream(
+        "POST",
+        target.api("/agent/stream"),
+        headers=_auth(token_a),
+        json={"question": "Acceptance check: opening a thread.", "create_thread": True},
+        timeout=180.0,
+    ) as response:
+        assert_status(response, 200, *credentials.secrets)
+        # Drained rather than read: whether the run completes is criterion 7's question, asked
+        # once elsewhere. Leaving the body unread would hold the connection open.
+        for _ in response.iter_lines():
+            pass
+
+    listing = fetch(writer, "GET", target.api("/threads"), headers=_auth(token_a))
+    assert_status(listing, 200, *credentials.secrets)
+    opened = _thread_ids(listing, credentials) - before
+    if not opened:
+        pytest.skip("the deployed stream opened no thread, so nothing here is an isolation check")
+    thread_id = sorted(opened)[0]
+    try:
+        yield thread_id
+    finally:
+        fetch(writer, "DELETE", target.api(f"/threads/{thread_id}"), headers=_auth(token_a))
+
+
 def test_neither_account_is_served_the_other_s_thread(
     writer: httpx.Client,
     target: Target,
     token_a: Token,
     token_b: Token,
     credentials: Credentials,
-    answer_of_a: dict[str, Any],
+    thread_of_a: str,
 ) -> None:
     """Group 18.5 and 18.7's persistent-memory case: threads, by listing and by identifier."""
     mine = fetch(writer, "GET", target.api("/threads"), headers=_auth(token_a))
@@ -886,12 +949,26 @@ def test_neither_account_is_served_the_other_s_thread(
 
     assert not (own & other), f"both accounts are served the same thread: {sorted(own & other)}"
 
-    thread_id = answer_of_a.get("thread_id")
-    assert thread_id, "the deployed answer opened no thread, so nothing here is an isolation check"
+    assert thread_of_a in own, "A's own thread is missing from A's listing"
+    assert thread_of_a not in other, "B's listing contains A's thread"
 
-    assert thread_id in own, "A's own thread is missing from A's listing"
-    fetched = fetch(writer, "GET", target.api(f"/threads/{thread_id}"), headers=_auth(token_b))
+    fetched = fetch(writer, "GET", target.api(f"/threads/{thread_of_a}"), headers=_auth(token_b))
     assert_status(fetched, 404, *credentials.secrets)
+
+    absent = fetch(writer, "GET", target.api(f"/threads/{NOT_A_REAL_ID}"), headers=_auth(token_b))
+    assert fetched.status_code == absent.status_code, (
+        "a foreign thread is refused differently from an absent one, which discloses that it exists"
+    )
+
+    # The other direction of the same policy, and the destructive one: a refusal that still deleted
+    # the row would satisfy every assertion above and lose A's conversation.
+    attempt = fetch(writer, "DELETE", target.api(f"/threads/{thread_of_a}"), headers=_auth(token_b))
+    assert_status(attempt, 404, *credentials.secrets)
+    survivor = fetch(writer, "GET", target.api("/threads"), headers=_auth(token_a))
+    assert_status(survivor, 200, *credentials.secrets)
+    assert thread_of_a in _thread_ids(survivor, credentials), (
+        "A's thread did not survive B's delete attempt"
+    )
 
 
 def _thread_ids(response: httpx.Response, credentials: Credentials) -> set[str]:
