@@ -237,6 +237,8 @@ describe("the keyless Wikimedia tier", () => {
     readonly artist?: string | null;
     readonly licenceUrl?: string | null;
     readonly description?: string | null;
+    /** What a search for the whole place name returns, for the fallback path. */
+    readonly results?: readonly { index?: number; title?: string; original?: { source: string } }[];
   }) {
     const extmetadata: Record<string, { value: string }> = {};
     if (options.licence) extmetadata.LicenseShortName = { value: options.licence };
@@ -246,6 +248,16 @@ describe("the keyless Wikimedia tier", () => {
 
     return vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
       const url = String(input);
+      /*
+       * The search fallback, which the chain reaches only when the article the locality names has
+       * no lead image of its own. Checked before the exact-title branch because both carry
+       * `prop=pageimages`; only this one carries a generator.
+       */
+      if (url.includes("generator=search")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ query: { pages: options.results ?? [] } }), { status: 200 }),
+        );
+      }
       if (url.includes("prop=pageimages")) {
         return Promise.resolve(
           new Response(
@@ -372,6 +384,99 @@ describe("the keyless Wikimedia tier", () => {
     const { resolveLocationImage, resetLocationImageCache } = await load();
     resetLocationImageCache();
     expect((await resolveLocationImage("Nowhere-at-all")).source).toBe("generated");
+  });
+
+  /**
+   * **The article a locality names is not always the article about the locality.**
+   *
+   * "New York" is a broad-concept page with no lead image; the city is at "New York City". The
+   * resolver made one attempt and stopped, so every New Yorker got drawn artwork while London,
+   * Berlin, Munich and Tokyo got photographs — which is a defect in the *lookup*, not a missing
+   * entry in a table, and is fixed as one. These cases drive that fallback with mocked answers;
+   * the live behaviour was checked against the real API for all five cities before it was written.
+   */
+  describe("a locality whose own article has no lead image", () => {
+    it("takes the best-ranked search result that is about the locality", async () => {
+      wikimedia({
+        original: null,
+        licence: "CC BY-SA 4.0",
+        artist: "A Photographer",
+        results: [
+          // Out of rank order on purpose: the search's own `index` decides, not the array.
+          { index: 3, title: "New York", original: { source: "https://upload.wikimedia.org/x/No_Lead.jpg" } },
+          {
+            index: 1,
+            title: "New York City",
+            original: { source: "https://upload.wikimedia.org/wikipedia/commons/7/7a/Empire_State.jpg" },
+          },
+        ],
+      });
+      const { resolveLocationImage, resetLocationImageCache } = await load();
+      resetLocationImageCache();
+
+      const image = await resolveLocationImage("New York, United States");
+      expect(image.source).toBe("commons");
+      expect(image.credit?.licence).toBe("CC BY-SA 4.0");
+    });
+
+    it("refuses a result that is not about the locality, however highly it ranks", async () => {
+      wikimedia({
+        original: null,
+        licence: "CC BY-SA 4.0",
+        artist: "A Photographer",
+        results: [
+          // What an unfiltered search actually returns first for this place.
+          {
+            index: 1,
+            title: "Theme from New York, New York",
+            original: { source: "https://upload.wikimedia.org/x/Record_Sleeve.jpg" },
+          },
+        ],
+      });
+      const { resolveLocationImage, resetLocationImageCache } = await load();
+      resetLocationImageCache();
+      expect((await resolveLocationImage("New York, United States")).source).toBe("generated");
+    });
+
+    it("refuses a result whose lead image is a flag or a logo rather than a photograph", async () => {
+      wikimedia({
+        original: null,
+        licence: "CC BY-SA 4.0",
+        artist: "A Photographer",
+        results: [
+          {
+            index: 1,
+            title: "New York Giants",
+            original: { source: "https://upload.wikimedia.org/x/New_York_Giants_logo.svg" },
+          },
+        ],
+      });
+      const { resolveLocationImage, resetLocationImageCache } = await load();
+      resetLocationImageCache();
+      expect((await resolveLocationImage("New York, United States")).source).toBe("generated");
+    });
+
+    it("falls through to artwork when the search finds nothing about the place either", async () => {
+      wikimedia({ original: null, licence: "CC BY-SA 4.0", artist: "Someone", results: [] });
+      const { resolveLocationImage, resetLocationImageCache } = await load();
+      resetLocationImageCache();
+      expect((await resolveLocationImage("Zzzznowhere, Nowhereland")).source).toBe("generated");
+    });
+  });
+
+  it("does not search at all when the locality's own article has a lead image", async () => {
+    /*
+     * The common path stays two requests. A place that resolves directly must not pay for a search
+     * it does not need — which is also what keeps the four cities that always worked unchanged.
+     */
+    const fetchSpy = wikimedia({ licence: "CC BY-SA 4.0", artist: "A Photographer" });
+    const { resolveLocationImage, resetLocationImageCache } = await load();
+    resetLocationImageCache();
+
+    expect((await resolveLocationImage("Berlin, Germany")).source).toBe("commons");
+    const asked = fetchSpy.mock.calls.map(([input]) => String(input));
+    expect(asked.some((url) => url.includes("generator=search"))).toBe(false);
+    expect(asked).toHaveLength(2);
   });
 
   it("is skipped entirely when a deployment switches it off", async () => {

@@ -301,14 +301,16 @@ async function fromUnsplash(
  * ever composed here, and a file whose metadata names no licence is refused rather than shown — an
  * unattributed photograph on a product screen is the one outcome worse than a drawing.
  *
- *   1. `prop=pageimages` on the English Wikipedia article for the place gives the lead image,
- *      which for a city is its skyline or a montage of it.
- *   2. `prop=imageinfo&iiprop=extmetadata` on that file gives the artist, the licence and a
+ *   1. `prop=pageimages` on the English Wikipedia article named by the place's own locality gives
+ *      the lead image, which for a city is its skyline or a montage of it.
+ *   2. Where that article has no lead image, a search for the *whole* place name, taking the
+ *      highest-ranked result whose title begins with the locality. See `searchLeadImage`.
+ *   3. `prop=imageinfo&iiprop=extmetadata` on the file gives the artist, the licence and a
  *      thumbnail at a width this layout can use rather than the 5000-pixel original.
  *
- * Two requests per place per process, behind the same cache as every other tier. Set
- * `CITY_IMAGE_COMMONS=off` to skip it — a deployment that would rather show artwork than reach a
- * third party on a page load can, and the chain simply continues to the next tier.
+ * Two requests per place per process — three where step 1 finds nothing — behind the same cache as
+ * every other tier. Set `CITY_IMAGE_COMMONS=off` to skip it: a deployment that would rather show
+ * artwork than reach a third party on a page load can, and the chain continues to the next tier.
  */
 
 const COMMONS_ENDPOINT = "https://en.wikipedia.org/w/api.php";
@@ -385,22 +387,95 @@ async function commonsJson(parameters: Record<string, string>): Promise<unknown 
  * that is a map or a coat of arms in a format this cannot show, or metadata with no licence in it.
  * The caller treats all of them the same way — it moves to the next tier.
  */
-async function fromCommons(displayName: string): Promise<ResolvedLocationImage | null> {
-  const place = (displayName.split(",")[0] ?? displayName).trim();
-  if (place.length === 0) return null;
+/** A lead image this frame can actually draw, or null. Shared by both title strategies. */
+function drawableSource(source: string | undefined): string | null {
+  if (!source) return null;
+  try {
+    return COMMONS_IMAGE.test(new URL(source).pathname) ? source : null;
+  } catch {
+    return null;
+  }
+}
 
+/**
+ * The lead image of the article a locality names, where that article has one.
+ *
+ * The direct hit, and the one almost every place takes: "Berlin", "London", "Munich" and "Tokyo"
+ * are each the title of their own city's article.
+ */
+async function exactLeadImage(place: string): Promise<string | null> {
   const page = (await commonsJson({
     action: "query",
     prop: "pageimages",
     piprop: "original",
     titles: place,
     redirects: "1",
+  })) as { query?: { pages?: readonly { original?: { source?: string } }[] } } | null;
+
+  return drawableSource(page?.query?.pages?.[0]?.original?.source);
+}
+
+/**
+ * The lead image of the best-ranked article a *search* for the whole place name finds.
+ *
+ * **Why this step exists.** The article a locality names is not always the article about the
+ * locality. "New York" is a broad-concept page with no lead image at all — the city is at "New York
+ * City" — so the resolver's single attempt found nothing and every New Yorker got drawn artwork
+ * while London, Berlin, Munich and Tokyo got photographs. That is not a New York problem; it is
+ * every place whose bare name is ambiguous on Wikipedia, and a map of exceptions would be a map of
+ * exceptions.
+ *
+ * So the fallback is the same question asked the way a person would ask it: search for the place as
+ * the backend names it — locality, region, country — and take the first result that is *about* the
+ * locality. Two filters decide that, and both are general:
+ *
+ * * **The title must begin with the locality.** This is what separates "New York City" and
+ *   "Springfield, Illinois" from "Theme from New York, New York" and "University of Illinois
+ *   Springfield", which is what an unfiltered search returns first.
+ * * **The lead image must be a photograph this frame can draw.** A flag or a logo is an `.svg` and
+ *   is refused by the same rule the direct path uses — which is also what stops "New York Giants"
+ *   from ever being the answer.
+ *
+ * Results are taken in the search's own ranking (`index`), not in the order the object happens to
+ * list them. Nothing here is specific to a city, a country or a naming convention.
+ */
+async function searchLeadImage(displayName: string, place: string): Promise<string | null> {
+  const found = (await commonsJson({
+    action: "query",
+    generator: "search",
+    gsrsearch: displayName,
+    gsrlimit: "6",
+    // Articles only: a category or a template is not a place.
+    gsrnamespace: "0",
+    prop: "pageimages",
+    piprop: "original",
   })) as {
-    query?: { pages?: readonly { original?: { source?: string } }[] };
+    query?: {
+      pages?: readonly { index?: number; title?: string; original?: { source?: string } }[];
+    };
   } | null;
 
-  const original = page?.query?.pages?.[0]?.original?.source;
-  if (!original || !COMMONS_IMAGE.test(new URL(original).pathname)) return null;
+  const ranked = [...(found?.query?.pages ?? [])].sort(
+    (one, other) => (one.index ?? 99) - (other.index ?? 99),
+  );
+  const wanted = place.toLowerCase();
+
+  for (const page of ranked) {
+    if (!(page.title ?? "").toLowerCase().startsWith(wanted)) continue;
+    const source = drawableSource(page.original?.source);
+    if (source) return source;
+  }
+  return null;
+}
+
+async function fromCommons(displayName: string): Promise<ResolvedLocationImage | null> {
+  const place = (displayName.split(",")[0] ?? displayName).trim();
+  if (place.length === 0) return null;
+
+  // The article the locality names, and — only where that has no lead image — a search for it.
+  const original =
+    (await exactLeadImage(place)) ?? (await searchLeadImage(displayName, place));
+  if (!original) return null;
 
   // `…/commons/f/f7/Museumsinsel_Berlin.jpg` → `File:Museumsinsel Berlin.jpg`, which is the title
   // the metadata request takes. Decoded, because the path is percent-encoded and the title is not.
