@@ -137,7 +137,6 @@ const STATISTIC_PHRASES: Readonly<Record<string, string>> = {
   "maximum_sustained_speed:wind_speed": "Strongest wind",
   "mean:temperature_max": "Average high",
   "mean:temperature_min": "Average low",
-  "mean:temperature_mean": "Average temperature",
   "minimum:temperature_max": "Lowest daily high",
   "maximum:temperature_max": "Highest daily high",
   "minimum:temperature_min": "Lowest daily low",
