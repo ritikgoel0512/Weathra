@@ -123,12 +123,32 @@ const UNCERTAINTY = {
   reference_time_utc: RETRIEVED_AT,
   spread_available: false,
   multi_provider_consensus: false,
+  /*
+   * Three bands rather than one.
+   *
+   * `UncertaintyStatement.horizon` is confidence *by distance*, and a single entry cannot show
+   * that: the report's confidence scale and the Dashboard's indicator both photographed as one
+   * chip. Three is what the statement is for — the same band close in, and the decline the basis
+   * sentence describes.
+   */
   horizon: [
     {
       confidence: "high",
       hours_ahead: 6,
       time_utc: "2026-09-04T12:00:00Z",
       time_local: "2026-09-04T14:00:00+02:00",
+    },
+    {
+      confidence: "moderate",
+      hours_ahead: 72,
+      time_utc: "2026-09-07T06:00:00Z",
+      time_local: "2026-09-07T08:00:00+02:00",
+    },
+    {
+      confidence: "low",
+      hours_ahead: 144,
+      time_utc: "2026-09-10T06:00:00Z",
+      time_local: "2026-09-10T08:00:00+02:00",
     },
   ],
 };
@@ -221,19 +241,47 @@ const EVIDENCE_RECORD = {
   question: "How does this week compare with the same week last year?",
   routing_reason: "The question spans a forecast and an archive period.",
   routing_source: "model",
+  /*
+   * The whole graph, not a third of it.
+   *
+   * Three agents and one tool call left `05-agent-evidence.png`'s execution column — the screen's
+   * subject — about a third the height of the record beside it. A question spanning a forecast and
+   * an archive period routes to every retrieval agent the supervisor has, and this is what that
+   * run records: the six members of `AgentName`, one of them skipped with the supervisor's reason
+   * for skipping it, so a status that is neither success nor failure is in the capture too.
+   */
   agents: [
     { sequence: 1, agent: "supervisor", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 120, reason: "Planned retrieval then comparison." },
     { sequence: 2, agent: "forecast", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 840, reason: "Retrieved the window." },
-    { sequence: 3, agent: "synthesis", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 900 },
+    { sequence: 3, agent: "historical", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 620, reason: "Loaded the same calendar week from the archive." },
+    { sequence: 4, agent: "analytics", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 310, reason: "Computed the mean and the difference from the baseline." },
+    { sequence: 5, agent: "rag", status: "skipped", started_at: RETRIEVED_AT, duration_ms: 40, reason: "The question needed no explanatory context beyond the retrieved figures." },
+    { sequence: 6, agent: "synthesis", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 900 },
   ],
   tool_calls: [
     {
       sequence: 1,
       tool: "weather_forecast",
       agent: "forecast",
-      arguments: { latitude: 52.52, longitude: 13.405, days: 3 },
+      arguments: { latitude: 52.52, longitude: 13.405, days: 7 },
       started_at: RETRIEVED_AT,
       duration_ms: 840,
+    },
+    {
+      sequence: 2,
+      tool: "weather_history",
+      agent: "historical",
+      arguments: { latitude: 52.52, longitude: 13.405, start: "2025-09-04", end: "2025-09-06" },
+      started_at: RETRIEVED_AT,
+      duration_ms: 620,
+    },
+    {
+      sequence: 3,
+      tool: "weather_baseline_comparison",
+      agent: "analytics",
+      arguments: { latitude: 52.52, longitude: 13.405, measure: "temperature_mean", years: 10 },
+      started_at: RETRIEVED_AT,
+      duration_ms: 310,
     },
   ],
   tool_results: [
@@ -243,12 +291,46 @@ const EVIDENCE_RECORD = {
       ok: true,
       data_class: "forecast",
       attribution: { ...ATTRIBUTION, period: PERIOD },
-      payload: { daily: [1, 2, 3], units: { temperature: "°C" } },
+      payload: { daily: 7, hourly: 24, units: { temperature: "°C" } },
+    },
+    {
+      sequence: 2,
+      tool: "weather_history",
+      ok: true,
+      data_class: "historical_observation",
+      attribution: { ...ATTRIBUTION, data_class: "historical_observation", period: PERIOD },
+      payload: { daily: 3, units: { temperature_mean: "°C" } },
+    },
+    {
+      sequence: 3,
+      tool: "weather_baseline_comparison",
+      ok: true,
+      data_class: "computed_statistic",
+      attribution: { ...ATTRIBUTION, data_class: "computed_statistic", period: PERIOD },
+      payload: { difference: 1.7, z_score: 1.21, years_used: 4 },
     },
   ],
-  analytics_results: [statistic("mean", "temperature", 17.9, "°C", "arithmetic mean of usable points")],
+  analytics_results: [
+    statistic("mean", "temperature", 17.9, "°C", "arithmetic mean of usable points"),
+    statistic("delta", "temperature_mean", 1.7, "°C", "the value being compared minus the baseline"),
+    statistic("z_score", "temperature_mean", 1.21, "", "value minus reference mean, divided by the reference standard deviation"),
+  ],
   anomaly_reports: [],
-  trend_reports: [],
+  trend_reports: [
+    {
+      measure: "temperature",
+      direction: "rising",
+      magnitude: 1.2,
+      slope_per_day: 0.4,
+      unit: "°C",
+      method: "least-squares slope",
+      minimum_points: 3,
+      insignificance_margin_per_day: 0.1,
+      points_used: 48,
+      points_excluded: 0,
+      provenance: PROVENANCE,
+    },
+  ],
   citations: [
     {
       document_id: "forecast-uncertainty.md",
@@ -259,14 +341,18 @@ const EVIDENCE_RECORD = {
       text: "Forecast skill declines with lead time because small errors in the initial state grow.",
     },
   ],
-  attributions: [{ ...ATTRIBUTION, period: PERIOD }],
-  data_classes: ["forecast", "computed_statistic", "ai_interpretation"],
+  attributions: [
+    { ...ATTRIBUTION, period: PERIOD },
+    { ...ATTRIBUTION, data_class: "historical_observation", period: PERIOD },
+    { ...ATTRIBUTION, data_class: "computed_statistic", period: PERIOD },
+  ],
+  data_classes: ["forecast", "historical_observation", "computed_statistic", "ai_interpretation"],
   llm_provider: "stub-gateway",
   llm_model: "stub-model",
   started_at: RETRIEVED_AT,
   completed_at: "2026-09-04T06:15:04Z",
   total_duration_ms: 4210,
-  steps_used: 3,
+  steps_used: 6,
   partial: false,
   partial_reason: null,
 };
@@ -287,17 +373,48 @@ const EVIDENCE_PROSE =
 const FIXTURES = {
   "/api/v1/me/preferences": {
     unit_system: "metric",
-    forecast_horizon_days: 3,
+    /*
+     * Seven, which is the horizon `01-dashboard.png` and `12-weather-intelligence-report.png` are
+     * drawn at. At three, the Dashboard's seven-day strip photographed as two figures and five
+     * cards reading "Not forecast", and the report's outlook as two day cards — a picture of this
+     * fixture's shape rather than of the screen. The screens' own thin-data behaviour is not lost
+     * with it: `dashboard.test.tsx` and `report.test.tsx` both hold a window shorter than the
+     * horizon, and the entry below that reports nothing still does.
+     */
+    forecast_horizon_days: 7,
     default_location: BERLIN,
     sources: { unit_system: "chosen", default_location: "chosen", forecast_horizon_days: "chosen" },
   },
 
+  /*
+   * The measures a current reading actually carries.
+   *
+   * It reported two, and every screen that lays out a metric grid — the Dashboard's readout, the
+   * report's observed column — was photographed with two tiles where the artifacts draw six. That
+   * made the capture evidence about this file rather than about the layout. The set below is the
+   * one the provider supplies for a point; `uv_index` is deliberately absent, so a measure the
+   * provider did not report is still part of the picture.
+   */
   "/api/v1/weather/current": {
     attribution: { ...ATTRIBUTION, data_class: "current" },
     observed_at_utc: RETRIEVED_AT,
     observed_at_local: "2026-09-04T08:15:00+02:00",
-    units: { temperature: "°C", relative_humidity: "%" },
-    values: { temperature: 15.3, relative_humidity: 68 },
+    units: {
+      temperature: "°C",
+      apparent_temperature: "°C",
+      relative_humidity: "%",
+      precipitation: "mm",
+      wind_speed: "km/h",
+      surface_pressure: "hPa",
+    },
+    values: {
+      temperature: 15.3,
+      apparent_temperature: 14.1,
+      relative_humidity: 68,
+      precipitation: 0.4,
+      wind_speed: 14.2,
+      surface_pressure: 1012,
+    },
   },
 
   /*
@@ -374,15 +491,18 @@ const FIXTURES = {
   "/api/v1/weather/forecast": {
     attribution: ATTRIBUTION,
     period: PERIOD,
-    horizon_days: 3,
+    // Seven, agreeing with the seven daily entries below and with the preference above. At three
+    // the report's header read "3 DAYS" over a strip of seven day cards.
+    horizon_days: 7,
     /*
      * A real hourly series, because an empty one is not a neutral fixture.
      *
      * Three screens draw their main chart from this — the Dashboard's climate pulse and
      * precipitation outlook, and Forecast Explorer's window and hour-by-hour matrix — and with no
      * entries all four photographed as empty frames. The frames were correct and the pictures were
-     * evidence of nothing. Two days at six-hour resolution, with one hour reporting no temperature
-     * so the gap behaviour stays visible in the capture.
+     * evidence of nothing. Six days at six-hour resolution — the window the horizon actually covers,
+     * so the report's timeline is a week rather than a corner of one — with one hour reporting no
+     * temperature so the gap behaviour stays visible in every capture.
      */
     hourly: {
       granularity: "hourly",
@@ -396,21 +516,71 @@ const FIXTURES = {
         { time_local: "2026-09-05T06:00:00+02:00", time_utc: "2026-09-05T04:00:00Z", values: { temperature: 11.9, precipitation: 0, relative_humidity: 80 } },
         { time_local: "2026-09-05T12:00:00+02:00", time_utc: "2026-09-05T10:00:00Z", values: { temperature: 18.6, precipitation: 0, relative_humidity: 58 } },
         { time_local: "2026-09-05T18:00:00+02:00", time_utc: "2026-09-05T16:00:00Z", values: { temperature: 15.4, precipitation: 2.1, relative_humidity: 71 } },
+        { time_local: "2026-09-06T00:00:00+02:00", time_utc: "2026-09-05T22:00:00Z", values: { temperature: 12.7, precipitation: 0, relative_humidity: 77 } },
+        { time_local: "2026-09-06T06:00:00+02:00", time_utc: "2026-09-06T04:00:00Z", values: { temperature: 13.5, precipitation: 0, relative_humidity: 75 } },
+        { time_local: "2026-09-06T12:00:00+02:00", time_utc: "2026-09-06T10:00:00Z", values: { temperature: 24.5, precipitation: 0, relative_humidity: 52 } },
+        { time_local: "2026-09-06T18:00:00+02:00", time_utc: "2026-09-06T16:00:00Z", values: { temperature: 19.2, precipitation: 0.3, relative_humidity: 63 } },
+        { time_local: "2026-09-07T00:00:00+02:00", time_utc: "2026-09-06T22:00:00Z", values: { temperature: 13.9, precipitation: 0, relative_humidity: 76 } },
+        { time_local: "2026-09-07T06:00:00+02:00", time_utc: "2026-09-07T04:00:00Z", values: { temperature: 14.2, precipitation: 0, relative_humidity: 74 } },
+        { time_local: "2026-09-07T12:00:00+02:00", time_utc: "2026-09-07T10:00:00Z", values: { temperature: 22.8, precipitation: 0, relative_humidity: 55 } },
+        { time_local: "2026-09-07T18:00:00+02:00", time_utc: "2026-09-07T16:00:00Z", values: { temperature: 18.6, precipitation: 0.2, relative_humidity: 66 } },
+        { time_local: "2026-09-08T00:00:00+02:00", time_utc: "2026-09-07T22:00:00Z", values: { temperature: 12.1, precipitation: 0.6, relative_humidity: 81 } },
+        { time_local: "2026-09-08T06:00:00+02:00", time_utc: "2026-09-08T04:00:00Z", values: { temperature: 12.9, precipitation: 0.4, relative_humidity: 83 } },
+        { time_local: "2026-09-08T12:00:00+02:00", time_utc: "2026-09-08T10:00:00Z", values: { temperature: 19.1, precipitation: 1.1, relative_humidity: 64 } },
+        { time_local: "2026-09-08T18:00:00+02:00", time_utc: "2026-09-08T16:00:00Z", values: { temperature: 16.4, precipitation: 1.3, relative_humidity: 72 } },
+        { time_local: "2026-09-09T00:00:00+02:00", time_utc: "2026-09-08T22:00:00Z", values: { temperature: 9.4, precipitation: 2.4, relative_humidity: 88 } },
+        { time_local: "2026-09-09T06:00:00+02:00", time_utc: "2026-09-09T04:00:00Z", values: { temperature: 8.1, precipitation: 1.8, relative_humidity: 90 } },
+        { time_local: "2026-09-09T12:00:00+02:00", time_utc: "2026-09-09T10:00:00Z", values: { temperature: 16.5, precipitation: 0.9, relative_humidity: 71 } },
+        { time_local: "2026-09-09T18:00:00+02:00", time_utc: "2026-09-09T16:00:00Z", values: { temperature: 13.2, precipitation: 0.1, relative_humidity: 79 } },
       ],
     },
+    /*
+     * A week of daily entries, because the horizon is a week.
+     *
+     * Two entries against a seven-day horizon photographed as five cards reading "Not forecast",
+     * which is the fixture's shape and not the screen's. The last day still reports no maximum, so
+     * a day the provider did not fully report stays in every capture — that behaviour is the point
+     * of the strip and is not being tidied away.
+     */
     daily: {
       granularity: "daily",
-      units: { temperature_max: "°C", temperature_min: "°C" },
+      units: { temperature_max: "°C", temperature_min: "°C", precipitation_sum: "mm" },
       entries: [
         {
           time_utc: "2026-09-03T22:00:00Z",
           time_local: "2026-09-04T00:00:00+02:00",
-          values: { temperature_max: 19.6, temperature_min: 10.4 },
+          values: { temperature_max: 19.6, temperature_min: 10.4, precipitation_sum: 1.6 },
         },
         {
           time_utc: "2026-09-04T22:00:00Z",
           time_local: "2026-09-05T00:00:00+02:00",
-          values: { temperature_max: 20.8, temperature_min: 11.2 },
+          values: { temperature_max: 20.8, temperature_min: 11.2, precipitation_sum: 2.1 },
+        },
+        {
+          time_utc: "2026-09-05T22:00:00Z",
+          time_local: "2026-09-06T00:00:00+02:00",
+          values: { temperature_max: 24.5, temperature_min: 13.1, precipitation_sum: 0 },
+        },
+        {
+          time_utc: "2026-09-06T22:00:00Z",
+          time_local: "2026-09-07T00:00:00+02:00",
+          values: { temperature_max: 22.8, temperature_min: 12.4, precipitation_sum: 0.2 },
+        },
+        {
+          time_utc: "2026-09-07T22:00:00Z",
+          time_local: "2026-09-08T00:00:00+02:00",
+          values: { temperature_max: 19.1, temperature_min: 11.8, precipitation_sum: 3.4 },
+        },
+        {
+          time_utc: "2026-09-08T22:00:00Z",
+          time_local: "2026-09-09T00:00:00+02:00",
+          values: { temperature_max: 16.5, temperature_min: 9.7, precipitation_sum: 5.2 },
+        },
+        {
+          // The provider reported a minimum for this day and no maximum. Not a zero.
+          time_utc: "2026-09-09T22:00:00Z",
+          time_local: "2026-09-10T00:00:00+02:00",
+          values: { temperature_max: null, temperature_min: 10.2, precipitation_sum: null },
         },
       ],
     },
@@ -426,8 +596,26 @@ const FIXTURES = {
     horizon_days: 3,
     from_cache: false,
     summary: "Across the window the mean temperature is 15.1 °C.",
+    /*
+     * More than one statistic, because the endpoint returns more than one.
+     *
+     * A single finding photographed as a single tile in a grid built for several, on the report
+     * and on Historical alike. These are the statistics `analytics/` computes for a forecast
+     * window; the last is deliberately not computable, so the "stated reason rather than a zero"
+     * path is in every capture.
+     */
     findings: [
       statistic("mean", "temperature", 15.1, "°C", "arithmetic mean of usable points"),
+      statistic("minimum", "temperature", 9.7, "°C", "minimum of usable points"),
+      statistic("maximum", "temperature", 24.5, "°C", "maximum of usable points"),
+      statistic("total", "precipitation", 12.5, "mm", "sum of usable points"),
+      {
+        ...statistic("mean_speed", "wind_speed", null, "km/h", "arithmetic mean of usable points"),
+        status: "not_computable",
+        reason: "The provider reported no wind speed for this window.",
+        points_used: 0,
+        points_excluded: 48,
+      },
     ],
     anomalies: {
       measure: "temperature",
@@ -438,8 +626,35 @@ const FIXTURES = {
       points_used: 48,
       points_excluded: 0,
       unit: "°C",
-      anomalies: [],
-      note: "No entry stood out from the window by this method.",
+      /*
+       * Two entries past the threshold and one under it, so the deviation plot has a shape and its
+       * threshold line has something to be a threshold *of*. An empty list is a real state and is
+       * the one `report.test.tsx` holds; it is not the one worth photographing.
+       */
+      anomalies: [
+        {
+          time_utc: "2026-09-05T16:00:00Z",
+          time_local: "2026-09-05T18:00:00+02:00",
+          value: 24.5,
+          deviation: 9.5,
+          deviation_score: 5.8,
+        },
+        {
+          time_utc: "2026-09-08T04:00:00Z",
+          time_local: "2026-09-08T06:00:00+02:00",
+          value: 8.1,
+          deviation: -6.9,
+          deviation_score: 4.2,
+        },
+        {
+          time_utc: "2026-09-09T10:00:00Z",
+          time_local: "2026-09-09T12:00:00+02:00",
+          value: 18.4,
+          deviation: 3.4,
+          deviation_score: 2.1,
+        },
+      ],
+      note: null,
       provenance: PROVENANCE,
       minimum: statistic("minimum", "temperature", 10.4, "°C", "minimum of usable points"),
       maximum: statistic("maximum", "temperature", 20.8, "°C", "maximum of usable points"),
@@ -467,12 +682,52 @@ const FIXTURES = {
     provider: "stub-provider",
     unit_system: "metric",
     data_class: "forecast",
-    comparison_available: false,
-    previous_retrieved_at: null,
+    /*
+     * An actual comparison, which is what this endpoint exists to return.
+     *
+     * With `comparison_available: false` the Dashboard's "What Changed?" band and the report's
+     * panel both photographed as one sentence explaining that there was nothing to compare — a
+     * true state, and the only one either had ever been seen in. The movements below include one
+     * inside the measure's materiality margin, so the "shown as immaterial rather than dropped or
+     * promoted" behaviour is in the picture too.
+     */
+    comparison_available: true,
+    previous_retrieved_at: "2026-09-03T18:00:00Z",
     current_retrieved_at: RETRIEVED_AT,
-    changes: [],
+    changes: [
+      {
+        local_date: "2026-09-05",
+        measure: "temperature_max",
+        previous: 19.4,
+        current: 20.8,
+        change: 1.4,
+        unit: "°C",
+        material: true,
+        statement: "The maximum for 5 September is 1.4 °C higher than in the earlier retrieval.",
+      },
+      {
+        local_date: "2026-09-07",
+        measure: "temperature_max",
+        previous: 23.9,
+        current: 22.8,
+        change: -1.1,
+        unit: "°C",
+        material: true,
+        statement: "The maximum for 7 September is 1.1 °C lower than in the earlier retrieval.",
+      },
+      {
+        local_date: "2026-09-08",
+        measure: "precipitation_sum",
+        previous: 3.3,
+        current: 3.4,
+        change: 0.1,
+        unit: "mm",
+        material: false,
+        statement: "The total for 8 September moved by less than the reporting margin.",
+      },
+    ],
     statement:
-      "No earlier forecast is on record for Berlin, Germany over this window, so there is nothing to compare against yet. This is the current forecast, not a change.",
+      "Compared with the retrieval of 3 September, two days moved materially and one did not. This is a comparison of two forecasts, not a record of what happened.",
   },
 
   "/api/v1/weather/history/baseline": {
@@ -1012,8 +1267,45 @@ function answerEnvelope(requestId, question) {
     thread_id: "thread-e2e",
     answer_prose: STREAM_ANSWER_PROSE,
     prose_data_class: "ai_interpretation",
-    findings: [],
-    attribution: [{ ...ATTRIBUTION, period: PERIOD }],
+    /*
+     * The figures the answer opens out into.
+     *
+     * It was an empty list, so the Analyst's answer rendered its prose over three panels reading
+     * "Not reported" and "This run retrieved no observation" — the shape of the screen with none of
+     * its content, which is what `02-ai-weather-analyst.png` fills with an OBSERVED DATA and a
+     * FORECAST VECTOR block. One retrieved observation, one retrieved forecast figure and one
+     * computed statistic, so the answer carries all three tiers the screen separates.
+     */
+    findings: [
+      {
+        label: "Relative humidity now",
+        value: 68,
+        unit: "%",
+        data_class: "current",
+        attribution: { ...ATTRIBUTION, data_class: "current", period: PERIOD },
+      },
+      {
+        label: "Highest temperature this week",
+        value: 24.5,
+        unit: "°C",
+        data_class: "forecast",
+        attribution: { ...ATTRIBUTION, period: PERIOD },
+      },
+      {
+        label: "Mean temperature this week",
+        value: 17.9,
+        unit: "°C",
+        data_class: "computed_statistic",
+        method: "arithmetic mean of usable points",
+        points_used: 48,
+        supporting: statistic("mean", "temperature", 17.9, "°C", "arithmetic mean of usable points"),
+        attribution: { ...ATTRIBUTION, data_class: "computed_statistic", period: PERIOD },
+      },
+    ],
+    attribution: [
+      { ...ATTRIBUTION, data_class: "current", period: PERIOD },
+      { ...ATTRIBUTION, period: PERIOD },
+    ],
     resolved: {
       locations: [BERLIN],
       period: PERIOD,

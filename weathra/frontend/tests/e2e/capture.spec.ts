@@ -44,7 +44,24 @@ const ONLY = (process.env.WEATHRA_SCREENS ?? "")
 
 const ALL_SCREENS = [
   { name: "01-dashboard", path: "/" },
-  { name: "02-analyst", path: "/analyst" },
+  /*
+   * The Analyst, photographed with an answer in it.
+   *
+   * The production fidelity review of 2026-09-10 graded this screen NOT CLOSE and said why: "ours
+   * cannot be photographed populated without a live model call, and a screen that has only ever
+   * been seen empty is not close to one that is full." The first half of that was wrong about this
+   * harness. `weathra-api-stub.mjs` models `POST /agent/stream` — it is what `flows.spec.ts` drives
+   * — so the shipping bundle can be photographed with a real streamed answer rendered by the real
+   * components, with no inference provider and no allowance spent. Not asking was the omission.
+   *
+   * The empty state is not lost with it: it is the state every width was photographed in until
+   * now, `analyst.test.tsx` holds it, and the composition either way is the point of the rebuild.
+   */
+  {
+    name: "02-analyst",
+    path: "/analyst",
+    ask: "How does this week compare with the same week last year?",
+  },
   { name: "03-historical", path: "/historical" },
   { name: "04-compare", path: "/compare", prepare: "Compare" },
   { name: "06-locations", path: "/locations" },
@@ -62,7 +79,17 @@ const ALL_SCREENS = [
     // supposed to show; the figures behind it are the stub's, shaped as the endpoint returns them.
     prepare: "Rank these days",
   },
-  { name: "05-evidence", path: "/evidence" },
+  /*
+   * Agent Evidence, photographed as a populated record.
+   *
+   * `05-agent-evidence.png` is a populated execution trace, and `/evidence` with no run id is
+   * deliberately the empty workspace — so photographing that route compared an empty screen with a
+   * full one and graded the difference as the screen's. The record the stub stores for the streamed
+   * run is the right comparison; the empty workspace is still photographed beside it, under its own
+   * name, because it is a real state this pass also rebuilt.
+   */
+  { name: "05-evidence", path: "/evidence/run-e2e-1" },
+  { name: "05-evidence-empty", path: "/evidence" },
   // Task 34.18 built it, and the stub now models the administrative reads, so it is photographed
   // rather than judged from source as it was in the first fidelity review.
   { name: "09-admin", path: "/admin/model-usage" },
@@ -134,6 +161,28 @@ test.describe("capture", () => {
           const control = page.getByRole("button", { name: prepare, exact: true }).first();
           if (await control.isVisible().catch(() => false)) {
             await control.click();
+            await page.waitForLoadState("networkidle").catch(() => {});
+          }
+        }
+
+        /*
+         * A screen whose content is behind a *question* is photographed with one asked.
+         *
+         * The composer, then the submit, then the answer — waited on by its rendered region rather
+         * than by a timer, because the stream settles when it settles. A failure to produce one is
+         * not fatal here: this spec is evidence, and a screenshot of the run that did not finish is
+         * still the picture of what the build does.
+         */
+        const question = "ask" in screen ? (screen as { ask?: string }).ask : undefined;
+        if (question !== undefined) {
+          const composer = page.getByLabel("Your weather question");
+          if (await composer.isVisible().catch(() => false)) {
+            await composer.fill(question);
+            await page.getByRole("button", { name: "Ask Weathra" }).click();
+            await page
+              .getByRole("region", { name: "AI interpretation" })
+              .waitFor({ state: "visible", timeout: 15_000 })
+              .catch(() => {});
             await page.waitForLoadState("networkidle").catch(() => {});
           }
         }
