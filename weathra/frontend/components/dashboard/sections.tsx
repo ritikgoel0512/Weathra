@@ -498,11 +498,14 @@ export function ForecastStrip({ forecast }: ForecastStripProps): ReactNode {
         >
           {day ? (
             <>
-              {/* A weekday reads at a glance where an ISO date has to be decoded. Both are here:
-                  the name for scanning, the date beneath it for certainty — but the date is the
-                  day and the month, not the calendar stamp the backend sent. */}
+              {/*
+                **One line, not two.** `01-dashboard.png`'s card opens on `MON` alone and nothing
+                else above the icon; ours carried the weekday and `4 Sep` under it, which made every
+                card in the strip a row taller than the artifact's and pushed the temperature — the
+                thing the card exists for — down past the middle of it. The date is not lost: it
+                heads the card's own Details, where the rest of the day's figures already are.
+              */}
               <p className={styles.stripDayName}>{weekdayOf(day)}</p>
-              <p className={styles.stripDayDate}>{shortDateOf(day)}</p>
               {/*
                 The artifact's day card is an icon and a condition word over the temperatures. That
                 was a precipitation glyph until the provider's `weather_code` arrived, because
@@ -573,20 +576,20 @@ export function ForecastStrip({ forecast }: ForecastStripProps): ReactNode {
                   </dd>
                 </div>
               </dl>
-              {/* Everything else the provider reported for this day, one interaction away. The
-                  card stays four lines; nothing the backend sent is dropped. */}
-              {dayDetails(day).length > 0 ? (
-                <details className={styles.dayDetails}>
-                  <summary className={styles.dayDetailsSummary}>Details</summary>
-                  <span className={styles.dayOther}>
-                    {dayDetails(day).map((reading) => (
-                      <span key={reading.key}>
-                        {reading.label}: {formatReading(reading)}
-                      </span>
-                    ))}
-                  </span>
-                </details>
-              ) : null}
+              {/* The date, and everything else the provider reported for this day, one
+                  interaction away. The card stays the artifact's five rows; nothing the backend
+                  sent is dropped. */}
+              <details className={styles.dayDetails}>
+                <summary className={styles.dayDetailsSummary}>Details</summary>
+                <span className={styles.dayOther}>
+                  <span>{shortDateOf(day)}</span>
+                  {dayDetails(day).map((reading) => (
+                    <span key={reading.key}>
+                      {reading.label}: {formatReading(reading)}
+                    </span>
+                  ))}
+                </span>
+              </details>
             </>
           ) : (
             <>
@@ -608,11 +611,14 @@ export interface ForecastMovementProps {
 }
 
 /**
- * The days ahead, badged FORECAST, each carrying the window's uncertainty.
+ * The seven-day strip, badged FORECAST — the artifact's "Forecast Explorer".
  *
- * Deliberately *not* called "Forecast Explorer": `docs/design/screens.md` §5 records that the
- * artifact's label collides with the name of a post-MVP screen, and a Dashboard section carrying it
- * would advertise as built something that is not.
+ * **Why it now carries the artifact's own name.** `docs/design/screens.md` §5 refused the label on
+ * the grounds that it collided with a post-MVP screen and would advertise something unbuilt. That
+ * reasoning has expired: `/explorer` ships, it is in the navigation, and `11-explorer.png` is the
+ * screen it was named after. So the Dashboard section uses the product's real name for the thing
+ * it is a summary of, and the heading links to the full screen — which is what makes the name a
+ * signpost rather than a claim.
  */
 export function ForecastMovement({ forecast, location }: ForecastMovementProps): ReactNode {
   // The place this screen resolved, read before any early return so the hook order is fixed.
@@ -624,7 +630,13 @@ export function ForecastMovement({ forecast, location }: ForecastMovementProps):
   return (
     <ProvenanceSection
       dataClass="forecast"
-      title="The days ahead"
+      title="Forecast Explorer"
+      eyebrow={`${days.length}-day analysis`}
+      action={
+        <Link className={styles.panelLink} href="/explorer">
+          Open Forecast Explorer
+        </Link>
+      }
       attribution={attributionOf({
         known,
         provider: forecast.attribution?.provider,
@@ -650,13 +662,20 @@ export function ForecastMovement({ forecast, location }: ForecastMovementProps):
         <ForecastStrip forecast={forecast} />
       )}
 
-      {/* Required on every forecast: the band, and the basis it rests on. */}
+      {/*
+        Required on every forecast: the band, and the basis it rests on. `compact` is finding 14 of
+        the customer-level review of 2026-09-11 — the basis and the no-spread note were two lines of
+        defensive prose across the full width of the Dashboard's widest card. Both are still here,
+        behind the control on the same line, where a person checking the method finds them and a
+        person reading the weather does not have to.
+      */}
       {confidence && forecast.uncertainty?.basis ? (
         <UncertaintyIndicator
           confidence={confidence}
           basis={forecast.uncertainty.basis}
           hoursAhead={forecast.uncertainty.horizon?.[0]?.hours_ahead ?? null}
           spreadAvailable={forecast.uncertainty.spread_available ?? null}
+          compact
         />
       ) : null}
     </ProvenanceSection>
@@ -723,6 +742,61 @@ export interface AnomalyDetectionProps extends DeterministicAnalyticsProps {
  * `analysis.summary` is the backend's own sentence about its own findings, written by code with no
  * model involved, which is why it sits in this region rather than in the interpretation panel.
  */
+/**
+ * Where this window sits against the years behind it: above, within, or below what is usual.
+ *
+ * Both halves are figures the screen already holds. The window's mean comes from the analysis
+ * findings; the baseline's mean and its standard deviation come from the historical endpoint for
+ * the same calendar days. "Usual" is one standard deviation of the reference years — which is the
+ * spread the baseline itself reports, not a threshold invented here — so a window inside it is
+ * within the usual range and one outside it is above or below.
+ *
+ * Null unless every part is present **and in the same unit**. Comparing a Celsius mean against a
+ * Fahrenheit baseline would produce a confident sentence and a wrong one.
+ */
+function usualRangeOf(
+  analysis: AnalysisResponse,
+  baseline: Baseline | null,
+): { title: string; detail: string; tone: "flag" | "calm" } | null {
+  /*
+   * `temperature_mean` where the analysis ran over a daily series, `temperature` where it ran over
+   * an hourly one. Both are the arithmetic mean of the window's temperature in the same unit, and
+   * matching only the first is why this card kept falling back to its own-distribution sentence
+   * with a perfectly good baseline sitting in the rail beside it.
+   */
+  const mean = (analysis.findings ?? []).find(
+    (finding) =>
+      finding.statistic === "mean" &&
+      (finding.measure === "temperature_mean" || finding.measure === "temperature"),
+  );
+  const current = typeof mean?.value === "number" ? mean.value : null;
+  const reference = typeof baseline?.mean?.value === "number" ? baseline.mean.value : null;
+  const spread =
+    typeof baseline?.standard_deviation?.value === "number"
+      ? baseline.standard_deviation.value
+      : null;
+  if (current === null || reference === null || spread === null) return null;
+  if ((mean?.unit ?? null) !== (baseline?.mean?.unit ?? null)) return null;
+
+  const difference = current - reference;
+  const years = (baseline?.years_used ?? []).length;
+  const size = formatReading({ value: Math.abs(difference), unit: baseline?.mean?.unit ?? null });
+  const against = years > 0 ? `the ${years}-year average` : "the archive baseline";
+
+  if (Math.abs(difference) <= spread) {
+    return {
+      title: "Within usual range",
+      detail: `This window sits ${size} from ${against} for these days.`,
+      tone: "calm",
+    };
+  }
+  return {
+    title: difference > 0 ? "Above usual range" : "Below usual range",
+    detail: `${size} ${difference > 0 ? "above" : "below"} ${against}, beyond its usual spread.`,
+    tone: "flag",
+  };
+}
+
 export function DeterministicAnalytics({
   analysis,
   location,
@@ -732,6 +806,7 @@ export function DeterministicAnalytics({
   const known = useResolvedPlace();
   const anomalies = analysis.anomalies?.anomalies ?? [];
   const trend = analysis.trend;
+  const band = usualRangeOf(analysis, baseline);
 
   return (
     <ProvenanceSection
@@ -759,7 +834,23 @@ export function DeterministicAnalytics({
         glance on the way past. It had become four equal label/value rows with the trend among
         them, which is a small table: nothing in it was wrong and nothing in it was first.
       */}
-      {analysis.anomalies ? (
+      {/*
+        **The status the card is read for, at the size a status is read at.**
+        `01-dashboard.png` fills this slot with a warning icon over "THERMAL DRIFT DETECTED" and
+        "Berlin-Mitte is 1.4°C above predicted trend" — a claim about a station and a model
+        prediction Weathra has neither of. What it does have is the window's own mean against the
+        multi-year baseline for the same calendar days, and the spread of the years that baseline
+        averages: those two figures say whether this window is above, within or below what is usual
+        here, which is the real version of the statement the artifact is making.
+        Where no baseline came back the card still states what the analysis found on its own —
+        whether anything in the window stood out against the rest of it — rather than going quiet.
+      */}
+      {band ? (
+        <p className={styles.anomalyHeadline} data-tone={band.tone}>
+          <span className={styles.anomalyHeadlineTitle}>{band.title}</span>
+          <span className={styles.anomalyHeadlineDetail}>{band.detail}</span>
+        </p>
+      ) : analysis.anomalies ? (
         <p
           className={styles.anomalyHeadline}
           data-tone={anomalies.length > 0 ? "flag" : "calm"}
@@ -958,8 +1049,17 @@ export function HistoricalContext({ baseline }: HistoricalContextProps): ReactNo
    */
   return (
     <ProvenanceSection
+      /*
+        **The artifact's own product name, because it is accurate.** `01-dashboard.png` closes on
+        "HISTORICAL / Climate Baseline Comparison", and that is precisely what this band does: it
+        puts the forecast window against the multi-year mean for the same calendar days. "Historical
+        context" named the same thing more weakly. Where the artifact then invents — a 30-year norm
+        nobody computed, a candlestick chart, a "2023 EXTREME" callout — this does not follow it;
+        the years used are the years the archive actually returned, and they are stated.
+      */
       dataClass="historical"
-      title="Historical context"
+      title="Climate Baseline Comparison"
+      eyebrow="This window against the years behind it"
       attribution={attributionOf({
         known,
         provider: baseline.provider,
@@ -984,12 +1084,22 @@ export function HistoricalContext({ baseline }: HistoricalContextProps): ReactNo
             </p>
           )}
 
+          {/*
+            **One line about the years, not three.** It read "Computed from 3 years: 2021, 2022,
+            2023." on one line and "Fewer years were available than requested." on the next, under
+            a statement that had already said the baseline was computed from the years listed.
+            `specs/historical` requires the years actually used to be stated and requires it to be
+            said when fewer were available than asked for — both still are, in one sentence, and
+            the year-by-year figures are the plot beside it.
+          */}
           <p className={styles.note}>
             {years.length > 0
-              ? `Computed from ${years.length} ${years.length === 1 ? "year" : "years"}: ${years.join(", ")}.`
+              ? `Based on ${years.length} ${years.length === 1 ? "year" : "years"} of archive observations (${years.join(", ")}).`
               : "The archive reported no years for this window."}
+            {/* The backend's own coverage caveat, verbatim and on the same line — it is a
+                `specs/historical` requirement and is not this screen's to paraphrase. */}
+            {baseline.coverage_note ? ` ${baseline.coverage_note}` : null}
           </p>
-          {baseline.coverage_note ? <p className={styles.note}>{baseline.coverage_note}</p> : null}
 
           <Link href="/historical">
             <Button variant="secondary" size="sm">
@@ -999,7 +1109,7 @@ export function HistoricalContext({ baseline }: HistoricalContextProps): ReactNo
         </div>
 
         <div className={styles.baselineChart}>
-          <h3 className={styles.baselineChartTitle}>The reference years behind this baseline</h3>
+          <h3 className={styles.baselineChartTitle}>The reference years</h3>
           {yearly.length > 0 ? (
             <BaselineYearsChart
               years={yearly}
@@ -1088,11 +1198,8 @@ export function WhatChanged({ report }: WhatChangedProps): ReactNode {
 
   if (!report) {
     return (
-      <ProvenanceSection dataClass="forecast" title="What Changed?">
-        <EmptyState title="Forecast movement is not available yet">
-          Weathra compares a forecast against the last snapshot captured for the same location and
-          window. No comparison could be retrieved for this briefing.
-        </EmptyState>
+      <ProvenanceSection dataClass="forecast" title="What Changed?" headingLevel={3}>
+        <p className={styles.note}>No comparison could be retrieved for this briefing.</p>
       </ProvenanceSection>
     );
   }
@@ -1103,6 +1210,7 @@ export function WhatChanged({ report }: WhatChangedProps): ReactNode {
     <ProvenanceSection
       dataClass="forecast"
       title="What Changed?"
+      headingLevel={3}
       attribution={attributionOf({
         known,
         provider: report.provider,
@@ -1112,30 +1220,38 @@ export function WhatChanged({ report }: WhatChangedProps): ReactNode {
         units: report.unit_system,
       })}
     >
-      <p className={styles.statement}>{report.statement}</p>
-
       {!report.comparison_available ? (
-        // Never a zero delta: no earlier snapshot is not the same as no movement.
-        <EmptyState title="No earlier snapshot for this location and window">
-          There is nothing yet to compare this forecast against.
-        </EmptyState>
-      ) : material.length === 0 ? (
-        <p className={styles.note}>
-          Nothing moved beyond the materiality margin for its measure since the previous snapshot.
-        </p>
-      ) : (
         /*
-          One line per day that moved. Each row carried the backend's sentence about itself as
-          well — "The maximum for 5 September is 1.4 °C higher than in the earlier retrieval" —
-          which is the label and the delta beside it, said again in prose. Two moved days made this
-          the tallest card in the column; `01-dashboard.png` draws it as a sub-card of three lines.
-          The sentences are not lost: they are what the evidence record carries.
+          **The backend's sentence is not shown in this state, and that is the point.** It reads
+          "No earlier forecast is on record for 51.5085, -0.1257 over this window" — a true
+          sentence naming a customer's location as a coordinate pair, on the primary Dashboard.
+          Finding 24 of the customer-level review of 2026-09-11 rules that out, so this state says
+          the one thing it means. Never a zero delta either: no earlier snapshot is not no movement,
+          and the two are different sentences.
         */
-        <ul className={styles.findings}>
+        <p className={styles.note}>No previous forecast to compare against yet.</p>
+      ) : material.length === 0 ? (
+        <>
+          <p className={styles.statement}>{report.statement}</p>
+          <p className={styles.note}>Nothing moved materially since the previous snapshot.</p>
+        </>
+      ) : (
+        <>
+          <p className={styles.statement}>{report.statement}</p>
+          {/*
+            One line per day that moved. Each row carried the backend's sentence about itself as
+            well — "The maximum for 5 September is 1.4 °C higher than in the earlier retrieval" —
+            which is the label and the delta beside it, said again in prose. Two moved days made
+            this the tallest card in the column; `01-dashboard.png` draws it as a sub-card of three
+            lines. The sentences are not lost: they are what the evidence record carries.
+          */}
+          <ul className={styles.findings}>
           {material.map((change) => (
             <li className={styles.finding} key={`${change.local_date}-${change.measure}`}>
               <span className={styles.findingLabel}>
-                {change.local_date} · {measureLabel(change.measure)}
+                {/* `5 Sep`, not `2026-09-05`: a calendar stamp is for a log, and this is a card. */}
+                {shortDate(`${change.local_date}T00:00`) ?? change.local_date} ·{" "}
+                {measureLabel(change.measure)}
               </span>
               <span className={styles.findingValue}>
                 {typeof change.change === "number"
@@ -1144,12 +1260,9 @@ export function WhatChanged({ report }: WhatChangedProps): ReactNode {
               </span>
             </li>
           ))}
-        </ul>
+          </ul>
+        </>
       )}
-
-      {report.previous_retrieved_at ? (
-        <p className={styles.note}>Previous snapshot retrieved {report.previous_retrieved_at}.</p>
-      ) : null}
     </ProvenanceSection>
   );
 }
@@ -1194,9 +1307,19 @@ export function SavedSnapshots({
         ) : state.kind === "error" ? (
           <p className={styles.note}>Your saved places could not be loaded.</p>
         ) : records.length === 0 ? (
-          <p className={styles.note}>
-            No places saved yet. <Link href="/locations">Save one</Link> and it appears here.
-          </p>
+          /*
+            A small empty state, not an explanation. `01-dashboard.png` lists saved places in a
+            short rail card; the state where there are none should be the same card with nothing in
+            it and one thing to do, rather than a sentence about what the card would contain.
+          */
+          <div className={styles.snapshotsEmpty}>
+            <p className={styles.note}>No saved places yet</p>
+            <Link href="/locations">
+              <Button variant="secondary" size="sm">
+                Save a place
+              </Button>
+            </Link>
+          </div>
         ) : (
           <ul className={styles.snapshots}>
             {records.map((record) => {
@@ -1277,7 +1400,8 @@ export function ClimatePulse({
   return (
     <ProvenanceSection
       dataClass="forecast"
-      title="Climate pulse"
+      title="Climate Pulse Analytics"
+      eyebrow="Next 24 reported hours"
       attribution={attributionOf({
         known,
         provider: forecast.attribution?.provider,
@@ -1307,11 +1431,23 @@ export function ClimatePulse({
           {peakChance ? (
             <FooterKpi term="Max rain chance" value={`${Math.round(peakChance.value)}% @ ${peakChance.at}`} />
           ) : null}
-          {footer}
+          {/*
+            **Two figures on the rule, the rest behind a control.** `01-dashboard.png` closes this
+            card on exactly two — "PEAK HEAT" and "MAX RISK" — and ours closed it on five, all at
+            the same weight, which is a KPI strip with no first item. The other three are computed
+            by `insightsFor` and none of them is deleted or moved to another screen; they are one
+            press away, under the two the artifact makes primary.
+          */}
+          {footer ? (
+            <details className={styles.moreInsights}>
+              <summary className={styles.moreInsightsSummary}>More insights</summary>
+              {footer}
+            </details>
+          ) : null}
         </div>
       }
     >
-      <p className={styles.panelLead}>The next 24 reported hours</p>
+      {/* The eyebrow above the card's name already says what window this is. */}
       {drawable ? (
         <IntradayChart hours={hours} unit={forecast.hourly?.units?.temperature ?? null} />
       ) : (
@@ -1382,7 +1518,8 @@ export function PrecipitationOutlook({
   return (
     <ProvenanceSection
       dataClass="forecast"
-      title="Precipitation outlook"
+      title="Precipitation Outlook"
+      eyebrow="Next 24 reported hours"
       attribution={attributionOf({
         known,
         provider: forecast.attribution?.provider,
@@ -1404,19 +1541,24 @@ export function PrecipitationOutlook({
       */}
       {peak ? (
         <div className={styles.riskPanel}>
-          <span className={styles.riskGlyph} aria-hidden="true">
-            <WeatherIcon
-              condition={conditionFor(peak.value >= 50 ? 61 : 3)}
-              size={68}
-            />
+          {/*
+            **The focal graphic the artifact builds this card around.** `01-dashboard.png` fills the
+            top half of it with a large rendered rain cloud and a lightning disc on its shoulder;
+            ours was a 68-pixel outline icon with a large empty field under it, which finding 18
+            of the customer-level review of 2026-09-11 calls out by name. That artwork is not ours
+            to copy, so the focal point is built from what is: the project's own weather glyph at
+            three times the size, on a radial wash of the accent, with the condition disc beside it.
+            It is decoration; every figure on the card is the provider's.
+          */}
+          <span className={styles.riskGlyph} aria-hidden="true" data-level={peak.value >= 50 ? "wet" : "possible"}>
+            <WeatherIcon condition={conditionFor(peak.value >= 50 ? 61 : 3)} size={104} />
           </span>
+
           <p className={styles.riskReadout}>
             <span className={styles.riskFigure}>{Math.round(peak.value)}</span>
             <span className={styles.riskUnit}>%</span>
           </p>
-          <p className={styles.riskCaption}>
-            Highest chance of rain in the next 24 hours, at {peak.at}.
-          </p>
+          <p className={styles.riskCaption}>Highest chance of rain, at {peak.at}</p>
 
           <dl className={styles.riskStats}>
             <div className={styles.riskStat}>
@@ -1434,20 +1576,83 @@ export function PrecipitationOutlook({
               </dd>
             </div>
           </dl>
+
+          {/*
+            **The basis, behind a control.** It closed the card as a paragraph — "Confidence
+            decreases with horizon distance, from one provider's output and its supplied spread
+            only." — under a large empty area, which is finding 18's second half. It is still on
+            this card, in this region, one press away; `specs/web-ui` requires a forecast figure to
+            carry its uncertainty, not to lead with it.
+          */}
+          {uncertainty ? (
+            <details className={styles.riskBasisDetails}>
+              <summary className={styles.riskBasisSummary}>How this is graded</summary>
+              <p className={styles.riskBasis}>{uncertainty.basis}</p>
+            </details>
+          ) : null}
         </div>
       ) : (
-        <EmptyChart
-          title="Chance of rain through the next 24 hours"
-          reason="This provider reported no chance of rain for this window. That is an absent reading, not a reading of zero."
-        />
+        <>
+          <EmptyChart
+            title="Chance of rain through the next 24 hours"
+            reason="This provider reported no chance of rain for this window. That is an absent reading, not a reading of zero."
+          />
+          {uncertainty ? <p className={styles.riskBasis}>{uncertainty.basis}</p> : null}
+        </>
       )}
+    </ProvenanceSection>
+  );
+}
 
-      {/*
-        The uncertainty every forecast figure must carry, kept as one line rather than the two
-        paragraphs that used to close this card. The basis is the sentence a reader checks; whether
-        the provider supplied a spread is the same fact said again for everyone who did not.
-      */}
-      {uncertainty ? <p className={styles.riskBasis}>{uncertainty.basis}</p> : null}
+/* ------------------------------------------------------------------------ why? */
+
+export interface WhyProps {
+  readonly analysis: AnalysisResponse | null;
+}
+
+/**
+ * *Why?* — the artifact's second sub-card inside Weathra Intelligence, filled truthfully.
+ *
+ * `01-dashboard.png` answers it with "increased thermal instability in the upper troposphere
+ * exacerbated convection along the leading edge of the low-pressure system", which is a sentence
+ * about an atmosphere Weathra does not model. What Weathra *does* have for this slot is the shape
+ * of the window itself: a Theil–Sen slope across it, and how many entries stood out against the
+ * rest. Both are computed here, both carry their method, and together they are the deterministic
+ * answer to why the days ahead read the way they do.
+ *
+ * It is an ANALYTICS region rather than part of the interpretation beside it, because that is what
+ * it is — a computed statement, not the model's. The badge says so where a reader meets it.
+ */
+export function Why({ analysis }: WhyProps): ReactNode {
+  const trend = analysis?.trend ?? null;
+  const anomalies = analysis?.anomalies?.anomalies ?? [];
+  if (!trend) return null;
+
+  const measure = measureLabel(trend.measure);
+  const standouts = anomalies.length;
+
+  return (
+    <ProvenanceSection dataClass="analytics" title="Why?" headingLevel={3}>
+      <p className={styles.statement}>
+        {/*
+          The direction the backend classified, the size of the move it measured, and — where the
+          same analysis found any — how many entries sat outside the window's own spread. Both
+          clauses are figures from the response; neither is an explanation composed here.
+        */}
+        {measure} is {trend.direction} across this window, by{" "}
+        {formatReading({ value: trend.magnitude, unit: trend.unit })} in total.
+        {standouts > 0
+          ? ` ${standouts} ${standouts === 1 ? "day sits" : "days sit"} outside its usual spread.`
+          : " Nothing in it sits outside its usual spread."}
+      </p>
+
+      <MethodNote
+        method={trend.method}
+        pointsUsed={trend.points_used}
+        pointsExcluded={trend.points_excluded}
+        unit={trend.unit}
+        compact
+      />
     </ProvenanceSection>
   );
 }
@@ -1493,26 +1698,29 @@ export function ConfidenceMatrix({ forecast, analysis }: ConfidenceMatrixProps):
   const coverage = used + excluded > 0 ? used / (used + excluded) : null;
 
   return (
-    <section className={styles.matrix} aria-label="Confidence matrix">
-      <h3 className={styles.matrixTitle}>Confidence matrix</h3>
+    <section className={styles.matrix} aria-label="Confidence">
+      <h3 className={styles.matrixTitle}>Confidence</h3>
+      {/*
+        **Two bars and two short notes.** The notes read "Graded from horizon distance — 6 h ahead."
+        and "192 of 240 points usable." — two explanations of method where the artifact has a
+        figure. The method has not gone anywhere: forecast confidence carries its basis under the
+        strip below, and the coverage figure is the point count itself. What is left here is what
+        the bar is measuring.
+      */}
       <Meter
         label="Forecast confidence"
         value={confidence}
         unavailable="No horizon reported"
-        note={
-          horizon
-            ? `Graded from horizon distance — ${horizon.hours_ahead} h ahead.`
-            : "The provider reported no horizon points."
-        }
+        note={horizon ? `${horizon.hours_ahead} h ahead` : "No horizon reported"}
       />
       <Meter
-        label="Analytics coverage"
+        label="Data coverage"
         value={coverage}
         unavailable="No statistics yet"
         note={
           coverage === null
-            ? "Nothing computed for this window."
-            : `${used} of ${used + excluded} points usable.`
+            ? "Nothing computed for this window"
+            : `${used} of ${used + excluded} points`
         }
       />
     </section>

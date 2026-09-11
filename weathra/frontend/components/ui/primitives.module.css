@@ -793,6 +793,44 @@ input.controlBare[type="date"]::-webkit-calendar-picker-indicator:hover {
   gap: var(--space-2);
 }
 
+/*
+ * The two-line card head the artifacts draw: badge and eyebrow on one rule with the action on its
+ * end, the card's name beneath. `order` rather than a second wrapper element, so the heading stays
+ * where it belongs in the document and only moves on the screen.
+ */
+.provenanceHeader[data-eyebrow="true"] {
+  row-gap: var(--space-1);
+}
+
+.provenanceHeader[data-eyebrow="true"] > .provenanceTitle {
+  order: 3;
+  flex: 1 0 100%;
+  font-family: var(--family-display);
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line);
+  font-weight: var(--type-display-weight);
+}
+
+.provenanceEyebrow {
+  order: 1;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  min-width: 0;
+}
+
+.provenanceAction {
+  order: 2;
+  margin-inline-start: auto;
+  flex-shrink: 0;
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+}
+
 .provenanceTitle {
   font-family: var(--family-display);
   font-size: var(--type-section-size);
@@ -849,6 +887,7 @@ input.controlBare[type="date"]::-webkit-calendar-picker-indicator:hover {
  */
 .attribution {
   padding-top: var(--space-2);
+  margin-top: auto;
   border-top: 1px solid var(--color-border-subtle);
   font-size: var(--type-label-size);
   line-height: var(--type-label-line);
@@ -934,6 +973,37 @@ input.controlBare[type="date"]::-webkit-calendar-picker-indicator:hover {
   font-size: var(--type-meta-size);
   line-height: var(--type-meta-line);
   color: var(--color-text-secondary);
+}
+
+/* One line, and the method behind a control on the end of it. See `compact` in `provenance.tsx`. */
+.uncertainty[data-compact="true"] {
+  padding: var(--space-2) var(--space-3);
+}
+
+.uncertaintyDetails {
+  margin-inline-start: auto;
+  min-width: 0;
+}
+
+.uncertaintySummary {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-accent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.uncertaintySummary:hover {
+  color: var(--color-accent-strong);
+}
+
+.uncertaintyDetails[open] {
+  flex: 1 0 100%;
+  margin-inline-start: 0;
+}
+
+.uncertaintyDetails > :not(summary) {
+  margin-block-start: var(--space-1);
 }
 
 .badge[data-confidence="high"] {
@@ -1060,6 +1130,44 @@ input.controlBare[type="date"]::-webkit-calendar-picker-indicator:hover {
   color: var(--color-text-secondary);
 }
 
+/*
+ * **The compact treatment — the Dashboard's.**
+ *
+ * Finding 7 of the customer-level review of 2026-09-11: this panel was "an oversized purple
+ * interpretation box" taking most of the intelligence row, inside a card that is itself called
+ * Weathra Intelligence. `01-dashboard.png` draws the interpretation as a labelled column *inside*
+ * that card, not as a box within a box — so here the frame comes off and the tier is carried by
+ * the badge, the eyebrow and the boundary sentence, which are what `specs/web-ui` actually
+ * requires. The region, its `data-tier` and its `data-interpretation` marker are untouched.
+ */
+.interpretation[data-density="compact"] {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  gap: var(--space-3);
+}
+
+/* On the title's own line, pushed to the end of it, at the smallest step the system has. */
+.interpretation[data-density="compact"] .interpretationBoundary {
+  margin-inline-start: auto;
+  max-width: 46ch;
+  text-align: end;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+}
+
+/* "CURRENT INTERPRETATION" — the artifact's own label over the prose. */
+.interpretationEyebrow {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-class-interpretation);
+}
+
 .interpretationBody {
   display: flex;
   flex-direction: column;
@@ -1132,13 +1240,25 @@ input.controlBare[type="date"]::-webkit-calendar-picker-indicator:hover {
   margin: 0;
 }
 
+/*
+ * **Legible over a daylight photograph, not only over a dark one.**
+ *
+ * The scrim is heaviest at the foot of the band, where the readout is, and lightest at the top —
+ * which is where this rule sits. Against the drawn artwork that was fine; against the Wikimedia
+ * photograph the hero now resolves for Berlin, a secondary-grey label over a bright aerial view is
+ * barely there. The halo is built from the surface token, so it inverts with the appearance like
+ * the credit line below it, and the label takes the primary text role rather than the secondary.
+ */
 .provenanceSection[data-variant="hero"] > .provenanceHeader > .provenanceTitle {
   font-size: var(--type-label-size);
   line-height: var(--type-label-line);
   font-weight: var(--type-label-weight);
   letter-spacing: var(--type-label-tracking);
   text-transform: uppercase;
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
+  text-shadow:
+    0 1px 2px var(--color-surface-base),
+    0 0 12px var(--color-surface-base);
 }
 
 .provenanceSection[data-variant="hero"] > .provenanceBody {
@@ -1212,9 +1332,19 @@ input.controlBare[type="date"]::-webkit-calendar-picker-indicator:hover {
  * The name falling out of the image was never the aspect ratio — it was the overlay's own
  * `min-height` exceeding the frame. That is fixed in `fixture-compare.module.css`.
  */
+/*
+ * Re-measured for the customer-level review of 2026-09-11, by probing the artifact's own pixels
+ * rather than by eye: `01-dashboard.png`'s hero runs from y=112 to y=393 over a content column
+ * 1133 wide — 281px, which is 4.03:1 and not the 4.32:1 the previous pass recorded. The difference
+ * is about 19 pixels at desk width, which is small until you put the two screens side by side and
+ * find production's hero is the shorter of the two while the brief is that it should dominate.
+ *
+ * `min-height` is what holds it at phone width, where 4:1 of 343 pixels is 86 and the readout does
+ * not fit in 86.
+ */
 .locationImage[data-variant="hero"] {
-  aspect-ratio: 108 / 25;
-  min-height: 200px;
+  aspect-ratio: 4 / 1;
+  min-height: 230px;
 }
 
 .locationImage[data-variant="banner"] {
@@ -1520,14 +1650,19 @@ input.controlBare[type="date"]::-webkit-calendar-picker-indicator:hover {
   display: block;
 }
 
+/*
+ * At the label step, not the meta step. Seven of these run down a populated Dashboard; each one is
+ * provenance a reader checks occasionally and reads past constantly, and the difference between
+ * 12px and 11px over seven rules is the difference between a weather product and a data export.
+ */
 .attributionSummary {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
   align-items: baseline;
   cursor: pointer;
-  font-size: var(--type-meta-size);
-  line-height: var(--type-meta-line);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
   color: var(--color-text-muted);
 }
 

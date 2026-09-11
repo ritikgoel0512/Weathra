@@ -10,17 +10,22 @@
  *
  * # Where the image comes from
  *
- * It asks `/api/location-image`, which walks three tiers server-side and always answers:
+ * It asks `/api/location-image`, which walks four tiers server-side and always answers:
  *
  *   1. a photograph from a configured provider (Pexels or Unsplash),
  *   2. a photograph committed under `public/locations/photos/`,
- *   3. the artwork this repository draws, in `public/locations/`.
+ *   3. a freely licensed photograph from Wikimedia Commons, which needs no credential at all,
+ *   4. the artwork this repository draws, in `public/locations/`.
+ *
+ * Tier 3 is why an unconfigured deployment still shows a real city rather than a drawing. Its
+ * photographs are CC-licensed, so the photographer and the licence are rendered in the corner from
+ * the file's own metadata — see `provider.server.ts`, which refuses a file that names no licence.
  *
  * The credential for tier 1 never reaches the browser — `lib/images/provider.server.ts` is
  * `server-only`, so importing it from here would fail the build rather than leak. What arrives is a
  * URL, a description and which tier produced it.
  *
- * **Tier 3 is drawn first, not last.** The generated artwork is rendered immediately from the
+ * **The drawing is painted first, not last.** The generated artwork is rendered immediately from the
  * place's name, and a resolved photograph replaces it when the request answers. So there is no
  * empty frame, no spinner in the hero, and no reflow: the frame's height comes from its aspect
  * ratio, which is fixed before anything loads. If the request fails, or a photograph 404s after
@@ -210,6 +215,23 @@ export function LocationImage({
           ) : (
             shown.credit.name
           )}
+          {/*
+            The licence beside the name, because a CC-BY-SA photograph is used *on the condition*
+            that the licence is named — and naming it is what makes this an attribution rather than
+            a caption. Present only where the source stated one; never inferred from the host.
+          */}
+          {shown.credit.licence ? (
+            <>
+              {" · "}
+              {shown.credit.licenceUrl ? (
+                <a href={shown.credit.licenceUrl} rel="noreferrer nofollow" target="_blank">
+                  {shown.credit.licence}
+                </a>
+              ) : (
+                shown.credit.licence
+              )}
+            </>
+          ) : null}
         </p>
       ) : null}
     </div>

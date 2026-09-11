@@ -339,13 +339,13 @@ describe("a populated briefing", () => {
 
     for (const title of [
       "Current conditions",
-      "The days ahead",
+      "Forecast Explorer",
       "What Changed?",
       // Two panels since the 2026-09-11 parity pass, split the way `01-dashboard.png` splits
       // this band: the alert in the rail, the statistics in the wide column beside it.
       "Anomaly detection",
       "Computed figures",
-      "Historical context",
+      "Climate Baseline Comparison",
       "Weathra Intelligence",
     ]) {
       expect(await screen.findByRole("region", { name: title }), title).toBeInTheDocument();
@@ -373,7 +373,7 @@ describe("a populated briefing", () => {
 
   it("renders the days ahead with their highs and lows", async () => {
     renderDashboard();
-    const forecast = await screen.findByRole("region", { name: "The days ahead" });
+    const forecast = await screen.findByRole("region", { name: "Forecast Explorer" });
 
     /*
      * The card names its day the way a person says it — `Fri` over `4 Sep` — rather than printing
@@ -392,7 +392,7 @@ describe("a populated briefing", () => {
 
   it("carries the forecast's uncertainty with its stated basis", async () => {
     renderDashboard();
-    const forecast = await screen.findByRole("region", { name: "The days ahead" });
+    const forecast = await screen.findByRole("region", { name: "Forecast Explorer" });
 
     expect(within(forecast).getByText("HIGH CONFIDENCE")).toBeInTheDocument();
     expect(within(forecast).getByText(/Confidence decreases with horizon distance/)).toBeInTheDocument();
@@ -429,9 +429,9 @@ describe("a populated briefing", () => {
 
   it("renders the historical baseline stating the years it actually used", async () => {
     renderDashboard();
-    const historical = await screen.findByRole("region", { name: "Historical context" });
+    const historical = await screen.findByRole("region", { name: "Climate Baseline Comparison" });
 
-    expect(within(historical).getByText(/Computed from 5 years: 2017, 2018/)).toBeInTheDocument();
+    expect(within(historical).getByText(/Based on 5 years of archive observations \(2017, 2018/)).toBeInTheDocument();
     expect(within(historical).getByText(/Fewer years were available than requested/)).toBeInTheDocument();
     // No claim of a published climate normal Weathra did not compute.
     expect(within(historical).queryByText(/1991-2020|climate norm/i)).not.toBeInTheDocument();
@@ -441,7 +441,7 @@ describe("a populated briefing", () => {
 describe("the person's own preferences decide the briefing", () => {
   it("asks for their default location, in their unit system, over their horizon", async () => {
     renderDashboard();
-    await screen.findByRole("region", { name: "The days ahead" });
+    await screen.findByRole("region", { name: "Forecast Explorer" });
 
     const asked = fetchMock.mock.calls.map(([input]) => new URL(input as string));
     const forecast = asked.find((url) => url.pathname === "/api/v1/weather/forecast");
@@ -478,7 +478,7 @@ describe("the person's own preferences decide the briefing", () => {
 
   it("calls the documented backend API and nothing else", async () => {
     renderDashboard();
-    await screen.findByRole("region", { name: "Historical context" });
+    await screen.findByRole("region", { name: "Climate Baseline Comparison" });
 
     for (const [input] of fetchMock.mock.calls) {
       const url = new URL(input as string);
@@ -542,7 +542,7 @@ describe("a person with no saved default location", () => {
     );
 
     // The explaining is gone with it: no region previews, no next-step cards.
-    for (const gone of ["Current conditions", "What changed?", "Historical context"]) {
+    for (const gone of ["Current conditions", "What changed?", "Climate Baseline Comparison"]) {
       expect(screen.queryByRole("heading", { name: gone })).toBeNull();
     }
     expect(screen.queryByRole("button", { name: "Saved locations" })).toBeNull();
@@ -614,7 +614,6 @@ describe("What Changed?, through the endpoint that returns it", () => {
     // The backend's own statement, and the delta it reported. Neither is derived here.
     expect(within(section).getByText(/the forecast for Berlin, Germany has moved/i)).toBeInTheDocument();
     expect(within(section).getByText("+2.7 °C")).toBeInTheDocument();
-    expect(within(section).getByText(/Previous snapshot retrieved/)).toBeInTheDocument();
     // Movement inside the materiality margin is not presented as a change.
     expect(within(section).queryByText("+0.1 °C")).not.toBeInTheDocument();
     // And the section is attributed like every other data-bearing surface.
@@ -645,10 +644,13 @@ describe("What Changed?, through the endpoint that returns it", () => {
     renderDashboard();
 
     const section = await screen.findByRole("region", { name: "What Changed?" });
-    expect(
-      within(section).getByText(/No earlier snapshot for this location and window/),
-    ).toBeInTheDocument();
-    expect(within(section).getByText(/nothing to compare against yet/)).toBeInTheDocument();
+    expect(within(section).getByText(/No previous forecast to compare against yet/)).toBeInTheDocument();
+    /*
+     * And *not* the backend's own sentence for this state, which names the place as a coordinate
+     * pair — "No earlier forecast is on record for 51.5085, -0.1257 over this window". True, and
+     * not something a customer's Dashboard says. See `WhatChanged`.
+     */
+    expect(within(section).queryByText(/51\.5085|-0\.1257/)).not.toBeInTheDocument();
     // A zero would claim the forecast had not moved, which is a different statement.
     expect(within(section).queryByText(/^\+?0(\.0)? /)).not.toBeInTheDocument();
     expect(within(section).queryByText(/unchanged/i)).not.toBeInTheDocument();
@@ -673,10 +675,10 @@ describe("What Changed?, through the endpoint that returns it", () => {
     renderDashboard();
 
     const section = await screen.findByRole("region", { name: "What Changed?" }, { timeout: 5000 });
-    expect(within(section).getByText(/not available yet/i)).toBeInTheDocument();
+    expect(within(section).getByText(/No comparison could be retrieved/i)).toBeInTheDocument();
     // Distinct from the backend saying there is nothing earlier on record.
     expect(
-      within(section).queryByText(/No earlier snapshot for this location and window/),
+      within(section).queryByText(/No previous forecast to compare against yet/),
     ).not.toBeInTheDocument();
     // And every other surface is untouched.
     expect(screen.getByRole("region", { name: "Current conditions" })).toBeInTheDocument();
@@ -728,8 +730,7 @@ describe("a location with no prior snapshot", () => {
     );
 
     const section = screen.getByRole("region", { name: "What Changed?" });
-    expect(within(section).getByText(/No earlier snapshot for this location and window/)).toBeInTheDocument();
-    expect(within(section).getByText(/No earlier snapshot of this window exists/)).toBeInTheDocument();
+    expect(within(section).getByText(/No previous forecast to compare against yet/)).toBeInTheDocument();
     // A zero would claim the forecast had not moved.
     expect(within(section).queryByText(/^0(\.0)? /)).not.toBeInTheDocument();
     expect(within(section).queryByText(/unchanged/i)).not.toBeInTheDocument();
@@ -777,15 +778,16 @@ describe("a location with no prior snapshot", () => {
     expect(within(section).getByText("+2.7 °C")).toBeInTheDocument();
     // Movement inside the materiality margin is not presented as a change.
     expect(within(section).queryByText("+0.1 °C")).not.toBeInTheDocument();
-    expect(within(section).getByText(/Previous snapshot retrieved/)).toBeInTheDocument();
   });
 
   it("distinguishes 'no comparison could be obtained' from 'nothing to compare against'", () => {
     render(<WhatChanged report={null} />);
 
     const section = screen.getByRole("region", { name: "What Changed?" });
-    expect(within(section).getByText(/not available yet/i)).toBeInTheDocument();
-    expect(within(section).queryByText(/No earlier snapshot for this location/)).not.toBeInTheDocument();
+    expect(within(section).getByText(/No comparison could be retrieved/i)).toBeInTheDocument();
+    expect(
+      within(section).queryByText(/No previous forecast to compare against yet/),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -849,24 +851,24 @@ describe("the error state", () => {
     // The historical surface reports its own failure; conditions and forecast are unaffected.
     expect(await screen.findByRole("region", { name: "Current conditions" })).toBeInTheDocument();
     expect(await screen.findByText(/No fixture for/, undefined, { timeout: 5000 })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "The days ahead" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Forecast Explorer" })).toBeInTheDocument();
   });
 });
 
 describe("data classes, provenance, and the line the model does not cross", () => {
   it("badges each surface with its own data class", async () => {
     renderDashboard();
-    await screen.findByRole("region", { name: "Historical context" });
+    await screen.findByRole("region", { name: "Climate Baseline Comparison" });
 
     expect(within(screen.getByRole("region", { name: "Current conditions" })).getByText("OBSERVED")).toBeInTheDocument();
-    expect(within(screen.getByRole("region", { name: "The days ahead" })).getByText("FORECAST")).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Forecast Explorer" })).getByText("FORECAST")).toBeInTheDocument();
     expect(
       within(screen.getByRole("region", { name: "What Changed?" })).getByText("FORECAST"),
     ).toBeInTheDocument();
     expect(
       within(screen.getByRole("region", { name: "Computed figures" })).getByText("ANALYTICS"),
     ).toBeInTheDocument();
-    expect(within(screen.getByRole("region", { name: "Historical context" })).getByText("HISTORICAL")).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Climate Baseline Comparison" })).getByText("HISTORICAL")).toBeInTheDocument();
     expect(
       within(screen.getByRole("region", { name: "Weathra Intelligence" })).getByText("AI INTERPRETATION"),
     ).toBeInTheDocument();
@@ -874,17 +876,19 @@ describe("data classes, provenance, and the line the model does not cross", () =
 
   it("separates retrieved figures, deterministic analytics, and model language into three tiers", async () => {
     const { container } = renderDashboard();
-    await screen.findByRole("region", { name: "Historical context" });
+    await screen.findByRole("region", { name: "Climate Baseline Comparison" });
 
     expect(container.querySelectorAll('[data-tier="retrieved"]').length).toBeGreaterThanOrEqual(3);
     /*
-     * Two computed regions, and the count stays exact rather than becoming a floor: the analytics
-     * band was split in two on 2026-09-11 — the anomaly alert in the rail, the statistics in the
-     * wide column — and an exact count is what would catch a third appearing by accident. One
-     * interpretation region, which is the tier that must never multiply: every model-written
-     * sentence on this screen belongs to the one panel that says a model wrote it.
+     * Three computed regions, and the count stays exact rather than becoming a floor: the anomaly
+     * alert in the rail, the statistics behind the intelligence card's own control, and *Why?* —
+     * the sub-card the artifact draws beside "What Changed?", which this build fills with the
+     * window's own Theil–Sen trend rather than with the artifact's invented troposphere. An exact
+     * count is what would catch a fourth appearing by accident. One interpretation region, which is
+     * the tier that must never multiply: every model-written sentence on this screen belongs to the
+     * one panel that says a model wrote it.
      */
-    expect(container.querySelectorAll('[data-tier="computed"]')).toHaveLength(2);
+    expect(container.querySelectorAll('[data-tier="computed"]')).toHaveLength(3);
     expect(container.querySelectorAll('[data-tier="interpretation"]')).toHaveLength(1);
 
     // The model's region contains none of the figures, and none of the figure regions contains it.
@@ -896,15 +900,15 @@ describe("data classes, provenance, and the line the model does not cross", () =
 
   it("attributes every data-bearing surface to the provider the backend named", async () => {
     renderDashboard();
-    await screen.findByRole("region", { name: "Historical context" });
+    await screen.findByRole("region", { name: "Climate Baseline Comparison" });
 
     for (const title of [
       "Current conditions",
-      "The days ahead",
+      "Forecast Explorer",
       "What Changed?",
       "Anomaly detection",
       "Computed figures",
-      "Historical context",
+      "Climate Baseline Comparison",
     ]) {
       const region = screen.getByRole("region", { name: title });
       expect(region.querySelector('[data-attribution="true"]'), title).toBeInTheDocument();
@@ -942,7 +946,7 @@ describe("data classes, provenance, and the line the model does not cross", () =
     // Nothing was spent on inference on arrival.
     expect(fetchMock.mock.calls.map(([i]) => new URL(i as string).pathname)).not.toContain("/api/v1/agent/ask");
 
-    await userEvent.click(within(panel).getByRole("button", { name: "Generate deeper interpretation" }));
+    await userEvent.click(within(panel).getByRole("button", { name: "Read these figures" }));
 
     expect(await screen.findByText(/sits close to the baseline/)).toBeInTheDocument();
     expect(screen.getByText(/Model: openrouter · nvidia/)).toBeInTheDocument();
@@ -981,7 +985,7 @@ describe("data classes, provenance, and the line the model does not cross", () =
 
     renderDashboard();
     const panel = await screen.findByRole("region", { name: "Weathra Intelligence" });
-    await userEvent.click(within(panel).getByRole("button", { name: "Generate deeper interpretation" }));
+    await userEvent.click(within(panel).getByRole("button", { name: "Read these figures" }));
 
     const state = await waitFor(() => {
       const found = document.querySelector('[data-quota="true"]');
@@ -1039,7 +1043,7 @@ describe("data classes, provenance, and the line the model does not cross", () =
 
     renderDashboard();
     const panel = await screen.findByRole("region", { name: "Weathra Intelligence" });
-    await userEvent.click(within(panel).getByRole("button", { name: "Generate deeper interpretation" }));
+    await userEvent.click(within(panel).getByRole("button", { name: "Read these figures" }));
 
     expect(await screen.findByText("Model: openrouter · a-synthesis-model")).toBeInTheDocument();
     expect(screen.getByText("Policy: free-synthesis")).toBeInTheDocument();
@@ -1065,7 +1069,7 @@ describe("data classes, provenance, and the line the model does not cross", () =
 
     renderDashboard();
     const panel = await screen.findByRole("region", { name: "Weathra Intelligence" });
-    await userEvent.click(within(panel).getByRole("button", { name: "Generate deeper interpretation" }));
+    await userEvent.click(within(panel).getByRole("button", { name: "Read these figures" }));
 
     expect(await screen.findByText(/no inference provider is configured/i)).toBeInTheDocument();
     // Every retrieved and computed surface is untouched.
@@ -1078,7 +1082,7 @@ describe("data classes, provenance, and the line the model does not cross", () =
 describe("nothing from the design artifact reaches the screen", () => {
   it("shows no sample value, invented source, station, or version string", async () => {
     renderDashboard();
-    await screen.findByRole("region", { name: "Historical context" });
+    await screen.findByRole("region", { name: "Climate Baseline Comparison" });
 
     const shown = document.body.textContent ?? "";
     for (const sample of ARTIFACT_SAMPLE_VALUES) {
@@ -1088,18 +1092,26 @@ describe("nothing from the design artifact reaches the screen", () => {
 
   it("offers no control the artifact shows that Weathra refuses to implement", async () => {
     renderDashboard();
-    await screen.findByRole("region", { name: "Historical context" });
+    await screen.findByRole("region", { name: "Climate Baseline Comparison" });
 
     for (const refused of [/compare models/i, /recalibrat/i, /export data/i, /export pdf/i, /chain of custody/i]) {
       expect(screen.queryByRole("button", { name: refused }), String(refused)).not.toBeInTheDocument();
     }
-    // And not the post-MVP screen's name on a Dashboard section.
-    expect(screen.queryByText("Forecast Explorer")).not.toBeInTheDocument();
+    /*
+     * "Forecast Explorer" was on this list because it named a screen that did not exist. It does
+     * now — `/explorer`, in the navigation, built against `11-explorer.png` — so the Dashboard's
+     * seven-day strip carries the product's real name for it and links there. What stays refused is
+     * everything above: a control the artifact draws that this build does not implement.
+     */
+    expect(screen.getByRole("link", { name: "Open Forecast Explorer" })).toHaveAttribute(
+      "href",
+      "/explorer",
+    );
   });
 
   it("shows every figure the backend supplied, and no figure it did not", async () => {
     renderDashboard();
-    await screen.findByRole("region", { name: "Historical context" });
+    await screen.findByRole("region", { name: "Climate Baseline Comparison" });
 
     // Each figure on screen traced back to the fixture that produced it. Read with whitespace
     // removed, because the hero and the day cards now set a figure and its unit as two elements —

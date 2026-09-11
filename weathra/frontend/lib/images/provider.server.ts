@@ -285,6 +285,187 @@ async function fromUnsplash(
   };
 }
 
+/* ---------------------------------------------------------------- wikimedia commons
+ *
+ * The keyless tier, and the reason a deployed Weathra can show a real photograph without anybody
+ * signing up for anything.
+ *
+ * Pexels and Unsplash are both free, and both want a key. That made real city photography a
+ * configuration step, and an unconfigured deployment — which is what production has been — fell
+ * straight through to drawn artwork. The fidelity review of 2026-09-11 called that what it is: a
+ * functional fallback that does not look like the approved screen.
+ *
+ * Wikimedia's action API needs no credential and no account, and it carries the two things that
+ * make using an image lawful rather than convenient: the photographer's name and the licence, in
+ * the file's own metadata. Both are read from the response and rendered on the image. Neither is
+ * ever composed here, and a file whose metadata names no licence is refused rather than shown — an
+ * unattributed photograph on a product screen is the one outcome worse than a drawing.
+ *
+ *   1. `prop=pageimages` on the English Wikipedia article for the place gives the lead image,
+ *      which for a city is its skyline or a montage of it.
+ *   2. `prop=imageinfo&iiprop=extmetadata` on that file gives the artist, the licence and a
+ *      thumbnail at a width this layout can use rather than the 5000-pixel original.
+ *
+ * Two requests per place per process, behind the same cache as every other tier. Set
+ * `CITY_IMAGE_COMMONS=off` to skip it — a deployment that would rather show artwork than reach a
+ * third party on a page load can, and the chain simply continues to the next tier.
+ */
+
+const COMMONS_ENDPOINT = "https://en.wikipedia.org/w/api.php";
+
+/**
+ * The identifier Wikimedia's terms of use ask an API client to send.
+ *
+ * A real contact is what the policy asks for; this names the project and the repository, which is
+ * the honest version of that for an open-source application with no single operator.
+ */
+const COMMONS_AGENT = "Weathra/1.0 (weather briefing application; https://github.com/weathra)";
+
+function commonsEnabled(): boolean {
+  return (process.env.CITY_IMAGE_COMMONS ?? "").trim().toLowerCase() !== "off";
+}
+
+/** Wikimedia returns `extmetadata` values as HTML fragments. This is the plain text in them. */
+function plainText(html: string | undefined): string | null {
+  if (!html) return null;
+  const text = html
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text.length > 0 ? text : null;
+}
+
+/**
+ * The photographer's name out of Commons' `Artist` field.
+ *
+ * The field is free-form wiki markup and a derived file carries its whole provenance chain in it:
+ * Berlin's lead image returns "File:Museumsinsel Berlin Juli 2021 1 (cropped).jpg : Kasa Fue
+ * derivative work: Georgfotoart". A credit line reading that is not a credit, so the chain is
+ * reduced to the person it ends on — which is who made the file being shown — and a name too long
+ * to be one is refused rather than truncated into something that misattributes.
+ */
+function artistName(html: string | undefined): string | null {
+  const text = plainText(html);
+  if (!text) return null;
+
+  // The last link in a derivation chain is the author of the derived file, which is this one.
+  const derived = text.split(/derivative work\s*:/i).at(-1)?.trim() ?? text;
+  // A leading "File:… .jpg :" is the source file's title, not a person.
+  const named = derived.replace(/^File:.*?\.(?:jpe?g|png|webp|svg)\s*:?\s*/i, "").trim();
+
+  return named.length > 0 && named.length <= 120 ? named : null;
+}
+
+/** File types a hero band can actually display. A video or a PDF is not a photograph of a city. */
+const COMMONS_IMAGE = /\.(jpe?g|png|webp)$/i;
+
+interface CommonsExtMetadata {
+  readonly [field: string]: { readonly value?: string } | undefined;
+}
+
+async function commonsJson(parameters: Record<string, string>): Promise<unknown | null> {
+  const query = new URLSearchParams({ format: "json", formatversion: "2", ...parameters });
+  const response = await fetch(`${COMMONS_ENDPOINT}?${query.toString()}`, {
+    headers: { "user-agent": COMMONS_AGENT, accept: "application/json" },
+    signal: AbortSignal.timeout(6000),
+  });
+  return response.ok ? ((await response.json()) as unknown) : null;
+}
+
+/**
+ * A freely licensed photograph of a place, or null.
+ *
+ * Null for every ordinary disappointment: no article, an article with no lead image, a lead image
+ * that is a map or a coat of arms in a format this cannot show, or metadata with no licence in it.
+ * The caller treats all of them the same way — it moves to the next tier.
+ */
+async function fromCommons(displayName: string): Promise<ResolvedLocationImage | null> {
+  const place = (displayName.split(",")[0] ?? displayName).trim();
+  if (place.length === 0) return null;
+
+  const page = (await commonsJson({
+    action: "query",
+    prop: "pageimages",
+    piprop: "original",
+    titles: place,
+    redirects: "1",
+  })) as {
+    query?: { pages?: readonly { original?: { source?: string } }[] };
+  } | null;
+
+  const original = page?.query?.pages?.[0]?.original?.source;
+  if (!original || !COMMONS_IMAGE.test(new URL(original).pathname)) return null;
+
+  // `…/commons/f/f7/Museumsinsel_Berlin.jpg` → `File:Museumsinsel Berlin.jpg`, which is the title
+  // the metadata request takes. Decoded, because the path is percent-encoded and the title is not.
+  const file = decodeURIComponent(new URL(original).pathname.split("/").pop() ?? "");
+  if (file.length === 0) return null;
+
+  const info = (await commonsJson({
+    action: "query",
+    prop: "imageinfo",
+    iiprop: "url|extmetadata",
+    iiurlwidth: "1600",
+    titles: `File:${file.replace(/_/g, " ")}`,
+  })) as {
+    query?: {
+      pages?: readonly {
+        imageinfo?: readonly {
+          thumburl?: string;
+          thumbwidth?: number;
+          thumbheight?: number;
+          extmetadata?: CommonsExtMetadata;
+        }[];
+      }[];
+    };
+  } | null;
+
+  const image = info?.query?.pages?.[0]?.imageinfo?.[0];
+  const url = image?.thumburl;
+  const metadata = image?.extmetadata;
+  if (!url || !metadata) return null;
+
+  /*
+   * The licence decides whether this may be shown at all. Commons is overwhelmingly free, but it
+   * does hold non-free files under exemptions, and "probably free" is not a standard to put a
+   * third party's photograph on a product screen by. No licence named, no photograph.
+   */
+  const licence = plainText(metadata.LicenseShortName?.value);
+  if (!licence || /fair use|non-free/i.test(licence)) return null;
+
+  const artist = artistName(metadata.Artist?.value);
+  const description = plainText(metadata.ImageDescription?.value);
+
+  return {
+    url,
+    /*
+     * The file's own description where it has one, because it describes what is actually in the
+     * frame. Where it has none, this says a photograph of the place was found — which is what is
+     * known, and no more.
+     */
+    description: description ?? `${displayName}, photographed`,
+    source: "commons",
+    // Only ever the metadata's own artist. A file that names none is credited to nobody rather
+    // than to "Wikimedia Commons", which did not take the picture.
+    credit: artist
+      ? {
+          name: artist,
+          url: `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(file)}`,
+          licence,
+          licenceUrl: plainText(metadata.LicenseUrl?.value) ?? undefined,
+        }
+      : undefined,
+    width: image.thumbwidth,
+    height: image.thumbheight,
+  };
+}
+
 /* ---------------------------------------------------------------- the chain */
 
 /**
@@ -322,6 +503,24 @@ export async function resolveLocationImage(displayName: string): Promise<Resolve
   if (local) {
     resolved.set(key, { at: Date.now(), image: local });
     return local;
+  }
+
+  /*
+   * The keyless photograph, after the two curated tiers and before the drawing. A committed file
+   * beats it because somebody chose that file for this place; a network lookup that nobody chose
+   * is still a real photograph and is far better than artwork, which is the whole point of the
+   * tier. See `fromCommons` for what it refuses.
+   */
+  if (commonsEnabled()) {
+    try {
+      const image = await fromCommons(displayName);
+      if (image) {
+        resolved.set(key, { at: Date.now(), image });
+        return image;
+      }
+    } catch {
+      // No article, no network, a slow response, a shape that changed. All the same here.
+    }
   }
 
   const generated = generatedImageFor(displayName);

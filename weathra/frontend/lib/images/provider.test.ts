@@ -16,7 +16,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { locationKey } from "./locations";
 
-const KEYS = ["CITY_IMAGE_PROVIDER", "PEXELS_API_KEY", "UNSPLASH_ACCESS_KEY"] as const;
+const KEYS = [
+  "CITY_IMAGE_PROVIDER",
+  "PEXELS_API_KEY",
+  "UNSPLASH_ACCESS_KEY",
+  "CITY_IMAGE_COMMONS",
+] as const;
 const saved: Partial<Record<(typeof KEYS)[number], string | undefined>> = {};
 
 beforeEach(() => {
@@ -38,11 +43,17 @@ async function load() {
   return import("./provider.server");
 }
 
-describe("with no provider configured", () => {
+describe("with no provider configured and Commons switched off", () => {
   beforeEach(() => {
     delete process.env.CITY_IMAGE_PROVIDER;
     delete process.env.PEXELS_API_KEY;
     delete process.env.UNSPLASH_ACCESS_KEY;
+    /*
+     * The keyless tier is on by default, which is the point of it — so a suite asserting "no
+     * network request at all" has to switch it off to be asserting anything. Its own behaviour is
+     * the block further down.
+     */
+    process.env.CITY_IMAGE_COMMONS = "off";
   });
 
   it("reports itself unconfigured rather than pretending", async () => {
@@ -70,6 +81,10 @@ describe("with no provider configured", () => {
 });
 
 describe("with a provider named but no key", () => {
+  beforeEach(() => {
+    process.env.CITY_IMAGE_COMMONS = "off";
+  });
+
   it("falls through rather than calling the provider unauthenticated", async () => {
     process.env.CITY_IMAGE_PROVIDER = "pexels";
     delete process.env.PEXELS_API_KEY;
@@ -93,6 +108,9 @@ describe("with a provider configured", () => {
   beforeEach(() => {
     process.env.CITY_IMAGE_PROVIDER = "pexels";
     process.env.PEXELS_API_KEY = "test-key-not-a-real-one";
+    // These cases are about the configured provider's own chain. The keyless tier below it would
+    // otherwise answer every "falls back to artwork" case with a photograph and hide the point.
+    process.env.CITY_IMAGE_COMMONS = "off";
   });
 
   const photos = [
@@ -192,6 +210,178 @@ describe("with a provider configured", () => {
     const image = await resolveLocationImage("Berlin, Germany");
     expect(image.source).toBe("provider");
     expect(image.credit?.name).toBe("A Photographer");
+  });
+});
+
+
+/**
+ * The keyless tier — task 21.9's answer to "real photography without a paid service".
+ *
+ * Every case here mocks the two Wikimedia calls rather than making them, so the suite stays
+ * offline and deterministic. What it asserts is the part that matters legally as much as visually:
+ * a photograph is shown only when the file's own metadata names a licence, and the photographer
+ * and licence that reach the screen are the metadata's, never composed here.
+ */
+describe("the keyless Wikimedia tier", () => {
+  beforeEach(() => {
+    delete process.env.CITY_IMAGE_PROVIDER;
+    delete process.env.PEXELS_API_KEY;
+    delete process.env.UNSPLASH_ACCESS_KEY;
+    delete process.env.CITY_IMAGE_COMMONS;
+  });
+
+  /** The two answers the chain makes, in order: the article's lead image, then that file's record. */
+  function wikimedia(options: {
+    readonly original?: string | null;
+    readonly licence?: string | null;
+    readonly artist?: string | null;
+    readonly licenceUrl?: string | null;
+    readonly description?: string | null;
+  }) {
+    const extmetadata: Record<string, { value: string }> = {};
+    if (options.licence) extmetadata.LicenseShortName = { value: options.licence };
+    if (options.artist) extmetadata.Artist = { value: options.artist };
+    if (options.licenceUrl) extmetadata.LicenseUrl = { value: options.licenceUrl };
+    if (options.description) extmetadata.ImageDescription = { value: options.description };
+
+    return vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const url = String(input);
+      if (url.includes("prop=pageimages")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              query: {
+                pages: [
+                  options.original === null
+                    ? {}
+                    : {
+                        original: {
+                          source:
+                            options.original ??
+                            "https://upload.wikimedia.org/wikipedia/commons/f/f7/Berlin_Skyline.jpg",
+                        },
+                      },
+                ],
+              },
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            query: {
+              pages: [
+                {
+                  imageinfo: [
+                    {
+                      thumburl: "https://thumb.wikimedia.org/wikipedia/commons/thumb/x/1600px-Berlin.jpg",
+                      thumbwidth: 1600,
+                      thumbheight: 900,
+                      extmetadata,
+                    },
+                  ],
+                },
+              ],
+            },
+          }),
+          { status: 200 },
+        ),
+      );
+    });
+  }
+
+  it("shows a freely licensed photograph with no credential configured at all", async () => {
+    wikimedia({ licence: "CC BY-SA 4.0", artist: "<a href='#'>A Photographer</a>" });
+    const { resolveLocationImage, resetLocationImageCache } = await load();
+    resetLocationImageCache();
+
+    const image = await resolveLocationImage("Berlin, Germany");
+    expect(image.source).toBe("commons");
+    expect(image.url).toContain("1600px-Berlin.jpg");
+  });
+
+  it("credits the author of the derived file rather than the whole provenance chain", async () => {
+    /*
+     * Commons' `Artist` for a derived file is its history: "File:Museumsinsel Berlin Juli 2021 1
+     * (cropped).jpg : Kasa Fue derivative work: Georgfotoart" is what Berlin's lead image actually
+     * returns. A credit line is a person, so it reduces to the one the chain ends on.
+     */
+    wikimedia({
+      licence: "CC BY-SA 4.0",
+      artist:
+        "<a href='#'>File:Museumsinsel Berlin Juli 2021 1 (cropped).jpg</a>: Kasa Fue derivative work: <a href='#'>Georgfotoart</a>",
+    });
+    const { resolveLocationImage, resetLocationImageCache } = await load();
+    resetLocationImageCache();
+    expect((await resolveLocationImage("Berlin, Germany")).credit?.name).toBe("Georgfotoart");
+  });
+
+  it("carries the photographer and the licence the file's own metadata names", async () => {
+    wikimedia({
+      licence: "CC BY-SA 4.0",
+      licenceUrl: "https://creativecommons.org/licenses/by-sa/4.0",
+      artist: "<ul><li><a href='#'>A Photographer</a></li></ul>",
+    });
+    const { resolveLocationImage, resetLocationImageCache } = await load();
+    resetLocationImageCache();
+
+    const image = await resolveLocationImage("Berlin, Germany");
+    // The markup Wikimedia wraps the artist in is not what a credit line should read.
+    expect(image.credit?.name).toBe("A Photographer");
+    expect(image.credit?.licence).toBe("CC BY-SA 4.0");
+    expect(image.credit?.licenceUrl).toBe("https://creativecommons.org/licenses/by-sa/4.0");
+  });
+
+  it("refuses a file whose metadata names no licence, rather than showing it uncredited", async () => {
+    wikimedia({ licence: null, artist: "Someone" });
+    const { resolveLocationImage, resetLocationImageCache } = await load();
+    resetLocationImageCache();
+    expect((await resolveLocationImage("Berlin, Germany")).source).toBe("generated");
+  });
+
+  it("refuses a non-free file", async () => {
+    wikimedia({ licence: "Fair use", artist: "Someone" });
+    const { resolveLocationImage, resetLocationImageCache } = await load();
+    resetLocationImageCache();
+    expect((await resolveLocationImage("Berlin, Germany")).source).toBe("generated");
+  });
+
+  it("credits nobody rather than crediting Wikimedia, when the file names no artist", async () => {
+    wikimedia({ licence: "CC0", artist: null });
+    const { resolveLocationImage, resetLocationImageCache } = await load();
+    resetLocationImageCache();
+    const image = await resolveLocationImage("Berlin, Germany");
+    expect(image.source).toBe("commons");
+    expect(image.credit).toBeUndefined();
+  });
+
+  it("skips a lead image this frame cannot show", async () => {
+    wikimedia({
+      original: "https://upload.wikimedia.org/wikipedia/commons/a/b/Coat_of_arms.svg",
+      licence: "CC BY-SA 4.0",
+    });
+    const { resolveLocationImage, resetLocationImageCache } = await load();
+    resetLocationImageCache();
+    expect((await resolveLocationImage("Berlin, Germany")).source).toBe("generated");
+  });
+
+  it("falls through to artwork when the place has no article", async () => {
+    wikimedia({ original: null });
+    const { resolveLocationImage, resetLocationImageCache } = await load();
+    resetLocationImageCache();
+    expect((await resolveLocationImage("Nowhere-at-all")).source).toBe("generated");
+  });
+
+  it("is skipped entirely when a deployment switches it off", async () => {
+    process.env.CITY_IMAGE_COMMONS = "off";
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const { resolveLocationImage, resetLocationImageCache } = await load();
+    resetLocationImageCache();
+
+    expect((await resolveLocationImage("Berlin, Germany")).source).toBe("generated");
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
 

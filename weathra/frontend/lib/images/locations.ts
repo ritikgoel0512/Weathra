@@ -13,6 +13,14 @@ export type LocationImageSource =
   | "provider"
   /** A photograph committed to `public/locations/photos/`, used when no provider is configured. */
   | "local"
+  /**
+   * A freely licensed photograph from Wikimedia Commons, resolved without any credential.
+   *
+   * Its own tier rather than `provider` because the licence obliges us differently: Commons files
+   * are CC-BY or CC-BY-SA far more often than not, so the photographer's name and the licence are
+   * rendered on the image. Both come from the file's own metadata — neither is ever composed here.
+   */
+  | "commons"
   /** The deterministic artwork this repository draws. Always available. */
   | "generated";
 
@@ -28,8 +36,21 @@ export interface ResolvedLocationImage {
    */
   readonly description: string;
   readonly source: LocationImageSource;
-  /** Who took it, when the provider says. Rendered as a credit where the licence asks for one. */
-  readonly credit?: { readonly name: string; readonly url?: string };
+  /**
+   * Who took it, when the source says, and under what licence.
+   *
+   * Every field is the source's own: a photographer's name is what the provider or the file's
+   * metadata returned, and `licence` is the licence that metadata names. Nothing here is inferred
+   * from anything else — an image whose source named no photographer carries no credit at all,
+   * which is the only honest rendering of "we do not know".
+   */
+  readonly credit?: {
+    readonly name: string;
+    readonly url?: string;
+    /** `CC BY-SA 4.0`, as the file's own metadata states it. Never assumed from the host. */
+    readonly licence?: string;
+    readonly licenceUrl?: string;
+  };
   /** Native pixel size, when known. Lets a caller size an `<img>` and avoid a reflow. */
   readonly width?: number;
   readonly height?: number;

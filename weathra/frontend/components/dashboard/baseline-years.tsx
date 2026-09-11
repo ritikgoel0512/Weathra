@@ -213,10 +213,18 @@ export function BaselineYearsChart({
         </div>
       </ScrollRegion>
 
+      {/*
+        **One clause, not two sentences.** It read "One mark per year the archive reported. The
+        scale runs 13–16.5 °C rather than from zero, so the difference between the years is
+        visible." — a paragraph of chart methodology under a chart, which finding 24 of the
+        customer-level review of 2026-09-11 lists among the copy to condense. The non-zero scale is
+        still declared, because a truncated axis that does not say so is a misleading chart; it is
+        declared as the fact it is rather than as an explanation of why.
+      */}
       <p className={styles.yearsNote} id={described}>
-        {`One mark per year the archive reported. The scale runs ${domain[0]}–${domain[1]}${
+        {`One mark per reported year · scale ${domain[0]}–${domain[1]}${
           unit ? ` ${unit}` : ""
-        } rather than from zero, so the difference between the years is visible.`}
+        }, not from zero`}
       </p>
 
       {/* Every value is also text — and a disclosure rather than a full-width button, so the

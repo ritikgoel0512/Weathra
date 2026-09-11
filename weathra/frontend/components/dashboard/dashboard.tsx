@@ -26,6 +26,7 @@
  * without being asked.
  */
 
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
@@ -72,6 +73,7 @@ import {
   ForecastMovement,
   PrecipitationOutlook,
   SavedSnapshots,
+  Why,
   ComputedFigures,
   DeterministicAnalytics,
   HistoricalContext,
@@ -137,6 +139,8 @@ function WeathraIntelligence({ units }: { readonly units: PreferenceView["unit_s
     return (
       <InterpretationPanel
         title="Weathra Intelligence"
+        eyebrow="Current interpretation"
+        density="compact"
         provider={inference?.provider ?? null}
         model={inference?.model ?? null}
         requestedModel={inference?.requestedModel ?? null}
@@ -172,24 +176,32 @@ function WeathraIntelligence({ units }: { readonly units: PreferenceView["unit_s
     return <QuotaState refusal={state.refusal} onRetry={ask} />;
   }
 
+  /*
+   * **The idle state, in one line.** It read "A language model can read the figures above together
+   * — the conditions, the days ahead, and how they sit against the record — and write what they
+   * add up to", which is a paragraph explaining a button. Finding 24 of the customer-level review
+   * of 2026-09-11 lists it among the copy that is technically correct and poor primary UX; the
+   * boundary sentence above already says what a language model is doing here.
+   */
   return (
-    <InterpretationPanel title="Weathra Intelligence">
+    <InterpretationPanel
+      title="Weathra Intelligence"
+      eyebrow="Current interpretation"
+      density="compact"
+    >
       {state.kind === "failed" ? (
         <p>
           {state.unavailable
-            ? "The AI Weather Analyst is unavailable because no inference provider is configured. Every figure on this screen is retrieved or computed and is unaffected."
+            ? "No inference provider is configured. Every figure on this screen is retrieved or computed and is unaffected."
             : state.message}
         </p>
       ) : (
-        <p>
-          A language model can read the figures above together — the conditions, the days ahead, and
-          how they sit against the record — and write what they add up to.
-        </p>
+        <p>Weathra can read the figures on this screen and write what they add up to.</p>
       )}
 
       <div className={styles.actions}>
         <Button variant="primary" size="sm" onClick={ask} busy={state.kind === "asking"}>
-          {state.kind === "asking" ? "Reading the figures…" : "Generate deeper interpretation"}
+          {state.kind === "asking" ? "Reading the figures…" : "Read these figures"}
         </Button>
       </div>
     </InterpretationPanel>
@@ -205,8 +217,11 @@ function WeathraIntelligence({ units }: { readonly units: PreferenceView["unit_s
 function meanTemperatureOf(
   analysis: { findings?: readonly { statistic: string; measure: string; value?: number | null; unit?: string | null }[] },
 ): { value: number | null; unit: string | null } | null {
+  // Both names the backend gives a window's mean temperature — see `usualRangeOf` in `sections`.
   const mean = (analysis.findings ?? []).find(
-    (finding) => finding.statistic === "mean" && finding.measure === "temperature_mean",
+    (finding) =>
+      finding.statistic === "mean" &&
+      (finding.measure === "temperature_mean" || finding.measure === "temperature"),
   );
   if (!mean) return null;
   return { value: typeof mean.value === "number" ? mean.value : null, unit: mean.unit ?? null };
@@ -346,16 +361,6 @@ function Briefing({
           <div className={styles.intelligencePrimary}>
             <WeathraIntelligence units={units} />
 
-            {changes.state.kind === "loading" ? (
-              <LoadingState label="Comparing against the last snapshot" lines={2} />
-            ) : (
-              // Ready renders the comparison the backend produced — populated or no-prior-snapshot,
-              // which the report itself distinguishes. Anything else is "no comparison could be
-              // obtained", which is `null` and a different sentence.
-              <WhatChanged
-                report={changes.state.kind === "ready" ? changes.state.data : null}
-              />
-            )}
           </div>
 
           <div className={styles.intelligenceAside}>
@@ -365,19 +370,55 @@ function Briefing({
             />
 
             {/*
-              **The arithmetic, one interaction from the screen rather than on it.** Six computed
-              statistics, each with its method and its own provenance, were a full-width card in
-              the primary view — the largest single surface on the Dashboard, and an engineering
-              report in the middle of a weather product. The figures are unchanged, the panel keeps
-              its data class and its attribution, and a person who wants the arithmetic is one
-              press from all of it.
+              **The two actions the artifact closes this card on.** `01-dashboard.png` ends its
+              Weathra Intelligence card on a pair of buttons — "Compare Models" and "View Agent
+              Evidence" — under the confidence bars. Weathra compares no models, so the first is
+              replaced by the thing a person actually wants after reading a confidence bar: the
+              arithmetic behind the figures. The second is a screen this build has.
             */}
-            {analysis.state.kind === "ready" ? (
-              <details className={styles.figuresDisclosure}>
-                <summary className={styles.figuresSummary}>View computed figures</summary>
-                <ComputedFigures analysis={analysis.state.data} location={location} />
-              </details>
-            ) : null}
+            <div className={styles.intelligenceActions}>
+              {/*
+                **The arithmetic, one interaction from the screen rather than on it.** Six computed
+                statistics, each with its method and its own provenance, were a full-width card in
+                the primary view — the largest single surface on the Dashboard, and an engineering
+                report in the middle of a weather product. The figures are unchanged, the panel
+                keeps its data class and its attribution, and a person who wants the arithmetic is
+                one press from all of it.
+              */}
+              {analysis.state.kind === "ready" ? (
+                <details className={styles.figuresDisclosure}>
+                  <summary className={styles.figuresSummary}>View computed figures</summary>
+                  <ComputedFigures analysis={analysis.state.data} location={location} />
+                </details>
+              ) : null}
+
+              <Link className={styles.intelligenceAction} href="/evidence">
+                View agent evidence
+              </Link>
+            </div>
+          </div>
+
+          {/*
+            **The two sub-cards, across the foot of the card rather than inside one column of it.**
+            `01-dashboard.png` puts "WHAT CHANGED?" and "WHY?" under the interpretation as two small
+            inset panels. Ours began that way and the 1440 capture showed the cost: the left column
+            ran to three times the height of the right one, leaving roughly 350 pixels of card
+            ground under the confidence bars — which is finding 7's "too much empty/unused space"
+            reproduced in a different place. Spanning both columns closes it, and it is the same two
+            sub-cards at the same size reading in the same order.
+          */}
+          <div className={styles.intelligenceSubcards}>
+            {changes.state.kind === "loading" ? (
+              <LoadingState label="Comparing against the last snapshot" lines={2} />
+            ) : (
+              // Ready renders the comparison the backend produced — populated or
+              // no-prior-snapshot, which the report itself distinguishes. Anything else is "no
+              // comparison could be obtained", which is `null` and a different sentence.
+              <WhatChanged report={changes.state.kind === "ready" ? changes.state.data : null} />
+            )}
+
+            {/* The artifact's second sub-card, answered from the window's own trend. */}
+            <Why analysis={analysis.state.kind === "ready" ? analysis.state.data : null} />
           </div>
         </div>
 
@@ -558,19 +599,22 @@ function LocationChoice({ preferences }: { readonly preferences: PreferenceView 
   const location = chosen ?? saved;
 
   /*
-   * The entry is folded away once there is a briefing to read — finding 1.7 of the runtime fidelity
-   * audit of 2026-09-08. `01-dashboard.png` opens straight onto the hero; production opened onto a
-   * form, above the fold, on every visit. It is the same form with the same single field and the
-   * same resolver behind it, one press away.
+   * **The entry is a control, not a band.** Finding 3 of the customer-level review of 2026-09-11:
+   * production dedicated a full-width card above the hero to "Brief me on another place" — a
+   * labelled field, a paragraph explaining that Weathra resolves the name first, a primary button
+   * and a secondary one. `01-dashboard.png` has nothing of the sort, and the shell already carries
+   * a location search in its header, so that card was the product's own search asked for twice,
+   * the second time in the place the weather is supposed to be.
    *
-   * It stays open in the three states where it is the thing to do: when there is no default
-   * location to brief on, while an entry is unsettled — a name being resolved, an ambiguous one
-   * waiting on a candidate, or a lookup that failed — and while the briefing is about a place that
-   * was named rather than the default, because "back to my default location" lives inside it and a
-   * way out that is hidden is not a way out. Collapsing under an empty state that says "name a
-   * place above" is finding 6.5's mistake on another screen, and it is not repeated here.
+   * It is now a compact disclosure on the heading's own line. Same field, same resolver, same
+   * candidate chooser, one press away — and closed it is the width of its own label.
+   *
+   * It opens in exactly the two states where it is the thing to do: while an entry is unsettled —
+   * being resolved, waiting on a candidate, or failed — and when there is no default to brief on.
+   * Briefing on a named place no longer forces it open, because the way back to the default is now
+   * a chip beside the briefing rather than a button buried inside the form.
    */
-  const entryOpen = location === null || settling || chosen !== null;
+  const entryOpen = location === null || settling;
 
   /**
    * Whether this is the Dashboard of somebody who has not chosen a place yet.
@@ -585,14 +629,27 @@ function LocationChoice({ preferences }: { readonly preferences: PreferenceView 
    * The form itself, built once and placed in whichever frame the state calls for. The populated
    * Dashboard folds it into a disclosure; the new-account Dashboard puts it in the hero. Same
    * field, same resolver, same candidate chooser — the alternative was a second form to keep right.
+   *
+   * `compact` drops the field's own description sentence and puts the button on the field's line.
+   * The sentence — "Weathra resolves the name before it retrieves anything" — is true, and it is
+   * the kind of true that belongs on the screen somebody meets when they have no place saved at
+   * all, not on every load of a populated Dashboard.
    */
-  const entryForm = (
+  const entryForm = (compact: boolean) => (
     <>
-      <form className={styles.entry} onSubmit={submit} aria-label="Choose a place to brief on">
+      <form
+        className={compact ? styles.entryCompact : styles.entry}
+        onSubmit={submit}
+        aria-label="Choose a place to brief on"
+      >
         <div className={styles.entryField}>
           <Input
             label="Brief me on a place"
-            description="Weathra resolves the name before it retrieves anything. Leave it empty to use your default location."
+            description={
+              compact
+                ? undefined
+                : "Weathra resolves the name before it retrieves anything. Leave it empty to use your default location."
+            }
             name="location"
             value={query}
             placeholder="A city, or a city and its region or country"
@@ -601,10 +658,22 @@ function LocationChoice({ preferences }: { readonly preferences: PreferenceView 
           />
         </div>
         <div className={styles.entryActions}>
-          <Button type="submit" variant="primary" busy={entry.busy} disabled={query.trim() === ""}>
+          <Button
+            type="submit"
+            variant="primary"
+            size={compact ? "sm" : undefined}
+            busy={entry.busy}
+            disabled={query.trim() === ""}
+          >
             {entry.busy ? "Resolving…" : "Show briefing"}
           </Button>
-          {chosen !== null || settling ? (
+          {/*
+            The way out of an unsettled entry, inside the control that created it. Once a place has
+            actually been chosen the way back is the chip beside the briefing instead — two buttons
+            with the same name on one screen is one too many, and the chip is where a person looks
+            for it.
+          */}
+          {settling || (!compact && chosen !== null) ? (
             <Button size="sm" onClick={toDefault}>
               Back to my default location
             </Button>
@@ -620,29 +689,37 @@ function LocationChoice({ preferences }: { readonly preferences: PreferenceView 
     </>
   );
 
+  /*
+   * The switcher, on the heading's line. `open` is controlled by the states above rather than left
+   * to the browser, so a candidate list can never appear inside a closed disclosure.
+   */
+  const switcher = onboarding ? null : (
+    <details className={styles.entryDisclosure} open={entryOpen}>
+      <summary className={styles.entrySummary}>Brief on another place</summary>
+      <div className={styles.entryPanel}>{entryForm(true)}</div>
+    </details>
+  );
+
   return (
-    <DashboardFrame>
-      {onboarding ? (
-        <GettingStarted>{entryForm}</GettingStarted>
-      ) : (
-        <details className={styles.entryDisclosure} open={entryOpen}>
-          {/*
-            One wording in every state. The note under the briefing already says which place is
-            being briefed on and whether it is the default, and a summary that repeated it would put
-            the same sentence on the screen twice — finding 2.3's mistake on the Analyst.
-          */}
-          <summary className={styles.entrySummary}>Brief on another place</summary>
-          {entryForm}
-        </details>
-      )}
+    <DashboardFrame action={switcher}>
+      {onboarding ? <GettingStarted>{entryForm(false)}</GettingStarted> : null}
 
       {/* Nothing location-dependent while the entry has not settled on one place. */}
       {settling || location === null ? null : (
         <>
           {chosen === null ? null : (
-            <p className={styles.note} data-briefing-place="chosen">
-              Briefing on {qualifiedName(chosen)}, which you named. Your default location is
-              unchanged.
+            /*
+              **A chip, not a paragraph.** This was two sentences across the page — "Briefing on
+              Munich, Bavaria, Germany, which you named. Your default location is unchanged." — and
+              the way back to the default was a button inside the form above it. Both facts fit on
+              one line, and the way back belongs beside the statement of where you are rather than
+              inside the control that took you there.
+            */
+            <p className={styles.briefingChip} data-briefing-place="chosen">
+              <span>Briefing on {qualifiedName(chosen)}</span>
+              <button type="button" className={styles.briefingChipAction} onClick={toDefault}>
+                Back to my default location
+              </button>
             </p>
           )}
           <Briefing
@@ -657,30 +734,36 @@ function LocationChoice({ preferences }: { readonly preferences: PreferenceView 
 }
 
 /**
- * The screen's frame: its heading, and whatever state it is in.
+ * The screen's frame: one toolbar line, and whatever state it is in.
  *
- * The heading is task 21.8's — every other MVP screen carried one and this did not, so a
- * heading-list navigation of the Dashboard showed its sections with nothing naming the page they
- * belong to. It lives here rather than inside the ready branch so a loading, failed or empty
- * Dashboard is still recognisably the Dashboard.
+ * **Why it is one line.** `01-dashboard.png` has no page title band at all: the shell's breadcrumb
+ * names the screen, and the very next thing under the header is the photographic hero. Production
+ * spent two rows before it — a title with a subtitle under it, then a "Brief on another place"
+ * disclosure across the full width — and the customer-level review of 2026-09-11 recorded the
+ * result: the first viewport opened on a form and an explanation rather than on the weather.
+ *
+ * So the heading, its subtitle and the place switcher share one baseline, and the hero starts
+ * immediately beneath. Nothing is removed. The `h1` is task 21.8's and is required for a
+ * heading-list navigation; the paragraph after it is what the accessibility suite measures for
+ * contrast in both appearances; and the switcher is the same single field and the same resolver,
+ * now the width of a button instead of the width of the page.
  */
-function DashboardFrame({ children }: { readonly children: ReactNode }): ReactNode {
+function DashboardFrame({
+  children,
+  action = null,
+}: {
+  readonly children: ReactNode;
+  /** The place switcher, where the screen has one. Absent on the states that cannot switch. */
+  readonly action?: ReactNode;
+}): ReactNode {
   return (
     <div className={styles.dashboard}>
-      {/*
-        One line, not three. The heading is task 21.8's and is required — a heading-list navigation
-        of this screen needs the page named, and the accessibility suite measures `main h1` and the
-        paragraph after it for contrast in both appearances. What it does not need is the third of
-        a viewport it was taking: `01-dashboard.png` has no page title at all, because the shell's
-        breadcrumb already says Dashboard, and the hero is what the screen opens on. So the title
-        and its subtitle sit on one baseline above the hero and the band starts where the artifact
-        starts it.
-      */}
       <header className={styles.heading}>
-        <h1 className={styles.title}>Dashboard</h1>
-        <p className={styles.subtitle}>
-          Conditions now, the days ahead, and how they sit against the record.
-        </p>
+        <div className={styles.headingText}>
+          <h1 className={styles.title}>Dashboard</h1>
+          <p className={styles.subtitle}>Conditions, the week ahead, and the record behind it.</p>
+        </div>
+        {action}
       </header>
 
       {children}

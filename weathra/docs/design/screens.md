@@ -282,10 +282,18 @@ override meant an operator on a light system saw the *whole product* — Dashboa
 palette no product artifact depicts. It was removed in the visual correction pass and is recorded in
 §8. The reading of `08` is unchanged; only the conclusion drawn from it is.
 
-**A naming collision to avoid.** `01` and `04` label their forecast strips "Forecast Explorer" and
-"Forecast Delta Explorer". **Forecast Explorer** is the name of a post-MVP screen
-([`roadmap.md`](roadmap.md)); a Dashboard section may not carry it, or the navigation would
-advertise as built something that is not.
+**A naming collision that has expired.** `01` and `04` label their forecast strips "Forecast
+Explorer" and "Forecast Delta Explorer". While **Forecast Explorer** was only a post-MVP name
+([`roadmap.md`](roadmap.md)), a Dashboard section could not carry it: the navigation would have
+advertised as built something that was not.
+
+That reason no longer holds. `/explorer` ships, it is in the navigation, and
+[`screens/11-forecast-explorer.png`](screens/11-forecast-explorer.png) is the screen it was named
+after — so as of the customer-level fidelity correction of **2026-09-11** the Dashboard's seven-day
+strip carries the product's real name for the thing it summarises, headed `FORECAST · 7-DAY
+ANALYSIS` as the artifact heads it, with a link to the full screen. The link is what keeps the name
+a signpost rather than a claim. `04`'s "Forecast Delta Explorer" matrix stays refused for the
+separate reason recorded in §7: the data behind it is not what that screen retrieves.
 
 ## 6. Approval record
 
@@ -409,7 +417,7 @@ implementation decides beyond them. Written during implementation and reviewed i
 | 2026-09-06 | All eight | **Correction, not a divergence.** The appearance is chosen by screen, not by the visitor's system. `prefers-color-scheme` is gone; `:root` is Midnight Intelligence and the `(auth)` group takes `data-appearance="light"` | The seven product artifacts are Midnight Intelligence and `08-authentication.png` is light. The old override handed that choice to the operating system instead, so an operator whose machine reported light was served a *Dashboard* matching none of the seven — found by looking at a rendered screen, because every suite passed against it. Both halves of the set are now reproduced as drawn. |
 | 2026-09-06 | All seven product artifacts | The top bar is implemented: breadcrumb, search field, and the signed-in person. Its **notification bell is not** | The strip was absent entirely, which was a large part of why a rendered screen and its artifact did not read as the same product. The bell is the one element with no truthful form — Weathra has no notifications, Weather Watch is post-MVP, and the artifacts draw it carrying an unread dot. The breadcrumb shows the real path rather than the artifacts' fixed `Dashboard › Meteorology Analytics`, and the search is a location search — the resolver Weathra actually has — rather than the artifacts' "locations or data". |
 | 2026-09-06 | `01-dashboard.png` | The hero band is reproduced in geometry and tonality, without the photograph, the station identifier or the "Agent Ready" line. Its four secondary measures are kept as slots, and one the provider did not report reads "Not reported" | §5 refuses generated decorative imagery set-wide and there is no approved asset, so the band keeps its height and gets an atmospheric wash from the surface tokens. Keeping the four slots and naming the absent ones is what preserves the composition without inventing a wind speed; dropping them would lose the hero, and filling them would lose the product. |
-| 2026-09-06 | `01-dashboard.png` | The day strip draws the days the backend returned, without a condition glyph or caption, and is not called "Forecast Explorer" | The horizon is the person's saved preference and the provider answers with what it has; drawing the artifact's seven would mean drawing days nobody forecast. The forecast carries a high and a low and no condition field, so there is no icon rather than a guessed one. The name is reserved for a post-MVP screen (§5). |
+| 2026-09-06 | `01-dashboard.png` | The day strip draws the days the backend returned, without a condition glyph or caption, and is not called "Forecast Explorer" | The horizon is the person's saved preference and the provider answers with what it has; drawing the artifact's seven would mean drawing days nobody forecast. The forecast carries a high and a low and no condition field, so there is no icon rather than a guessed one. The name is reserved for a post-MVP screen (§5). **Superseded 2026-09-11**: the provider's `weather_code` supplies a real condition and `/explorer` now exists, so the strip carries both the glyph and the name, and links to the screen (§5). |
 | 2026-09-06 | `01-dashboard.png` | The closing status rule carries the provider, the place and the units, not "DATA FLOW: ACTIVE · SYSTEM HASH: B882-X90A-BERL · v4.8.2-STABLE" | Same rule, same position; a hash and a version string are invented values, and the facts put in their place are ones the screen already holds. |
 | 2026-09-06 | `08-authentication.png` | The password visibility control is now the artifact's eye glyph rather than the words "Show"/"Hide" | The earlier decision was that an icon-only control needs a name supplied separately and an invisible name is an unchecked one. The name is `aria-label`, and every test for these three forms queries the button *by* that name — so it is asserted on every run rather than merely present, which meets the original concern without keeping the words. |
 | 2026-09-06 | `08-authentication.png` | "Remember me" is still not implemented | Supabase persists the session either way; a checkbox that changed nothing would be exactly the fabrication this pass exists to remove. Implementing it truthfully means session-scoped rather than persistent auth cookies, which is an authentication-behaviour change rather than a visual one. |

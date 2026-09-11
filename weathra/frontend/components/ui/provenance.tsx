@@ -188,6 +188,15 @@ export function AttributionFooter(props: AttributionFooterProps): ReactNode {
   return (
     <footer className={styles.attribution} data-attribution="true">
       <details className={styles.attributionDetails}>
+        {/*
+          **Two facts and a control.** Finding 23 of the customer-level review of 2026-09-11: a
+          populated Dashboard carries seven of these, and each printed the provider, the retrieval
+          time *and* the unit system — three chips repeated seven times down one page, which reads
+          as an engineering report whatever each line says. The unit system is the one of the three
+          that is identical on every card of a briefing and is already stated once on the screen's
+          closing rule, so it comes off the summary and stays in the list below, where
+          `specs/web-ui`'s requirement to carry it is actually met.
+        */}
         <summary className={styles.attributionSummary}>
           <span className={styles.attributionChip}>{provider?.trim() || NOT_REPORTED}</span>
           {retrieved && retrievedAt ? (
@@ -195,7 +204,6 @@ export function AttributionFooter(props: AttributionFooterProps): ReactNode {
               Updated <time dateTime={retrievedAt}>{retrieved}</time>
             </span>
           ) : null}
-          {units ? <span className={styles.attributionChip}>{units}</span> : null}
           <span className={styles.attributionMore}>Evidence</span>
         </summary>
 
@@ -329,6 +337,21 @@ export interface UncertaintyIndicatorProps {
   readonly hoursAhead?: number | null;
   /** False when the provider supplies no spread. Undefined means the backend did not say. */
   readonly spreadAvailable?: boolean | null;
+  /**
+   * Put the basis behind a control instead of on the face of the card.
+   *
+   * Finding 14 of the customer-level review of 2026-09-11: on the Dashboard this rendered as two
+   * full-width lines of defensive prose — "Confidence decreases with horizon distance, from one
+   * provider's output and its supplied spread only." over "This provider supplies no forecast
+   * spread for this figure, so none is shown." — under the seven-day strip, which is the widest
+   * card on the screen.
+   *
+   * The band and how far out it is graded stay on the face, because those are the fact. The basis
+   * is not dropped and could not be: `specs/web-ui` requires confidence to be presented with its
+   * basis, and `basis` is still a required prop that is still rendered, one press away, in the same
+   * region. What changes is whether a person has to read the method to read the weather.
+   */
+  readonly compact?: boolean;
 }
 
 /**
@@ -343,25 +366,48 @@ export function UncertaintyIndicator({
   basis,
   hoursAhead,
   spreadAvailable,
+  compact = false,
 }: UncertaintyIndicatorProps): ReactNode {
+  const detail = (
+    <>
+      <p className={styles.uncertaintyBasis}>{basis}</p>
+      {spreadAvailable === false ? (
+        <p className={styles.uncertaintyBasis}>{NO_SPREAD_AVAILABLE}</p>
+      ) : null}
+    </>
+  );
+
   return (
-    <div className={styles.uncertainty} data-confidence={confidence} data-uncertainty="true">
-      <p className={styles.uncertaintyHeader}>
+    <div
+      className={styles.uncertainty}
+      data-confidence={confidence}
+      data-uncertainty="true"
+      data-compact={compact ? "true" : undefined}
+    >
+      {/* A `div`, not a `p`: the compact treatment puts a disclosure on this line, and a
+          `<details>` inside a paragraph is not a paragraph the browser will keep. */}
+      <div className={styles.uncertaintyHeader}>
         <span className={styles.badge} data-confidence={confidence}>
           {CONFIDENCE_LABELS[confidence]}
         </span>
         {typeof hoursAhead === "number" ? (
           <span className={styles.uncertaintyHorizon}>
-            {hoursAhead} h into the forecast horizon
+            {/* "6 h ahead, lower further into the week" is the fact the band is graded from; the
+                sentence that says so is in the disclosure beside it. */}
+            {compact
+              ? `${hoursAhead} h ahead — lower further into the week`
+              : `${hoursAhead} h into the forecast horizon`}
           </span>
         ) : null}
-      </p>
+        {compact ? (
+          <details className={styles.uncertaintyDetails}>
+            <summary className={styles.uncertaintySummary}>How this is graded</summary>
+            {detail}
+          </details>
+        ) : null}
+      </div>
 
-      <p className={styles.uncertaintyBasis}>{basis}</p>
-
-      {spreadAvailable === false ? (
-        <p className={styles.uncertaintyBasis}>{NO_SPREAD_AVAILABLE}</p>
-      ) : null}
+      {compact ? null : detail}
     </div>
   );
 }
@@ -516,6 +562,25 @@ export interface InterpretationPanelProps {
    * a distinguishable interpretation rather than a styled quote.
    */
   readonly prominence?: "panel" | "lead";
+  /**
+   * A small label over the prose, naming what this particular reading is.
+   *
+   * `01-dashboard.png` heads its interpretation "CURRENT INTERPRETATION" inside a card titled
+   * Weathra Intelligence, and the two say different things: the title names the capability, the
+   * eyebrow names what is being read right now. Optional, because the Analyst's answer is the whole
+   * screen and needs no second label on it.
+   */
+  readonly eyebrow?: string;
+  /**
+   * How much room the panel takes.
+   *
+   * `comfortable` is the default and the screen-sized treatment: a framed region with the boundary
+   * sentence on its own line above the prose. `compact` is the Dashboard's, where this panel is one
+   * quarter of a composed intelligence card — the boundary sentence moves onto the header's own
+   * line so the prose starts where the artifact starts it. It moves; it is never dropped, and it is
+   * the same constant either way.
+   */
+  readonly density?: "comfortable" | "compact";
 }
 
 /**
@@ -539,6 +604,8 @@ export function InterpretationPanel({
   footer,
   headingLevel = 2,
   prominence = "panel",
+  eyebrow,
+  density = "comfortable",
 }: InterpretationPanelProps): ReactNode {
   const attributed = [provider?.trim(), model?.trim()].filter(Boolean).join(" · ");
   const Heading = headingLevel === 2 ? "h2" : "h3";
@@ -552,14 +619,21 @@ export function InterpretationPanel({
       data-class="interpretation"
       data-tier="interpretation"
       data-interpretation="true"
+      data-density={density}
       aria-label={title}
     >
       <header className={styles.interpretationHeader}>
         <DataClassBadge dataClass="interpretation" />
         <Heading className={styles.interpretationTitle}>{title}</Heading>
+        {/*
+          The boundary sentence rides the header in the compact treatment and sits on its own line
+          above the prose in the comfortable one. Same constant, same region, same guarantee — what
+          changes is whether it is a line of the card or a note on its title.
+        */}
+        <p className={styles.interpretationBoundary}>{INTERPRETATION_BOUNDARY}</p>
       </header>
 
-      <p className={styles.interpretationBoundary}>{INTERPRETATION_BOUNDARY}</p>
+      {eyebrow ? <p className={styles.interpretationEyebrow}>{eyebrow}</p> : null}
 
       <div className={styles.interpretationBody} data-prominence={prominence}>
         {children}
@@ -606,6 +680,17 @@ export interface ProvenanceSectionProps {
    * rather than a decoration, and a variant that could drop them would not be a variant.
    */
   readonly variant?: "panel" | "hero";
+  /**
+   * A small label above the title, naming what the section is a view of.
+   *
+   * The artifacts head their cards twice — "FORECAST · 7-DAY ANALYSIS" over "Forecast Explorer",
+   * "ANALYTICS · 24H INTRA-DAY PROJECTION" over "Climate Pulse Analytics" — and the pair is what
+   * makes a card read as a product surface rather than as a panel with a heading on it. It sits
+   * beside the data-class badge, which is a different fact and is never replaced by it.
+   */
+  readonly eyebrow?: string;
+  /** A control on the header's far end — the artifacts' "Export Data (CSV)" slot. */
+  readonly action?: ReactNode;
 }
 
 /**
@@ -625,6 +710,8 @@ export function ProvenanceSection({
   footer,
   headingLevel = 2,
   variant = "panel",
+  eyebrow,
+  action,
 }: ProvenanceSectionProps): ReactNode {
   if (isInterpretation(dataClass)) {
     return (
@@ -645,9 +732,17 @@ export function ProvenanceSection({
       data-variant={variant}
       aria-label={title}
     >
-      <header className={styles.provenanceHeader}>
+      {/*
+        Two lines where the card has an eyebrow, one where it does not. The artifacts set the badge
+        and the eyebrow on one rule with any action on its end, and the card's name underneath at
+        the section step — `order` is what puts them there without moving the heading out of its
+        place in the document.
+      */}
+      <header className={styles.provenanceHeader} data-eyebrow={eyebrow ? "true" : undefined}>
         <DataClassBadge dataClass={dataClass} />
+        {eyebrow ? <p className={styles.provenanceEyebrow}>{eyebrow}</p> : null}
         <Heading className={styles.provenanceTitle}>{title}</Heading>
+        {action ? <div className={styles.provenanceAction}>{action}</div> : null}
       </header>
 
       <div className={styles.provenanceBody}>{children}</div>

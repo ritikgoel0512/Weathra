@@ -158,13 +158,18 @@ export function IntradayChart({ hours, unit }: IntradayChartProps): ReactNode {
                 {/* The artifact fills under its curve. A gradient, so the fill reads as depth
                     beneath the line rather than as a second solid region with an edge of its own. */}
                 <linearGradient id={fill} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--color-accent)" stopOpacity={0.42} />
-                  <stop offset="100%" stopColor="var(--color-accent)" stopOpacity={0.02} />
+                  <stop offset="0%" stopColor="var(--color-accent)" stopOpacity={0.26} />
+                  <stop offset="100%" stopColor="var(--color-accent)" stopOpacity={0.01} />
                 </linearGradient>
               </defs>
 
               {/* Horizontal hairlines only. Vertical ones turn a 24-column chart into a grid. */}
-              <CartesianGrid stroke="var(--color-border-subtle)" strokeDasharray="0" vertical={false} />
+              {/* Hairlines, dashed and quiet. A solid grid competes with the curve drawn on it. */}
+              <CartesianGrid
+                stroke="var(--color-border-subtle)"
+                strokeDasharray="2 6"
+                vertical={false}
+              />
               <XAxis
                 dataKey="label"
                 stroke="var(--color-border-strong)"
@@ -210,9 +215,16 @@ export function IntradayChart({ hours, unit }: IntradayChartProps): ReactNode {
                   yAxisId="chance"
                   dataKey="chance"
                   name="Chance of rain"
-                  fill="var(--color-class-analytics)"
-                  fillOpacity={0.26}
-                  barSize={14}
+                  /*
+                    Finding 16 of the customer-level review of 2026-09-11: at 26% of a violet across
+                    two thirds of every hour, 24 of these read as one solid block behind the curve
+                    and the card looked like an engineering plot rather than the artifact's. The
+                    artifact draws a handful of narrow blue columns under a bright line. Same
+                    figures, same axis, less ink.
+                  */
+                  fill="var(--color-class-forecast)"
+                  fillOpacity={0.34}
+                  barSize={9}
                   radius={[2, 2, 0, 0]}
                   isAnimationActive={false}
                 />
@@ -223,8 +235,10 @@ export function IntradayChart({ hours, unit }: IntradayChartProps): ReactNode {
                 type="monotone"
                 dataKey="temperature"
                 name="Temperature"
-                stroke="var(--color-class-forecast)"
-                strokeWidth={2}
+                /* The accent, so the curve is unmistakably the subject and the bars beneath it are
+                   unmistakably not. Both were the same forecast blue. */
+                stroke="var(--color-accent)"
+                strokeWidth={2.5}
                 fill={`url(#${fill})`}
                 dot={false}
                 activeDot={{ r: 4 }}
@@ -237,13 +251,19 @@ export function IntradayChart({ hours, unit }: IntradayChartProps): ReactNode {
         </div>
       </ScrollRegion>
 
-      <p className={styles.intradayNote} id={described}>
-        {missing === 0
-          ? "Every hour in this window was reported by the provider."
-          : `${missing} ${missing === 1 ? "hour" : "hours"} in this window ${
-              missing === 1 ? "was" : "were"
-            } not reported by the provider and ${missing === 1 ? "is" : "are"} left as a gap.`}
-      </p>
+      {/*
+        **One short line, on the disclosure's own rule.** It read "Every hour in this window was
+        reported by the provider." across the full width of the widest card on the screen — a
+        sentence about completeness where the artifact has nothing at all. The gap case keeps its
+        count, because a gap is a fact about the chart and has to be stated where the chart is.
+      */}
+      <div className={styles.intradayRule}>
+        <p className={styles.intradayNote} id={described}>
+          {missing === 0
+            ? `All ${hours.length} hours reported.`
+            : `${missing} of ${hours.length} hours not reported, and left as gaps.`}
+        </p>
+      </div>
 
       {/* Every value is also text — the rule the historical charts set, kept here. */}
       <details className={styles.intradayFigures}>
