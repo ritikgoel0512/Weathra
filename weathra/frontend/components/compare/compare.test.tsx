@@ -210,8 +210,15 @@ const ARTIFACT_SAMPLE_VALUES = [
   "Neural Agent",
   "Dr. Aris Thorne",
   "1991-2020",
-  "Forecast Delta Explorer",
 ];
+
+/*
+ * **Why "Forecast Delta Explorer" is no longer on that list.** It was, for the same reason
+ * "Forecast Explorer" was refused on the Dashboard: it named a region this build did not have. Task
+ * 34.31 built it — a row per day with each place's own provider condition and forecast high — so
+ * the artifact's name is now the true name of a real region, and refusing it would mean refusing to
+ * call a thing what it is. Every identifier above is still an invention and is still refused.
+ */
 
 /* --------------------------------------------------------------------- harness */
 
@@ -603,7 +610,12 @@ describe("the runtime fidelity audit's compare findings", () => {
     await compare();
     await screen.findByRole("region", { name: "Ranked by warmest" });
 
-    const summary = screen.getByText(/2 places · ranked by warmest · 5 days ahead/);
+    /*
+     * The summary is "Change comparison" rather than a restatement of the enquiry. What is being
+     * compared is on the heading's own control strip now — `04-compare-cities.png` puts it there —
+     * and a disclosure whose label repeats the line above it is the same fact drawn twice.
+     */
+    const summary = screen.getByText("Change comparison");
     expect(screen.getByLabelText("Location 1")).not.toBeVisible();
 
     // Every field is one press away, and still the same form: no field was removed to fold it.
@@ -629,32 +641,45 @@ describe("the runtime fidelity audit's compare findings", () => {
     renderScreen();
     await compare();
 
-    const summary = await screen.findByRole("region", { name: "How this comparison was made" });
+    /*
+     * The screen closes on "Comparison Summary" now, which states the result in a sentence a
+     * customer reads. The methodology is not lost and not softened — it is the first disclosure
+     * inside that region, which is where task 34.31 put every technical surface this screen used to
+     * end on.
+     */
+    const summary = await screen.findByRole("region", { name: "Comparison Summary" });
+    expect(within(summary).getByText(/leads on warmest by/)).toBeInTheDocument();
 
-    // The face: a sentence, in words, with no raw enum in it.
+    await userEvent.click(within(summary).getByText("How this comparison was made"));
     expect(within(summary).getByText(/3 candidates ranked by warmest/)).toBeInTheDocument();
-    expect(within(summary).getByText(/No model interpretation, no confidence score/)).toBeInTheDocument();
-    expect(within(summary).queryByText("locations")).not.toBeInTheDocument();
-
-    // The fields, one press away and said as a person would say them.
-    await userEvent.click(within(summary).getByText("The fields this comparison reported"));
+    expect(
+      within(summary).getByText(/No model interpretation and no confidence score/),
+    ).toBeInTheDocument();
     expect(within(summary).getByText("Warmest")).toBeInTheDocument();
     expect(within(summary).getByText("Several places over one window")).toBeInTheDocument();
-    expect(within(summary).getByText("3")).toBeInTheDocument();
   });
 
   it("does not repeat the shared basis's own rows in the summary (4.6)", async () => {
     renderScreen();
     await compare();
 
-    const basis = await screen.findByRole("region", { name: "The basis every candidate shares" });
-    const summary = screen.getByRole("region", { name: "How this comparison was made" });
+    const summary = await screen.findByRole("region", { name: "Comparison Summary" });
 
-    // Stated in full, once, in the panel whose subject they are.
+    /*
+     * The basis is inside the ranking disclosure now, which is inside this region — so the two
+     * are nested rather than adjacent, and the rule they were written for still holds: the rows are
+     * stated in full, once, in the panel whose subject they are.
+     */
+    await userEvent.click(
+      within(summary).getByText("Ranking details and every figure behind it"),
+    );
+    const basis = await screen.findByRole("region", { name: "The basis every candidate shares" });
     expect(within(basis).getByText(/temperature_mean: mean/)).toBeInTheDocument();
     expect(within(basis).getByText(/Scores within 0.1 share a rank/)).toBeInTheDocument();
-    expect(within(summary).queryByText(/temperature_mean: mean/)).not.toBeInTheDocument();
-    expect(within(summary).queryByText(/share a rank/)).not.toBeInTheDocument();
+
+    await userEvent.click(within(summary).getByText("How this comparison was made"));
+    const methodology = within(summary).getByText(/3 candidates ranked by warmest/).parentElement!;
+    expect(within(methodology).queryByText(/temperature_mean: mean/)).not.toBeInTheDocument();
   });
 });
 
@@ -678,18 +703,36 @@ describe("the screen is named in every state (1.1)", () => {
 });
 
 describe("data classes and failures", () => {
-  it("keeps the ranking in a computed region, with no model-written region at all", async () => {
+  it("keeps the ranking computed, and spends no inference call to render the screen", async () => {
     const { container } = renderScreen();
     await compare();
-    await screen.findByRole("region", { name: "Ranked by warmest" });
+    await screen.findByRole("region", { name: "Comparison Intelligence" });
 
-    // The screen carries several computed regions — the ranking, the figures matrix, the account of
-    // how the comparison was made — and, since the delta explorer was added, retrieved ones too:
-    // each place's own forecast is retrieved data and is badged as such. The claim that matters is
-    // the last line, and it is the one that has never changed: **nothing here is model-written.**
+    /*
+     * **The claim changed, and this is what it changed to.** This suite used to assert that the
+     * screen had *no* interpretation region at all, because `screens.md` §8 had recorded the
+     * artifact's Comparison Intelligence card as unimplementable. Task 34.31 built it: one region,
+     * carrying a deterministic reading of the comparison by default and the model's reading only
+     * where somebody presses for it.
+     *
+     * So the guarantee that matters is no longer "nothing is model-written" — it is that **no
+     * inference call is made to render this screen**, and that anything model-written that does
+     * arrive is inside the one region that says a model wrote it. Both are asserted here.
+     */
     expect(container.querySelectorAll('[data-tier="computed"]').length).toBeGreaterThanOrEqual(1);
-    expect(container.querySelectorAll('[data-tier="interpretation"]')).toHaveLength(0);
-    expect(within(screen.getByRole("region", { name: "Ranked by warmest" })).getByText("ANALYTICS")).toBeInTheDocument();
+    expect(container.querySelectorAll('[data-tier="interpretation"]')).toHaveLength(1);
+
+    const asked = (fetchMock.mock.calls as [string][]).map(([input]) => new URL(input).pathname);
+    expect(asked).not.toContain("/api/v1/agent/ask");
+
+    await userEvent.click(
+      within(await screen.findByRole("region", { name: "Comparison Summary" })).getByText(
+        "Ranking details and every figure behind it",
+      ),
+    );
+    expect(
+      within(screen.getByRole("region", { name: "Ranked by warmest" })).getByText("ANALYTICS"),
+    ).toBeInTheDocument();
   });
 
   it("shows the backend's own message when a comparison is refused, and no ranking", async () => {

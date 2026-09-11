@@ -22,6 +22,8 @@ export type { FieldControl, FieldProps } from "./field";
 export { Input } from "./input";
 export type { InputProps } from "./input";
 
+export { IntelligenceMark, PrecipitationMark, StatusMark } from "./marks";
+
 export { Metric } from "./metric";
 export type { MetricProps } from "./metric";
 

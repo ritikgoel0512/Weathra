@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The two drawings this Dashboard owns — task 34.30.
+ * The drawings the product owns — task 34.30, moved into the primitive layer by task 34.31.
  *
  * Both are **decorative**, both are `aria-hidden`, and neither encodes a figure. Every number on
  * the cards they sit in is text the backend supplied, drawn beside them where the provenance
@@ -13,11 +13,17 @@
  * weather product should not fetch a picture to draw a cloud. Nothing here was traced from, copied
  * out of, or downloaded for the design artifact — `01-dashboard.png`'s own rain graphic is somebody
  * else's rendering and is not part of this project's asset set.
+ *
+ * **Why they are primitives now.** They were the Dashboard's until Compare Cities needed the same
+ * two: `04-compare-cities.png` heads its Comparison Intelligence card with the same circular mark
+ * and states an anomaly with the same status treatment, and two screens drawing the same mark from
+ * two files is how a design system stops being one. The drawings themselves are unchanged — the
+ * frozen Dashboard renders exactly what it rendered before this move.
  */
 
 import { useId, type ReactNode } from "react";
 
-import styles from "./dashboard.module.css";
+import styles from "./primitives.module.css";
 
 /**
  * The circular mark on the Weathra Intelligence header band.

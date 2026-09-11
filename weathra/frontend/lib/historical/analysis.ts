@@ -140,6 +140,38 @@ export function periodLabel(period: { start_local: string; end_local: string } |
   return `${localDateOf(period.start_local)} to ${localDateOf(period.end_local)}`;
 }
 
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"] as const;
+
+/**
+ * The same window, said the way a sentence says it: `4 to 6 September`.
+ *
+ * `periodLabel` is the provenance form and stays exactly as it is — a footer stating which window a
+ * figure covers wants the calendar dates, unambiguous and sortable. A customer-facing sentence does
+ * not: "Over 2026-09-04 to 2026-09-06, Berlin leads…" is the engineering-copy tell task 34.31 was
+ * sent to remove. Built from the string's own parts rather than through `toLocaleDateString`, for
+ * the reason every other date on these screens is: the backend resolved this into the *location's*
+ * timezone, and re-parsing it would re-express it in the reader's.
+ */
+export function periodSentence(
+  period: { start_local: string; end_local: string } | undefined,
+): string | null {
+  const label = periodLabel(period);
+  if (label === null) return null;
+  const [start, end] = label.split(" to ");
+  const from = /^(\d{4})-(\d{2})-(\d{2})$/.exec(start ?? "");
+  const to = /^(\d{4})-(\d{2})-(\d{2})$/.exec(end ?? "");
+  if (!from || !to) return label;
+
+  const month = (match: RegExpExecArray) => MONTHS[Number(match[2]) - 1] ?? match[2];
+  const day = (match: RegExpExecArray) => String(Number(match[3]));
+
+  // Within one month, the month is said once: `4 to 6 September`.
+  if (from[1] === to[1] && from[2] === to[2]) {
+    return `${day(from)} to ${day(to)} ${month(to)}`;
+  }
+  return `${day(from)} ${month(from)} to ${day(to)} ${month(to)}`;
+}
+
 /** A date shifted by whole years, as an ISO calendar date. Used only to seed the form's defaults. */
 export function yearsBefore(iso: string, years: number): string {
   const match = /^(\d{4})(-\d{2}-\d{2})$/.exec(iso);

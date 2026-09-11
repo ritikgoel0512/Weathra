@@ -1563,11 +1563,6 @@
   min-width: 0;
 }
 
-.markSvg {
-  flex: none;
-  display: block;
-}
-
 /*
  * **The artifact's two sub-cards, side by side.** `01-dashboard.png` puts "WHAT CHANGED?" and
  * "WHY?" under the interpretation as two small inset panels of two or three lines each. Ours had

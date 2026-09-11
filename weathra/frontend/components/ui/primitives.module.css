@@ -1694,3 +1694,12 @@ input.controlBare[type="date"]::-webkit-calendar-picker-indicator:hover {
   flex: none;
   color: currentColor;
 }
+
+/*
+ * The shared drawings — `components/ui/marks.tsx`, moved here with them by task 34.31 so the
+ * Dashboard and Compare Cities draw the same mark from the same rule rather than from two.
+ */
+.markSvg {
+  flex: none;
+  display: block;
+}

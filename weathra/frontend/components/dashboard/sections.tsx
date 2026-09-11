@@ -31,7 +31,9 @@ import {
   Meter,
   EmptyState,
   MethodNote,
+  PrecipitationMark,
   ProvenanceSection,
+  StatusMark,
   UncertaintyIndicator,
   WeatherIcon,
   type Attribution,
@@ -67,7 +69,6 @@ import {
 } from "@/lib/dashboard/briefing";
 
 import { BaselineYearsChart } from "./baseline-years";
-import { PrecipitationMark, StatusMark } from "./marks";
 import { IntradayChart, intradayHours, peakOf } from "./intraday";
 
 import styles from "./dashboard.module.css";

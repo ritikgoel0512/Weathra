@@ -19,26 +19,107 @@
   min-width: 0;
 }
 
+/*
+ * **One row, with the comparison on the end of it** — task 34.31.
+ *
+ * `04-compare-cities.png` sets its screen name on the left of a single row and a compact control
+ * pill on the right, and the two city cards begin immediately under it. Production stacked a title
+ * over a subtitle over a full-width disclosure, then a form, then a ranking chart — so the first
+ * viewport was configuration and methodology and the cities were below the fold.
+ */
 .heading {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  min-width: 0;
+}
+
+.headingText {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
   min-width: 0;
 }
 
 .title {
   font-family: var(--family-display);
-  font-size: var(--type-display-size);
-  line-height: var(--type-display-line);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
   font-weight: var(--type-display-weight);
   color: var(--color-text-primary);
 }
 
 .subtitle {
-  font-size: var(--type-body-size);
-  line-height: var(--type-body-line);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
   color: var(--color-text-muted);
   max-width: 72ch;
+}
+
+/*
+ * The artifact's control pill: the two places, a swap between them, a rule, and the window. It
+ * states what is being compared; the form that changes it is the disclosure below.
+ */
+.strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-raised);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  min-width: 0;
+}
+
+.stripPlace {
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.stripSwap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-inset);
+  color: var(--color-accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.stripSwap:hover {
+  color: var(--color-accent-strong);
+  border-color: var(--color-border-strong);
+}
+
+.stripDivider {
+  width: 1px;
+  height: 14px;
+  background: var(--color-border-subtle);
+}
+
+.stripRule {
+  width: 1px;
+  height: 18px;
+  margin-inline: var(--space-1);
+  background: var(--color-border-subtle);
+}
+
+.stripWindow {
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* -------------------------------------------------------------------- controls */
@@ -55,6 +136,22 @@
   border-radius: var(--radius-lg);
   background: var(--color-surface-raised);
   min-width: 0;
+}
+
+/*
+ * Once there is a comparison on the screen, this is a link-sized control rather than a bar across
+ * the page: the strip in the heading already says what is being compared, so all this has left to
+ * offer is the way to change it.
+ */
+.queryDisclosure[data-configured="true"]:not([open]) {
+  align-self: flex-start;
+  border-color: transparent;
+  background: none;
+}
+
+.queryDisclosure[data-configured="true"]:not([open]) .querySummary {
+  padding-inline: 0;
+  color: var(--color-accent);
 }
 
 .querySummary {
@@ -337,14 +434,26 @@
 
 /* ------------------------------------------------------------------ exclusions */
 
+/*
+ * **A notice, at the size of a notice** — task 34.31.
+ *
+ * A place that could not be scored is a required part of the answer: a ranking of two presented as
+ * a ranking of three is the failure this screen exists to avoid. What it is not is the loudest
+ * thing on the page, which is what it was — a full-width tinted box above the two cities the screen
+ * is about, at body step, four lines tall. Every word of it is still here and it is still a
+ * `role="status"`; it is now the size of the fact it carries, under the cards rather than in front
+ * of them.
+ */
 .excluded {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-status-warning-surface);
-  border: 1px solid var(--color-status-warning);
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  background: color-mix(in srgb, var(--color-status-warning-surface) 70%, var(--color-surface-raised));
+  border: 1px solid color-mix(in srgb, var(--color-status-warning) 44%, transparent);
   border-radius: var(--radius-md);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
 }
 
 .excludedList {
@@ -356,18 +465,25 @@
   padding: 0;
 }
 
+/* The name and its reason on one line, which is how a notice states a pair. */
 .excludedItem {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
   min-width: 0;
 }
 
 .excludedName {
   font-weight: 600;
   color: var(--color-text-primary);
-  font-size: var(--type-body-size);
-  line-height: var(--type-body-line);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.excludedName::after {
+  content: " ·";
+  color: var(--color-text-muted);
 }
 
 /* ---------------------------------------------------------------------- chart */
@@ -675,3 +791,908 @@
   color: var(--color-text-muted);
   font-size: var(--type-label-size);
 }
+
+/* ==================================================================== task 34.31
+ *
+ * The reconstructed composition, in the order `04-compare-cities.png` sets it out: two city heroes,
+ * Comparison Intelligence, the differential matrix, the pulse chart beside its metrics rail, the
+ * archive baseline, and the summary the screen closes on. Every value below is a task 20.3 token,
+ * and the card language is the frozen Dashboard's — that screen is the quality standard this one
+ * was rebuilt against.
+ */
+
+/* ---------------------------------------------------------------- the city heroes */
+
+/*
+ * Two equal cards, side by side, as the artifact draws them. They stack below the tablet tier
+ * rather than shrinking, because a hero at 300 pixels is a thumbnail.
+ */
+.cityHeroes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .cityHeroes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.cityHero {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
+/*
+ * **Taller than the shared banner, because this card is a hero.**
+ *
+ * `LocationImage`'s `banner` variant is 23:6 — the strip a Saved Locations card carries — and at
+ * that ratio a 500-pixel-wide hero is 130 pixels of image, which `object-fit: cover` fills with the
+ * top of the photograph. The first capture of this screen is a strip of Berlin's sky.
+ * `04-compare-cities.png` gives its own cards roughly 5:2, which is where the city actually is. The
+ * shared primitive is untouched: this is the compare screen asking for its own proportions, so
+ * nothing else that draws a banner moves.
+ */
+.cityHero [data-variant="banner"] {
+  aspect-ratio: 5 / 2;
+  min-height: 180px;
+}
+
+/* The photographer's credit belongs under the identity, not across it. */
+.cityHero [data-variant="banner"] > p:last-child {
+  bottom: var(--space-1);
+}
+
+.cityHeroOverlay {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  min-width: 0;
+  /* Room at the foot for the licence credit, which sits in the frame's own bottom-right corner. */
+  padding-block-end: var(--space-3);
+}
+
+.cityHeroBadges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The artifact's rank marker, at the size a marker takes rather than the size a headline takes. */
+.cityHeroRank {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.cityHeroTie {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.cityHeroIdentity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* The city, at the display step, on the photograph. The artifact's own hierarchy. */
+.cityHeroName {
+  font-family: var(--family-display);
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line);
+  font-weight: var(--type-display-weight);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+  text-shadow: 0 1px 6px color-mix(in srgb, var(--color-surface-base) 82%, transparent);
+}
+
+.cityHeroRegion {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+  text-shadow: 0 1px 6px color-mix(in srgb, var(--color-surface-base) 82%, transparent);
+}
+
+.cityHeroBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-4);
+  min-width: 0;
+}
+
+.cityHeroReadout {
+  min-width: 0;
+}
+
+.cityHeroTemperature {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  margin: 0;
+  font-family: var(--family-display);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+.cityHeroFigure {
+  font-size: var(--type-readout-size);
+  line-height: 1;
+  font-weight: var(--type-readout-weight);
+}
+
+.cityHeroUnit {
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-secondary);
+}
+
+/* The condition in the accent under the temperature — the artifact's own pairing. */
+.cityHeroCondition {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
+  color: var(--color-accent);
+}
+
+.cityHeroContext {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  text-align: end;
+}
+
+.cityHeroContextItem {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+}
+
+.cityHeroContextItem dt {
+  text-transform: uppercase;
+  letter-spacing: var(--type-label-tracking);
+  font-weight: var(--type-label-weight);
+}
+
+.cityHeroContextItem dd {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Humidity and wind, across the card's foot, under a hairline — as the artifact sets them. */
+.cityHeroMetrics {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--color-border-subtle);
+}
+
+.cityHeroMetric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cityHeroMetricTerm {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.cityHeroMetricValue {
+  margin: 0;
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------ comparison intelligence */
+
+/*
+ * The same card the frozen Dashboard draws, with a comparison in it: a tinted header band across
+ * the top, the reading on the left, the meters and the action on the right, and two inset sub-cards
+ * across the foot.
+ */
+.intelligenceCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+.intelligenceHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-4)) var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  border-block-end: 1px solid var(--color-border-subtle);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-accent) 7%, var(--color-surface-overlay)) 0%,
+    var(--color-surface-raised) 100%
+  );
+}
+
+.intelligenceMark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-pill);
+  background: radial-gradient(
+    70% 70% at 50% 40%,
+    color-mix(in srgb, var(--color-accent) 18%, transparent) 0%,
+    transparent 72%
+  );
+}
+
+.intelligenceHeadText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.intelligenceHeadTitle {
+  font-family: var(--family-display);
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
+  color: var(--color-accent-strong);
+}
+
+.intelligenceHeadMeta {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.intelligenceMain {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .intelligenceMain {
+    grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  }
+}
+
+.intelligencePrimary,
+.intelligenceAside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.intelligenceAsk {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.meters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.metersTitle {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.metersMethod,
+.metricsMore {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.metersMethodSummary,
+.metricsMoreSummary {
+  cursor: pointer;
+  color: var(--color-accent);
+}
+
+.metersMethodSummary:hover,
+.metricsMoreSummary:hover {
+  color: var(--color-accent-strong);
+}
+
+.intelligenceActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--color-border-subtle);
+  min-width: 0;
+}
+
+.intelligenceAction,
+.summaryAction {
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.intelligenceAction:hover,
+.summaryAction:hover {
+  color: var(--color-accent-strong);
+  text-decoration: underline;
+}
+
+/* The artifact's two inset sub-cards, across the foot of the card rather than inside one column. */
+.intelligenceSubcards {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+@media (min-width: 600px) {
+  .intelligenceSubcards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.subcard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+  min-width: 0;
+}
+
+.subcardTitle {
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-accent);
+}
+
+.subcardProse {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-secondary);
+}
+
+.subcardFigures {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.subcardFigure {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.subcardFigureLabel {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+  min-width: 0;
+}
+
+.subcardFigureValue {
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.subcardFigureValue[data-direction="up"] {
+  color: var(--color-status-warning);
+}
+
+.subcardFigureValue[data-direction="down"] {
+  color: var(--color-class-forecast);
+}
+
+/* ------------------------------------------------------- forecast delta explorer */
+
+.deltaLegend,
+.pulseLegend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.deltaLegendItem,
+.pulseLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.deltaLegendItem::before,
+.pulseLegendItem::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+}
+
+.deltaLegendItem[data-series="1"]::before,
+.pulseLegendItem[data-series="1"]::before {
+  background: var(--color-class-historical);
+}
+
+.deltaLegendItem[data-series="2"]::before,
+.pulseLegendItem[data-series="2"]::before {
+  background: var(--color-class-analytics);
+}
+
+.deltaLegendItem[data-series="3"]::before,
+.pulseLegendItem[data-series="3"]::before {
+  background: var(--color-class-forecast);
+}
+
+/*
+ * A row per day, a cell per place — the artifact's matrix. It is still a `<table>`, so it is still
+ * navigable as one; what changed is that a cell is a glyph and a temperature rather than a string
+ * in a spreadsheet.
+ */
+.delta {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.deltaRow {
+  border-block-end: 1px solid var(--color-border-subtle);
+}
+
+.deltaRow:last-child {
+  border-block-end: 0;
+}
+
+.deltaDay {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3) var(--space-2) var(--space-3) 0;
+  text-align: start;
+  white-space: nowrap;
+}
+
+.deltaWeekday {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.deltaDate {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-body-weight);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.deltaCell {
+  padding: var(--space-2);
+  width: 44%;
+}
+
+/* The artifact insets each cell on its own ground, which is what makes the two columns read. */
+.deltaCell > :first-child {
+  display: inline-flex;
+}
+
+.deltaCell {
+  text-align: center;
+}
+
+.deltaIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  color: var(--color-accent);
+  vertical-align: middle;
+}
+
+.deltaIconEmpty {
+  color: var(--color-text-muted);
+}
+
+.deltaValue {
+  margin-inline-start: var(--space-3);
+  font-family: var(--family-display);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+
+.deltaAbsent {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+/* ---------------------------------------------- the pulse band and its metrics rail */
+
+.pulseBand {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: stretch;
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .pulseBand {
+    /* The artifact's own division: a wide plot, a narrow rail. */
+    grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr);
+  }
+}
+
+.metrics {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  min-width: 0;
+}
+
+.metricsTitle {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.metricsList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Each a bordered pill, as the artifact draws them: the measure left, the difference right. */
+.metric {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+  min-width: 0;
+}
+
+.metricTerm {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+  min-width: 0;
+}
+
+.metricValue {
+  font-family: var(--family-display);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--color-text-primary);
+}
+
+.metricValue[data-direction="up"] {
+  color: var(--color-status-warning);
+}
+
+.metricValue[data-direction="down"] {
+  color: var(--color-class-forecast);
+}
+
+.metricsCaption {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+}
+
+/* The status the rail closes on — the frozen Dashboard's own treatment, computed per place. */
+.metricsStatus {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin: 0;
+  margin-block-start: auto;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+}
+
+.metricsStatus[data-tone="calm"] {
+  border-color: color-mix(in srgb, var(--color-status-ok) 34%, transparent);
+  background: color-mix(in srgb, var(--color-status-ok-surface) 62%, var(--color-surface-inset));
+}
+
+.metricsStatus[data-tone="flag"] {
+  border-color: color-mix(in srgb, var(--color-status-warning) 46%, transparent);
+  background: var(--color-status-warning-surface);
+}
+
+.metricsStatusText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.metricsStatusTitle {
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+}
+
+.metricsStatus[data-tone="calm"] .metricsStatusTitle {
+  color: var(--color-status-ok);
+}
+
+.metricsStatus[data-tone="flag"] .metricsStatusTitle {
+  color: var(--color-status-warning);
+}
+
+.metricsStatusDetail {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+/* --------------------------------------------------- the decadal climate baseline */
+
+.baselineBand {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .baselineBand {
+    /* The artifact's own 40/60 narrative-and-plot division. */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+    gap: var(--space-5);
+  }
+}
+
+.baselineAccount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.baselineLead {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-secondary);
+}
+
+.baselineDeltas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  width: 100%;
+  margin: 0;
+}
+
+.baselineDelta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+  min-width: 0;
+}
+
+.baselineDeltaTerm {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.baselineDeltaValue {
+  margin: 0;
+  font-family: var(--family-display);
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line);
+  font-weight: var(--type-display-weight);
+  color: var(--color-class-historical);
+  font-variant-numeric: tabular-nums;
+}
+
+.baselineDeltaNote {
+  margin: 0;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+}
+
+/* The plot on its own inset panel, as the frozen Dashboard's baseline band sets it. */
+.baselineChart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+  min-width: 0;
+}
+
+.baselineChartTitle {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.baselineScroll {
+  min-width: 0;
+}
+
+.baselinePlot {
+  width: 100%;
+  min-width: 320px;
+  height: 240px;
+}
+
+.baselineNote {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+}
+
+/* ------------------------------------------------------------- the closing summary */
+
+.summaryLead {
+  font-size: var(--type-lead-size);
+  line-height: var(--type-lead-line);
+  color: var(--color-text-primary);
+  max-width: 80ch;
+}
+
+.summaryActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.summaryDetails {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/*
+ * The ranking, its chart, its shared basis and the per-statistic matrix — every technical surface
+ * the screen used to end on, whole, behind one control.
+ */
+.rankingDisclosure {
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  border-block-start: 1px solid var(--color-border-subtle);
+  padding-block-start: var(--space-3);
+}
+
+.rankingSummary {
+  cursor: pointer;
+  color: var(--color-accent);
+  font-weight: var(--type-ui-weight);
+}
+
+.rankingSummary:hover {
+  color: var(--color-accent-strong);
+}
+
+.rankingDisclosure > :not(summary) {
+  margin-block-start: var(--space-3);
+}
+

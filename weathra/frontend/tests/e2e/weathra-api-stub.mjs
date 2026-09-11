@@ -1596,6 +1596,20 @@ const FIXTURES = {
       points_used: 24,
       points_excluded: 2,
     },
+    /*
+     * The statistics a real ranking applies, which is more than one — task 34.31.
+     *
+     * The comparison service computes the whole set for every location and returns them as each
+     * candidate's `supporting` list; this fixture carried only the mean, so the reconstructed
+     * screen's metrics rail had exactly one difference in it and the capture said nothing about
+     * how three of them lay out. These are the same measures `statistics_applied` names elsewhere
+     * in this file, with figures for two nearby cities that differ the way two nearby cities do.
+     */
+    statistics_applied: [
+      "temperature_mean: mean",
+      "precipitation_sum: total",
+      "wind_speed_max: maximum",
+    ],
     candidates: [
       {
         label: "Berlin, Germany",
@@ -1603,7 +1617,11 @@ const FIXTURES = {
         period: PERIOD,
         rank: 1,
         score: 18.4,
-        supporting: [statistic("mean", "temperature", 18.4, "°C", "arithmetic mean of usable points")],
+        supporting: [
+          statistic("mean", "temperature", 18.4, "°C", "arithmetic mean of usable points"),
+          statistic("total", "precipitation_sum", 12.5, "mm", "sum of usable points"),
+          statistic("maximum", "wind_speed_max", 31.4, "km/h", "maximum of usable points"),
+        ],
       },
       {
         label: "Munich, Germany",
@@ -1611,7 +1629,11 @@ const FIXTURES = {
         period: PERIOD,
         rank: 2,
         score: 16.1,
-        supporting: [statistic("mean", "temperature", 16.1, "°C", "arithmetic mean of usable points")],
+        supporting: [
+          statistic("mean", "temperature", 16.1, "°C", "arithmetic mean of usable points"),
+          statistic("total", "precipitation_sum", 18.2, "mm", "sum of usable points"),
+          statistic("maximum", "wind_speed_max", 24.8, "km/h", "maximum of usable points"),
+        ],
       },
     ],
     excluded: [
@@ -1873,6 +1895,86 @@ function inUnits(fixture, units) {
     }
   }
   return converted;
+}
+
+
+/* --------------------------------------------------- one fixture, two places (task 34.31)
+ *
+ * Every weather fixture here is a single body served for any coordinate, which is right for the
+ * screens that read one place and wrong for the one that reads two: Compare Cities photographed
+ * with this stub showed Berlin and Munich agreeing to the decimal on every figure on the page, so
+ * the capture said nothing about whether the screen renders a *difference*.
+ *
+ * This shifts a point read by a small amount derived from the coordinates themselves. It is
+ * deterministic — the same place is the same shift on every run, so a capture is reproducible — and
+ * it is confined to this stub. **No product code knows about it**, and nothing in the application
+ * derives a figure from a coordinate; the shift exists so that two places look like two places in
+ * a screenshot, which is the only thing it is for.
+ */
+
+/** A small signed offset for a point, stable across runs. Zero where no point was asked for. */
+function placeOffset(url) {
+  const latitude = Number(url.searchParams.get("latitude"));
+  const longitude = Number(url.searchParams.get("longitude"));
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return 0;
+  // A hash of the rounded point, mapped to [-2.4, +2.4] in quarter steps.
+  const seed = Math.abs(Math.round(latitude * 100) * 31 + Math.round(longitude * 100) * 17);
+  return ((seed % 20) - 10) * 0.24;
+}
+
+/** The measures worth shifting: the ones two cities visibly differ on. */
+const SHIFTED = new Set([
+  "temperature",
+  "temperature_max",
+  "temperature_min",
+  "temperature_mean",
+  "apparent_temperature",
+  "relative_humidity",
+  "wind_speed",
+]);
+
+function shiftValues(values, offset) {
+  if (values === null || typeof values !== "object") return values;
+  const shifted = {};
+  for (const [key, value] of Object.entries(values)) {
+    shifted[key] =
+      typeof value === "number" && SHIFTED.has(key)
+        ? Math.round((value + offset) * 10) / 10
+        : value;
+  }
+  return shifted;
+}
+
+function byPlace(fixture, url) {
+  const offset = placeOffset(url);
+  if (offset === 0 || fixture === null || typeof fixture !== "object") return fixture;
+
+  const shifted = structuredClone(fixture);
+
+  if (shifted.values) shifted.values = shiftValues(shifted.values, offset);
+  for (const key of ["hourly", "daily"]) {
+    const series = shifted[key];
+    if (!series?.entries) continue;
+    series.entries = series.entries.map((entry) => ({
+      ...entry,
+      values: shiftValues(entry.values, offset),
+    }));
+  }
+  // The baseline's own figures, so each place sits against its own archive rather than a shared one.
+  for (const key of ["mean", "minimum", "maximum"]) {
+    const statistic = shifted[key];
+    if (statistic && typeof statistic.value === "number") {
+      statistic.value = Math.round((statistic.value + offset) * 10) / 10;
+    }
+  }
+  if (Array.isArray(shifted.yearly_means)) {
+    shifted.yearly_means = shifted.yearly_means.map((point) => ({
+      ...point,
+      value:
+        typeof point.value === "number" ? Math.round((point.value + offset) * 10) / 10 : point.value,
+    }));
+  }
+  return shifted;
 }
 
 const server = createServer((request, response) => {
@@ -2223,7 +2325,15 @@ const server = createServer((request, response) => {
   }
   // Weather reads are answered in the unit system the request asked for, which is what makes a
   // saved unit preference observable on screen rather than merely stored — task 21.10, flow 3.
-  send(response, 200, path.startsWith("/api/v1/weather/") ? inUnits(fixture, requestedUnits(url)) : fixture);
+  //
+  // …and, for a point read, offset by the point. See `byPlace`.
+  send(
+    response,
+    200,
+    path.startsWith("/api/v1/weather/")
+      ? byPlace(inUnits(fixture, requestedUnits(url)), url)
+      : fixture,
+  );
 });
 
 server.listen(PORT, HOST, () => {

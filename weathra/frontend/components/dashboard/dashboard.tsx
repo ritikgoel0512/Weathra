@@ -35,6 +35,7 @@ import {
   Button,
   ErrorState,
   EmptyState,
+  IntelligenceMark,
   Input,
   InterpretationPanel,
   LoadingState,
@@ -52,7 +53,6 @@ import type {
 } from "@/lib/api/schema";
 import { FixtureDashboard } from "@/components/dashboard/fixture-dashboard";
 import { GettingStarted } from "./getting-started";
-import { IntelligenceMark } from "./marks";
 import { PLACE_PARAM } from "@/components/shell/top-bar";
 import { briefingLocationFrom, calendarWindowFrom } from "@/lib/dashboard/briefing";
 import { placeLabel, qualifiedName } from "@/lib/locations/place";

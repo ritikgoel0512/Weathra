@@ -46,7 +46,12 @@ import type {
   Location,
   UnitSystem,
 } from "@/lib/api/schema";
-import { blockingReason, CRITERIA, criterionLabel } from "@/lib/comparison/ranking";
+import { blockingReason, byRank, CRITERIA, criterionLabel, tiedRanks } from "@/lib/comparison/ranking";
+import {
+  baselineStanding,
+  differencesBetween,
+  windowMeanOf,
+} from "@/lib/comparison/differences";
 import { qualifiedName } from "@/lib/locations/place";
 import {
   alreadyResolved,
@@ -56,17 +61,20 @@ import {
   UNRESOLVED,
   type LocationResolution,
 } from "@/lib/locations/resolution";
-import { formatReading, forecastDaysFrom } from "@/lib/dashboard/briefing";
+import { calendarWindowFrom, formatReading, forecastDaysFrom } from "@/lib/dashboard/briefing";
 import { useApiQuery } from "@/lib/query/hooks";
 import { PREFERENCES_KEY, SAVED_LOCATIONS_KEY } from "@/lib/query/keys";
 
 import { ComparisonChart } from "./chart";
+import { buildBaselineEntries, DecadalClimateBaseline } from "./baseline";
+import { CityHero } from "./city-hero";
+import { ForecastDeltaExplorer } from "./delta-explorer";
+import { ComparisonIntelligence } from "./intelligence";
+import { DeterministicMetrics } from "./metrics";
 import {
-  ComparisonCharts,
+  ClimatePulseCard,
   ComparisonSummary,
-  DeterministicAssociation,
   DifferentialMatrix,
-  ForecastDeltaExplorer,
   Excluded, Ranking, SharedBasis,
 } from "./sections";
 import styles from "./compare.module.css";
@@ -134,73 +142,189 @@ function useForecastRow(place: Location | null, days: number, units: string) {
   return query.state.kind === "ready" ? query.state.data : null;
 }
 
+/** One place's current conditions, for its hero card. Disabled until there is a place. */
+function useCurrentRow(place: Location | null, units: string) {
+  const query = useApiQuery({
+    key: ["compare", "current", place?.latitude, place?.longitude, units],
+    request: (client) =>
+      client.current({
+        latitude: place!.latitude,
+        longitude: place!.longitude,
+        units: units as UnitSystem,
+      }),
+    enabled: place !== null,
+  });
+  return query.state.kind === "ready" ? query.state.data : null;
+}
+
 /**
- * The matrix rows, built from each candidate's own forecast.
+ * One place's archive baseline over the comparison's own calendar window.
  *
- * Capped at the first four places so the grid stays a grid; the ranking above always lists them
- * all, and the artifact's matrix is two columns wide.
+ * This is what turned "Decadal Climate Baseline" from an empty frame into a band with two real
+ * deltas and a plot in it. The endpoint is the one Historical Analytics and the Dashboard already
+ * use; the window is the comparison's own period reduced to calendar dates, so both places are
+ * measured against the same days of the years behind them.
  */
-function ForecastDeltaGrid({
+function useBaselineRow(place: Location | null, window: { start: string; end: string } | null, units: string) {
+  const query = useApiQuery({
+    key: ["compare", "baseline", place?.latitude, place?.longitude, window, units],
+    request: (client) =>
+      client.baseline({
+        latitude: place!.latitude,
+        longitude: place!.longitude,
+        units: units as UnitSystem,
+        start: window!.start,
+        end: window!.end,
+        measure: "temperature_mean",
+      }),
+    enabled: place !== null && window !== null,
+  });
+  return query.state.kind === "ready" ? query.state.data : null;
+}
+
+/**
+ * Everything the reconstructed screen draws below the ranking, from each candidate's own place.
+ *
+ * **Why the retrievals live here.** `POST /weather/comparison` ranks; it does not carry a current
+ * reading, a per-day series or an archive baseline. The artifact's screen is built out of all
+ * three, so each is fetched per compared place through the documented endpoint for it — the same
+ * calls the Dashboard makes for one place, made for two. Nothing is computed in a component: the
+ * differences come from `lib/comparison/differences`, which subtracts figures the backend returned.
+ *
+ * **Four fixed slots, because React requires the same hooks on every render.** The comparison
+ * accepts up to eight places; the first four get the full treatment and the ranking above always
+ * lists every one of them. The artifact is a two-city screen and two is what this is tuned for.
+ */
+function ComparisonBody({
   result,
   days,
 }: {
   readonly result: ComparisonResult;
   readonly days: number;
 }): ReactNode {
-  const candidates: readonly ComparisonCandidate[] = (result.candidates ?? []).slice(0, 4);
+  const candidates: readonly ComparisonCandidate[] = byRank(result).slice(0, 4);
   const units = result.unit_system ?? "metric";
+  const window = calendarWindowFrom(result.period);
 
-  // Fixed number of hooks: React requires the same calls on every render, so four slots are asked
-  // for and the unused ones are disabled rather than conditionally skipped.
-  const a = useForecastRow(candidates[0]?.location ?? null, days, units);
-  const b = useForecastRow(candidates[1]?.location ?? null, days, units);
-  const c = useForecastRow(candidates[2]?.location ?? null, days, units);
-  const d = useForecastRow(candidates[3]?.location ?? null, days, units);
+  const forecasts = [
+    useForecastRow(candidates[0]?.location ?? null, days, units),
+    useForecastRow(candidates[1]?.location ?? null, days, units),
+    useForecastRow(candidates[2]?.location ?? null, days, units),
+    useForecastRow(candidates[3]?.location ?? null, days, units),
+  ];
+  const currents = [
+    useCurrentRow(candidates[0]?.location ?? null, units),
+    useCurrentRow(candidates[1]?.location ?? null, units),
+    useCurrentRow(candidates[2]?.location ?? null, units),
+    useCurrentRow(candidates[3]?.location ?? null, units),
+  ];
+  const baselines = [
+    useBaselineRow(candidates[0]?.location ?? null, window, units),
+    useBaselineRow(candidates[1]?.location ?? null, window, units),
+    useBaselineRow(candidates[2]?.location ?? null, window, units),
+    useBaselineRow(candidates[3]?.location ?? null, window, units),
+  ];
 
-  const rows: { label: string; days: { date: string; high: string | null }[] }[] = candidates.map(
-    (candidate: ComparisonCandidate, index: number) => {
-      const forecast = [a, b, c, d][index] ?? null;
-      const daily = forecastDaysFrom(forecast?.daily);
-      return {
-        label: candidate.label,
-        days: daily.map((day) => ({
-          date: day.date,
-          high: day.high ? formatReading(day.high) : null,
-        })),
-      };
-    },
-  );
+  const shared = tiedRanks(result);
 
-  // Seven rows, as the artifact draws them, labelled by the dates any place actually reported.
+  // The day matrix: a cell per place per day, carrying the provider's own code and high.
+  const rows = candidates.map((candidate, index) => {
+    const daily = forecastDaysFrom(forecasts[index]?.daily);
+    return {
+      label: candidate.label,
+      days: daily.map((day) => ({
+        date: day.date,
+        conditionCode: day.conditionCode,
+        high: day.high ? formatReading(day.high) : null,
+      })),
+    };
+  });
   const dates: string[] = [
     ...new Set<string>(rows.flatMap((row) => row.days.map((day) => day.date))),
   ].sort();
 
-  /*
-   * The same four forecasts, as the artifact's intra-day plot.
-   *
-   * Built here rather than in `ComparisonCharts` because this is where the forecasts already are —
-   * the matrix needs them, so drawing the plot from them costs no extra request. A place whose
-   * provider returned no hourly series contributes an empty line and is filtered out by the chart.
-   */
-  const pulse = candidates.map((candidate: ComparisonCandidate, index: number) => {
-    const forecast = [a, b, c, d][index] ?? null;
-    return {
-      label: candidate.label,
-      points: (forecast?.hourly?.entries ?? []).map((entry) => ({
-        at: entry.time_utc,
-        value: entry.values?.temperature ?? null,
-      })),
-    };
-  });
+  // The intra-day plot, from the same forecasts. No extra retrieval.
+  const pulse = candidates.map((candidate, index) => ({
+    label: candidate.label,
+    points: (forecasts[index]?.hourly?.entries ?? []).map((entry) => ({
+      at: entry.time_utc,
+      value: entry.values?.temperature ?? null,
+    })),
+  }));
   const pulseUnit =
-    [a, b, c, d].find((forecast) => forecast?.hourly?.units?.temperature)?.hourly?.units
+    forecasts.find((forecast) => forecast?.hourly?.units?.temperature)?.hourly?.units
       ?.temperature ?? null;
+
+  const differences = differencesBetween(candidates[0], candidates[1]);
+  const standings = candidates.map((candidate, index) => ({
+    label: candidate.label,
+    standing: baselineStanding(windowMeanOf(candidate), baselines[index] ?? null),
+  }));
+  const baselineEntries = buildBaselineEntries(
+    candidates.map((candidate, index) => ({
+      label: candidate.label,
+      baseline: baselines[index] ?? null,
+      windowMean: windowMeanOf(candidate),
+    })),
+  );
 
   return (
     <>
+      {/* **B — the two city hero cards**, which is what `04-compare-cities.png` opens on. */}
+      <div className={styles.cityHeroes}>
+        {candidates.map((candidate, index) => (
+          <CityHero
+            key={`${candidate.label}-${candidate.rank}`}
+            candidate={candidate}
+            current={currents[index] ?? null}
+            sharesRank={shared.has(candidate.rank)}
+          />
+        ))}
+      </div>
+
+      {/*
+        Named directly under the cards rather than above them: a reader who asked about three places
+        and is shown two has to be told which one is missing and why, and the place to tell them is
+        beside the two they did get rather than in front of them.
+      */}
+      <Excluded result={result} />
+
+      {/* **C — Comparison Intelligence**, carrying the two association meters the artifact puts
+          in it rather than leaving them in a band of their own. */}
+      <ComparisonIntelligence result={result} />
+
+      {/* **D — the seven-row differential matrix**, with a glyph and a temperature per cell. */}
       <ForecastDeltaExplorer rows={rows} dates={dates} />
-      <ComparisonCharts pulse={pulse} pulseUnit={pulseUnit} />
+
+      {/* **E — the intra-day plot, and the deterministic metrics rail beside it.** */}
+      <ClimatePulseCard pulse={pulse} pulseUnit={pulseUnit}>
+        <DeterministicMetrics
+          differences={differences}
+          leading={candidates[0]?.label ?? null}
+          trailing={candidates[1]?.label ?? null}
+          standings={standings}
+        />
+      </ClimatePulseCard>
+
+      {/* **F — the archive baseline per place**, which used to be an empty frame. */}
+      <DecadalClimateBaseline entries={baselineEntries} />
+
+      {/*
+        **G — the customer-facing close**, holding every technical surface the screen used to end
+        on: the ranking with its chart and its shared basis, and the per-statistic matrix.
+      */}
+      <ComparisonSummary result={result}>
+        <details className={styles.rankingDisclosure}>
+          <summary className={styles.rankingSummary}>
+            Ranking details and every figure behind it
+          </summary>
+          <Ranking result={result}>
+            <ComparisonChart result={result} />
+            <SharedBasis result={result} />
+          </Ranking>
+          <DifferentialMatrix result={result} />
+        </details>
+      </ComparisonSummary>
     </>
   );
 }
@@ -232,27 +356,7 @@ function Results({ enquiry }: { readonly enquiry: Enquiry }): ReactNode {
 
   return (
     <div className={styles.results}>
-      {/* Named before the ranking, so a shorter answer than the question is never a surprise. */}
-      <Excluded result={result} />
-
-      <Ranking result={result}>
-        <SharedBasis result={result} />
-        <ComparisonChart result={result} />
-      </Ranking>
-
-      {/*
-        The artifact's two bars, where the artifact puts them — directly under the comparison's own
-        account of itself, above the day matrix. See `DeterministicAssociation`.
-      */}
-      <DeterministicAssociation result={result} />
-
-      {/* The artifact's day-by-day matrix, from each place's own retrieved forecast. */}
-      <ForecastDeltaGrid result={result} days={enquiry.days} />
-
-      {/* The account of how the ranking was made. The two lower charts are rendered by
-          `ForecastDeltaGrid` above, which is where the forecasts they are drawn from already are. */}
-      <DifferentialMatrix result={result} />
-      <ComparisonSummary result={result} />
+      <ComparisonBody result={result} days={enquiry.days} />
     </div>
   );
 }
@@ -402,12 +506,87 @@ export function CompareCities(): ReactNode {
    * exactly one early return; Historical Analytics has three, which is why that one has a
    * component.
    */
+  /**
+   * The compact control strip `04-compare-cities.png` puts in its heading row.
+   *
+   * The artifact's is a single pill — a pin and a city, a swap control, a pin and a city, a rule,
+   * and the window. Production's was a full-height form with a fieldset of rows, a criterion select
+   * and a number field, sitting above every result on every visit; the customer-level review of
+   * 2026-09-11 recorded it as one of the reasons the first viewport looked nothing like the
+   * artifact's.
+   *
+   * So the strip states what is being compared and the form is behind it. Swap is a real action
+   * here — it reorders the two entries and re-asks, which changes which place the differences are
+   * subtracted *from* and therefore the sign of every figure in the metrics rail.
+   */
+  const swap = useCallback(() => {
+    setRows((current) => {
+      const next = [...(current ?? entries)];
+      if (next.length < 2) return next;
+      const [first, second] = [next[0]!, next[1]!];
+      next[0] = second;
+      next[1] = first;
+      return next;
+    });
+    setEnquiry((current) =>
+      current === null || current.locations.length < 2
+        ? current
+        : {
+            ...current,
+            locations: [current.locations[1]!, current.locations[0]!, ...current.locations.slice(2)],
+          },
+    );
+  }, [entries]);
+
+  const strip =
+    enquiry === null ? null : (
+      <div className={styles.strip}>
+        <span className={styles.stripPlace}>{enquiry.locations[0]?.split(",")[0]}</span>
+        {enquiry.locations.length === 2 ? (
+          <button
+            type="button"
+            className={styles.stripSwap}
+            onClick={swap}
+            aria-label="Swap the two places"
+            title="Swap the two places"
+          >
+            <span aria-hidden="true">⇄</span>
+          </button>
+        ) : (
+          <span className={styles.stripDivider} aria-hidden="true" />
+        )}
+        <span className={styles.stripPlace}>
+          {enquiry.locations.length === 2
+            ? enquiry.locations[1]?.split(",")[0]
+            : `${enquiry.locations.length - 1} more`}
+        </span>
+        <span className={styles.stripRule} aria-hidden="true" />
+        <span className={styles.stripWindow}>
+          {enquiry.days} {enquiry.days === 1 ? "day" : "days"}
+        </span>
+      </div>
+    );
+
+  /*
+   * The heading outlives the state — finding 1.1's rule, applied here on 2026-09-09 after
+   * `tests/e2e/fidelity.spec.ts` photographed this screen mid-flight and found four grey lines
+   * under no title at all. The frame is inline rather than extracted because this screen has
+   * exactly one early return; Historical Analytics has three, which is why that one has a
+   * component.
+   *
+   * One row, as the artifact has it: the screen's name on the left, what is being compared on the
+   * right. The subtitle is the one the accessibility suite measures for contrast, so it stays —
+   * on the same baseline rather than on a line of its own.
+   */
   const heading = (
     <header className={styles.heading}>
-      <h1 className={styles.title}>Compare Cities</h1>
-      <p className={styles.subtitle}>
-        Ranked against one criterion, over one window, in each place&rsquo;s own local time.
-      </p>
+      <div className={styles.headingText}>
+        <h1 className={styles.title}>Compare Cities</h1>
+        <p className={styles.subtitle}>
+          Two places, one window, each in its own local time.
+        </p>
+      </div>
+      {strip}
     </header>
   );
 
@@ -439,13 +618,10 @@ export function CompareCities(): ReactNode {
       <details
         className={styles.queryDisclosure}
         open={enquiry === null || blocked !== null || awaiting}
+        data-configured={enquiry === null ? undefined : "true"}
       >
         <summary className={styles.querySummary}>
-          {enquiry === null
-            ? "Choose what to compare"
-            : `${enquiry.locations.length} places · ranked by ${criterionLabel(
-                enquiry.criterion,
-              ).toLowerCase()} · ${enquiry.days} ${enquiry.days === 1 ? "day" : "days"} ahead`}
+          {enquiry === null ? "Choose what to compare" : "Change comparison"}
         </summary>
         <form className={styles.controls} onSubmit={submit} aria-label="Choose what to compare">
         <fieldset className={styles.locations}>

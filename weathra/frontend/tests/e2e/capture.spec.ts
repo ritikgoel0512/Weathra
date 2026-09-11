@@ -187,6 +187,63 @@ test.describe("capture", () => {
           }
         }
 
+        /*
+         * **Wait for the location-image chain to settle.**
+         *
+         * `LocationImage` paints the drawn artwork immediately and replaces it when the resolver
+         * answers, which is what keeps the frame from being empty — and it means a screenshot taken
+         * the instant the network goes quiet can catch the artwork on one card and the photograph on
+         * the other. The first Compare Cities capture of task 34.31 did exactly that.
+         *
+         * This waits for no frame to be on the generated tier any more, and gives up quietly when
+         * one genuinely is: a place with no photograph anywhere in the chain is a real state, and
+         * photographing it is the point of the harness rather than a failure of it.
+         */
+        await page
+          .waitForFunction(
+            () => document.querySelectorAll('[data-source="generated"]').length === 0,
+            undefined,
+            /*
+              Long enough for a cold chain. A place resolves through up to two Wikimedia calls with
+              a six-second timeout each, and two places resolve in parallel — so six seconds is
+              under the worst case and the first correction capture of task 34.31 caught exactly
+              that: one card photographed with its photograph and the other with its drawing.
+            */
+            { timeout: 15_000 },
+          )
+          .catch(() => {});
+
+        /*
+         * …and then for the bytes. The tier flips the moment the *resolver* answers; the `<img>`
+         * then has a photograph to fetch and decode, and a screenshot taken between the two catches
+         * the token-built field behind it — a teal wash where a city should be, which is what the
+         * second Compare Cities capture of task 34.31 shows on one of its two cards.
+         */
+        await page
+          .evaluate(
+            () =>
+              Promise.race([
+                Promise.all(
+                  Array.from(document.images)
+                    .filter((image) => !image.complete)
+                    .map(
+                      (image) =>
+                        new Promise((settle) => {
+                          image.addEventListener("load", settle, { once: true });
+                          image.addEventListener("error", settle, { once: true });
+                        }),
+                    ),
+                ),
+                /*
+                  Capped, because a `loading="lazy"` image below the fold fires neither event until
+                  it is scrolled to — and waiting on one of those waits forever, which is what took
+                  this spec past its own timeout the first time it was written without the race.
+                */
+                new Promise((settle) => setTimeout(settle, 4000)),
+              ]),
+          )
+          .catch(() => {});
+
         // A horizontal scrollbar on the document is the defect this pass exists to find: a screen
         // that pushes the page sideways rather than scrolling its own wide table. Recorded beside
         // the screenshot rather than failed on, because this spec is evidence and not a gate.

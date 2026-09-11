@@ -24,10 +24,10 @@
  * three is the failure this screen exists to avoid.
  */
 
+import Link from "next/link";
 import { useId, type ReactNode } from "react";
 import {
   CartesianGrid,
-  Legend,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -61,9 +61,10 @@ import {
   byRank,
   weightPercentage,
 } from "@/lib/comparison/ranking";
-import { measureLabel } from "@/lib/dashboard/briefing";
+import { differencesBetween } from "@/lib/comparison/differences";
+import { formatReading, measureLabel } from "@/lib/dashboard/briefing";
 import { unavailableReason } from "@/lib/historical/analysis";
-import { periodLabel } from "@/lib/historical/analysis";
+import { periodLabel, periodSentence } from "@/lib/historical/analysis";
 import { placeLabel } from "@/lib/locations/place";
 
 import styles from "./compare.module.css";
@@ -600,34 +601,81 @@ function modeLabel(mode: string): string {
   return mode.replace(/_/g, " ");
 }
 
+/**
+ * "Comparison Synthesis Summary" — the region `04-compare-cities.png` closes on. Task 34.31.
+ *
+ * Production closed on two technical cards instead: "Every figure behind the ranking" over a
+ * statistic-by-place matrix, and "How this comparison was made" opening with the word
+ * *Deterministic:*. Both are real and both are worth keeping; neither is a finish. The artifact's
+ * own close is a paragraph a person reads and two actions — so this states the comparison's result
+ * in a sentence, and puts every one of those figures and every word of that methodology one press
+ * below it.
+ *
+ * The artifact's paragraph attributes the divergence to the North Atlantic Jet Stream and
+ * recommends drainage monitoring to city planners. Weathra establishes no causality from a
+ * comparison of two windows and makes no recommendation from one; the sentence here says what was
+ * measured and by how much, which is the whole of what the response supports. Its two actions are
+ * `EXPORT PDF` and `RECALIBRATE MODELS` — Weathra exports no PDF and recalibrates no model, so the
+ * action here is the evidence record, which it does have.
+ */
 export function ComparisonSummary({
   result,
+  children,
 }: {
   readonly result: ComparisonResult;
+  /** The technical cards, folded into this one's disclosures rather than trailing it. */
+  readonly children?: ReactNode;
 }): ReactNode {
   const compared = (result.candidates ?? []).length;
+  const ranked = [...(result.candidates ?? [])].sort((one, other) => one.rank - other.rank);
+  const leading = ranked[0];
+  const trailing = ranked[1];
+  const headline = differencesBetween(leading, trailing)[0] ?? null;
 
   return (
     <ProvenanceSection
       dataClass="analytics"
-      title="How this comparison was made"
+      title="Comparison Summary"
+      eyebrow="What this comparison found"
+      headingLevel={2}
       attribution={null}
     >
-      <p className={styles.note}>
-        Deterministic: {compared} {compared === 1 ? "candidate" : "candidates"}{" "}
-        ranked by {criterionLabel(result.criterion).toLowerCase()}, over{" "}
-        {periodLabel(result.period)}. No model interpretation, no confidence
-        score.
+      <p className={styles.summaryLead}>
+        {leading && trailing && headline ? (
+          <>
+            Over {periodSentence(result.period)}, {leading.label} leads on{" "}
+            {criterionLabel(result.criterion).toLowerCase()} by{" "}
+            {formatReading({ value: Math.abs(headline.value), unit: headline.unit })} of{" "}
+            {measureLabel(headline.measure).toLowerCase()}.
+          </>
+        ) : (
+          <>
+            {compared} {compared === 1 ? "place was" : "places were"} ranked by{" "}
+            {criterionLabel(result.criterion).toLowerCase()} over {periodSentence(result.period)}.
+          </>
+        )}
       </p>
 
+      <div className={styles.summaryActions}>
+        <Link className={styles.summaryAction} href="/evidence">
+          View agent evidence
+        </Link>
+      </div>
+
       {/*
-        The fields themselves, one press away. They are machinery — the sort of thing somebody
-        checking a ranking wants and nobody reading one does — which is what a disclosure is for.
+        Everything the screen used to close on, kept whole and moved behind one control each:
+        the ranking chart, the per-place figures, the shared basis, and the fields the comparison
+        reported. Nothing here is summarised away — a person checking a ranking gets all of it.
       */}
+      <div className={styles.summaryDetails}>{children}</div>
+
       <details className={styles.summaryDisclosure}>
-        <summary className={styles.summarySummary}>
-          The fields this comparison reported
-        </summary>
+        <summary className={styles.summarySummary}>How this comparison was made</summary>
+        <p className={styles.note}>
+          Deterministic: {compared} {compared === 1 ? "candidate" : "candidates"} ranked by{" "}
+          {criterionLabel(result.criterion).toLowerCase()}, over {periodLabel(result.period)}. No
+          model interpretation and no confidence score entered the ranking.
+        </p>
         <dl className={styles.summaryFacts}>
           <div className={styles.summaryFact}>
             <dt>Criterion</dt>
@@ -651,87 +699,6 @@ export function ComparisonSummary({
           <p className={styles.note}>{result.weighting_disclosure}</p>
         ) : null}
       </details>
-    </ProvenanceSection>
-  );
-}
-
-/* ------------------------------------------------- forecast delta explorer */
-
-export interface ForecastDeltaProps {
-  /** One entry per compared place, in rank order, with whatever forecast was retrieved for it. */
-  readonly rows: readonly {
-    readonly label: string;
-    readonly days: readonly {
-      readonly date: string;
-      readonly high: string | null;
-    }[];
-  }[];
-  readonly dates: readonly string[];
-}
-
-/**
- * "Forecast Delta Explorer" — the artifact's day-by-day matrix, one column per compared place.
- *
- * This is the shape `04-compare-cities.png` actually draws, and it is now buildable: the screen
- * asks the backend for each compared place's forecast over the same horizon, so every cell is a
- * figure that place's provider returned. A day a provider did not forecast is a dash with a
- * heading, never an interpolation between the days on either side of it.
- *
- * Seven rows because the artifact has seven; the horizon is what the person asked for, so a shorter
- * answer leaves the later rows unreported rather than inventing them.
- */
-export function ForecastDeltaExplorer({
-  rows,
-  dates,
-}: ForecastDeltaProps): ReactNode {
-  return (
-    <ProvenanceSection
-      dataClass="forecast"
-      title="Forecast delta explorer"
-      attribution={null}
-    >
-      {rows.length === 0 || dates.length === 0 ? (
-        <p className={styles.note}>
-          No forecast was retrieved for the compared places.
-        </p>
-      ) : (
-        <ScrollRegion label="Forecast by day and place">
-          <table className={styles.matrix}>
-            <caption className={styles.matrixCaption}>
-              Each place&rsquo;s forecast high, by day, over the shared horizon.
-            </caption>
-            <thead>
-              <tr>
-                <th scope="col">Day</th>
-                {rows.map((row) => (
-                  <th scope="col" key={row.label}>
-                    {row.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {dates.map((date) => (
-                <tr key={date}>
-                  <th scope="row">{date}</th>
-                  {rows.map((row) => {
-                    const cell = row.days.find((day) => day.date === date);
-                    return (
-                      <td key={`${row.label}-${date}`}>
-                        {cell?.high ?? (
-                          <span className={styles.matrixAbsent}>
-                            Not forecast
-                          </span>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </ScrollRegion>
-      )}
     </ProvenanceSection>
   );
 }
@@ -834,25 +801,20 @@ export function ClimatePulseDifferential({
       >
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-            <CartesianGrid stroke="var(--color-border-subtle)" strokeDasharray="0" vertical={false} />
-            <XAxis dataKey="label" {...PULSE_AXIS} minTickGap={28} />
-            <YAxis
-              {...PULSE_AXIS}
-              width={52}
-              label={
-                unit
-                  ? {
-                      value: unit,
-                      angle: -90,
-                      position: "insideLeft",
-                      fill: "var(--color-text-muted)",
-                      fontSize: 11,
-                    }
-                  : undefined
-              }
+            {/* Dashed hairlines only. A solid grid competes with the two curves drawn on it. */}
+            <CartesianGrid
+              stroke="var(--color-border-subtle)"
+              strokeDasharray="2 6"
+              vertical={false}
             />
+            <XAxis dataKey="label" {...PULSE_AXIS} minTickGap={28} />
+            {/*
+              The unit is in the caption under the card, not rotated down the axis. A vertical `°C`
+              is the engineering-plot tell the frozen Dashboard's own chart dropped for the same
+              reason, and it cost 52 pixels of plot width to say one thing twice.
+            */}
+            <YAxis {...PULSE_AXIS} width={40} />
             <Tooltip cursor={{ stroke: "var(--color-border-strong)" }} content={<PulseTooltip />} />
-            <Legend wrapperStyle={{ fontSize: 11, color: "var(--color-text-muted)" }} iconType="plainline" />
             {drawable.map((entry, index) => (
               <Line
                 key={entry.label}
@@ -871,47 +833,63 @@ export function ClimatePulseDifferential({
         </ResponsiveContainer>
       </div>
       <figcaption className={styles.pulseNote} id={described}>
-        One line per place, from each place&rsquo;s own hourly forecast. An hour a provider did not
-        report is a gap in that line rather than a value between its neighbours.
+        {/*
+          One clause. It read as two sentences of chart methodology across the widest card on the
+          screen; the gap rule is still stated, because a broken line that does not say why is a
+          misleading chart.
+        */}
+        One line per place from its own hourly forecast{unit ? ` · ${unit}` : ""} · an unreported
+        hour is a gap, never a value between its neighbours
       </figcaption>
     </figure>
   );
 }
 
-export function ComparisonCharts({
+/**
+ * "Climate Pulse Differential" — the artifact's wide lower chart, beside the metrics rail.
+ *
+ * The chart itself is unchanged in what it plots: one line per compared place, from that place's
+ * own hourly forecast, with a reported gap left as a gap. What task 34.31 changed is the frame
+ * around it, to the standard the frozen Dashboard's own Climate Pulse set — the legend on the
+ * card's header rule rather than under the plot, a dashed hairline grid rather than a solid one,
+ * the unit stated in the caption rather than rotated down the axis, and the caption itself one
+ * clause instead of two sentences of chart methodology.
+ */
+export function ClimatePulseCard({
   pulse = [],
   pulseUnit = null,
+  children,
 }: {
   readonly pulse?: readonly PulseSeries[];
   readonly pulseUnit?: string | null;
+  /** The deterministic metrics rail, which sits beside the chart in the artifact. */
+  readonly children?: ReactNode;
 } = {}): ReactNode {
+  const drawable = pulse.filter((entry) => entry.points.some((point) => point.value !== null));
+
   return (
-    <div className={styles.chartRow}>
+    <div className={styles.pulseBand}>
       <ProvenanceSection
         dataClass="forecast"
-        title="Climate pulse differential"
+        title="Climate Pulse Differential"
+        eyebrow="Intra-day temperature comparison"
         attribution={null}
+        action={
+          drawable.length > 0 ? (
+            <span className={styles.pulseLegend}>
+              {drawable.map((entry, index) => (
+                <span className={styles.pulseLegendItem} key={entry.label} data-series={index}>
+                  {entry.label.split(",")[0]}
+                </span>
+              ))}
+            </span>
+          ) : null
+        }
       >
         <ClimatePulseDifferential series={pulse} unit={pulseUnit} />
       </ProvenanceSection>
-      <ProvenanceSection
-        dataClass="historical"
-        title="Decadal climate baseline"
-        attribution={null}
-      >
-        {/*
-          Still a frame, and the reason is now what it would take rather than what is absent. The
-          artifact draws a candlestick over thirty-year normals per city; Weathra's baseline is
-          computed from the archive years it can actually fetch, and a decade-over-decade series
-          for two places is two more multi-year fan-outs on a screen that already makes one
-          retrieval per place. `screens.md` §5 records the candlestick itself as mockup filler.
-        */}
-        <EmptyChart
-          title="Decade-over-decade baseline"
-          reason="A multi-decade baseline per place is not retrieved for a comparison. Historical Analytics computes one place's baseline over the years the archive holds."
-          height={200}
-        />
-      </ProvenanceSection>
+
+      {children}
     </div>
   );
 }
@@ -927,8 +905,8 @@ const PULSE_AXIS = {
 /** One per compared place, in rank order. Four, because the matrix asks for four forecasts. */
 const PULSE_COLOURS = [
   "var(--color-accent)",
-  "var(--color-class-analytics)",
   "var(--color-class-historical)",
+  "var(--color-class-analytics)",
   "var(--color-class-forecast)",
 ] as const;
 
