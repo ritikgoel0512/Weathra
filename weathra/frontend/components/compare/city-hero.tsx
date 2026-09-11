@@ -96,7 +96,14 @@ export function CityHero({ candidate, current, sharesRank }: CityHeroProps): Rea
           </span>
 
           <span className={styles.cityHeroIdentity}>
-            <h3 className={styles.cityHeroName}>{city}</h3>
+            {/*
+              **`h2`, because these cards are now the screen's first content.** The name was an
+              `h3` when the heroes sat inside the ranking's own `h2` section; task 34.31 moved the
+              ranking into a disclosure at the foot of the screen, so the cards follow the `h1`
+              directly and a jump from one to three is a hole in the heading list a screen-reader
+              user navigates by. `tests/accessibility.test.tsx` is what caught it.
+            */}
+            <h2 className={styles.cityHeroName}>{city}</h2>
             {region ? <p className={styles.cityHeroRegion}>{region}</p> : null}
           </span>
         </div>
