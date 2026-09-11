@@ -337,6 +337,10 @@ def test_no_decode_is_scoped_to_exactly_the_two_documented_list_fields() -> None
         ("Bearer sk-or-v1-abc", "the scheme copied along with the key"),
         ("bearer  sk-or-v1-abc", "the scheme in lower case, with extra spacing"),
         ("Bearer sk-or-v1-abc\n", "both at once"),
+        ('"sk-or-v1-abc"', "the quoting a .env line needs, copied into a dashboard field"),
+        ("'sk-or-v1-abc'", "the same, single-quoted"),
+        ('"sk-or-v1-abc"\n', "quoted and newline-terminated, which is one paste"),
+        ('Bearer "sk-or-v1-abc"', "all three layers of packaging at once"),
     ],
 )
 def test_a_pasted_credential_is_normalized(stored: str, reason: str) -> None:
@@ -362,6 +366,26 @@ def test_normalization_does_not_reach_inside_the_credential() -> None:
     built = settings(openrouter_api_key="SK-Or-V1-AbC_dEf-123")
     assert built.openrouter_api_key is not None
     assert built.openrouter_api_key.get_secret_value() == "SK-Or-V1-AbC_dEf-123"
+
+
+@pytest.mark.parametrize(
+    ("stored", "reason"),
+    [
+        ('"sk-or-v1-abc', "a lone leading quote is not a matching pair"),
+        ('sk-or-v1-abc"', "a lone trailing quote is not either"),
+        ("\"sk-or-v1-abc'", "two different quote characters are not a pair"),
+        ('sk-or-v1"abc', "a quote inside the value is part of the value"),
+    ],
+)
+def test_only_a_matching_pair_of_quotes_is_packaging(stored: str, reason: str) -> None:
+    """An unbalanced quote is left alone, so the key stays visibly wrong rather than quietly so.
+
+    Stripping one side would produce a value that is still not the key and no longer looks unusual,
+    which trades a 401 an operator can reason about for one they cannot.
+    """
+    built = settings(openrouter_api_key=stored)
+    assert built.openrouter_api_key is not None
+    assert built.openrouter_api_key.get_secret_value() == stored, reason
 
 
 def test_an_absent_credential_stays_absent() -> None:

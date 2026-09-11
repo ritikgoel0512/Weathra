@@ -222,6 +222,60 @@ not separable without it.
 They do not need to be. Since `eded048` the backend records the class itself: the log line names
 which status arrived, and the evidence record carries `not_configured` or `provider_error`
 accordingly. **The next naturally occurring signed-in Analyst request classifies this**, at no cost
-and with no credential spent. Until one happens, the honest entry is the one above, and this
-unresolved diagnostic blocks nothing: the credential is not to be replaced, the model is not to be
-changed to make a test pass, and no other work waits on it.
+and with no credential spent.
+
+## Resolved, 2026-09-11: `AUTH_INVALID`, on evidence this time
+
+That request happened. A signed-in `POST /api/v1/agent/ask` against production answered **503**
+with `details: {"provider": "openrouter", "status": 401}` — the deployed build reporting, in its
+own words, which status the gateway returned. That build separates 401 from 403 (it serves the
+routes introduced alongside the model policy resolver, all of which postdate `eded048`), so the
+401 is not the collapsed mapping speaking: the gateway was handed a credential and refused it.
+
+What that on its own does *not* establish is whether the fault is the credential or the request
+around it. Both were checked, and neither is ambiguous:
+
+| Asked | Answer |
+|---|---|
+| Does the request shape 401? | No. `GET /api/v1/key` and `POST /chat/completions` on the configured model, with Weathra's exact headers and body, both → **200**, served by Nvidia |
+| Does the code path 401? | No. The real `OpenRouterClient` driven directly — construction, `complete`, and the structured-output `complete_json` — → **200** on that same model |
+| Is the model gone? | No. It is in the catalog and answered in the probe above |
+| Is a credential absent? | No. `/api/v1/ready` reports `inference_provider` `configured: true` |
+
+So the code path is sound with a credential the gateway accepts, and production has a credential the
+gateway does not. **The value of `OPENROUTER_API_KEY` in the deployed environment is not one
+OpenRouter accepts** — a deployment configuration fault, not a defect in policy resolution, catalog
+lookup, capability mapping, client construction, or response handling, each of which is exercised by
+the probes above.
+
+It is worth being precise about why `AUTH_INVALID` is the right label *now* when it was the wrong
+one in 2026-09-08. Then, the word came from a mapping that produced it for 401 and 403 alike, so it
+described the code rather than the gateway; a classification inherited from a defect is not
+evidence. Now it comes from a build that distinguishes them, alongside a working credential proving
+the other side of the comparison. The word is the same and what stands behind it is not.
+
+**There is no configured way around it.** Every row of the seeded model catalog is on the
+`openrouter` gateway and `_REGISTRY` in `agents/llm/registry.py` registers exactly one provider, so
+the credential is common to every candidate a policy could resolve. Failover exists and correctly
+declines to act here: a rejected credential is refused identically by the second model and the
+third. There is no eligible fallback to reach for, and inventing one — a second gateway, a model
+outside the catalog — would be building new architecture to route around a wrong secret.
+
+**What remains, and who can do it.** Setting the deployed `OPENROUTER_API_KEY` to a credential
+OpenRouter accepts. That is the whole remedy, it is an operator action on the Render service, and
+nothing in this repository can perform or verify it. Until then `/agent/ask` and `/agent/stream`
+fail in production and tasks 25.4's criteria 6 and 7 stay open; every other capability serves, which
+is the property the lazy client construction above exists to preserve.
+
+**One defect was found on the way, and fixed.** The 401 was reported to callers as
+`agent_not_configured` — while the same deployment's readiness probe reported the inference provider
+`configured: true`. Both statements were true under the old mapping and together they were
+unreadable, because readiness can only see that a credential string exists and only a call can find
+out whether the gateway accepts it. Anyone reading the pair reasonably concluded the readiness probe
+was wrong and went looking for a wiring fault that did not exist. A 401 now raises
+`ProviderAuthenticationFailed` — code `provider_authentication_failed`, still 503, still the same
+sentence on the screen — and records `provider_auth_failed` in the evidence. `AgentNotConfigured`
+now means only what it says: no credential at all.
+
+This unresolved diagnostic blocked nothing while it was open: the credential was not replaced, the
+model was not changed to make a test pass, and no other work waited on it.

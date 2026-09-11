@@ -457,6 +457,15 @@ class Settings(BaseSettings):
         the diagnostic — reads it from. What is *not* normalised is anything inside the key: no
         case folding, no internal whitespace removal, no truncation. A key that is wrong stays
         wrong and is still reported as rejected.
+
+        **Surrounding quotes are the third artefact, added 2026-09-11.** A `.env` line is often
+        written `OPENROUTER_API_KEY="sk-or-v1-…"` because most of the file's other values need the
+        quoting, and a value pasted into a hosting dashboard's plain text field is sometimes copied
+        from such a line with the quotes attached. The dashboard stores them, nothing displays them
+        differently from the rest of the value, and the gateway answers 401 — the same 401 a wrong
+        key gets, which is what makes this worth removing rather than diagnosing. Only a matching
+        pair is stripped, and only from the outside: a lone quote is not packaging, and a quote
+        inside the value is not ours to touch.
         """
         if not isinstance(value, str):
             return value
@@ -465,6 +474,11 @@ class Settings(BaseSettings):
         # the front, because the scheme is not part of the credential.
         if trimmed[:7].lower() == "bearer ":
             trimmed = trimmed[7:].strip()
+        # A matching pair only, and only around something: `""` is an unset value spelled oddly and
+        # unwrapping it to the empty string is the same answer either way, but a single `"` left on
+        # one side would be swallowed by a one-sided strip and the key would still be wrong.
+        if len(trimmed) >= 2 and trimmed[0] == trimmed[-1] and trimmed[0] in "\"'":
+            trimmed = trimmed[1:-1].strip()
         return trimmed
 
     @field_validator("api_version_prefix")
