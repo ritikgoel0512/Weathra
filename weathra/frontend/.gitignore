@@ -19,3 +19,8 @@ next-env.d.ts
 
 # Task 21.8 manual-pass harness working directory (scripts/manual-pass-serve.sh).
 .manual-pass/
+
+# Production captures: real screens of a real account, so they may carry that person's saved
+# places and their plan. Reviewed locally by whoever ran the capture; never repository contents.
+# Written by tests/e2e/production-capture.spec.ts.
+capture/production/

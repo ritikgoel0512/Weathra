@@ -73,6 +73,33 @@ UNSPLASH_ACCESS_KEY=…             # when unsplash
 
 Unset is a supported configuration, not a broken one: the chain simply starts at tier 2.
 
+### Which provider, and is the free tier enough
+
+Confirmed 2026-09-11, and stated here because "a credential (below)" was not an actionable answer.
+
+| | Pexels | Unsplash |
+|---|---|---|
+| Account | free, self-serve, no card | free, self-serve, no card |
+| Approval step | **none** — the key works immediately | **yes** for anything above demo |
+| Rate limit | 200/hour, 20,000/month | 50/hour on demo; 5,000/hour once approved |
+| Attribution | required | required |
+
+**Pexels is the recommendation**, on the approval step rather than the rate limit: 50 requests an
+hour is workable for one reviewer and the Unsplash production tier needs an application reviewed by
+a human, which is a blocker nobody can schedule. 200/hour and 20,000/month is comfortably enough
+here — the resolved image is keyed per place, and a location's photograph is fetched once and then
+served from the tier-2 and tier-3 chain, so the ceiling is *distinct places looked at*, not page
+views.
+
+**`CITY_IMAGE_PROVIDER=pexels` plus `PEXELS_API_KEY` — configured on Vercel only.** Not Render, and
+the distinction is not arbitrary: the only code that reads either variable is
+`lib/images/provider.server.ts`, reached only by the `app/api/location-image` route handler, which
+runs in the Next.js server runtime. The Python backend never fetches an image and never sees the
+name. Setting it on Render would do nothing at all.
+
+Neither is needed for the product to work. Tier 3b draws an atmosphere for any place from its own
+name, and that is what every capture and every unconfigured deployment shows today.
+
 ### Not in a `frontend/.env*` file, including `.env.local`
 
 `scripts/secret-containment.ts` names both keys in `SECRET_NAMES`, so either one written into any

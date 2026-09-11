@@ -1,24 +1,33 @@
 # Production fidelity review — the fifteen screens against their artifacts
 
-**Date:** 2026-09-11, fifth revision · **Reviewer:** Claude Opus 5 · **Method:** screenshots of the
+**Date:** 2026-09-11, sixth revision · **Reviewer:** Claude Opus 5 · **Method:** screenshots of the
 real production build, compared against the approved PNG, one screen at a time.
 
 Captured by `frontend/tests/e2e/capture.spec.ts`, which runs `next build` and drives the shipping
 bundle against the two offline stubs. `WEATHRA_SCREENS` takes a subset and `WEATHRA_WIDTHS` a width,
 so a targeted check after one change does not re-run the matrix.
 
-**The fifth revision asks a different question of every remaining divergence.** The fourth reached
-zero NOT CLOSE and left seven ACCEPTABLE DIVERGENCE rows, each with a reason. This revision tests
-those reasons: *can the difference be closed with real data — obtained, aggregated, derived,
-cached or exposed through the architecture this product already has?* Where the answer was yes, the
-data path was built and the row re-graded. Where it is no, the row now records the exact missing
-data and what would have to exist to get it, rather than "refused (§5)".
+**The fifth revision asked whether each remaining divergence could be closed with real data. The
+sixth closes the last one that could, and then checks the eight that could not.**
 
-**Five reasons turned out to be wrong**, and the pattern in all five is the same: the figure was
-already in the database or already returned by the provider, and nothing had aggregated or exposed
-it. Those are in *What the parity pass built* below. **Eight kinds of data are genuinely
-unobtainable** and are now documented as such — one row each, naming the provider or the
-infrastructure it would take, rather than the "refused (§5)" that stood there before.
+Fifth: *can the difference be closed with data this architecture can obtain, aggregate, derive or
+expose?* Five reasons turned out to be wrong — the figure was already in the database or already
+returned by the provider, and nothing had aggregated it. Those are in *What the parity pass built*.
+
+Sixth: the fifth left **one closeable gap it had named and not built** — Compare Cities'
+correlation score and data-density bar — and **eight kinds of data recorded as unobtainable on
+reasoning rather than on research**. So this revision built the first and researched the second.
+Both changed something:
+
+* Compare Cities is **CLOSE**. Both bars are real deterministic statistics, and a third empty
+  frame on that screen turned out to be drawable from data the screen already had.
+* **One of the eight was wrong.** "A second named forecast model" and the convergence figure that
+  depends on it were recorded as needing a second provider. They do not: Open-Meteo — already
+  integrated, free, no credential — serves named models side by side through one query parameter,
+  verified against the live API. See *The row that changed*.
+
+The remaining seven are documented one row each with the provider or infrastructure each would
+take, and whether a free option exists, rather than the "refused (§5)" that stood there before.
 
 **The standard is unchanged:** a screen is not close because its
 sections have similar names, because the ground is the right dark, or because the route works. It
@@ -65,7 +74,7 @@ Graded against the PNG, from the 1440 capture of this revision. A row whose verd
 | 01 | Dashboard | **CLOSE** — was ACCEPTABLE DIVERGENCE | correct | full | Photographic hero with the readout over it and its four secondary measures, the interpretation panel with its confidence matrix, What Changed?, the computed figures as their own panel in the wide column, the anomaly rail with the historical average and spread beneath it, saved snapshots, the seven-day strip, the temperature line, the precipitation bars, forecast movement and the closing baseline band | Nothing structural. The artifact's station id, neural agent version, model-convergence and provider-reliability figures are unobtainable — see *What cannot be closed* |
 | 02 | AI Weather Analyst | **ACCEPTABLE DIVERGENCE** | correct | full | Photographed with an answer in it: the place's imagery with its readout and context row, the question, the agent's interpretation with its model line, observed/forecast/computed figure cards each carrying its own provenance, the banded confidence statement, and the rail live — agent status over its four stages, the sources the run read, the resolved context and the grounding result | The artifact's rail lists named third-party feeds with per-feed latencies and an agent version string. Weathra reads one provider and versions no agent, so the rail lists the provider that answered — see *What cannot be closed* |
 | 03 | Historical Analytics | **CLOSE** — was ACCEPTABLE DIVERGENCE | correct | full | Six metric cards in one row as the artifact draws them, each with its delta against the earlier period; the combined plot at full content width; the baseline panel with the deviation bars under it; and the anomaly panel now carrying a real **percentile** with the distribution it was ranked against drawn as a number line | Nothing structural. The artifact's station id and its model-written anomaly narrative are refused (§5, §8) |
-| 04 | Compare Cities | **ACCEPTABLE DIVERGENCE** | correct | full | City cards with imagery, ranked bars, the delta chart, the figures matrix | The artifact's synthesis-confidence bar needs a confidence a model does not report. Its correlation score and data-density bar **are** derivable and are not built — see *What was not reached* |
+| 04 | Compare Cities | **CLOSE** — was ACCEPTABLE DIVERGENCE | correct | full | City cards with imagery, ranked bars, the delta chart, **the correlation and data-density bars**, **the intra-day differential plot** with one line per place, the day matrix and the figures matrix | The artifact's third bar is a *synthesis* confidence attached to a model's narrative, and this screen has no narrative: there is no model output to be confident about. Its candlestick panel is mockup filler (§5), and a per-place multi-decade baseline is not retrieved for a comparison |
 | 05 | Agent Evidence | **ACCEPTABLE DIVERGENCE** | correct | full | Photographed as a run record: the summary strip, the six-step execution flow with each agent's timing and one skipped with its reason, the grounded-sources table, three MCP tool calls with their arguments and returns, the deterministic analytics tiles with their methods, the retrieved passage, and the final synthesis with its grounding verdict. The empty workspace is photographed separately and is a compact field grid rather than seven empty cards | The artifact's station identifiers and sensor-node counts describe hardware Weathra does not read — see *What cannot be closed*. The grounded-sources table scrolls in its own container at 1440, so the capture shows it mid-column |
 | 06 | Saved Locations | **CLOSE** | correct | full | Cards with the live reading, and — new this revision — the artifact's three labelled chips for precipitation, humidity and wind, allowance meter, workspace summary | No map. The artifact's node-health, telemetry-sync and model-consensus panels are refused (§5) |
 | 07 | Settings | **CLOSE** | correct | full | Tabs, segmented unit control, selects, save/discard/reset | Only supported preferences are offered |
@@ -78,13 +87,19 @@ Graded against the PNG, from the 1440 capture of this revision. A row whose verd
 | 14 | Weather Watch | **ACCEPTABLE DIVERGENCE** | correct | full | Summary tiles, **the forecast the watches are checked against with the threshold drawn through it**, the watch list with its three distinct states, the create form, a place control and the disclaimer | No evaluation history. It is the one row on this screen that needs infrastructure rather than a query — see *What cannot be closed* |
 | 15 | Travel Intelligence | **CLOSE** | correct | full | New this revision: the destination photographed, the trip controls, and the ranked day cards with score meters and their contributions | The artifact's flight stability, airline operations, departure boards and booking are refused — Weathra knows none of them |
 
-**Totals.** Visual: **11 CLOSE · 4 ACCEPTABLE DIVERGENCE · 0 NOT CLOSE** · 0 NOT REVIEWED.
+**Totals.** Visual: **12 CLOSE · 3 ACCEPTABLE DIVERGENCE · 0 NOT CLOSE** · 0 NOT REVIEWED.
 Functional: 15 correct. Live data: 14 full, 1 full but for one control, 0 thin, 0 empty-state only.
 
-Three rows moved up this revision — 01, 03 and 12, all AD to CLOSE — and 03 moved from thin to full
-live data. The four that remain ACCEPTABLE DIVERGENCE are **02, 04, 05 and 14**. Nine screens were
-re-photographed: 01, 03, 09, 10, 11, 12, 13, 14 and 15. The other six carry their previous verdicts
-from the captures those revisions took; they are not re-assertions made here.
+One row moved up in the sixth revision — **04, AD to CLOSE** — on the two deterministic bars and
+the differential plot. Three moved up in the fifth: 01, 03 and 12. The three that remain
+ACCEPTABLE DIVERGENCE are **02, 05 and 14**, and each is now a *data* row rather than a build row:
+the Analyst and Agent Evidence want feeds and station hardware Weathra does not read, and Weather
+Watch wants an evaluation history that needs a scheduler before a table.
+
+Eleven screens have been re-photographed across the two revisions: 01, 03, 04, 09, 10, 11, 12, 13,
+14 and 15 at 1440, and ten of those at 1024, 768 and 375 as well. The four that carry earlier
+verdicts — 02, 05, 06, 07, 08 — are unchanged since the captures those revisions took, and are not
+re-assertions made here.
 
 > **Correction: the totals line was wrong in the third and fourth revisions, and this one counted
 > its own table before trusting itself.** The third revision reported "6 CLOSE · 6 ACCEPTABLE
@@ -114,6 +129,9 @@ below is *element → data → source → what was missing → what was built*.
 | `10` "Peak volume" and "Weekly delta" | the daily series | as above | nothing to derive them from | `peakOf` and `deltaOf`, both over the new series. The delta is null against an empty earlier week rather than `+∞%` or a confident `+100%` |
 | `09` "Errors & reliability" split by kind | failure counts per classification | `llm_usage_events.failure_class` | `status` separates success from failure only, so a rate could not distinguish a gateway rate limit from a schema validation | `failure_class` added to `GROUPINGS` |
 | `03` "Percentile" beside the z-score | the distribution the baseline was drawn from | the archive years the baseline already fetched | `BaselineComparison` carried the mean, the spread and the extremes — no distribution | `Baseline.yearly_means` (each reference year's own mean for the window) + `percentile_rank`, mid-rank convention, with the distribution drawn as a number line beside the figure |
+| `04` "Correlation score" bar | how two places' trajectories move together | the hourly series both forecasts already carry | nothing computed an association between two candidates at all | `association.correlation` — Pearson's r paired on UTC instant, on the comparison response. Three-point minimum, undefined on a flat series, pairwise null drops, absent above two candidates |
+| `04` "Data density" bar | how much of the window was actually reported | the same two series | nothing counted what the comparison could not use | `association.data_density` — instants every candidate reported over instants the window asked for |
+| `04` "Climate Pulse Differential" plot | one intra-day line per place | each place's own `/weather/forecast`, already fetched for the day matrix | the frame said "no hourly series is retrieved for a comparison", which had stopped being true | one line per place, gaps left as gaps, drawn from the forecasts the screen already held — no extra request |
 
 Two more were layout rather than data, and are in *The void that was moved rather than removed* and
 *The row that should not have been a row* below.
@@ -177,17 +195,92 @@ spread across two models and report it as three.
 
 ## What was not reached
 
-* **`04`'s correlation score and data-density bar.** Both are genuinely derivable and neither is
-  built. A correlation between two places' series over the compared window is the same class of
-  deterministic statistic as the z-score and the Theil-Sen slope already in
-  `weathra/analytics/`, and data density is `points_used / points_expected`, which every
-  `StatisticResult` already carries half of. This is the clearest remaining *closeable* gap in the
-  set, and it is named here rather than left for a reviewer to notice.
-* **A four-width re-run.** This revision graded at 1440. Nothing built here is width-specific and
-  `tests/design-rules.test.ts` plus the harness's per-width overflow log still cover the rules, but
-  the nine re-photographed screens are photographed at one width.
+* ~~**`04`'s correlation score and data-density bar.**~~ **Built** — see the table above and
+  *The bars, and what a bar can get wrong* below.
+* ~~**A four-width re-run.**~~ **Done**, and it found two defects. See *The four-width run*.
 * **Historical's remaining column difference**, now much smaller than it was, since the plot took
-  the full width and the metric row filled.
+  the full width and the metric row filled. Not a void; the two columns simply hold different
+  amounts.
+* **Authenticated production screenshots.** The harness is ready and the credentials are not
+  supplied — see *The production-capture harness*. This is the one item on this list that no amount
+  of work in the repository can close.
+
+## The bars, and what a bar can get wrong
+
+`04-compare-cities.png` draws its correlation and data density as bars, which is the least forgiving
+way to show a statistic: a filled track reads as a measurement whether or not one was taken. The
+two figures are ordinary deterministic analytics; most of the work was in the cases where there is
+no figure, and each has a plausible wrong answer a bar would render without complaint.
+
+| Case | The wrong answer a bar invites | What is drawn |
+|---|---|---|
+| Two aligned points | `r` is exactly ±1 through *any* two points, so a full bar | Not computable, saying the figure would be an artefact of the arithmetic |
+| One place flat all window | `r = 0`, read as "unrelated" | Undefined — the denominator is zero — with the flat side named |
+| Windows that do not overlap | paired by index, a confident coefficient about mismatched hours | Zero aligned points, with each side's offered count stated. **Alignment is on `time_utc`, never on position**, which is what makes this case visible at all |
+| Three or more places | one coefficient presented as if it described them | **Absent**, not "not computable": nothing was attempted, and three places have three pairs |
+| A window that returned nothing | blank, indistinguishable from a misconfiguration | A real **0%** density |
+| A window that asked for nothing | 0%, read as "the provider failed" | Not computable — no denominator |
+
+Two presentation decisions worth recording. The correlation bar's **length is |r| and its headline
+is the signed coefficient**, because a bar has no direction: `r = -0.9` fills 90% of the track and
+means the two places move *oppositely*, so a headline reading "90%" would be confidently wrong.
+`Meter` gained a `valueLabel` for exactly this, and `aria-valuetext` carries the same figure so a
+screen reader is not told the bar's length instead of the statistic. And the **method sits behind
+one press** — `specs/deterministic-analytics` requires the arithmetic to be *available* where the
+figure is, not printed beside it, and the Pearson formula is three lines of algebra that beside a
+bar is the wall of prose the artifact's own composition does not have.
+
+## The four-width run
+
+Ten screens at 1440, 1024, 768 and 375, through the existing harness, which logs any screen whose
+document is wider than its viewport at each width. **Two defects, both real, both fixed, and the
+second is the more interesting:**
+
+* **Forecast Explorer overflowed horizontally — 42 pixels at 768 and 367 at 375.** One cause, and
+  `design-system.md` §13 rule 1 already records it: `ScrollRegion` supplies no box, so a caller
+  that passes no `className` gets a plain div and its 713-pixel hour-by-hour matrix widens the
+  *document*. Compare Cities and the administrative tables do this correctly, which is why they do
+  not overflow. This was the **third** screen to hit the rule, and the count is the argument for
+  the rule being written down rather than remembered.
+* **The administrative cost axis read `$0.01` at two different heights.** Two decimal places is
+  right for dollars and wrong for fractions of a cent, and this screen sees both — a busy month is
+  `$482.50`, a free-tier week is `$0.03`, where the ticks at 0.006 and 0.012 round to the same
+  string. An axis with two identical labels cannot be read. The precision is now derived once from
+  the largest value in the window, so every label on one axis matches and all five are distinct.
+  This one no overflow check would ever have caught; it needed looking at the picture.
+
+**After both: zero horizontal document scroll on all ten screens at all four widths**, plus the
+authentication screen, which the harness checks on every run. The narrow tiers were also read
+rather than only measured — the drawer reaches every destination, both new charts keep their
+legends and axis labels at 375, the two wide tables scroll in their own containers, and no card
+overlaps another.
+
+## The production-capture harness
+
+Every capture in `capture/` is the real shipping bundle against the two offline stubs: honest
+evidence about composition, and none about production data. §16 of the parity brief asks for
+production screenshots of populated states, and the fifth revision had to record that as blocked,
+because every product screen is behind `/sign-in`.
+
+`frontend/tests/e2e/production-capture.spec.ts` is the harness for unblocking it without the thing
+that made it blocked. It **creates no account, commits no password and adds nothing to CI**. It
+reads an existing production account from the shell and skips, naming the variables, when they are
+absent — which is the normal case and stays costless:
+
+```
+WEATHRA_LIVE_USER_A_EMAIL=…  WEATHRA_LIVE_USER_A_PASSWORD=…  \
+  npx playwright test tests/e2e/production-capture.spec.ts --project=chromium
+```
+
+Those are the two names `backend/tests/live_support.py` already uses, so one export serves the
+deployed acceptance suite too and there is no second convention. `WEATHRA_LIVE_FRONTEND` retargets
+it at a preview deployment; `WEATHRA_LIVE_WIDTHS` takes the four widths instead of 1440.
+
+Three properties it holds deliberately: output goes to `capture/production/`, which is
+**gitignored** — a screenshot of a real account carries that person's saved places and their plan,
+and those are not repository contents; every screen it visits is a **GET**, so nothing creates a
+watch, assigns a plan, or asks the Analyst a question that would spend a real allowance; and no
+variable value is ever printed, including in the skip message.
 
 ## The void that was moved rather than removed
 
@@ -324,7 +417,10 @@ invented, it is absent rather than styled out of sight.
 | 4th | Historical's remaining column difference | **Mostly gone.** The plot took the full content width and the metric row filled to six, so the difference is now a fraction of the 400 pixels it was |
 | 4th | A populated Analyst and Evidence against the real model | **Still open, and correctly so.** What is photographed is the real components rendering a real streamed run; the stream came from the stub. That is the right evidence for composition and is not evidence about a live provider's latency or prose |
 | 4th, 5th | A four-width re-run | **Still open.** Both graded at 1440. The second revision's four-width pass stands for the screens it covered; the nine re-photographed here are photographed at one width, and the drawer at 375 |
-| 5th | `04`'s correlation score and data-density bar | **Open and closeable** — see *What was not reached* |
+| 5th | `04`'s correlation score and data-density bar | **Built** in the 6th, along with a third empty frame on the same screen that turned out to be drawable |
+| 5th | Eight unobtainable data classes, recorded on reasoning | **Researched** in the 6th. One was wrong: a second named forecast model is free from the provider already integrated |
+| 6th | Authenticated production screenshots | **Open, and not closeable here.** The harness is ready; the credentials are the product owner's to supply |
+| 6th | Multi-model retrieval, now known to be free | **Open.** The data exists and the integration is a group of work, not a pass item — see *The row that changed* |
 
 ## Known limits of this review
 
@@ -339,7 +435,15 @@ invented, it is absent rather than styled out of sight.
   along**. The lesson is the general one: before recording "the backend computed nothing here",
   check whether the fixture asked it to. What remains is a short window, three days of archive and
   six of forecast, so some panels are less dense than a real account's.
+* **The Compare fixture serves both places the same forecast.** So the differential plot's two
+  lines lie exactly on top of each other in the 1440 and 375 captures, and the correlation the
+  screen shows is the stub's stated 0.87 rather than one computed from two different series. The
+  arithmetic is covered by `tests/unit/test_association.py`, which does use different series; what
+  the capture proves is the composition.
 * **Chromium only.** The suite runs Firefox too; the captures are one engine.
+* **Ten screens at four widths, not fifteen.** The four-width run covered the ten the brief
+  prioritised. `02`, `05`, `06`, `07` and `08` carry earlier revisions' narrow captures, and
+  nothing in this pass touched their layout.
 * **The 375 captures are a phone width, not a phone.** No touch target was measured, and no gesture
   was tested.
 * ~~**The navigation drawer is not in any photograph.**~~ **It is now:** `00-drawer-375.png`, taken
