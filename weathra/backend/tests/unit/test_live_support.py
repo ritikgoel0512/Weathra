@@ -30,8 +30,10 @@ from tests.live_support import (
     CREDENTIAL_VARIABLES,
     DEFAULT_BACKEND,
     DEFAULT_FRONTEND,
+    SECOND_ACCOUNT_VARIABLES,
     LiveCheckError,
     ReadOnlyViolation,
+    Token,
     assert_not_server_error,
     assert_status,
     credentials_from_env,
@@ -291,6 +293,50 @@ def test_half_a_credential_set_is_treated_as_none(dropped: str) -> None:
     found, missing = credentials_from_env(partial)
     assert found is None
     assert missing == (dropped,)
+
+
+def test_the_first_account_supplied_twice_is_not_a_second_account() -> None:
+    """The configuration mistake that reads as a production data leak.
+
+    Account A's address in account B's variables satisfies "both are set" and signs in twice
+    perfectly well. Every isolation check then reports that one account can read and delete the
+    other's data — true, because there is only one account, and indistinguishable in a log from a
+    broken policy. So it is reported the way an absent second account is reported, naming the same
+    two variables, and the isolation checks skip.
+    """
+    same = {
+        **CREDENTIALS,
+        "WEATHRA_LIVE_USER_B_EMAIL": CREDENTIALS["WEATHRA_LIVE_USER_A_EMAIL"].upper(),
+    }
+    found, missing = credentials_from_env(same)
+    assert missing == SECOND_ACCOUNT_VARIABLES
+    assert found is not None
+    assert found.has_second_account is False, "one account was accepted as two"
+
+
+def test_a_genuine_second_account_is_still_accepted() -> None:
+    """The other half: the guard above must not reject the configuration it exists to protect."""
+    found, missing = credentials_from_env(CREDENTIALS)
+    assert missing == ()
+    assert found is not None and found.has_second_account
+
+
+def test_a_token_does_not_print_itself_but_is_still_the_token() -> None:
+    """pytest renders every fixture argument into a traceback, so the repr is the leak path."""
+    token = Token("header.payload.signature")
+    assert "signature" not in repr(token)
+    assert f"Bearer {token}" == "Bearer header.payload.signature"
+    assert token == "header.payload.signature"
+
+
+def test_credentials_do_not_print_themselves() -> None:
+    """Same route, the other object: a failed check must not print an account or a client key."""
+    found, _ = credentials_from_env(CREDENTIALS)
+    assert found is not None
+    rendered = repr(found)
+    for secret in (*found.secrets, found.user_a_email, found.user_b_email or ""):
+        assert secret not in rendered, "a credential is rendered into every traceback"
+    assert "project.supabase.co" in rendered, "the project URL is public and worth keeping"
 
 
 def test_signing_in_returns_the_token_and_nothing_else() -> None:

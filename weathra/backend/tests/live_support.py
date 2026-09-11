@@ -26,7 +26,7 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
@@ -112,18 +112,37 @@ def target_from_env(environment: Mapping[str, str] | None = None) -> Target:
 
 @dataclass(frozen=True)
 class Credentials:
-    """One deployed account, and optionally a second, with the public configuration to sign in."""
+    """One deployed account, and optionally a second, with the public configuration to sign in.
+
+    Everything but the project URL is ``repr=False``. That is not tidiness: a fixture argument is
+    rendered by pytest into every traceback of every test that takes it, so a single failed
+    assertion would otherwise print an account's address, its password and the client key into the
+    run log — the exact thing the `redact` helper exists to prevent, arriving by a route `redact`
+    never sees.
+    """
 
     supabase_url: str
-    anon_key: str
-    user_a_email: str
-    user_a_password: str
-    user_b_email: str | None = None
-    user_b_password: str | None = None
+    anon_key: str = field(repr=False)
+    user_a_email: str = field(repr=False)
+    user_a_password: str = field(repr=False)
+    user_b_email: str | None = field(default=None, repr=False)
+    user_b_password: str | None = field(default=None, repr=False)
 
     @property
     def has_second_account(self) -> bool:
-        return bool(self.user_b_email and self.user_b_password)
+        """Whether a *second* account is configured — not merely whether both variables are set.
+
+        The address is compared, and the comparison is the whole point. Supplying account A's
+        credentials in account B's variables satisfies "both are present" and satisfies signing in
+        twice, and then every isolation check reports that one account can read and delete the
+        other's data — which is true, because there is only one account. That reads as a production
+        data leak and is a configuration mistake, so it is refused here rather than asserted later.
+        Identical addresses cannot be two subjects; distinct addresses that turn out to resolve to
+        one are caught by the suite, which compares the subjects the deployment itself reports.
+        """
+        if not (self.user_b_email and self.user_b_password):
+            return False
+        return self.user_b_email.strip().casefold() != self.user_a_email.strip().casefold()
 
     @property
     def secrets(self) -> tuple[str, ...]:
@@ -160,6 +179,12 @@ def credentials_from_env(
         return None, missing
 
     second = tuple(name for name in SECOND_ACCOUNT_VARIABLES if not present[name])
+    if not second and present["WEATHRA_LIVE_USER_B_EMAIL"].strip().casefold() == (
+        present["WEATHRA_LIVE_USER_A_EMAIL"].strip().casefold()
+    ):
+        # Set, but to the first account. Reported as though unset, naming the same variables, so
+        # the isolation checks skip for a reason a reader can act on instead of failing as a leak.
+        second = SECOND_ACCOUNT_VARIABLES
     return (
         Credentials(
             supabase_url=normalise(
@@ -173,6 +198,22 @@ def credentials_from_env(
         ),
         second,
     )
+
+
+class Token(str):
+    """An access token that does not print itself.
+
+    ``str`` everywhere it is used — interpolated into an ``Authorization`` header, searched for in
+    a refusal body — and opaque everywhere it is *shown*. pytest renders each fixture argument's
+    ``repr`` in the traceback of any test that takes it, so a plain ``str`` here puts a live bearer
+    token into the log of every failure in the authenticated tier. There is no reason a reader of
+    that log needs the token, and several reasons they must not have it.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "«token»"
 
 
 def redact(text: str, *secrets: str) -> str:
@@ -330,7 +371,7 @@ def json_body(response: httpx.Response, *secrets: str) -> dict[str, Any]:
     return parsed
 
 
-def sign_in(client: httpx.Client, credentials: Credentials, email: str, password: str) -> str:
+def sign_in(client: httpx.Client, credentials: Credentials, email: str, password: str) -> Token:
     """A bearer token for a real deployed account, obtained the way the browser obtains one.
 
     Supabase's password grant with the public client key — no service-role key, nothing minted, no
@@ -353,4 +394,4 @@ def sign_in(client: httpx.Client, credentials: Credentials, email: str, password
     token = json_body(response, *credentials.secrets).get("access_token")
     if not isinstance(token, str) or not token:
         raise LiveCheckError("the identity provider returned no access token")
-    return token
+    return Token(token)

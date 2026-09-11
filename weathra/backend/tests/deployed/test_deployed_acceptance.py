@@ -39,6 +39,7 @@ from tests.live_support import (
     SECOND_ACCOUNT_VARIABLES,
     Credentials,
     Target,
+    Token,
     assert_not_server_error,
     assert_status,
     credentials_from_env,
@@ -449,16 +450,36 @@ def writer() -> Iterator[httpx.Client]:
 
 
 @pytest.fixture(scope="module")
-def token_a(writer: httpx.Client, credentials: Credentials) -> str:
+def token_a(writer: httpx.Client, credentials: Credentials) -> Token:
     return sign_in(writer, credentials, credentials.user_a_email, credentials.user_a_password)
 
 
 @pytest.fixture(scope="module")
-def token_b(writer: httpx.Client, second_account: Credentials) -> str:
+def token_b(
+    writer: httpx.Client, second_account: Credentials, subject_a: str, target: Target
+) -> Token:
+    """The second account's session, having confirmed it really is a second *subject*.
+
+    `has_second_account` rejects the same address supplied twice, which is the mistake that is easy
+    to make; this is the one that is not. Two distinct addresses can still resolve to one Supabase
+    user, and when they do, every isolation check below reports that one account reads and deletes
+    the other's data. That is a true statement about one account and a false alarm about
+    production, so it is refused here — the checks skip, naming the variables to fix — rather than
+    being recorded as a leak.
+    """
     assert second_account.user_b_email and second_account.user_b_password
-    return sign_in(
+    token = sign_in(
         writer, second_account, second_account.user_b_email, second_account.user_b_password
     )
+    response = fetch(writer, "GET", target.api("/me"), headers=_auth(token))
+    assert_status(response, 200, *second_account.secrets)
+    if json_body(response, *second_account.secrets).get("user_id") == subject_a:
+        pytest.skip(
+            "both live accounts resolve to the same deployed subject, so nothing here would be an "
+            "isolation check; point " + " and ".join(SECOND_ACCOUNT_VARIABLES) + " at a second "
+            "account"
+        )
+    return token
 
 
 def _auth(token: str) -> dict[str, str]:
@@ -466,7 +487,7 @@ def _auth(token: str) -> dict[str, str]:
 
 
 def test_a_real_session_is_served_and_acts_as_its_own_subject(
-    writer: httpx.Client, target: Target, token_a: str, credentials: Credentials
+    writer: httpx.Client, target: Target, token_a: Token, credentials: Credentials
 ) -> None:
     """Group 18.2 against the deployment: the valid case, and whose it is."""
     response = fetch(writer, "GET", target.api("/me"), headers=_auth(token_a))
@@ -479,7 +500,7 @@ def test_a_real_session_is_served_and_acts_as_its_own_subject(
 
 @pytest.fixture
 def location_of_b(
-    writer: httpx.Client, target: Target, token_b: str, credentials: Credentials
+    writer: httpx.Client, target: Target, token_b: Token, credentials: Credentials
 ) -> Iterator[dict[str, Any]]:
     """One saved location belonging to account B, removed afterwards.
 
@@ -511,7 +532,7 @@ def location_of_b(
 def test_one_account_cannot_read_another_s_saved_location(
     writer: httpx.Client,
     target: Target,
-    token_a: str,
+    token_a: Token,
     credentials: Credentials,
     location_of_b: dict[str, Any],
 ) -> None:
@@ -531,8 +552,8 @@ def test_one_account_cannot_read_another_s_saved_location(
 def test_one_account_cannot_delete_another_s_saved_location(
     writer: httpx.Client,
     target: Target,
-    token_a: str,
-    token_b: str,
+    token_a: Token,
+    token_b: Token,
     credentials: Credentials,
     location_of_b: dict[str, Any],
 ) -> None:
@@ -551,7 +572,7 @@ def test_one_account_cannot_delete_another_s_saved_location(
 
 
 def test_an_authenticated_stream_completes(
-    writer: httpx.Client, target: Target, token_a: str, credentials: Credentials
+    writer: httpx.Client, target: Target, token_a: Token, credentials: Credentials
 ) -> None:
     """Group 18.8's authenticated case and 25.4's stream, in one: it opens, and it finishes."""
     with writer.stream(
@@ -571,8 +592,60 @@ def test_an_authenticated_stream_completes(
     )
 
 
+@pytest.fixture(scope="module")
+def answer_of_a(
+    writer: httpx.Client, target: Target, token_a: Token, credentials: Credentials
+) -> Iterator[dict[str, Any]]:
+    """One question, asked once, through the deployed product as account A.
+
+    Module-scoped and shared rather than asked per test, and that is the point rather than a
+    speed optimisation. `/ask` is the only check in either task that reaches the inference gateway,
+    so every additional caller would be another real request against a real key for a criterion
+    that is already answered. The three assertions below — the grounding criterion of 25.4, and
+    18.5's evidence and thread isolation, which need a record that genuinely belongs to somebody —
+    all read this one answer. There is no retry: a failure is reported as a failure.
+
+    `create_thread` is set because 18.7's persistent-memory isolation needs a thread that genuinely
+    belongs to somebody; the thread is this fixture's own record and is deleted on the way out.
+    """
+    response = fetch(
+        writer,
+        "POST",
+        target.api("/agent/ask"),
+        headers=_auth(token_a),
+        json={
+            "question": (
+                "Acceptance check: what is the temperature in Berlin over the next three days?"
+            ),
+            "create_thread": True,
+        },
+        timeout=180.0,
+    )
+    assert_not_server_error(response, *credentials.secrets)
+    assert_status(response, 200, *credentials.secrets)
+    body = json_body(response, *credentials.secrets)
+    try:
+        yield body
+    finally:
+        # The thread is this check's own record and is removed whether the assertions passed or
+        # not. The evidence record it produced is left alone: it is what `/evidence/{id}` is asked
+        # about above, and deleting a run's evidence would be deleting the acceptance evidence.
+        thread_id = body.get("thread_id")
+        if thread_id:
+            fetch(
+                writer,
+                "DELETE",
+                target.api(f"/threads/{thread_id}"),
+                headers=_auth(token_a),
+            )
+
+
 def test_a_question_s_every_figure_appears_in_its_evidence(
-    writer: httpx.Client, target: Target, token_a: str, credentials: Credentials
+    writer: httpx.Client,
+    target: Target,
+    token_a: Token,
+    credentials: Credentials,
+    answer_of_a: dict[str, Any],
 ) -> None:
     """25.4's remaining criterion: a question through `/ask`, and its figures held to its evidence.
 
@@ -595,17 +668,7 @@ def test_a_question_s_every_figure_appears_in_its_evidence(
     is retrievable, which is what a person following the answer's evidence link actually does. The
     two request identifiers must agree, or the link points at somebody else's run.
     """
-    response = fetch(
-        writer,
-        "POST",
-        target.api("/agent/ask"),
-        headers=_auth(token_a),
-        json={"question": "What is the temperature in Berlin over the next three days?"},
-        timeout=180.0,
-    )
-    assert_not_server_error(response, *credentials.secrets)
-    assert_status(response, 200, *credentials.secrets)
-    body = json_body(response, *credentials.secrets)
+    body = answer_of_a
 
     answer = body.get("answer") or {}
     grounding = answer.get("grounding") or {}
@@ -643,3 +706,197 @@ def test_a_question_s_every_figure_appears_in_its_evidence(
         assert held.get("request_id") == record.get("request_id"), (
             "the stored evidence record belongs to a different run than the answer"
         )
+
+
+# --------------------------------------------- 25.3, the second subject and the other direction
+#
+# Everything below needs both accounts. Group 18's isolation cases are symmetric by construction —
+# "A cannot see B" and "B cannot see A" are the same policy asked from opposite ends — and a suite
+# that only ever asked one direction would pass against a policy that happened to be right for one
+# account and wrong for the other. Asking both costs one extra record and proves the property the
+# task names rather than half of it.
+
+
+@pytest.fixture(scope="module")
+def subject_a(
+    writer: httpx.Client, target: Target, token_a: Token, credentials: Credentials
+) -> str:
+    """Account A's own subject, as the deployment reports it."""
+    response = fetch(writer, "GET", target.api("/me"), headers=_auth(token_a))
+    assert_status(response, 200, *credentials.secrets)
+    identifier = json_body(response, *credentials.secrets).get("user_id")
+    assert isinstance(identifier, str) and identifier, "/me named no subject for account A"
+    return identifier
+
+
+@pytest.fixture(scope="module")
+def subject_b(
+    writer: httpx.Client, target: Target, token_b: Token, credentials: Credentials
+) -> str:
+    response = fetch(writer, "GET", target.api("/me"), headers=_auth(token_b))
+    assert_status(response, 200, *credentials.secrets)
+    identifier = json_body(response, *credentials.secrets).get("user_id")
+    assert isinstance(identifier, str) and identifier, "/me named no subject for account B"
+    return identifier
+
+
+def test_the_second_account_is_served_and_acts_as_its_own_subject(
+    writer: httpx.Client,
+    target: Target,
+    token_b: Token,
+    second_account: Credentials,
+    subject_a: str,
+) -> None:
+    """Group 18.2 for the second subject, and that it *is* a second one.
+
+    The last assertion is the one worth having. Two sessions that both resolved to the same subject
+    would make every isolation check below pass while proving nothing at all, and that is exactly
+    what a misconfigured pair of accounts — or a token cached across the two sign-ins — would look
+    like from the outside.
+    """
+    response = fetch(writer, "GET", target.api("/me"), headers=_auth(token_b))
+    assert_not_server_error(response, *second_account.secrets)
+    assert_status(response, 200, *second_account.secrets)
+    body = json_body(response, *second_account.secrets)
+
+    assert body.get("user_id"), "/me answered without naming its subject"
+    assert body.get("email") == second_account.user_b_email, "/me answered as somebody else"
+    assert body.get("email_verified") is True, (
+        "the second account's token does not report a verified email"
+    )
+    assert body.get("user_id") != subject_a, (
+        "both sessions resolve to the same subject, so nothing below would be an isolation check"
+    )
+
+
+@pytest.fixture
+def location_of_a(
+    writer: httpx.Client, target: Target, token_a: Token, credentials: Credentials
+) -> Iterator[dict[str, Any]]:
+    """The mirror of `location_of_b`: one saved location belonging to account A, removed after.
+
+    Deliberately a different place from B's, so a listing that returned the wrong account's rows
+    could not be mistaken for the right one on its contents.
+    """
+    created = fetch(
+        writer,
+        "POST",
+        target.api("/me/locations"),
+        headers=_auth(token_a),
+        json={"latitude": -33.8688, "longitude": 151.2093, "label": "live-acceptance-a"},
+    )
+    assert_status(created, (200, 201), *credentials.secrets)
+    record = json_body(created, *credentials.secrets)
+    try:
+        yield record
+    finally:
+        fetch(
+            writer,
+            "DELETE",
+            target.api(f"/me/locations/{record['id']}"),
+            headers=_auth(token_a),
+        )
+
+
+def test_the_second_account_cannot_read_the_first_s_saved_location(
+    writer: httpx.Client,
+    target: Target,
+    token_b: Token,
+    credentials: Credentials,
+    location_of_a: dict[str, Any],
+) -> None:
+    """Group 18.5 in the other direction: B's listing does not carry A's row."""
+    listing = fetch(writer, "GET", target.api("/me/locations"), headers=_auth(token_b))
+    assert_status(listing, 200, *credentials.secrets)
+    identifiers = {
+        entry.get("id") for entry in json_body(listing, *credentials.secrets).get("locations", [])
+    }
+    assert location_of_a["id"] not in identifiers, "B's listing contains A's saved location"
+
+
+def test_the_second_account_cannot_delete_the_first_s_saved_location(
+    writer: httpx.Client,
+    target: Target,
+    token_a: Token,
+    token_b: Token,
+    credentials: Credentials,
+    location_of_a: dict[str, Any],
+) -> None:
+    """Group 18.6 in the other direction, and A's record is still there afterwards."""
+    attempt = fetch(
+        writer, "DELETE", target.api(f"/me/locations/{location_of_a['id']}"), headers=_auth(token_b)
+    )
+    assert_status(attempt, 404, *credentials.secrets)
+
+    listing = fetch(writer, "GET", target.api("/me/locations"), headers=_auth(token_a))
+    assert_status(listing, 200, *credentials.secrets)
+    identifiers = {
+        entry.get("id") for entry in json_body(listing, *credentials.secrets).get("locations", [])
+    }
+    assert location_of_a["id"] in identifiers, "A's saved location did not survive B's attempt"
+
+
+def test_neither_account_is_served_the_other_s_evidence_record(
+    writer: httpx.Client,
+    target: Target,
+    token_a: Token,
+    token_b: Token,
+    credentials: Credentials,
+    answer_of_a: dict[str, Any],
+) -> None:
+    """Group 18.5's evidence case against the deployment, over a record that genuinely exists.
+
+    The identifier came out of A's own answer a moment earlier, so this is not the absent-record
+    path dressed up: the row is there, it is A's, and B is refused with the *same* 404 A would get
+    for an identifier that was never issued. A 403 would confirm the record is real and somebody
+    else's, which is itself the disclosure the handler's identical-response rule exists to prevent.
+    """
+    evidence_id = answer_of_a.get("evidence_id")
+    if not evidence_id:
+        pytest.skip("the deployed answer carried no stored evidence identifier to ask about")
+
+    mine = fetch(writer, "GET", target.api(f"/evidence/{evidence_id}"), headers=_auth(token_a))
+    assert_status(mine, 200, *credentials.secrets)
+
+    theirs = fetch(writer, "GET", target.api(f"/evidence/{evidence_id}"), headers=_auth(token_b))
+    assert_status(theirs, 404, *credentials.secrets)
+
+    absent = fetch(writer, "GET", target.api(f"/evidence/{NOT_A_REAL_ID}"), headers=_auth(token_b))
+    assert theirs.status_code == absent.status_code, (
+        "a foreign record is refused differently from an absent one, which discloses that it exists"
+    )
+
+
+def test_neither_account_is_served_the_other_s_thread(
+    writer: httpx.Client,
+    target: Target,
+    token_a: Token,
+    token_b: Token,
+    credentials: Credentials,
+    answer_of_a: dict[str, Any],
+) -> None:
+    """Group 18.5 and 18.7's persistent-memory case: threads, by listing and by identifier."""
+    mine = fetch(writer, "GET", target.api("/threads"), headers=_auth(token_a))
+    assert_status(mine, 200, *credentials.secrets)
+    own = _thread_ids(mine, credentials)
+
+    theirs = fetch(writer, "GET", target.api("/threads"), headers=_auth(token_b))
+    assert_status(theirs, 200, *credentials.secrets)
+    other = _thread_ids(theirs, credentials)
+
+    assert not (own & other), f"both accounts are served the same thread: {sorted(own & other)}"
+
+    thread_id = answer_of_a.get("thread_id")
+    assert thread_id, "the deployed answer opened no thread, so nothing here is an isolation check"
+
+    assert thread_id in own, "A's own thread is missing from A's listing"
+    fetched = fetch(writer, "GET", target.api(f"/threads/{thread_id}"), headers=_auth(token_b))
+    assert_status(fetched, 404, *credentials.secrets)
+
+
+def _thread_ids(response: httpx.Response, credentials: Credentials) -> set[str]:
+    """The identifiers in a `/threads` listing."""
+    entries = json_body(response, *credentials.secrets).get("threads")
+    if not isinstance(entries, list):
+        return set()
+    return {str(entry["id"]) for entry in entries if isinstance(entry, dict) and entry.get("id")}
