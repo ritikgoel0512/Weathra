@@ -112,6 +112,7 @@ PROTECTED_GETS: tuple[str, ...] = (
     "/threads",
     "/threads/00000000-0000-4000-8000-000000000000",
     "/evidence/00000000-0000-4000-8000-000000000000",
+    "/me/watches",
     "/weather/changes?location=Berlin",
 )
 
@@ -128,6 +129,15 @@ PROTECTED_WRITES: tuple[tuple[str, str], ...] = (
     ("DELETE", "/me/locations/00000000-0000-4000-8000-000000000000"),
     ("DELETE", "/me/data"),
     ("DELETE", "/threads/00000000-0000-4000-8000-000000000000"),
+    # Weather Watch. Added 2026-09-11: `test_every_protected_path_has_a_credential_free_check`
+    # caught these missing against the deployed pair, which is the second time that assertion has
+    # found a protected surface nobody was probing — the first was group 31's administrative paths.
+    # All five methods the router publishes, because a 401 on the collection says nothing about the
+    # member, and `evaluate` reaches a provider if it is ever reached at all.
+    ("POST", "/me/watches"),
+    ("PATCH", "/me/watches/00000000-0000-4000-8000-000000000000"),
+    ("DELETE", "/me/watches/00000000-0000-4000-8000-000000000000"),
+    ("POST", "/me/watches/00000000-0000-4000-8000-000000000000/evaluate"),
 )
 
 NOT_A_REAL_ID = "00000000-0000-4000-8000-000000000000"
@@ -147,6 +157,7 @@ def test_every_protected_path_has_a_credential_free_check() -> None:
         path.replace("{saved_id}", NOT_A_REAL_ID)
         .replace("{thread_id}", NOT_A_REAL_ID)
         .replace("{evidence_id}", NOT_A_REAL_ID)
+        .replace("{watch_id}", NOT_A_REAL_ID)
         for path in PROTECTED_PATHS
         if path not in ADMINISTRATIVE_PATHS
     }
