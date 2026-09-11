@@ -215,6 +215,35 @@ def test_each_workflow_only_runs_for_its_own_application(
     assert not any(path.startswith("weathra/backend/") for path in frontend_triggers)
 
 
+def test_the_workflow_guards_run_when_the_files_they_guard_change(
+    backend_workflow: dict[str, Any],
+) -> None:
+    """The guards in this file describe `.github/`, so `.github/` has to trigger them.
+
+    `test_each_workflow_only_runs_for_its_own_application` above is about the *applications*: a
+    frontend change must not start a Postgres service. This is about the *guards*, and it is the
+    gap that rule left open.
+
+    Two tests in this suite assert properties of files outside `weathra/backend/` —
+    `test_ci_workflows.py` says what `frontend.yml` must contain, and
+    `test_frontend_release_environment.py` says how `.github/scripts/vercel_release_env.py` must
+    fail closed. Both ran only when the backend changed. So editing `frontend.yml` ran
+    `frontend.yml`, which does not hold the test that says what `frontend.yml` has to be: the file
+    could be edited into violating its own contract, and the only thing that would have noticed was
+    the next unrelated backend change.
+
+    The frontend prefix stays out. What is added is the directory the guards actually describe.
+    """
+    for event in ("pull_request", "push"):
+        paths = _triggers(backend_workflow)[event]["paths"]
+        assert any(
+            path.startswith(".github/workflows/") for path in paths
+        ), f"a change to a workflow file does not run its own guard on {event}"
+        assert any(
+            path.startswith(".github/scripts/") for path in paths
+        ), f"a change to a release script does not run its guard on {event}"
+
+
 def test_both_workflows_run_on_pull_requests_and_on_main(
     backend_workflow: dict[str, Any], frontend_workflow: dict[str, Any]
 ) -> None:

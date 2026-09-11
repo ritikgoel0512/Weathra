@@ -1,15 +1,28 @@
 name: backend
 
+# `weathra/frontend/**` is deliberately absent: a frontend-only change must not wait for a Postgres
+# service to start, which `tests/test_ci_workflows.py` holds this file to.
+#
+# `.github/**` is deliberately present, and it is not the same thing. This job owns the guards that
+# assert properties of files *outside* `weathra/backend/` — `tests/test_ci_workflows.py` asserts
+# what the frontend workflow must contain, and `tests/test_frontend_release_environment.py` asserts
+# how `.github/scripts/vercel_release_env.py` must fail. Both were reachable only by editing the
+# backend: a change to `frontend.yml` ran `frontend.yml`, which does not contain the test that says
+# what `frontend.yml` has to be, so the one file could be edited into violating its own contract
+# with nothing to notice. Triggering on the directory those guards describe closes that, and costs
+# a run only when a workflow or a release script actually changes.
 on:
   pull_request:
     paths:
       - "weathra/backend/**"
-      - ".github/workflows/backend.yml"
+      - ".github/workflows/**"
+      - ".github/scripts/**"
   push:
     branches: [main]
     paths:
       - "weathra/backend/**"
-      - ".github/workflows/backend.yml"
+      - ".github/workflows/**"
+      - ".github/scripts/**"
   workflow_dispatch:
 
 concurrency:
