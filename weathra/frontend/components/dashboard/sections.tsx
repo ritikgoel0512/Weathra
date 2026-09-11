@@ -52,7 +52,6 @@ import { resolvedPlaceLabel } from "@/lib/locations/place";
 import { useResolvedPlace } from "@/lib/locations/resolved-place";
 import {
   dayDetails,
-  dayHeadline,
   dayPrecipitationFrom,
   formatReading,
   forecastDaysFrom,
@@ -305,6 +304,13 @@ export interface ForecastStripProps {
  * own precipitation: the total, the maximum probability, and a glyph that is a picture of those two
  * figures. See `dayPrecipitationFrom`. A dry day is never drawn as a sunny one.
  */
+/** `2026-09-12T00:00:00+02:00` → `Friday`, from the day's own local stamp. */
+function weekdayOf(day: { timeLocal: string; date: string }): string {
+  const parsed = new Date(day.timeLocal);
+  if (Number.isNaN(parsed.getTime())) return day.date;
+  return parsed.toLocaleDateString(undefined, { weekday: "short" });
+}
+
 export function ForecastStrip({ forecast }: ForecastStripProps): ReactNode {
   const days = forecastDaysFrom(forecast.daily);
 
@@ -327,7 +333,10 @@ export function ForecastStrip({ forecast }: ForecastStripProps): ReactNode {
         >
           {day ? (
             <>
-              <p className={styles.stripDayName}>{day.date}</p>
+              {/* A weekday reads at a glance where an ISO date has to be decoded. Both are here:
+                  the name for scanning, the date beneath it for certainty. */}
+              <p className={styles.stripDayName}>{weekdayOf(day)}</p>
+              <p className={styles.stripDayDate}>{day.date}</p>
               <DayPrecipitationGlyph outlook={dayPrecipitationFrom(day)} />
               <dl className={styles.stripFigures}>
                 <div className={styles.stripFigure}>
@@ -343,6 +352,20 @@ export function ForecastStrip({ forecast }: ForecastStripProps): ReactNode {
                   </dd>
                 </div>
               </dl>
+              {/* Everything else the provider reported for this day, one interaction away. The
+                  card stays four lines; nothing the backend sent is dropped. */}
+              {dayDetails(day).length > 0 ? (
+                <details className={styles.dayDetails}>
+                  <summary className={styles.dayDetailsSummary}>Details</summary>
+                  <span className={styles.dayOther}>
+                    {dayDetails(day).map((reading) => (
+                      <span key={reading.key}>
+                        {reading.label}: {formatReading(reading)}
+                      </span>
+                    ))}
+                  </span>
+                </details>
+              ) : null}
             </>
           ) : (
             <>
@@ -380,7 +403,7 @@ export function ForecastMovement({ forecast, location }: ForecastMovementProps):
   return (
     <ProvenanceSection
       dataClass="forecast"
-      title="Forecast movement"
+      title="The days ahead"
       attribution={attributionOf({
         known,
         provider: forecast.attribution?.provider,
@@ -391,56 +414,19 @@ export function ForecastMovement({ forecast, location }: ForecastMovementProps):
         fromCache: forecast.attribution?.from_cache,
       })}
     >
+      {/*
+        **One strip, not two.** This band and "The days ahead" rendered the same seven days on one
+        screen — the same highs, lows and precipitation totals, in two card languages. Two readings
+        of one forecast is not twice the evidence. The cards are now the strip's, drawn once, and
+        this band keeps what only it carried: the data-class badge, the attribution, and the
+        confidence the forecast rests on.
+      */}
       {days.length === 0 ? (
         <EmptyState title="No forecast days returned">
           The provider returned no daily entries for this window.
         </EmptyState>
       ) : (
-        <ul className={styles.days}>
-          {days.map((day) => (
-            <li className={styles.day} key={day.timeLocal}>
-              <span className={styles.dayDate}>{day.date}</span>
-              <span className={styles.dayRange}>
-                {day.high ? (
-                  <span>
-                    <span className={styles.dayRangeLabel}>High </span>
-                    {formatReading(day.high)}
-                  </span>
-                ) : null}
-                {day.low ? (
-                  <span>
-                    <span className={styles.dayRangeLabel}>Low </span>
-                    {formatReading(day.low)}
-                  </span>
-                ) : null}
-              </span>
-              {/*
-                The card answers "what is this day like": the temperatures, and whether it rains.
-                Every other measure the provider reported is still here, behind the disclosure —
-                see `dayHeadline` for what this strip looked like when it showed them all at once.
-              */}
-              {dayHeadline(day).map((reading) => (
-                <span className={styles.dayOther} key={reading.key}>
-                  <span>
-                    {reading.label}: {formatReading(reading)}
-                  </span>
-                </span>
-              ))}
-              {dayDetails(day).length > 0 ? (
-                <details className={styles.dayDetails}>
-                  <summary className={styles.dayDetailsSummary}>View details</summary>
-                  <span className={styles.dayOther}>
-                    {dayDetails(day).map((reading) => (
-                      <span key={reading.key}>
-                        {reading.label}: {formatReading(reading)}
-                      </span>
-                    ))}
-                  </span>
-                </details>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+        <ForecastStrip forecast={forecast} />
       )}
 
       {/* Required on every forecast: the band, and the basis it rests on. */}
@@ -686,12 +672,20 @@ export function HistoricalContext({ baseline }: HistoricalContextProps): ReactNo
       <p className={styles.statement}>{baseline.labelling}</p>
 
       <ul className={styles.findings}>
-        {([["Mean", baseline.mean], ["Minimum", baseline.minimum], ["Maximum", baseline.maximum]] as const).map(
-          ([label, result]) =>
+        {(
+          [
+            ["mean", baseline.mean],
+            ["minimum", baseline.minimum],
+            ["maximum", baseline.maximum],
+          ] as const
+        ).map(
+          ([statistic, result]) =>
             result ? (
-              <li className={styles.finding} key={label}>
+              <li className={styles.finding} key={statistic}>
+                {/* `Average temperature`, not `Mean · temperature mean`. The same phrasing the
+                    computed figures use, so one screen does not name a figure two ways. */}
                 <span className={styles.findingLabel}>
-                  {label} · {baseline.measure.replace(/_/g, " ")}
+                  {statisticPhrase(statistic, baseline.measure)}
                 </span>
                 {typeof result.value === "number" ? (
                   <span className={styles.findingValue}>

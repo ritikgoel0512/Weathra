@@ -86,11 +86,15 @@ describe("attribution", () => {
   it("shows the provider, location, period and retrieval time", () => {
     render(<AttributionFooter attribution={ATTRIBUTION} />);
 
-    expect(screen.getByText("open-meteo")).toBeInTheDocument();
+    // The provider and the retrieval time appear twice on purpose: once in the summary a person
+    // reads without opening anything, and once in the description list under it. A summary that
+    // previewed neither would be a disclosure worth nothing, and the rows are what `specs/web-ui`
+    // requires the surface to carry.
+    expect(screen.getAllByText("open-meteo").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("Berlin, Germany")).toBeInTheDocument();
     expect(screen.getByText(/2026-09-04 00:00 to 2026-09-11 00:00/)).toBeInTheDocument();
     expect(screen.getByText(/Europe\/Berlin/)).toBeInTheDocument();
-    expect(screen.getByText("2026-09-04 06:15 UTC")).toBeInTheDocument();
+    expect(screen.getAllByText("2026-09-04 06:15 UTC").length).toBeGreaterThanOrEqual(1);
   });
 
   it("labels every field, as name and value pairs", () => {
@@ -112,7 +116,9 @@ describe("attribution", () => {
     // No default provider, no placeholder station, no plausible-looking stand-in.
     render(<AttributionFooter attribution={{}} />);
 
-    expect(screen.getAllByText(NOT_REPORTED)).toHaveLength(4);
+    // Five: the four description rows that have nothing to report, and the summary's own preview
+    // of the provider.
+    expect(screen.getAllByText(NOT_REPORTED)).toHaveLength(5);
     expect(document.body.textContent ?? "").not.toMatch(/station|WMO|synop/i);
   });
 
@@ -176,13 +182,14 @@ describe("attribution", () => {
       expect(container.querySelector("[data-attribution]")).not.toHaveAttribute(
         "data-attribution-scope",
       );
-      expect(screen.getAllByText(NOT_REPORTED)).toHaveLength(4);
+      expect(screen.getAllByText(NOT_REPORTED)).toHaveLength(5);
     });
   });
 
   it("treats a blank provider as unreported", () => {
     render(<AttributionFooter attribution={{ ...ATTRIBUTION, provider: "   " }} />);
-    expect(screen.getByText(NOT_REPORTED)).toBeInTheDocument();
+    // In the summary and in the row beneath it: a blank provider is unreported in both places.
+    expect(screen.getAllByText(NOT_REPORTED)).toHaveLength(2);
   });
 
   it("says when a figure came from the cache rather than the provider just now", () => {
@@ -428,7 +435,9 @@ describe("the separation between retrieved data, calculation, and interpretation
     const { container } = screenWithAllThree();
 
     const retrieved = container.querySelector('[data-tier="retrieved"]') as HTMLElement;
-    expect(within(retrieved).getByText("open-meteo")).toBeInTheDocument();
+    // Named in the summary and again in the row below it; both are inside this region, which is
+    // what the assertion is about.
+    expect(within(retrieved).getAllByText("open-meteo").length).toBeGreaterThanOrEqual(1);
     expect(retrieved.querySelector('[data-attribution="true"]')).toBeInTheDocument();
   });
 });

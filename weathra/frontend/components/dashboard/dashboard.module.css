@@ -212,6 +212,12 @@
  * The rest of the day's measures, one interaction away. The summary is deliberately quiet: it is
  * the least important thing on a card whose job is the temperatures and the rain.
  */
+.stripDayDate {
+  font-size: var(--type-meta-size);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .dayDetails {
   font-size: var(--type-meta-size);
   line-height: var(--type-meta-line);
@@ -983,4 +989,135 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: var(--space-3);
+}
+
+/* --------------------------------------------------------------------- hourly strip */
+
+/*
+ * The band the artifact has and this screen did not: the next 24 provider-reported hours, read
+ * across rather than down. Fixed-width columns so the temperatures line up as a shape a person can
+ * scan, and a scroll region rather than a wrap, because an hourly forecast that reflows into four
+ * rows is a table.
+ */
+.hourly {
+  display: grid;
+  gap: var(--space-2);
+  /* Without this the 24 fixed-width columns below size the grid track and push the page open —
+     measured at 476px past a 1440 viewport by the capture harness before it was added. */
+  min-width: 0;
+}
+
+/*
+ * `ScrollRegion` carries no styles of its own; the caller says where the overflow lives. Here it is
+ * the strip, which scrolls inside itself rather than widening the page — the horizontal page scroll
+ * `specs/web-ui` rules out.
+ */
+.hourlyScroll {
+  overflow-x: auto;
+  min-width: 0;
+  scrollbar-width: thin;
+}
+
+.hourlyTitle {
+  margin: 0;
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  color: var(--color-text-primary);
+}
+
+.hourlyList {
+  display: flex;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hour {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  flex: 0 0 auto;
+  min-width: 64px;
+  padding: var(--space-2) var(--space-1);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+}
+
+.hourTime {
+  font-size: var(--type-meta-size);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.hourIcon {
+  color: var(--color-accent);
+  min-height: 22px;
+}
+
+.hourTemperature {
+  font-size: var(--type-section-size);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.hourChance,
+.hourChanceEmpty {
+  min-height: 1em;
+  font-size: var(--type-meta-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.hourChance {
+  color: var(--color-accent);
+}
+
+/* --------------------------------------------------------------------- insights */
+
+/*
+ * Weathra Intelligence, computed rather than asked for. One card per statement the figures on this
+ * screen support; a grid that wraps, because the number of statements is the number the data
+ * carries and not a layout constant.
+ */
+.insightGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-2);
+}
+
+.insight {
+  display: grid;
+  gap: 2px;
+  align-content: start;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+}
+
+.insightTitle {
+  font-size: var(--type-meta-size);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.insightValue {
+  font-size: var(--type-display-size, var(--type-section-size));
+  line-height: 1.1;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.insight[data-direction="up"] .insightValue {
+  color: var(--color-class-forecast, var(--color-accent));
+}
+
+.insight[data-direction="down"] .insightValue {
+  color: var(--color-accent);
+}
+
+.insightDetail {
+  font-size: var(--type-meta-size);
+  color: var(--color-text-muted);
 }

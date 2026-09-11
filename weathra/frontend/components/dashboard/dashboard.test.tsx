@@ -325,7 +325,7 @@ describe("a populated briefing", () => {
 
     for (const title of [
       "Current conditions",
-      "Forecast movement",
+      "The days ahead",
       "What Changed?",
       // Two panels since the 2026-09-11 parity pass, split the way `01-dashboard.png` splits
       // this band: the alert in the rail, the statistics in the wide column beside it.
@@ -359,7 +359,7 @@ describe("a populated briefing", () => {
 
   it("renders the days ahead with their highs and lows", async () => {
     renderDashboard();
-    const forecast = await screen.findByRole("region", { name: "Forecast movement" });
+    const forecast = await screen.findByRole("region", { name: "The days ahead" });
 
     expect(within(forecast).getByText("2026-09-04")).toBeInTheDocument();
     expect(within(forecast).getByText("21.4 °C")).toBeInTheDocument();
@@ -369,7 +369,7 @@ describe("a populated briefing", () => {
 
   it("carries the forecast's uncertainty with its stated basis", async () => {
     renderDashboard();
-    const forecast = await screen.findByRole("region", { name: "Forecast movement" });
+    const forecast = await screen.findByRole("region", { name: "The days ahead" });
 
     expect(within(forecast).getByText("HIGH CONFIDENCE")).toBeInTheDocument();
     expect(within(forecast).getByText(/Confidence decreases with horizon distance/)).toBeInTheDocument();
@@ -412,7 +412,7 @@ describe("a populated briefing", () => {
 describe("the person's own preferences decide the briefing", () => {
   it("asks for their default location, in their unit system, over their horizon", async () => {
     renderDashboard();
-    await screen.findByRole("region", { name: "Forecast movement" });
+    await screen.findByRole("region", { name: "The days ahead" });
 
     const asked = fetchMock.mock.calls.map(([input]) => new URL(input as string));
     const forecast = asked.find((url) => url.pathname === "/api/v1/weather/forecast");
@@ -821,7 +821,7 @@ describe("the error state", () => {
     // The historical surface reports its own failure; conditions and forecast are unaffected.
     expect(await screen.findByRole("region", { name: "Current conditions" })).toBeInTheDocument();
     expect(await screen.findByText(/No fixture for/, undefined, { timeout: 5000 })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Forecast movement" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "The days ahead" })).toBeInTheDocument();
   });
 });
 
@@ -831,7 +831,7 @@ describe("data classes, provenance, and the line the model does not cross", () =
     await screen.findByRole("region", { name: "Historical context" });
 
     expect(within(screen.getByRole("region", { name: "Current conditions" })).getByText("OBSERVED")).toBeInTheDocument();
-    expect(within(screen.getByRole("region", { name: "Forecast movement" })).getByText("FORECAST")).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "The days ahead" })).getByText("FORECAST")).toBeInTheDocument();
     expect(
       within(screen.getByRole("region", { name: "What Changed?" })).getByText("FORECAST"),
     ).toBeInTheDocument();
@@ -872,7 +872,7 @@ describe("data classes, provenance, and the line the model does not cross", () =
 
     for (const title of [
       "Current conditions",
-      "Forecast movement",
+      "The days ahead",
       "What Changed?",
       "Anomaly detection",
       "Computed figures",
@@ -914,7 +914,7 @@ describe("data classes, provenance, and the line the model does not cross", () =
     // Nothing was spent on inference on arrival.
     expect(fetchMock.mock.calls.map(([i]) => new URL(i as string).pathname)).not.toContain("/api/v1/agent/ask");
 
-    await userEvent.click(within(panel).getByRole("button", { name: "Generate interpretation" }));
+    await userEvent.click(within(panel).getByRole("button", { name: "Generate deeper interpretation" }));
 
     expect(await screen.findByText(/sits close to the baseline/)).toBeInTheDocument();
     expect(screen.getByText(/Model: openrouter · nvidia/)).toBeInTheDocument();
@@ -953,7 +953,7 @@ describe("data classes, provenance, and the line the model does not cross", () =
 
     renderDashboard();
     const panel = await screen.findByRole("region", { name: "Weathra Intelligence" });
-    await userEvent.click(within(panel).getByRole("button", { name: "Generate interpretation" }));
+    await userEvent.click(within(panel).getByRole("button", { name: "Generate deeper interpretation" }));
 
     const state = await waitFor(() => {
       const found = document.querySelector('[data-quota="true"]');
@@ -1011,7 +1011,7 @@ describe("data classes, provenance, and the line the model does not cross", () =
 
     renderDashboard();
     const panel = await screen.findByRole("region", { name: "Weathra Intelligence" });
-    await userEvent.click(within(panel).getByRole("button", { name: "Generate interpretation" }));
+    await userEvent.click(within(panel).getByRole("button", { name: "Generate deeper interpretation" }));
 
     expect(await screen.findByText("Model: openrouter · a-synthesis-model")).toBeInTheDocument();
     expect(screen.getByText("Policy: free-synthesis")).toBeInTheDocument();
@@ -1037,7 +1037,7 @@ describe("data classes, provenance, and the line the model does not cross", () =
 
     renderDashboard();
     const panel = await screen.findByRole("region", { name: "Weathra Intelligence" });
-    await userEvent.click(within(panel).getByRole("button", { name: "Generate interpretation" }));
+    await userEvent.click(within(panel).getByRole("button", { name: "Generate deeper interpretation" }));
 
     expect(await screen.findByText(/no inference provider is configured/i)).toBeInTheDocument();
     // Every retrieved and computed surface is untouched.

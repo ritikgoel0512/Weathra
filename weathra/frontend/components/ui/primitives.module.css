@@ -1433,3 +1433,53 @@ input.controlBare[type="date"]::-webkit-calendar-picker-indicator:hover {
 .locationOverlay {
   z-index: 3;
 }
+
+/* ------------------------------------------------------------------ compact attribution */
+
+/*
+ * The summary is the card's provenance at a glance; the description list under it is the same
+ * evidence it always carried, one interaction down. See `AttributionFooter` for why.
+ */
+.attributionDetails {
+  display: block;
+}
+
+.attributionSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: baseline;
+  cursor: pointer;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.attributionSummary::-webkit-details-marker {
+  display: none;
+}
+
+.attributionChip {
+  font-variant-numeric: tabular-nums;
+}
+
+.attributionChip + .attributionChip::before {
+  content: "·";
+  margin-right: var(--space-2);
+}
+
+.attributionMore {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.attributionDetails[open] .attributionList {
+  margin-top: var(--space-2);
+}
+
+/* The condition drawing inherits whatever colour its context sets. */
+.weatherIcon {
+  flex: none;
+  color: currentColor;
+}

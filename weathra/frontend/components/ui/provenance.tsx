@@ -172,8 +172,33 @@ export function AttributionFooter(props: AttributionFooterProps): ReactNode {
   const start = formatLocalStamp(period?.start);
   const end = formatLocalStamp(period?.end);
 
+  /*
+   * **One line, then the rest behind it.** This footer used to print the whole description list
+   * under every card — "Source: open-meteo · Location: Munich, Bavaria, Germany · Period: … ·
+   * Retrieved: … · Units: metric" — and a populated Dashboard carries seven of them. Seven copies
+   * of the same sentence is not seven pieces of evidence; it is one, repeated until a person stops
+   * reading it, which is the opposite of what evidence-first is for.
+   *
+   * So the summary states what changes between cards and what a person actually checks: who
+   * supplied it, and how fresh it is. Everything else — the place, the period, the units, the cache
+   * — is one interaction away and is *not removed*. `specs/web-ui` requires every surface to carry
+   * its provider, location, period and retrieval time; it requires them to be carried, not to be
+   * the loudest thing on the card.
+   */
   return (
     <footer className={styles.attribution} data-attribution="true">
+      <details className={styles.attributionDetails}>
+        <summary className={styles.attributionSummary}>
+          <span className={styles.attributionChip}>{provider?.trim() || NOT_REPORTED}</span>
+          {retrieved && retrievedAt ? (
+            <span className={styles.attributionChip}>
+              Updated <time dateTime={retrievedAt}>{retrieved}</time>
+            </span>
+          ) : null}
+          {units ? <span className={styles.attributionChip}>{units}</span> : null}
+          <span className={styles.attributionMore}>Evidence</span>
+        </summary>
+
       <dl className={styles.attributionList}>
         <div className={styles.attributionItem}>
           <dt className={styles.attributionTerm}>Source</dt>
@@ -219,6 +244,7 @@ export function AttributionFooter(props: AttributionFooterProps): ReactNode {
           </div>
         ) : null}
       </dl>
+      </details>
 
       {children ? <div className={styles.attributionExtra}>{children}</div> : null}
     </footer>

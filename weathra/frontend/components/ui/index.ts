@@ -26,6 +26,7 @@ export { Metric } from "./metric";
 export type { MetricProps } from "./metric";
 
 export { ScrollRegion } from "./scroll-region";
+export { WeatherIcon } from "./weather-icon";
 export type { ScrollRegionProps } from "./scroll-region";
 
 export { Select } from "./select";

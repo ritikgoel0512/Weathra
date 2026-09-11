@@ -55,6 +55,10 @@ import { PLACE_PARAM } from "@/components/shell/top-bar";
 import { briefingLocationFrom, calendarWindowFrom } from "@/lib/dashboard/briefing";
 import { placeLabel, qualifiedName } from "@/lib/locations/place";
 import { ResolvedPlaceProvider } from "@/lib/locations/resolved-place";
+import { forecastDaysFrom } from "@/lib/dashboard/briefing";
+import { baselineDifferenceOf } from "@/lib/dashboard/insights";
+import { HourlyForecast } from "./hourly";
+import { DeterministicInsights } from "./insight-panel";
 import { useLocationResolution } from "@/hooks/use-location-resolution";
 import { usingVisilyFixtures } from "@/lib/fixtures/visily";
 import { useApiQuery } from "@/lib/query/hooks";
@@ -66,12 +70,11 @@ import {
   ClimatePulse,
   ConfidenceMatrix,
   CurrentConditions,
-  ForecastStrip,
+  ForecastMovement,
   PrecipitationOutlook,
   SavedSnapshots,
   ComputedFigures,
   DeterministicAnalytics,
-  ForecastMovement,
   HistoricalContext,
   WhatChanged,
 } from "./sections";
@@ -180,18 +183,34 @@ function WeathraIntelligence({ units }: { readonly units: PreferenceView["unit_s
         </p>
       ) : (
         <p>
-          Ask Weathra to read the figures above — the conditions, the days ahead, and anything that
-          stood out.
+          A language model can read the figures above together — the conditions, the days ahead, and
+          how they sit against the record — and write what they add up to.
         </p>
       )}
 
       <div className={styles.actions}>
         <Button variant="primary" size="sm" onClick={ask} busy={state.kind === "asking"}>
-          {state.kind === "asking" ? "Reading the figures…" : "Generate interpretation"}
+          {state.kind === "asking" ? "Reading the figures…" : "Generate deeper interpretation"}
         </Button>
       </div>
     </InterpretationPanel>
   );
+}
+
+/**
+ * The mean temperature this window's analysis computed, for comparison against the baseline.
+ *
+ * Read off the findings the screen already has rather than requested: the analysis endpoint is
+ * asked once, and the figure is in its answer.
+ */
+function meanTemperatureOf(
+  analysis: { findings?: readonly { statistic: string; measure: string; value?: number | null; unit?: string | null }[] },
+): { value: number | null; unit: string | null } | null {
+  const mean = (analysis.findings ?? []).find(
+    (finding) => finding.statistic === "mean" && finding.measure === "temperature_mean",
+  );
+  if (!mean) return null;
+  return { value: typeof mean.value === "number" ? mean.value : null, unit: mean.unit ?? null };
 }
 
 /**
@@ -301,6 +320,53 @@ function Briefing({
         <CurrentConditions current={current.state.data} location={location} />
       ) : null}
 
+      {/*
+        **The order is the product.** Before this, the band under the hero was the AI panel, the
+        confidence matrix and the anomaly detail, and the forecast — the thing a weather product
+        exists to show — was four panels down. A person briefing on Munich met an interpretation
+        offer and a methodology column before they met a temperature for tomorrow.
+        `01-dashboard.png` puts the forecast immediately under the hero, and so does this now:
+        the hours, then the days, then what they add up to.
+      */}
+      {forecast.state.kind === "ready" ? <HourlyForecast forecast={forecast.state.data} /> : null}
+
+      {/*
+        One forecast band, carrying the cards, the data-class badge, the attribution and the
+        confidence. It used to be two: a bare strip here and a second, plainer copy of the same
+        seven days further down under its own heading.
+      */}
+      {forecast.state.kind === "ready" ? (
+        <ForecastMovement forecast={forecast.state.data} location={location} />
+      ) : null}
+
+      {/*
+        Weathra Intelligence's computed half, from the series the strip above just rendered. It
+        costs no inference call, so it is populated on a deployment with no provider configured —
+        the exact state in which the panel below used to say the least.
+
+        Named for what it is rather than for the feature it belongs to: "Weathra Intelligence" is
+        the panel underneath, which is where a model writes, and two regions with one name is a
+        screen reader reading the same landmark twice.
+      */}
+      {forecast.state.kind === "ready" ? (
+        <section aria-label="What the forecast says">
+          <div className={styles.bandHeading}>
+            <h2 className={styles.bandTitle}>What the forecast says</h2>
+            <p className={styles.bandMeta}>
+              Computed from the days above. No model was asked.
+            </p>
+          </div>
+          <DeterministicInsights
+            days={forecastDaysFrom(forecast.state.data.daily)}
+            baselineDifference={
+              baseline.state.kind === "ready" && analysis.state.kind === "ready"
+                ? baselineDifferenceOf(baseline.state.data, meanTemperatureOf(analysis.state.data))
+                : null
+            }
+          />
+        </section>
+      ) : null}
+
       <div className={styles.columns}>
         <div className={styles.column}>
           <div className={styles.intelligenceRow}>
@@ -350,19 +416,6 @@ function Briefing({
         </div>
       </div>
 
-      {forecast.state.kind === "ready" ? (
-        <section aria-label="The days ahead">
-          <div className={styles.bandHeading}>
-            <h2 className={styles.bandTitle}>The days ahead</h2>
-            <p className={styles.bandMeta}>
-              {forecast.state.data.horizon_days}-day horizon from your preferences, in{" "}
-              {location.timezone}.
-            </p>
-          </div>
-          <ForecastStrip forecast={forecast.state.data} />
-        </section>
-      ) : null}
-
       {/*
         The artifact's analytics row: the wide intra-day chart on the left, the precipitation panel
         beside it. Both are drawn from the forecast the screen already holds.
@@ -379,15 +432,13 @@ function Briefing({
       ) : null}
 
       {/*
-        Full width, because it is one band and not two. It sat in the two-column grid above with
-        nothing beside it, which left a third of the row empty at every desk width — the artifact
-        has no void there, and the emptiness read as a panel that had failed to load rather than as
-        a panel that was never there.
+        **Forecast movement is gone, and nothing was lost with it.** It rendered the same seven days
+        as the strip above — day, high, low, precipitation total — a second time, with the
+        confidence band beneath. Two identical readings of one forecast is not twice the evidence;
+        the 2026-09-11 capture shows both bands on one screen, and there is no reading of that page
+        where a person needs the second. The confidence band it carried belongs to the forecast and
+        is rendered with the strip.
       */}
-      {forecast.state.kind === "ready" ? (
-        <ForecastMovement forecast={forecast.state.data} location={location} />
-      ) : null}
-
       {/*
         The wide baseline band `01-dashboard.png` closes on: the account on the left, the figures
         beside it. It used to be a card in the right rail, which is a different composition.

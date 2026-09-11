@@ -130,6 +130,11 @@ export function statisticPhrase(statistic: string, measure: string): string {
 
 /** The pairs worth saying properly, because they are the ones the Dashboard shows. */
 const STATISTIC_PHRASES: Readonly<Record<string, string>> = {
+  "mean:temperature_mean": "Average temperature",
+  "minimum:temperature_mean": "Coolest in the window",
+  "maximum:temperature_mean": "Warmest in the window",
+  "mean_speed:wind_speed": "Average wind",
+  "maximum_sustained_speed:wind_speed": "Strongest wind",
   "mean:temperature_max": "Average high",
   "mean:temperature_min": "Average low",
   "mean:temperature_mean": "Average temperature",
