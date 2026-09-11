@@ -299,8 +299,14 @@ export function Ranking({ result, children }: RankingProps): ReactNode {
         units: result.unit_system,
       }}
     >
-      {children}
-
+      {/*
+        **The places first, then the account of how they were ranked.** `04-compare-cities.png`
+        opens with the two locations side by side — each with its own image, temperature and
+        conditions — and carries no ranking chart at the top at all. Production opened with a
+        full-width bar chart of two bars, which is a rendering of the same two numbers the cards
+        already carry, sized to dominate the screen. The chart is not deleted: it moves under the
+        cards with the shared basis, where it explains the ranking rather than replacing it.
+      */}
       <div className={styles.candidates}>
         {byRank(result).map((candidate) => (
           <CandidateCard
@@ -311,6 +317,8 @@ export function Ranking({ result, children }: RankingProps): ReactNode {
           />
         ))}
       </div>
+
+      {children}
     </ProvenanceSection>
   );
 }
