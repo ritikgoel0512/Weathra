@@ -329,8 +329,41 @@ describe("the drawer", () => {
   it("offers a labelled way out of an open drawer", async () => {
     renderShell();
     await userEvent.click(screen.getByRole("button", { name: "Menu" }));
-    // The scrim behind the drawer: a tap anywhere outside closes it, and it says so.
-    expect(screen.getByRole("button", { name: "Close menu" })).toBeInTheDocument();
+
+    /*
+     * Two, and the second is the one the 2026-09-10 narrow pass added.
+     *
+     * The scrim has always been here: a tap anywhere outside closes the drawer, and it says so.
+     * What it is not is a control anybody can see — it is a wash of dark over the page. At 375 the
+     * open drawer covers the header's Menu toggle that opened it, so with the scrim as the only
+     * dismissal there was nothing on screen to press. The drawer now carries its own close control
+     * beside its brand, and that one is inside the navigation landmark.
+     */
+    const ways = screen.getAllByRole("button", { name: "Close menu" });
+    expect(ways).toHaveLength(2);
+
+    const nav = screen.getByRole("navigation", { name: "Weathra" });
+    const inDrawer = within(nav).getByRole("button", { name: "Close menu" });
+    expect(inDrawer).toBeInTheDocument();
+  });
+
+  it("closes the drawer from its own control, and gives focus back to the toggle", async () => {
+    renderShell();
+    const toggle = screen.getByRole("button", { name: "Menu" });
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+    const nav = screen.getByRole("navigation", { name: "Weathra" });
+    await userEvent.click(within(nav).getByRole("button", { name: "Close menu" }));
+
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    // Focus goes back to what opened it, rather than being left on a control that no longer exists.
+    expect(toggle).toHaveFocus();
+  });
+
+  it("has no close control when the drawer is shut", () => {
+    renderShell();
+    expect(screen.queryAllByRole("button", { name: "Close menu" })).toHaveLength(0);
   });
 });
 

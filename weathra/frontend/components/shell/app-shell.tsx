@@ -27,7 +27,7 @@ import { DEFAULT_PROTECTED_PATH } from "@/lib/routes";
 
 import { FixtureBanner } from "@/components/ui";
 
-import { BrandMark, MenuIcon } from "./icons";
+import { BrandMark, CloseIcon, MenuIcon } from "./icons";
 import { IdentityPanel } from "./identity";
 import type { MeResponse } from "@/lib/api/schema";
 import { useApiQuery } from "@/lib/query/hooks";
@@ -153,12 +153,39 @@ export function AppShell({ identity, signOutControl, children }: AppShellProps):
         aria-label="Weathra"
         data-open={drawerOpen ? "true" : undefined}
       >
-        <Link className={styles.brand} href={DEFAULT_PROTECTED_PATH}>
-          <span className={styles.brandMark}>
-            <BrandMark size={20} />
-          </span>
-          <span className={styles.brandName}>Weathra</span>
-        </Link>
+        <div className={styles.navigationTop}>
+          <Link className={styles.brand} href={DEFAULT_PROTECTED_PATH}>
+            <span className={styles.brandMark}>
+              <BrandMark size={20} />
+            </span>
+            <span className={styles.brandName}>Weathra</span>
+          </Link>
+
+          {/*
+            The drawer's own close control — the narrow visual pass of 2026-09-10.
+            *
+            Opening the drawer at 375 covers the Menu toggle that opened it: the drawer is 272px
+            wide, anchored left, above the header, and the toggle sits underneath it. So the only
+            ways out were the scrim — which is a labelled control but has no visible affordance,
+            being a wash of dark over the page — and Escape, which is a keyboard user's route and
+            nobody else's. A person who opened the menu on a phone had nothing to press to close it.
+            *
+            Rendered only while the drawer is open, and only at the width where the drawer exists;
+            above 768 the rail is permanent and there is nothing to close. It carries a visible
+            glyph and an accessible name rather than a bare ✕.
+          */}
+          {drawerOpen ? (
+            <button
+              type="button"
+              className={styles.navigationClose}
+              aria-label="Close menu"
+              aria-controls={NAVIGATION_ID}
+              onClick={dismiss}
+            >
+              <CloseIcon size={18} />
+            </button>
+          ) : null}
+        </div>
 
         {/*
           The entries scroll; the brand above and the identity below do not. The wrapper is the

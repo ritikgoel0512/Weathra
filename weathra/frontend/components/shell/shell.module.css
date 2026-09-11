@@ -148,6 +148,18 @@
 }
 
 /* The drawer control. Shares the item's shape, but it is a button and needs a button's reset. */
+/*
+ * The drawer's top row: the brand, and — below 768 while the drawer is open — its close control.
+ * A row at every width; above 768 it holds the brand alone, which is what it held before.
+ */
+.navigationTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
 .menuButton {
   display: inline-flex;
   align-items: center;
@@ -449,6 +461,27 @@
     z-index: 3;
     background: rgb(0 0 0 / 0.5);
     border: 0;
+  }
+
+  /*
+   * The drawer's own close control, beside its brand.
+   *
+   * Only at this tier: above 768 the rail is permanent and `.navigationClose` is never rendered.
+   * The drawer covers the header's Menu toggle here — 272 pixels of it, anchored left, at
+   * `z-index: 4` — so without this the only visible dismissal was the scrim, which is a wash of
+   * dark rather than a control anybody would recognise as one.
+   */
+  .navigationClose {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    padding: var(--space-2);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-inset);
+    color: var(--color-text-primary);
+    cursor: pointer;
   }
 
   .main {

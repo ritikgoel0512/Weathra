@@ -231,6 +231,33 @@ export function MenuIcon({ open }: { readonly open: boolean }): ReactNode {
 }
 
 /**
+ * The drawer's own dismissal glyph.
+ *
+ * `MenuIcon` already draws this cross in its open state, and this is not it: that one belongs to
+ * the header's toggle, which the open drawer sits on top of at 375. This is the control *inside*
+ * the drawer, which is the only visible way out of it on a phone. Same stroke, same weight, same
+ * `aria-hidden` — the accessible name is on the button.
+ */
+export function CloseIcon({ size = 20 }: { readonly size?: number }): ReactNode {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M6 6l12 12" />
+      <path d="M18 6L6 18" />
+    </svg>
+  );
+}
+
+/**
  * The password field's visibility glyph — `08-authentication.png` shows an eye inside the field's
  * trailing edge, where the implementation drew the words "Show"/"Hide".
  *
