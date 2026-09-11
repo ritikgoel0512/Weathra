@@ -932,6 +932,45 @@ const FIXTURES = {
    * a plan resolves to a policy per call role, and the policy resolves to a model. No model string
    * is written here, because none is written in the frontend at all (task 34.22).
    */
+  "/api/v1/plans": {
+    default_plan: "free",
+    self_service: false,
+    assignment_note: "",
+    count: 3,
+    plans: [
+      {
+        plan_code: "free",
+        display_name: "Free",
+        rank: 1,
+        allowances: [
+          { dimension: "requests_per_day", window: "day", allowance: 30 },
+          { dimension: "tokens_per_month", window: "month", allowance: 200000 },
+          { dimension: "concurrent_runs", window: "concurrent", allowance: 2 },
+        ],
+      },
+      {
+        plan_code: "pro",
+        display_name: "Pro",
+        rank: 2,
+        allowances: [
+          { dimension: "requests_per_day", window: "day", allowance: 300 },
+          { dimension: "tokens_per_month", window: "month", allowance: 2000000 },
+          { dimension: "concurrent_runs", window: "concurrent", allowance: 5 },
+        ],
+      },
+      {
+        plan_code: "premium",
+        display_name: "Premium",
+        rank: 3,
+        allowances: [
+          { dimension: "requests_per_day", window: "day", allowance: 1000 },
+          { dimension: "tokens_per_month", window: "month", allowance: 8000000 },
+          { dimension: "concurrent_runs", window: "concurrent", allowance: 10 },
+        ],
+      },
+    ],
+  },
+
   "/api/v1/admin/plans": {
     count: 3,
     plans: [

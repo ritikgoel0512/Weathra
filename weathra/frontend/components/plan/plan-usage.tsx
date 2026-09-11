@@ -28,6 +28,7 @@ import {
   isInternal,
   pressuredDimensions,
   readDimension,
+  resetPhrase,
   resetSchedule,
   type DimensionReading,
 } from "@/lib/plan/usage";
@@ -112,7 +113,11 @@ function Allowance({ reading }: { reading: DimensionReading }): ReactNode {
         ) : reading.nearLimit ? (
           <Badge tone="warning">Nearly used</Badge>
         ) : null}
-        <span className={styles.allowanceWindow}>{reading.windowLabel}</span>
+        {/* "Resets tomorrow", not "11 Sept, 00:00". The instant stays in the reset schedule below,
+            which is where somebody who wants the exact turnover looks for it. */}
+        <span className={styles.allowanceWindow}>
+          {resetPhrase(reading.resetsAt) ?? reading.windowLabel}
+        </span>
       </div>
 
       {reading.limited ? (
@@ -191,7 +196,7 @@ function Ready({ usage }: { usage: UsageResponse }): ReactNode {
               })}
             </ol>
             <p className={styles.planNote}>
-              Plan changes are made by a Weathra administrator. There is no self-service checkout.
+              Every account starts on Free. Compare the plans below to see what each one allows.
             </p>
             {internal ? (
               <p className={styles.planNote}>
@@ -328,13 +333,6 @@ function Ready({ usage }: { usage: UsageResponse }): ReactNode {
             </CardBody>
           </Card>
 
-          {/*
-            The commercial half of the account page: what the other tiers allow, how to move, and
-            the truth about billing. Its own component because every claim it makes goes through
-            `lib/plan/commerce`, which is the seam a payment provider replaces.
-          */}
-          <PlanComparison currentPlan={usage.plan_code ?? null} />
-
           <Card aria-labelledby="resets">
             <CardHeader title="Reset windows" titleId="resets" />
             <CardBody>
@@ -354,6 +352,15 @@ function Ready({ usage }: { usage: UsageResponse }): ReactNode {
           </Card>
         </div>
       </div>
+
+      {/*
+        Full width, under the usage bands. The commercial half of the account page — what the other
+        tiers allow, how to move, and the truth about billing. It sat in the narrow right rail,
+        where a four-column tier table had nowhere to go and clipped its last column; a comparison
+        that cannot show the tier being compared to is not one. Its own component because every
+        claim it makes goes through `lib/plan/commerce`, the seam a payment provider replaces.
+      */}
+      <PlanComparison currentPlan={usage.plan_code ?? null} />
     </div>
   );
 }

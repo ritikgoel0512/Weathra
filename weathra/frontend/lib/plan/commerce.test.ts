@@ -101,7 +101,7 @@ describe("what a tier is worth, derived rather than written", () => {
 
   it("computes the gain against the tier below from the allowances themselves", () => {
     // 25 → 250 a day. The sentence is arithmetic, so it stays true when a row is edited.
-    expect(valueProposition(PRO_PLAN, plans())).toBe("10× daily questions than Free.");
+    expect(valueProposition(PRO_PLAN, plans())).toBe("10× the daily questions of Free.");
   });
 
   it("falls back to a truthful phrase when nothing measurably increases", () => {

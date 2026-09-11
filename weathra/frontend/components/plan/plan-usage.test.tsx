@@ -114,12 +114,15 @@ describe("the person's own plan", () => {
     expect(screen.queryByText(/plus/i)).toBeNull();
   });
 
-  it("says plan changes are administrative rather than offering a checkout", async () => {
+  it("points at the plans rather than at who administers them", async () => {
+    // This said "Plan changes are made by a Weathra administrator. There is no self-service
+    // checkout." — true, and a description of Weathra's internal process on a customer's account
+    // page. The boundary is still stated, in the Billing card, where it belongs.
     mount(client());
-    await screen.findByText(/Plan changes are made by a Weathra administrator/);
+    await screen.findByText(/Every account starts on Free/);
 
-    expect(screen.getByText(/no self-service checkout/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /upgrade/i })).toBeNull();
+    expect(screen.queryByText(/administrator/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /upgrade now/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /upgrade/i })).toBeNull();
   });
 });
@@ -158,7 +161,8 @@ describe("consumption against allowance", () => {
 
     // Two windowed dimensions are scheduled; concurrency has no window and is not given a
     // fabricated one — it falls as soon as a run finishes, which is not a date.
-    const scheduled = screen
+    const resets = screen.getByRole("heading", { name: "Reset windows" }).closest("section")!;
+    const scheduled = within(resets)
       .getAllByRole("listitem")
       .filter((row) => /Sep|Oct/.test(row.textContent ?? ""));
     expect(scheduled).toHaveLength(2);

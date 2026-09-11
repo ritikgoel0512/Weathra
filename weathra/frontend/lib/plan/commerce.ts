@@ -125,8 +125,10 @@ export function valueProposition(
   const best = gains[0];
   if (!best) return `More headroom than ${below.display_name}.`;
 
-  const times = best.factor >= 2 ? `${Math.round(best.factor)}×` : `${Math.round((best.factor - 1) * 100)}% more`;
-  return `${times} ${DIMENSION_PHRASES[best.dimension] ?? "capacity"} than ${below.display_name}.`;
+  const subject = DIMENSION_PHRASES[best.dimension] ?? "capacity";
+  return best.factor >= 2
+    ? `${Math.round(best.factor)}× the ${subject} of ${below.display_name}.`
+    : `${Math.round((best.factor - 1) * 100)}% more ${subject} than ${below.display_name}.`;
 }
 
 /** Plain words for the dimensions the database counts in. No raw field names on a plan card. */

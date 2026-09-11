@@ -124,3 +124,31 @@ export function pressuredDimensions(
 export function isInternal(usage: UsageResponse): boolean {
   return usage.internal === true;
 }
+
+/**
+ * When an allowance next refills, said the way a person would say it.
+ *
+ * The account page listed `11 Sept, 00:00` beside every dimension. That is the exact instant the
+ * counter turns over, and it is the shape of an operations console: a customer asking "when do my
+ * requests come back" is answered by *tomorrow*, not by a timestamp they have to compare against
+ * the clock. The instant is not lost — it stays in the reset schedule, where somebody who wants it
+ * is looking for it — but it is not what the allowance card says.
+ *
+ * `now` is injectable so the wording is testable without waiting for midnight.
+ */
+export function resetPhrase(resetsAt: string | null, now: Date = new Date()): string | null {
+  if (!resetsAt) return null;
+  const when = new Date(resetsAt);
+  if (Number.isNaN(when.getTime())) return null;
+
+  const startOfDay = (date: Date): number =>
+    new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const days = Math.round((startOfDay(when) - startOfDay(now)) / 86_400_000);
+
+  if (days <= 0) return "Resets today";
+  if (days === 1) return "Resets tomorrow";
+  if (days < 7) {
+    return `Resets ${when.toLocaleDateString(undefined, { weekday: "long" })}`;
+  }
+  return `Resets ${when.toLocaleDateString(undefined, { day: "numeric", month: "short" })}`;
+}

@@ -18,6 +18,7 @@ import {
   isInternal,
   pressuredDimensions,
   readDimension,
+  resetPhrase,
   resetSchedule,
   windowLabel,
 } from "./usage";
@@ -166,5 +167,26 @@ describe("an internal account", () => {
     expect(isInternal(usage)).toBe(true);
     expect(isInternal({} as UsageResponse)).toBe(false);
     expect(isInternal({ internal: false } as UsageResponse)).toBe(false);
+  });
+});
+
+describe("when an allowance refills, in words", () => {
+  const now = new Date("2026-09-10T09:00:00Z");
+
+  it("answers the question a customer is actually asking", () => {
+    // The account page listed `11 Sept, 00:00` beside every dimension — the exact turnover instant,
+    // which is the shape of an operations console rather than an answer.
+    expect(resetPhrase("2026-09-10T23:00:00Z", now)).toBe("Resets today");
+    expect(resetPhrase("2026-09-11T00:00:00Z", now)).toBe("Resets tomorrow");
+    expect(resetPhrase("2026-10-01T00:00:00Z", now)).toMatch(/^Resets .*Oct/);
+  });
+
+  it("names the weekday for something inside the week", () => {
+    expect(resetPhrase("2026-09-13T00:00:00Z", now)).toMatch(/^Resets \w+day$/);
+  });
+
+  it("says nothing rather than guessing for a dimension with no window", () => {
+    expect(resetPhrase(null, now)).toBeNull();
+    expect(resetPhrase("not a date", now)).toBeNull();
   });
 });
