@@ -566,9 +566,6 @@ const EVIDENCE_RECORD = {
   partial_reason: null,
 };
 
-const EVIDENCE_PROSE =
-  "The provider's forecast puts this week's mean at 17.9 °C, which the archive comparison places above the four-year baseline.";
-
 /**
  * What the MVP screens ask for, and what this answers with while the session is being honoured.
  *
