@@ -396,6 +396,53 @@ export function readableProse(text: string): string {
   });
 }
 
+/**
+ * How many figures the deterministic band leads with. The artifact sets three across its row.
+ */
+export const PRIMARY_FIGURES = 3;
+
+/**
+ * The statistics a reader needs first, chosen by what a decision turns on.
+ *
+ * A comparison run records ten results — a mean, a minimum, a maximum and a range for each window,
+ * then the differences between them — and rendering them in storage order puts "minimum of the
+ * first window" where the artifact puts the anomaly. Ten cards is a dump whatever each one says.
+ *
+ * The ranking is by *statistic kind*, not by value: a difference or a z-score answers "is this
+ * unusual", a total answers "how much", and an extreme answers neither on its own. Nothing is
+ * hidden — everything past the first three sits behind the band's own disclosure — and nothing is
+ * reordered within a rank, so the run's own sequence still decides ties.
+ */
+const FIGURE_PRIORITY: readonly string[] = [
+  "delta",
+  "difference",
+  "z_score",
+  "percentage_change",
+  "anomaly",
+  "percentile_rank",
+  "trend",
+  "total",
+  "mean",
+  "standard_deviation",
+  "range",
+];
+
+export function leadingFigures<T extends { readonly statistic?: string }>(
+  figures: readonly T[],
+): { readonly primary: readonly T[]; readonly rest: readonly T[] } {
+  const ranked = figures
+    .map((figure, index) => {
+      const rank = FIGURE_PRIORITY.indexOf(String(figure.statistic ?? ""));
+      return { figure, index, rank: rank === -1 ? FIGURE_PRIORITY.length : rank };
+    })
+    .sort((left, right) => left.rank - right.rank || left.index - right.index);
+
+  return {
+    primary: ranked.slice(0, PRIMARY_FIGURES).map((entry) => entry.figure),
+    rest: ranked.slice(PRIMARY_FIGURES).map((entry) => entry.figure),
+  };
+}
+
 /** One logical stage of a run: an agent, and every action it took. */
 export interface AgentStage {
   readonly agent: string;

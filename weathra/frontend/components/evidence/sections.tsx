@@ -57,6 +57,7 @@ import { measureLabel } from "@/lib/dashboard/briefing";
 import { dataClassFor } from "@/lib/design/data-class";
 import {
   agentStages,
+  leadingFigures,
   statisticsFromTools,
   formatDurationMs,
   readableProse,
@@ -71,15 +72,6 @@ import { inferenceMetadataFrom } from "@/lib/inference/served";
 import { placeLabel } from "@/lib/locations/place";
 
 import styles from "./evidence.module.css";
-
-/**
- * How many computed figures lead the deterministic band.
- *
- * The artifact sets three across its analytics row. Four is the ceiling here because a comparison
- * run genuinely produces four a reader wants together — both periods, their difference, and the
- * spread — and cutting to three would hide one of them behind a disclosure for symmetry's sake.
- */
-const LEAD_FIGURES = 4;
 
 /* ------------------------------------------------------------------ formatting */
 
@@ -688,7 +680,7 @@ export function DeterministicAnalytics({ record }: { readonly record: RunRecord 
             and the method that produced it. The band never shows a payload's envelope.
           */}
           <ul className={styles.figures}>
-            {recovered.map((result, index) => (
+            {leadingFigures(recovered).primary.map((result, index) => (
               <StatisticFigure key={`${result.statistic}-${result.measure}-${index}`} result={result} />
             ))}
           </ul>
@@ -718,6 +710,8 @@ export function DeterministicAnalytics({ record }: { readonly record: RunRecord 
     );
   }
 
+  const leading = leadingFigures(record.statistics);
+
   return (
     <div data-evidence-section="analytics">
       {/*
@@ -736,29 +730,37 @@ export function DeterministicAnalytics({ record }: { readonly record: RunRecord 
           with three. The ordering is the analytics layer's own — the order the run computed them —
           so "the first four" is not this screen ranking evidence, it is the run's own sequence.
         */}
+        {/*
+          Three figures lead, chosen by what a decision turns on rather than by storage order.
+          
+          A comparison run records ten results — a mean, a minimum, a maximum and a range for each
+          window, then the differences — so rendering them as stored puts "minimum of the first
+          window" where the artifact puts the anomaly. Everything past the third is behind the
+          band's own disclosure; nothing is dropped.
+        */}
         <ul className={styles.figures}>
-          {record.statistics.slice(0, LEAD_FIGURES).map((result, index) => (
+          {leading.primary.map((result, index) => (
             <StatisticFigure key={`${result.statistic}-${result.measure}-${index}`} result={result} />
           ))}
-          {record.statistics.length <= LEAD_FIGURES
+          {leading.rest.length === 0
             ? record.anomalies.map((report, index) => (
                 <AnomalyFigure key={`anomaly-${report.measure}-${index}`} report={report} />
               ))
             : null}
-          {record.statistics.length <= LEAD_FIGURES
+          {leading.rest.length === 0
             ? record.trends.map((report, index) => (
                 <TrendFigure key={`trend-${report.measure}-${index}`} report={report} />
               ))
             : null}
         </ul>
 
-        {record.statistics.length > LEAD_FIGURES ? (
+        {leading.rest.length > 0 ? (
           <details className={styles.moreFigures}>
             <summary>
               Every figure this run computed ({record.statistics.length})
             </summary>
             <ul className={styles.figures}>
-              {record.statistics.slice(LEAD_FIGURES).map((result, index) => (
+              {leading.rest.map((result, index) => (
                 <StatisticFigure
                   key={`rest-${result.statistic}-${result.measure}-${index}`}
                   result={result}

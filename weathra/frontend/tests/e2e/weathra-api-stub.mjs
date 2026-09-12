@@ -207,6 +207,25 @@ function dayCandidate(date, rank, score, { temperature, rain, wind }, tied) {
   };
 }
 
+const LONDON = {
+  display_name: "London",
+  latitude: 51.5085,
+  longitude: -0.1257,
+  timezone: "Europe/London",
+  country: "United Kingdom",
+  country_code: "GB",
+  region: "England",
+};
+
+/** The rich run's own window, in its own zone. */
+const LONDON_PERIOD = {
+  start_local: "2026-09-04T00:00:00+01:00",
+  end_local: "2026-09-11T00:00:00+01:00",
+  start_utc: "2026-09-03T23:00:00Z",
+  end_utc: "2026-09-10T23:00:00Z",
+  timezone: "Europe/London",
+};
+
 const BARCELONA = {
   display_name: "Barcelona",
   latitude: 41.3874,
@@ -1812,8 +1831,21 @@ const FIXTURES = {
    */
   "/api/v1/evidence": {
     limit: 20,
-    returned: 2,
+    returned: 3,
     records: [
+      {
+        id: "run-rich",
+        created_at: "2026-09-04T10:12:00Z",
+        question: "Deep-dive on the weather in London for the next 7 days.",
+        answer_preview:
+          "London runs 1.4 °C above its recent historical reference over the next seven days, with the largest departure on the third and fourth days.",
+        duration_ms: 4180,
+        partial: false,
+        weather_provider: "stub-provider",
+        llm_model: "stub-model",
+        steps: 10,
+        locations: ["London, United Kingdom"],
+      },
       {
         id: "run-stub",
         created_at: "2026-09-04T09:02:40Z",
@@ -1851,6 +1883,159 @@ const FIXTURES = {
    * answer. Photographing only the rich six-agent run hid how much space the empty categories were
    * taking on this one.
    */
+  /*
+   * The canonical *rich* run: the shape the evidence console is judged against.
+   *
+   * A deep-dive question routes to every capability the planner has — forecast beside current,
+   * the archive for comparison, the analytics kernel over both, and the knowledge base for the
+   * meteorological context — so one record carries several source classes, several computed
+   * figures, real citations and a grounded conclusion. Photographing only a narrow run is what let
+   * raw dumps and duplicate agent cards survive earlier passes; this fixture is the regression
+   * guard against going back to them.
+   *
+   * Deterministic values, real shapes. Two historical retrievals and three analytics calls on
+   * purpose: one logical card each is the thing being asserted.
+   */
+  "/api/v1/evidence/run-rich": {
+    id: "run-rich",
+    request_id: "req-rich-1",
+    thread_id: "thread-rich",
+    question:
+      "Deep-dive on the weather in London for the next 7 days: analyse current and forecast conditions, compare them with historical conditions, identify anomalies, and explain the meteorological context.",
+    answer_prose:
+      "London runs 1.4 °C above its recent historical reference over the next seven days, with the largest departure on the third and fourth days. Rainfall totals 18.2 mm against 11.6 mm for the comparison window, and gusts stay below the threshold Weathra treats as disruptive. The warmth is a persistent anomaly rather than a single spike, which the retrieved context attributes to a blocking pattern holding the airmass in place.",
+    envelope: {
+      request_id: "req-rich-1",
+      answer_prose: "London runs 1.4 °C above its recent historical reference over the next seven days.",
+      prose_data_class: "ai_interpretation",
+      findings: [],
+      attribution: [
+        { ...ATTRIBUTION, location: LONDON, data_class: "current", period: LONDON_PERIOD },
+        { ...ATTRIBUTION, data_class: "forecast", period: PERIOD },
+        { ...ATTRIBUTION, location: LONDON, data_class: "historical_observation", period: LONDON_PERIOD },
+        { ...ATTRIBUTION, location: LONDON, data_class: "computed_statistic", period: LONDON_PERIOD },
+      ],
+      resolved: {
+        locations: [LONDON],
+        period: LONDON_PERIOD,
+        unit_system: "metric",
+        location_source: "request",
+        units_source: "preferences",
+        statement: "London, United Kingdom, for the next seven days, from the place you named.",
+      },
+      grounding: {
+        verified: true,
+        method: "figures extracted from the prose and matched within 0.05",
+        figures_checked: 4,
+        ungrounded_figures: [],
+        prose_discarded: false,
+      },
+      uncertainty: UNCERTAINTY,
+      unanswered_parts: [],
+    },
+    evidence: {
+      question: "Deep-dive on the weather in London for the next 7 days.",
+      routing_reason:
+        "The question asks for current conditions, a forecast, a historical comparison, anomaly analysis and meteorological context.",
+      routing_source: "model",
+      agents: [
+        { sequence: 1, agent: "supervisor", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 140, reason: "Planned current, forecast, archive, analytics and knowledge." },
+        { sequence: 2, agent: "current", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 260, reason: "Retrieved conditions as they stand now." },
+        { sequence: 3, agent: "forecast", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 820, reason: "Retrieved the seven-day window." },
+        // Two archive retrievals, one logical card: the grouping this fixture exists to hold.
+        { sequence: 4, agent: "historical", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 540, reason: "Loaded the equivalent recent window." },
+        { sequence: 5, agent: "historical", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 380, reason: "Loaded the prior-year window for comparison." },
+        { sequence: 6, agent: "analytics", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 210, reason: "Computed the mean for each window." },
+        { sequence: 7, agent: "analytics", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 160, reason: "Computed the difference and its z-score." },
+        { sequence: 8, agent: "analytics", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 120, reason: "Computed the precipitation totals." },
+        { sequence: 9, agent: "rag", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 310, reason: "Retrieved context on blocking patterns and forecast skill." },
+        { sequence: 10, agent: "synthesis", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 1240 },
+      ],
+      tool_calls: [
+        { sequence: 1, tool: "weather_current", agent: "current", arguments: { latitude: 51.5085, longitude: -0.1257 }, started_at: RETRIEVED_AT, duration_ms: 260 },
+        { sequence: 2, tool: "weather_forecast", agent: "forecast", arguments: { latitude: 51.5085, longitude: -0.1257, days: 7 }, started_at: RETRIEVED_AT, duration_ms: 820 },
+        { sequence: 3, tool: "weather_history", agent: "historical", arguments: { latitude: 51.5085, longitude: -0.1257, start: "2026-08-28", end: "2026-09-03" }, started_at: RETRIEVED_AT, duration_ms: 540 },
+        { sequence: 4, tool: "weather_history", agent: "historical", arguments: { latitude: 51.5085, longitude: -0.1257, start: "2025-09-04", end: "2025-09-10" }, started_at: RETRIEVED_AT, duration_ms: 380 },
+        { sequence: 5, tool: "weather_statistics", agent: "analytics", arguments: { measure: "temperature_mean" }, started_at: RETRIEVED_AT, duration_ms: 210 },
+        { sequence: 6, tool: "weather_statistics", agent: "analytics", arguments: { measure: "precipitation_sum" }, started_at: RETRIEVED_AT, duration_ms: 120 },
+      ],
+      tool_results: [
+        { sequence: 1, tool: "weather_current", ok: true, data_class: "current", attribution: { ...ATTRIBUTION, location: LONDON, data_class: "current", period: LONDON_PERIOD }, payload: { values: 8, units: { temperature: "°C" } } },
+        { sequence: 2, tool: "weather_forecast", ok: true, data_class: "forecast", attribution: { ...ATTRIBUTION, location: LONDON, period: LONDON_PERIOD }, payload: { daily: 7, hourly: 168 } },
+        { sequence: 3, tool: "weather_history", ok: true, data_class: "historical_observation", attribution: { ...ATTRIBUTION, location: LONDON, data_class: "historical_observation", period: LONDON_PERIOD }, payload: { daily: 7 } },
+        { sequence: 4, tool: "weather_history", ok: true, data_class: "historical_observation", attribution: { ...ATTRIBUTION, location: LONDON, data_class: "historical_observation", period: LONDON_PERIOD }, payload: { daily: 7 } },
+        { sequence: 5, tool: "weather_statistics", ok: true, data_class: "computed_statistic", attribution: { ...ATTRIBUTION, location: LONDON, data_class: "computed_statistic", period: LONDON_PERIOD }, payload: { results: 3 } },
+        { sequence: 6, tool: "weather_statistics", ok: true, data_class: "computed_statistic", attribution: { ...ATTRIBUTION, location: LONDON, data_class: "computed_statistic", period: LONDON_PERIOD }, payload: { results: 2 } },
+      ],
+      /*
+       * Ten recorded figures, three of which lead the band. The extremes and the per-window means
+       * are real and stay in the record; they sit behind the disclosure because "minimum of the
+       * first window" is not what a reader decides on.
+       */
+      analytics_results: [
+        statistic("delta", "temperature_mean", 1.4, "°C", "the value being compared minus the baseline"),
+        statistic("z_score", "temperature_mean", 1.18, "", "value minus reference mean, divided by the reference standard deviation"),
+        statistic("total", "precipitation_sum", 18.2, "mm", "sum of usable points"),
+        statistic("mean", "temperature_mean", 19.6, "°C", "arithmetic mean of usable points"),
+        statistic("mean", "temperature_mean", 18.2, "°C", "arithmetic mean of usable points"),
+        statistic("maximum", "temperature_max", 24.8, "°C", "maximum of usable points"),
+        statistic("minimum", "temperature_min", 12.4, "°C", "minimum of usable points"),
+        statistic("range", "temperature_mean", 12.4, "°C", "maximum minus minimum of usable points"),
+        statistic("total", "precipitation_sum", 11.6, "mm", "sum of usable points"),
+        statistic("standard_deviation", "temperature_mean", 1.9, "°C", "population standard deviation of usable points"),
+      ],
+      anomaly_reports: [],
+      trend_reports: [],
+      citations: [
+        {
+          document_id: "blocking-patterns.md",
+          title: "How blocking patterns hold an airmass in place",
+          topic: "circulation",
+          chunk_position: 2,
+          score: 0.91,
+          text: "A blocking high diverts the usual west-to-east progression of systems, so an airmass that would ordinarily be replaced within a day or two stays put. The effect on surface temperature is cumulative: each day under the same airmass departs a little further from the seasonal reference, which is why a blocked pattern shows as a sustained anomaly rather than a single warm day.",
+        },
+        {
+          document_id: "forecast-uncertainty.md",
+          title: "Why forecast confidence falls with horizon distance",
+          topic: "uncertainty",
+          chunk_position: 1,
+          score: 0.84,
+          text: "Forecast skill declines with lead time because small errors in the initial state grow. Two runs started from almost the same atmosphere diverge, slowly at first and then quickly, so the spread between plausible outcomes widens the further ahead the model is asked to look.",
+        },
+        {
+          document_id: "anomaly-basics.md",
+          title: "What a temperature anomaly describes",
+          topic: "analysis",
+          chunk_position: 4,
+          score: 0.77,
+          text: "An anomaly is a departure from a reference, and it means nothing without the reference being stated. A figure quoted against a four-year archive is a different claim from the same figure quoted against a thirty-year normal.",
+        },
+      ],
+      attributions: [
+        { ...ATTRIBUTION, location: LONDON, data_class: "current", period: LONDON_PERIOD },
+        { ...ATTRIBUTION, location: LONDON, period: LONDON_PERIOD },
+        { ...ATTRIBUTION, location: LONDON, data_class: "historical_observation", period: LONDON_PERIOD },
+        { ...ATTRIBUTION, location: LONDON, data_class: "computed_statistic", period: LONDON_PERIOD },
+      ],
+      data_classes: ["current", "forecast", "historical_observation", "computed_statistic", "ai_interpretation"],
+      llm_provider: "stub-gateway",
+      llm_model: "stub-model",
+      started_at: RETRIEVED_AT,
+      completed_at: "2026-09-04T06:15:04Z",
+      total_duration_ms: 4180,
+      steps_used: 10,
+      partial: false,
+      partial_reason: null,
+    },
+    llm_provider: "stub-gateway",
+    llm_model: "stub-model",
+    weather_provider: "stub-provider",
+    duration_ms: 4180,
+    partial: false,
+    created_at: "2026-09-04T10:12:00Z",
+  },
+
   "/api/v1/evidence/run-stub": {
     id: "run-stub",
     request_id: "req-stub",
