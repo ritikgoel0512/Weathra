@@ -482,3 +482,37 @@ behind `Compare with another period`.
   production reads Open-Meteo.
 * **Pressure reads "not reported"** for this window, because the archive supplied none. The card
   stays so the row keeps its rhythm.
+
+## Travel Intelligence — 2026-09-12 (task 34.40)
+
+**Visily target.** `15-travel-intelligence.png`: a trip strip, a photographic destination hero
+beside a large viability ring, four metric cards, a daily outlook beside a packing rail, an
+intra-day chart, a comparison matrix beside a "what changed" card, an AI synthesis band, and a
+historical baseline region.
+
+**Production before.** A display title, a lede, an always-open place disclosure, a full-width city
+photograph, a four-field form in a card of its own — and then nothing until a button was pressed.
+The product existed only after that press; the page a customer met was the configuration for it.
+
+**Production after.** One trip strip. The hero beside a suitability card carrying the backend's own
+rank. Three metric cards from the best day's supporting statistics. A daily outlook of day cards
+beside weather-aware guidance, each note naming the figure that raised it. The advisory in the
+footer rule. The screen answers its default question on arrival.
+
+**Verdict: ACCEPTABLE DIVERGENCE** — the first two-thirds of the artifact's bands are reconstructed
+and recognisable; three of its lower bands are not built.
+
+**Truthful divergences.**
+
+* **No viability index.** The artifact's ring reads `88 EXCELLENT` over "thermal comfort 92%" and
+  "activity exposure 84%". The backend's score has no ceiling, so a percentage would invent the
+  scale; the ring carries the rank — `#1 of 2 days` — which is the ordering the response contains.
+* **No flight stability, airline operations, sensor nodes, model convergence or vector alignment.**
+* **No AI packing strategy.** Weathra runs no packing model, so the rail carries only the
+  considerations the figures on the screen justify, each naming its figure.
+* **Not built in this pass:** the intra-day chart, the temporal comparison matrix, "what changed",
+  the synthesis band and the historical baseline region. Each needs data this screen does not
+  currently request — hourly series, sub-window comparisons, forecast snapshots and an archive
+  baseline — and adding four retrievals was beyond what the pass could verify.
+* **The capture's provider reads `stub-provider`** because the harness is a stub; production reads
+  Open-Meteo.

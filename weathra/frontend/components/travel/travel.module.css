@@ -134,3 +134,429 @@
   color: var(--color-text-secondary);
   font-size: var(--type-ui-size);
 }
+
+/* ================================== task 34.40: the artifact's composition ============== */
+
+/*
+ * **The trip strip** — the artifact's one control row, where there were four bands.
+ *
+ * Production opened on a display title, a lede, an always-open place disclosure and a four-field
+ * form inside a card of its own, and only then, after a button press, showed anything about the
+ * weather. `15-travel-intelligence.png` puts the trip on one row and goes straight to the decision.
+ */
+.tripStrip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  min-width: 0;
+}
+
+.tripField {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tripLabel {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.tripValue {
+  font-family: var(--family-display);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.tripSelect {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-inset);
+  color: var(--color-text-primary);
+  font-family: var(--family-body);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+}
+
+.adjust {
+  margin-inline-start: auto;
+  min-width: 0;
+}
+
+.adjustSummary {
+  cursor: pointer;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+  color: var(--color-accent);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+}
+
+.adjust > :not(summary) {
+  margin-block-start: var(--space-3);
+}
+
+/* ----------------------------------------------- the hero and the suitability card */
+
+/*
+ * The artifact's lead band: a dominant photographic hero and a strong card beside it, roughly two
+ * to one. Production stacked the hero full width with nothing beside it.
+ */
+.lead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: stretch;
+  min-width: 0;
+}
+
+.lead > * {
+  min-width: 0;
+}
+
+.leadHero {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.leadHero > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .lead {
+    grid-template-columns: minmax(0, 2fr) minmax(19rem, 1fr);
+  }
+}
+
+.heroFacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: var(--space-3) 0 0;
+  min-width: 0;
+}
+
+.heroFact {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.heroFact dt {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text-primary) 70%, transparent);
+}
+
+.heroFact dd {
+  margin: 0;
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  color: var(--color-text-primary);
+}
+
+.heroFigure {
+  font-family: var(--family-display);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-display-weight);
+}
+
+/*
+ * **A rank, not an index out of a hundred.** The artifact's ring reads 88 EXCELLENT; the backend's
+ * score has no ceiling, so turning it into a percentage would invent the scale. The order is real.
+ */
+.ring {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 8.5rem;
+  height: 8.5rem;
+  margin: 0 auto var(--space-3);
+  border-radius: var(--radius-pill);
+  border: 3px solid var(--color-accent);
+  background: radial-gradient(
+    70% 70% at 50% 40%,
+    color-mix(in srgb, var(--color-accent) 16%, transparent) 0%,
+    transparent 72%
+  );
+}
+
+.ringRank {
+  font-family: var(--family-display);
+  font-size: var(--type-display-size);
+  line-height: 1;
+  font-weight: var(--type-display-weight);
+  color: var(--color-text-primary);
+}
+
+.ringOf {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.ringDay {
+  margin: 0 0 var(--space-3);
+  text-align: center;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+}
+
+.contributions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.contribution {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  min-width: 0;
+}
+
+.contribution dt {
+  color: var(--color-text-muted);
+}
+
+.contribution dd {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.disclaimer {
+  margin: var(--space-3) 0 0;
+  padding-block-start: var(--space-2);
+  border-block-start: 1px solid var(--color-border-subtle);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+}
+
+/* ------------------------------------------------------------- the metric row */
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .metrics {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  min-width: 0;
+}
+
+.metricLabel {
+  margin: 0;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.metricValue {
+  margin: 0;
+  font-family: var(--family-display);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.metricNote {
+  margin: 0;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* ----------------------------------------------- the outlook and the guidance rail */
+
+.outlook {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .outlook {
+    grid-template-columns: minmax(0, 2.4fr) minmax(17rem, 1fr);
+  }
+}
+
+/* The artifact's day cards, across rather than down. */
+.days {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.day {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+  min-width: 0;
+}
+
+/* The top-ranked day, marked by border and by badge — never by colour alone. */
+.day[data-best="true"] {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface-inset));
+}
+
+.dayWeekday {
+  margin: 0;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.dayDate {
+  margin: 0;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+}
+
+.dayFigure {
+  margin: var(--space-1) 0 0;
+  font-family: var(--family-display);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+}
+
+.dayRain {
+  margin: 0;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.whyList {
+  margin: var(--space-2) 0 0;
+  padding-inline-start: var(--space-4);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+}
+
+/* --------------------------------------------------------------- the guidance */
+
+.guidance {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.guide {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.guideMark {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-block-start: 0.5em;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+}
+
+.guideText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.guideTitle {
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-primary);
+}
+
+.guideBecause {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* The advisory the artifact sets in its footer rule. */
+.advisory {
+  margin: 0;
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--color-border-subtle);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}

@@ -90,44 +90,59 @@ describe("ranking a weather window", () => {
   it("asks the backend to rank the days, against the criterion chosen", async () => {
     const compareLocations = vi.fn().mockResolvedValue(RANKING);
     mount(client({ compareLocations }));
-    await screen.findByRole("heading", { name: "Travel Intelligence" });
+    await vi.waitFor(() => expect(screen.getAllByText("Lisbon, Portugal").length).toBeGreaterThan(0));
 
-    await userEvent.click(screen.getByRole("button", { name: "Rank these days" }));
-
-    expect(compareLocations).toHaveBeenCalledWith({
+    await vi.waitFor(() =>
+      expect(compareLocations).toHaveBeenCalledWith({
       criterion: "outdoor_suitability",
       location: "Lisbon, Portugal",
-      days: 7,
-    });
+        days: 7,
+      }),
+    );
   });
 
   it("shows each day's rank, and the figures behind its score", async () => {
     mount(client());
-    await screen.findByRole("heading", { name: "Travel Intelligence" });
-    await userEvent.click(screen.getByRole("button", { name: "Rank these days" }));
 
-    expect(await screen.findByText("2026-09-12")).toBeInTheDocument();
-    expect(screen.getByText("Best in this window")).toBeInTheDocument();
+    /*
+     * The day cards carry the weekday and the date the backend stated, not the raw label — a
+     * customer reading a travel screen is choosing between days, and `2026-09-12` is a key.
+     */
+    expect(await screen.findByText("Best")).toBeInTheDocument();
     // The supporting statistic the backend returned, not a figure computed here.
-    expect(screen.getByText("23.4 °C")).toBeInTheDocument();
-    expect(screen.getByText("What made this score")).toBeInTheDocument();
+    expect(screen.getAllByText("23.4 °C").length).toBeGreaterThan(0);
+
+    // Every figure behind the score is still here, one press in rather than down the page.
+    await userEvent.click(screen.getAllByText("Show details")[0]!);
+    expect(screen.getAllByText(/Precipitation/).length).toBeGreaterThan(0);
   });
 
-  it("ranks nothing until asked", async () => {
-    const compareLocations = vi.fn();
-    mount(client({ compareLocations }));
-    await screen.findByRole("heading", { name: "Travel Intelligence" });
+  it("leads with the destination beside its suitability, as the artifact composes it", async () => {
+    mount(client());
+    await screen.findByText("Best");
+    expect(screen.getByRole("heading", { name: "Weather suitability" })).toBeInTheDocument();
+    expect(screen.getByText(/of 2 days/)).toBeInTheDocument();
+  });
 
-    expect(compareLocations).not.toHaveBeenCalled();
+  it("answers the default question on arrival rather than after a press", async () => {
+    /*
+     * The screen used to open on a form and an empty state telling the person to choose what they
+     * wanted from the weather, so the product existed only after a button. The defaults are a real
+     * question already — which days here are good to be outside, over the next week — so it answers
+     * that, and the controls change the answer.
+     */
+    const compareLocations = vi.fn().mockResolvedValue(RANKING);
+    mount(client({ compareLocations }));
+
+    await vi.waitFor(() => expect(compareLocations).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("Best")).toBeInTheDocument();
   });
 });
 
 describe("what travel intelligence never claims", () => {
   it("offers no aviation or booking content, and says plainly that it has none", async () => {
     const { container } = mount(client());
-    await screen.findByRole("heading", { name: "Travel Intelligence" });
-    await userEvent.click(screen.getByRole("button", { name: "Rank these days" }));
-    await screen.findByText("2026-09-12");
+    await screen.findByText("Best");
 
     const text = container.textContent ?? "";
     // The artifact's aviation apparatus, none of which Weathra knows anything about.
@@ -143,8 +158,13 @@ describe("what travel intelligence never claims", () => {
       expect(text, `travel claims ${invented}`).not.toContain(invented);
     }
 
-    // And the absence is stated rather than left to be noticed.
+    /*
+     * And the absence is stated rather than left to be noticed — twice. It was a card of its own
+     * headed "What this is, and is not" at the foot of the page; the artifact sets an advisory in
+     * its footer rule, so the same words are there, and the suitability card carries the shorter
+     * version beside the figure somebody would otherwise read as a travel verdict.
+     */
     expect(text).toContain("not advice about");
-    expect(screen.getByRole("heading", { name: "What this is, and is not" })).toBeInTheDocument();
+    expect(screen.getAllByText(/not transport or safety advice/).length).toBeGreaterThan(0);
   });
 });
