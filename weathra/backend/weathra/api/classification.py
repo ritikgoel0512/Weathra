@@ -132,6 +132,13 @@ _CLASSIFICATIONS: tuple[EndpointClassification, ...] = (
     ),
     # ------------------------------------------ protected: writes the shared snapshot history
     EndpointClassification(
+        "/travel/intelligence",
+        Access.PROTECTED,
+        "One trip analysed from a single forecast retrieval. Records that retrieval in the shared "
+        "snapshot history so a later trip can say what moved, which is the same reason "
+        "/weather/changes is not public.",
+    ),
+    EndpointClassification(
         "/weather/changes",
         Access.PROTECTED,
         "Forecast movement since the last snapshot. Records the retrieval it compares, and is not "

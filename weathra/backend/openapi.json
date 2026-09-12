@@ -10320,7 +10320,7 @@
     },
     "/api/v1/travel/intelligence": {
       "post": {
-        "description": "Everything the Travel Intelligence screen shows, from one forecast retrieval.",
+        "description": "**Protected.** One trip analysed from a single forecast retrieval. Records that retrieval in the shared snapshot history so a later trip can say what moved, which is the same reason /weather/changes is not public.\n\nEverything the Travel Intelligence screen shows, from one forecast retrieval.",
         "operationId": "intelligence_api_v1_travel_intelligence_post",
         "requestBody": {
           "content": {
@@ -10343,6 +10343,9 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "description": "No valid access token was presented."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -10354,6 +10357,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
         "summary": "Analyse a trip's weather",
         "tags": [
           "travel"

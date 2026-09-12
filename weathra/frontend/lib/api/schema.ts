@@ -2287,7 +2287,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     operationId: "intelligence_api_v1_travel_intelligence_post",
     method: "POST",
     path: "/api/v1/travel/intelligence",
-    requiresToken: false,
+    requiresToken: true,
     administrative: false,
     request: "TravelIntelligenceRequest",
     successStatus: 200,

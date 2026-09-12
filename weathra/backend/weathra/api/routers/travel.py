@@ -26,7 +26,7 @@ from weathra.api.dependencies import Configuration, CurrentSession, Places, Weat
 from weathra.api.middleware import annotate
 from weathra.api.routers.support import provider_for, units_for
 from weathra.api.routers.weather import ProviderName, Units
-from weathra.auth.deps import OptionalPrincipal
+from weathra.auth.deps import RequiredPrincipal
 from weathra.domain.analytics import StatisticResult
 from weathra.domain.errors import ValidationFailed, WeathraError
 from weathra.domain.location import Location, Resolved
@@ -94,10 +94,10 @@ async def intelligence(
     weather: WeatherFor,
     session: CurrentSession,
     settings: Configuration,
-    principal: OptionalPrincipal,
+    principal: RequiredPrincipal,
 ) -> TravelIntelligence:
     """Everything the Travel Intelligence screen shows, from one forecast retrieval."""
-    preferences = PreferenceStore(session, principal, settings) if principal is not None else None
+    preferences = PreferenceStore(session, principal, settings)
     unit_system, _ = await units_for(
         request, requested=body.units, principal=principal, preferences=preferences
     )
@@ -188,7 +188,7 @@ async def intelligence(
 
     annotate(
         request,
-        acting_user_id=principal.user_id if principal else None,
+        acting_user_id=principal.user_id,
         weather_provider=forecast.provider,
     )
 

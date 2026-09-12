@@ -98,7 +98,7 @@ or the credential.
 | `GET` | `/api/v1/weather/analysis` | public | 200 | `AnalysisResponse` |
 | `GET` | `/api/v1/weather/changes` | **protected** | 200 | `WhatChanged` |
 | `POST` | `/api/v1/weather/comparison` | public | 200 | `ComparisonResult` |
-| `POST` | `/api/v1/travel/intelligence` | public | 200 | `TravelIntelligence` |
+| `POST` | `/api/v1/travel/intelligence` | **protected** | 200 | `TravelIntelligence` |
 | `POST` | `/api/v1/weather/scenario` | **public** | 200 | `ScenarioResponse` |
 | `GET` | `/api/v1/weather/current` | public | 200 | `CurrentResponse` |
 | `GET` | `/api/v1/weather/forecast` | public | 200 | `ForecastResponse` |
@@ -164,7 +164,7 @@ or the credential.
 | `/weather/analysis` | public | Deterministic analytics over a supplied window. Reads no user-owned row. |
 | `/weather/changes` | **protected** | Forecast movement since the last snapshot. Records the retrieval it compares, and is not one of the endpoints specs/http-api admits to the public surface. |
 | `/weather/comparison` | public | Ranking supplied candidates. Reads no user-owned row. |
-| `/travel/intelligence` | public | One trip analysed from a single destination forecast retrieval. Reads the shared forecast snapshot history; reads no user-owned row. |
+| `/travel/intelligence` | **protected** | One trip analysed from a single forecast retrieval. Records that retrieval in the shared snapshot history so a later trip can say what moved, which is the same reason `/weather/changes` is not public. |
 | `/weather/scenario` | **public** | Applies stated assumptions to a real forecast. Hypothetical, never a forecast. |
 | `/weather/current` | public | Current conditions for supplied parameters. Applies the caller's units when signed in. |
 | `/weather/forecast` | public | A forecast for supplied parameters. Applies the caller's units when signed in. |
