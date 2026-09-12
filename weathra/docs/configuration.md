@@ -98,7 +98,7 @@ bundle — see [`authentication.md`](authentication.md) for why the split is dra
 | `MCP_TRANSPORT` | `in-process` | behaviour | `in-process` or a network transport |
 | `MCP_SERVER_ADDRESS` | `http://127.0.0.1:8000/mcp` | behaviour | Where the MCP server listens when it is not in-process |
 | `MCP_TIMEOUT_SECONDS` | `30.0` | behaviour | Per-tool-call timeout |
-| `MCP_ENABLED_TOOLS` | `geocode_location, weather_current, weather_forecast, weather_history, weather_compare, weather_statistics, weather_anomaly` | behaviour | The tools the server registers. A tool absent here cannot be called at all |
+| `MCP_ENABLED_TOOLS` | `geocode_location, weather_current, weather_forecast, weather_history, weather_compare, weather_statistics, weather_anomaly, weather_satellite` | behaviour | The tools the server registers. A tool absent here cannot be called at all |
 | `EMBEDDING_MODEL_ID` | `BAAI/bge-small-en-v1.5` | behaviour | Embedding model. Changing it requires a re-index |
 | `EMBEDDING_DIMENSION` | `384` | behaviour | Vector width. Must match the model and the column |
 | `RAG_TOP_K` | `4` | behaviour | Chunks retrieved per query |

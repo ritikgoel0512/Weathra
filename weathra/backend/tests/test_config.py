@@ -69,7 +69,7 @@ def test_documented_defaults() -> None:
     assert built.comparison_max_locations == 8
     # MCP
     assert built.mcp_transport == "in-process"
-    assert len(built.mcp_enabled_tools) == 7
+    assert len(built.mcp_enabled_tools) == 8
     # RAG
     assert built.embedding_model_id == "BAAI/bge-small-en-v1.5"
     assert built.embedding_dimension == 384
@@ -287,7 +287,7 @@ def test_defaults_survive_an_environment_that_names_neither_variable(
 ) -> None:
     built = _from_environment(monkeypatch)
     assert built.cors_allowed_origins == ("http://localhost:3000",)
-    assert len(built.mcp_enabled_tools) == 7
+    assert len(built.mcp_enabled_tools) == 8
 
 
 def test_unrelated_scalars_still_load_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
