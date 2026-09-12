@@ -1484,3 +1484,11 @@
   line-height: var(--type-meta-line);
   color: var(--color-text-secondary);
 }
+
+/* The window a figure covers — the only thing telling a comparison's two sides apart. */
+.figurePeriod {
+  display: block;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-accent);
+}

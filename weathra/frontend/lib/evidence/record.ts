@@ -427,10 +427,92 @@ const FIGURE_PRIORITY: readonly string[] = [
   "range",
 ];
 
+/** The window a figure was computed over, as a key. Figures with no provenance share one bucket. */
+function periodKeyOf(figure: unknown): string {
+  const provenance = isObject(figure) ? figure.provenance : null;
+  const period = isObject(provenance) ? provenance.period : null;
+  if (!isObject(period)) return "";
+  return `${String(period.start_local ?? "")}..${String(period.end_local ?? "")}`;
+}
+
+/**
+ * The same figure, recorded twice, collapsed to one.
+ *
+ * A run can compute a mean through the analytics agent *and* record it again in a statistics tool
+ * result, so the band drew two cards reading "Mean · Temperature max" with the same number — which
+ * looks like two findings and is one. Identity is the statistic, the measure and the window it
+ * covers: two means over *different* windows are two findings and must both survive, which is the
+ * whole point of a comparison.
+ */
+function deduplicate<T>(figures: readonly T[]): T[] {
+  const seen = new Set<string>();
+  const kept: T[] = [];
+
+  for (const figure of figures) {
+    const record: Record<string, unknown> = isObject(figure) ? figure : {};
+    const key = [
+      String(record.statistic ?? ""),
+      String(record.measure ?? ""),
+      periodKeyOf(figure),
+      String(record.value ?? ""),
+    ].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    kept.push(figure);
+  }
+
+  return kept;
+}
+
+/**
+ * Whether these figures are a comparison: one statistic computed over two different windows.
+ *
+ * A comparison run's three most useful figures are not its three highest-ranked *kinds* — they are
+ * the two sides and the difference between them, in that order, because that is the shape of the
+ * question. Ranking by kind alone put the delta first and then two means a reader could not tell
+ * apart.
+ */
+function comparisonFigures<T>(figures: readonly T[]): T[] | null {
+  const byKind = new Map<string, T[]>();
+  for (const figure of figures) {
+    const record: Record<string, unknown> = isObject(figure) ? figure : {};
+    const kind = `${String(record.statistic ?? "")}|${String(record.measure ?? "")}`;
+    byKind.set(kind, [...(byKind.get(kind) ?? []), figure]);
+  }
+
+  // The statistic computed over more than one window is the comparison's two sides.
+  const sides = [...byKind.entries()].find(
+    ([kind, group]) =>
+      group.length === 2 &&
+      !kind.startsWith("delta") &&
+      new Set(group.map(periodKeyOf)).size === 2,
+  )?.[1];
+  if (sides === undefined) return null;
+
+  const difference = figures.find((figure) => {
+    const held: Record<string, unknown> = isObject(figure) ? figure : {};
+    const statistic = String(held.statistic ?? "");
+    return statistic === "delta" || statistic === "difference";
+  });
+  if (difference === undefined) return null;
+
+  // Later window first: "this period, that period, the difference" is how the question is asked.
+  const ordered = [...sides].sort((left, right) => periodKeyOf(right).localeCompare(periodKeyOf(left)));
+  return [...ordered, difference];
+}
+
 export function leadingFigures<T extends { readonly statistic?: string }>(
   figures: readonly T[],
 ): { readonly primary: readonly T[]; readonly rest: readonly T[] } {
-  const ranked = figures
+  const unique = deduplicate(figures);
+
+  const comparison = comparisonFigures(unique);
+  if (comparison !== null) {
+    const chosen = new Set(comparison);
+    return { primary: comparison, rest: unique.filter((figure) => !chosen.has(figure)) };
+  }
+
+  const ranked = unique
     .map((figure, index) => {
       const rank = FIGURE_PRIORITY.indexOf(String(figure.statistic ?? ""));
       return { figure, index, rank: rank === -1 ? FIGURE_PRIORITY.length : rank };

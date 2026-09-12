@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   agentStages,
+  leadingFigures,
   readableProse,
   statisticsFromTools,
   type RunRecord,
@@ -202,5 +203,75 @@ describe("the run's agents as logical stages", () => {
     );
 
     expect(stages.map((stage) => stage.agent)).toEqual(["supervisor", "forecast", "historical"]);
+  });
+});
+
+/** A statistic as the analytics layer records one, over a stated window. */
+function figure(statistic: string, measure: string, value: number, window: string) {
+  return {
+    statistic,
+    measure,
+    value,
+    unit: "°C",
+    provenance: { period: { start_local: `${window}T00:00:00+01:00`, end_local: `${window}T23:00:00+01:00` } },
+  };
+}
+
+describe("the figures the analytics band leads with", () => {
+  it("leads a comparison with its two sides and the difference, in that order", () => {
+    /*
+     * The shape of the question decides the shape of the answer. Ranking by statistic *kind* alone
+     * put the delta first and then two means a reader could not tell apart; a comparison's three
+     * useful figures are this period, that period, and what separates them.
+     */
+    const { primary, rest } = leadingFigures([
+      figure("mean", "temperature_max", 21.5, "2026-09-04"),
+      figure("minimum", "temperature_max", 16.1, "2026-09-04"),
+      figure("maximum", "temperature_max", 25.9, "2026-09-04"),
+      figure("range", "temperature_max", 9.8, "2026-09-04"),
+      figure("mean", "temperature_max", 19.2, "2025-09-04"),
+      figure("minimum", "temperature_max", 14.4, "2025-09-04"),
+      figure("maximum", "temperature_max", 24.0, "2025-09-04"),
+      figure("range", "temperature_max", 9.6, "2025-09-04"),
+      figure("delta", "temperature_max", 2.3, "2026-09-04"),
+    ]);
+
+    expect(primary).toHaveLength(3);
+    expect(primary.map((entry) => entry.value)).toEqual([21.5, 19.2, 2.3]);
+    // The extremes and ranges are still in the record, behind the band's own disclosure.
+    expect(rest).toHaveLength(6);
+  });
+
+  it("collapses the same figure recorded twice", () => {
+    /*
+     * A run can compute a mean through the analytics agent and record it again in a statistics tool
+     * result. Two cards with the same number over the same window look like two findings and are
+     * one. Two means over *different* windows are two findings and both survive — that distinction
+     * is the whole of a comparison.
+     */
+    const { primary, rest } = leadingFigures([
+      figure("mean", "temperature_max", 21.5, "2026-09-04"),
+      figure("mean", "temperature_max", 21.5, "2026-09-04"),
+      figure("mean", "temperature_max", 19.2, "2025-09-04"),
+      figure("delta", "temperature_max", 2.3, "2026-09-04"),
+    ]);
+
+    expect(primary.map((entry) => entry.value)).toEqual([21.5, 19.2, 2.3]);
+    expect(rest).toHaveLength(0);
+  });
+
+  it("caps a non-comparison run at three, by what a decision turns on", () => {
+    const { primary, rest } = leadingFigures([
+      figure("minimum", "temperature_max", 16.1, "2026-09-04"),
+      figure("maximum", "temperature_max", 25.9, "2026-09-04"),
+      figure("mean", "temperature_max", 21.5, "2026-09-04"),
+      figure("total", "precipitation_sum", 18.2, "2026-09-04"),
+      figure("z_score", "temperature_mean", 1.18, "2026-09-04"),
+    ]);
+
+    expect(primary).toHaveLength(3);
+    // A z-score and a total answer "is this unusual" and "how much"; an extreme answers neither.
+    expect(primary.map((entry) => entry.statistic)).toEqual(["z_score", "total", "mean"]);
+    expect(rest).toHaveLength(2);
   });
 });

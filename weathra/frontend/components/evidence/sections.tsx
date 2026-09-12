@@ -100,6 +100,24 @@ function statisticLabel(result: StatisticResult): string {
   return measure === null ? statistic : `${statistic} · ${measure}`;
 }
 
+/**
+ * The window a figure covers, for the one place two figures are otherwise identical.
+ *
+ * A comparison's two sides are the same statistic over the same measure — "Mean · Temperature max"
+ * twice — so labelled by kind alone they read as one finding recorded twice. The window is the only
+ * thing that distinguishes them, and it is the thing the comparison is *about*.
+ */
+function figurePeriodLabel(result: StatisticResult): string | null {
+  const period = result.provenance?.period;
+  const from = calendarDay(period?.start_local);
+  const to = calendarDay(period?.end_local);
+  if (from === null) return null;
+  if (to === null || from === to) return from;
+  const [fromDay, fromMonth, fromYear] = from.split(" ");
+  const [, toMonth, toYear] = to.split(" ");
+  return fromMonth === toMonth && fromYear === toYear ? `${fromDay} – ${to}` : `${from} – ${to}`;
+}
+
 const SHORT_MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ] as const;
@@ -588,10 +606,12 @@ export function GroundedSources({
 
 function StatisticFigure({ result }: { readonly result: StatisticResult }): ReactNode {
   const figure = formatStatistic(result);
+  const period = figurePeriodLabel(result);
 
   return (
     <li className={styles.figure} data-statistic={result.statistic}>
       <span className={styles.figureLabel}>{statisticLabel(result)}</span>
+      {period === null ? null : <span className={styles.figurePeriod}>{period}</span>}
       {figure === null ? (
         <span className={styles.note}>Not computable: {unavailableReason(result)}</span>
       ) : (
