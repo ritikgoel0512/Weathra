@@ -723,14 +723,7 @@
   color: var(--color-text-secondary);
 }
 
-.logList {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
+
 
 /*
  * One run per row, and the whole row opens it.
@@ -738,72 +731,24 @@
  * A "view" control at the end of each line would make the target a few pixels wide in a list whose
  * every row has exactly one thing to do.
  */
-.logRow {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
-  border-bottom: 1px solid var(--color-border-subtle);
-  min-width: 0;
-}
 
-.logRow:last-child {
-  border-bottom: none;
-}
 
-.logLink {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  flex: 1 1 auto;
-  padding: var(--space-4) 0;
-  min-width: 0;
-  color: inherit;
-  text-decoration: none;
-  border-radius: var(--radius-sm);
-}
 
-.logLink:hover .logQuestion,
-.logLink:focus-visible .logQuestion {
-  color: var(--color-accent);
-}
 
-.logLink:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-}
 
-.logQuestion {
-  font-size: var(--type-card-size);
-  line-height: var(--type-card-line);
-  font-weight: var(--type-card-weight);
-  color: var(--color-text-primary);
-  overflow-wrap: break-word;
-}
 
-.logPreview {
-  max-width: 84ch;
-  font-size: var(--type-ui-size);
-  line-height: var(--type-body-line);
-  color: var(--color-text-secondary);
-}
+
+
+
+
+
+
+
 
 /* The facts that let a person recognise a run: when, where, how many steps, how long. */
-.logFacts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-4);
-  margin-top: var(--space-1);
-  font-size: var(--type-label-size);
-  line-height: var(--type-label-line);
-  letter-spacing: var(--type-label-tracking);
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
 
-.logFact {
-  white-space: nowrap;
-}
+
+
 
 .stateActions {
   display: flex;
@@ -824,4 +769,75 @@
 .table td:nth-child(4) {
   white-space: normal;
   min-width: 12ch;
+}
+
+/* ------------------------------------------------------ the run switcher */
+
+/*
+ * The runs a person can switch between, above the record showing one of them.
+ *
+ * A horizontal rail rather than a stacked list: the record below is the page's subject, and a
+ * full-width list of questions above it would push the trace off the first screen — which is the
+ * thing the artifact opens on.
+ */
+.chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chipItem {
+  min-width: 0;
+}
+
+.chip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3);
+  text-align: left;
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  color: inherit;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.chip:hover {
+  border-color: var(--color-border-strong, var(--color-accent));
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* The run being shown, marked by border and by `aria-pressed` — never by colour alone. */
+.chip[data-selected="true"] {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface-inset));
+}
+
+.chipQuestion {
+  font-size: var(--type-ui-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-primary);
+  overflow-wrap: break-word;
+}
+
+.chipFacts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
 }

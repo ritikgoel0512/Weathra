@@ -19,10 +19,16 @@
  * Intelligence Report. The deterministic screens compute their answers without an agent and store
  * no run, so they have no records to list — said plainly on the empty state rather than implied
  * away by a list that stays mysteriously short.
+ *
+ * **It opens on a record, not on a list.** `05-agent-evidence.png` is a *populated trace*, and a
+ * list is not one: landing on an index meant the navigation entry still showed the shape of the
+ * evidence log rather than an actual execution. The newest run is rendered in full underneath a
+ * compact switcher, so the page a person meets is the thing the artifact draws, and every other
+ * run is one press away. `/evidence/{id}` is unchanged and still opens any record directly.
  */
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import {
   Badge,
@@ -36,6 +42,7 @@ import {
 import type { EvidenceListResponse, EvidenceSummary } from "@/lib/api/schema";
 import { useApiQuery } from "@/lib/query/hooks";
 
+import { AgentEvidence } from "./evidence";
 import styles from "./evidence.module.css";
 
 /** Where a run is produced in the first place. */
@@ -50,35 +57,44 @@ function spokenDuration(milliseconds: number): string {
   return seconds < 10 ? `${seconds.toFixed(1)} s` : `${Math.round(seconds)} s`;
 }
 
-/** One stored run, as a row that opens it. */
-function RecordRow({ record }: { readonly record: EvidenceSummary }): ReactNode {
+/**
+ * One stored run in the switcher.
+ *
+ * A button rather than a link, because pressing it changes what is shown *on this page* rather
+ * than navigating away — the record appears below it. The deep link still exists: every run has
+ * its own route, offered beside the selection for anyone who wants to share or bookmark one.
+ */
+function RunChip({
+  record,
+  selected,
+  onSelect,
+}: {
+  readonly record: EvidenceSummary;
+  readonly selected: boolean;
+  readonly onSelect: () => void;
+}): ReactNode {
   const places = record.locations ?? [];
 
   return (
-    <li className={styles.logRow}>
-      <Link className={styles.logLink} href={`/evidence/${record.id}`}>
-        <span className={styles.logQuestion}>{record.question}</span>
-
-        {record.answer_preview ? (
-          <span className={styles.logPreview}>{record.answer_preview}</span>
-        ) : null}
-
-        <span className={styles.logFacts}>
-          <span className={styles.logFact}>{formatInstant(record.created_at)}</span>
-          {places.length > 0 ? (
-            <span className={styles.logFact}>{places.join(" · ")}</span>
-          ) : null}
-          <span className={styles.logFact}>
+    <li className={styles.chipItem}>
+      <button
+        type="button"
+        className={styles.chip}
+        data-selected={selected ? "true" : undefined}
+        aria-pressed={selected}
+        onClick={onSelect}
+      >
+        <span className={styles.chipQuestion}>{record.question}</span>
+        <span className={styles.chipFacts}>
+          <span>{formatInstant(record.created_at)}</span>
+          {places.length > 0 ? <span>{places.join(" · ")}</span> : null}
+          <span>
             {record.steps} {record.steps === 1 ? "agent" : "agents"}
           </span>
-          <span className={styles.logFact}>{spokenDuration(record.duration_ms)}</span>
-          {record.weather_provider ? (
-            <span className={styles.logFact}>{record.weather_provider}</span>
-          ) : null}
+          <span>{spokenDuration(record.duration_ms)}</span>
+          {record.partial ? <Badge tone="warning">Partial</Badge> : null}
         </span>
-      </Link>
-
-      {record.partial ? <Badge tone="warning">Partial</Badge> : null}
+      </button>
     </li>
   );
 }
@@ -115,11 +131,61 @@ function NoRecords(): ReactNode {
   );
 }
 
+/** The switcher and the record it selects. */
+function Log({ records }: { readonly records: readonly EvidenceSummary[] }): ReactNode {
+  const newest = records[0] as EvidenceSummary;
+  const [selected, setSelected] = useState<string>(newest.id);
+  const current = records.find((record) => record.id === selected) ?? newest;
+
+  return (
+    <>
+      {/*
+        More than one run is worth switching between; exactly one is not, and a switcher offering a
+        single choice is furniture. With one record the page is simply that record.
+      */}
+      {records.length > 1 ? (
+        <Card aria-labelledby="evidence-runs">
+          <CardHeader
+            title="Recent runs"
+            titleId="evidence-runs"
+            subtitle={`${records.length} of your most recent runs, newest first. Select one to see its record.`}
+          />
+          <CardBody>
+            <ul className={styles.chips}>
+              {records.map((record) => (
+                <RunChip
+                  key={record.id}
+                  record={record}
+                  selected={record.id === current.id}
+                  onSelect={() => setSelected(record.id)}
+                />
+              ))}
+            </ul>
+          </CardBody>
+        </Card>
+      ) : null}
+
+      <p className={styles.note}>
+        Showing the record for the run selected above.{" "}
+        <Link className={styles.link} href={`/evidence/${current.id}`}>
+          Open it on its own page
+        </Link>
+        .
+      </p>
+
+      {/* The record itself, rendered by the same component `/evidence/{id}` uses. One screen. */}
+      <AgentEvidence key={current.id} evidenceId={current.id} />
+    </>
+  );
+}
+
 export function EvidenceLog(): ReactNode {
   const records = useApiQuery<EvidenceListResponse>({
     key: ["evidence", "records"],
     request: (client) => client.evidenceRecords({ limit: 20 }),
   });
+
+  const found = records.state.kind === "ready" ? (records.state.data.records ?? []) : [];
 
   return (
     <section className={styles.log} aria-label="Agent Evidence">
@@ -127,7 +193,8 @@ export function EvidenceLog(): ReactNode {
         <h1 className={styles.logTitle}>Agent evidence log</h1>
         <p className={styles.logLead}>
           Every question Weathra answered through its agents, with the full record of how it got
-          there. Open one to see the steps, the sources, the analytics and the knowledge behind it.
+          there: what ran, what each step retrieved, the analytics it computed and the knowledge it
+          cited.
         </p>
         <p className={styles.note}>
           Run records are private to the person whose question produced them: this page is behind
@@ -143,26 +210,11 @@ export function EvidenceLog(): ReactNode {
           title="Your evidence records could not be read"
           onRetry={records.retry}
         />
-      ) : records.state.kind === "ready" && (records.state.data.records ?? []).length === 0 ? (
+      ) : found.length === 0 ? (
         <NoRecords />
-      ) : records.state.kind === "ready" ? (
-        <Card aria-labelledby="evidence-records">
-          <CardHeader
-            title="Recent runs"
-            titleId="evidence-records"
-            subtitle={`${records.state.data.returned} of your most recent ${
-              records.state.data.returned === 1 ? "run" : "runs"
-            }, newest first.`}
-          />
-          <CardBody>
-            <ul className={styles.logList}>
-              {(records.state.data.records ?? []).map((record) => (
-                <RecordRow key={record.id} record={record} />
-              ))}
-            </ul>
-          </CardBody>
-        </Card>
-      ) : null}
+      ) : (
+        <Log records={found} />
+      )}
     </section>
   );
 }

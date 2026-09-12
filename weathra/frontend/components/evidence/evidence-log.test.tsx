@@ -8,6 +8,7 @@
 
 import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiError, type ApiClient } from "@/lib/api/client";
@@ -47,9 +48,27 @@ const RECORDS = {
   ],
 };
 
+/** The page renders a record inline, so the client has to be able to serve one. */
+const RECORD = {
+  id: "run-1",
+  request_id: "req-1",
+  thread_id: null,
+  question: "What should I expect over the next few days?",
+  answer_prose: "Berlin is running warmer than usual this week.",
+  envelope: {},
+  evidence: {},
+  llm_provider: "a-gateway",
+  llm_model: "a-model",
+  weather_provider: "open-meteo",
+  duration_ms: 4210,
+  partial: false,
+  created_at: "2026-09-04T06:15:05Z",
+};
+
 function client(overrides: Partial<ApiClient> = {}): ApiClient {
   return {
     evidenceRecords: vi.fn().mockResolvedValue(RECORDS),
+    evidence: vi.fn().mockResolvedValue(RECORD),
     ...overrides,
   } as unknown as ApiClient;
 }
@@ -65,33 +84,49 @@ function mount(api: ApiClient) {
 }
 
 describe("the evidence log", () => {
-  it("lists the runs a person has, each opening its own record", async () => {
-    mount(client());
+  it("opens on a record rather than on an index", async () => {
+    const evidence = vi.fn().mockResolvedValue(RECORD);
+    mount(client({ evidence }));
 
-    const list = await screen.findByRole("region", { name: "Recent runs" });
-    const links = within(list).getAllByRole("link");
+    /*
+     * `05-agent-evidence.png` is a populated trace, and a list is not one. The newest run is
+     * fetched and rendered underneath the switcher, so the page a person meets is an execution.
+     */
+    await vi.waitFor(() => expect(evidence).toHaveBeenCalledWith("run-1"));
+    expect(
+      await screen.findByRole("link", { name: "Open it on its own page" }),
+    ).toHaveAttribute("href", "/evidence/run-1");
+  });
 
-    expect(links).toHaveLength(2);
-    expect(links[0]).toHaveAttribute("href", "/evidence/run-1");
-    expect(links[1]).toHaveAttribute("href", "/evidence/run-2");
-    expect(within(list).getByText(/next few days/)).toBeInTheDocument();
+  it("offers every run as a switch, and shows the one selected", async () => {
+    const evidence = vi.fn().mockResolvedValue(RECORD);
+    mount(client({ evidence }));
+
+    const runs = await screen.findByRole("region", { name: "Recent runs" });
+    const chips = within(runs).getAllByRole("button");
+    expect(chips).toHaveLength(2);
+    expect(chips[0]).toHaveAttribute("aria-pressed", "true");
+    expect(chips[1]).toHaveAttribute("aria-pressed", "false");
+
+    await userEvent.click(chips[1] as HTMLElement);
+    await vi.waitFor(() => expect(evidence).toHaveBeenCalledWith("run-2"));
   });
 
   it("names the places a run resolved, and never their coordinates", async () => {
     mount(client());
-    const list = await screen.findByRole("region", { name: "Recent runs" });
+    const runs = await screen.findByRole("region", { name: "Recent runs" });
 
-    expect(within(list).getByText("Berlin, Germany")).toBeInTheDocument();
-    expect(within(list).getByText("Munich, Germany")).toBeInTheDocument();
+    expect(within(runs).getByText("Berlin, Germany")).toBeInTheDocument();
+    expect(within(runs).getByText("Munich, Germany")).toBeInTheDocument();
     // A coordinate pair is internal metadata here as it is everywhere else in Weathra.
-    expect(list.textContent).not.toMatch(/\d+\.\d+°\s*[NSEW]|\d{2}\.\d{3,}/);
+    expect(runs.textContent).not.toMatch(/\d+\.\d+°\s*[NSEW]|\d{2}\.\d{3,}/);
   });
 
   it("marks a partial run, so an incomplete record is not read as a complete one", async () => {
     mount(client());
-    const list = await screen.findByRole("region", { name: "Recent runs" });
+    const runs = await screen.findByRole("region", { name: "Recent runs" });
 
-    expect(within(list).getByText("Partial")).toBeInTheDocument();
+    expect(within(runs).getByText("Partial")).toBeInTheDocument();
   });
 
   it("says where a run comes from when there are none, rather than reading as a failure", async () => {
