@@ -442,6 +442,7 @@ async function invoke(client: ApiClient, operation: ApiOperation): Promise<unkno
         start: "2026-09-14",
         end: "2026-09-18",
       }),
+    evidence_records_api_v1_evidence_get: () => client.evidenceRecords(),
     evidence_api_v1_evidence__evidence_id__get: () => client.evidence(identifier),
     me_api_v1_me_get: () => client.me(),
     read_usage_api_v1_me_usage_get: () => client.usage(),

@@ -9441,7 +9441,7 @@
     },
     "/api/v1/evidence": {
       "get": {
-        "description": "*Your* stored runs, newest first.\n\n**Why this exists.** Evidence was reachable only by identifier, so the navigation entry led to\na page that could describe the evidence log without ever showing one \u2014 a person with a dozen\nstored runs saw the same empty workspace as a person with none. Answering \"which runs do I\nhave\" is not inventing a listing; refusing to answer it was what forced the screen to.\n\nThe ownership predicate is explicit and Row Level Security sits behind it, the same pair the\nrecord endpoint uses. A caller sees their own rows or no rows; there is no third answer, and\nnothing here reveals that anybody else's exist.",
+        "description": "**Protected.** The acting user's own stored evidence records, newest first. Owner-scoped in the query and by Row Level Security behind it; a caller sees their rows or none.\n\n*Your* stored runs, newest first.\n\n**Why this exists.** Evidence was reachable only by identifier, so the navigation entry led to\na page that could describe the evidence log without ever showing one \u2014 a person with a dozen\nstored runs saw the same empty workspace as a person with none. Answering \"which runs do I\nhave\" is not inventing a listing; refusing to answer it was what forced the screen to.\n\nThe ownership predicate is explicit and Row Level Security sits behind it, the same pair the\nrecord endpoint uses. A caller sees their own rows or no rows; there is no third answer, and\nnothing here reveals that anybody else's exist.",
         "operationId": "evidence_records_api_v1_evidence_get",
         "parameters": [
           {
@@ -9470,6 +9470,9 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "description": "No valid access token was presented."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -9481,6 +9484,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
         "summary": "Your evidence records",
         "tags": [
           "evidence"

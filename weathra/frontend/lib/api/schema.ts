@@ -2035,7 +2035,7 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     operationId: "evidence_records_api_v1_evidence_get",
     method: "GET",
     path: "/api/v1/evidence",
-    requiresToken: false,
+    requiresToken: true,
     administrative: false,
     request: null,
     successStatus: 200,
