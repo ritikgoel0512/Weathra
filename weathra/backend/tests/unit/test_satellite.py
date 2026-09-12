@@ -13,6 +13,7 @@ it would fail rather than hit NASA.
 
 from __future__ import annotations
 
+from contextlib import AbstractAsyncContextManager
 from datetime import UTC, date, datetime
 
 import httpx
@@ -26,6 +27,7 @@ from weathra.agents.plan import Capability, PlanStep, fallback_plan
 from weathra.domain.errors import ProviderUnavailable
 from weathra.domain.evidence import AgentName, DataClass, StepStatus
 from weathra.domain.satellite import INTERPRETATION_BOUNDARY, SatelliteObservation
+from weathra.mcp.client import McpToolClient
 from weathra.providers.gibs import (
     ATTRIBUTION,
     MINIMUM_IMAGE_BYTES,
@@ -180,7 +182,9 @@ def test_the_synthesis_prompt_forbids_drawing_weather_from_an_image() -> None:
 # =========================================================================== through the graph
 
 
-def _satellite_tools(bodies: dict[str, bytes] | None = None):
+def _satellite_tools(
+    bodies: dict[str, bytes] | None = None,
+) -> AbstractAsyncContextManager[McpToolClient]:
     """The real MCP server and the real tool, over a transport that answers for NASA."""
     return connected_tools(
         settings=agent_settings(),
