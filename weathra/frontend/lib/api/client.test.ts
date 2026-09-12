@@ -434,6 +434,14 @@ async function invoke(client: ApiClient, operation: ApiOperation): Promise<unkno
   const byOperation: Record<string, () => Promise<unknown>> = {
     ask_api_v1_agent_ask_post: () => client.ask({ question: "Will it rain?" }),
     changes_api_v1_weather_changes_get: () => client.changes({ location: "Berlin" }),
+    // Protected for the same reason as the line above: analysing a trip records the retrieval it
+    // analysed in the shared forecast snapshot history.
+    intelligence_api_v1_travel_intelligence_post: () =>
+      client.travelIntelligence({
+        destination: "Barcelona, Spain",
+        start: "2026-09-14",
+        end: "2026-09-18",
+      }),
     evidence_api_v1_evidence__evidence_id__get: () => client.evidence(identifier),
     me_api_v1_me_get: () => client.me(),
     read_usage_api_v1_me_usage_get: () => client.usage(),
