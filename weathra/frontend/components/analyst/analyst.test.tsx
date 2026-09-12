@@ -1966,8 +1966,10 @@ describe("the rail beside a successful answer", () => {
     await screen.findByRole("region", { name: "AI interpretation" });
 
     const status = screen.getByRole("region", { name: "Agent status" });
-    expect(within(status).getByText("Current conditions")).toBeInTheDocument();
+    expect(within(status).getByText("Conditions agent")).toBeInTheDocument();
     expect(within(status).getAllByText("Used")).toHaveLength(3);
+    // Named as an agent, beside the other agents; "Current conditions" is the source row's words.
+    expect(within(status).queryByText("Current conditions")).toBeNull();
   });
 
   it("lists one row per source and role, not one per attribution entry", async () => {

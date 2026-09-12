@@ -60,7 +60,10 @@ function stringList(value: unknown): string[] {
  */
 export const AGENT_LABELS: Readonly<Record<string, string>> = {
   supervisor: "Supervisor",
-  current: "Current conditions",
+  // "Conditions agent", parallel with the four beside it, rather than "Current conditions" —
+  // which is what the *source* row under Active data sources is called, and two adjacent cards
+  // saying the same words about two different things read as one thing said twice.
+  current: "Conditions agent",
   forecast: "Forecast agent",
   historical: "Historical agent",
   analytics: "Analytics agent",
