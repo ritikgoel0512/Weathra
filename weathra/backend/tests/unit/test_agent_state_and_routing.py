@@ -443,6 +443,57 @@ def test_the_deterministic_router_declines_a_non_weather_question() -> None:
     assert "weather" in plan.out_of_scope_reason
 
 
+def test_a_question_asking_for_both_gets_both() -> None:
+    """The shape that most needs two retrievals was the one shape guaranteed to get one.
+
+    This read `historical and not forecast`, so "compare the forecast against recent historical
+    conditions" produced the forecast half and silently dropped the comparison it was asking for —
+    and a run that cannot retrieve both cannot produce the evidence a comparison is made of.
+    """
+    plan = fallback_plan(
+        "Deep-dive on the weather for London over the next 7 days. Compare the forecast against "
+        "recent historical conditions and identify any meaningful anomaly."
+    )
+
+    chosen = [step.capability for step in plan.steps]
+    assert plan.in_scope
+    assert Capability.FORECAST in chosen
+    assert Capability.HISTORICAL in chosen
+    assert Capability.ANALYTICS in chosen
+
+
+def test_a_comparison_of_periods_is_a_weather_question() -> None:
+    """It carries no weather word at all, and the router refused it.
+
+    "How does this week compare with the same week last year?" has no temperature, no rain, no
+    "weather" — so the vocabulary check called it out of scope and the deterministic router
+    answered a plain weather question with a refusal. On a weather product, comparing two calendar
+    windows is about the weather in them.
+    """
+    plan = fallback_plan("How does this week compare with the same week last year?")
+
+    assert plan.in_scope
+    assert Capability.HISTORICAL in [step.capability for step in plan.steps]
+
+
+def test_a_narrow_comparison_stays_narrow() -> None:
+    """Routing more capabilities than a question needs is its own failure.
+
+    The comparison above needs the archive and the arithmetic over it. It does not need a forecast,
+    a satellite pass or the knowledge base, and a router that reached for them would spend provider
+    calls on a question that did not ask — the cost that has to stay controlled.
+    """
+    chosen = [
+        step.capability
+        for step in fallback_plan("How does this week compare with the same week last year?").steps
+    ]
+
+    assert Capability.FORECAST not in chosen
+    assert Capability.SATELLITE not in chosen
+    assert Capability.RAG not in chosen
+    assert Capability.CURRENT not in chosen
+
+
 def test_a_historical_fallback_supplies_a_concrete_range() -> None:
     """A router that produced no dates would route to a capability that cannot run."""
     plan = fallback_plan("How much did it rain in Berlin last week?", now=NOW)

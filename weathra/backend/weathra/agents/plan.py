@@ -469,9 +469,36 @@ def looks_like_weather(question: str) -> bool:
     is intentionally generous: a false "in scope" costs a capability run that finds nothing, while
     a false "out of scope" refuses a question Weathra could have answered.
     """
-    return bool(_words(question) & _WEATHER_WORDS) or any(
-        pattern.search(question) for pattern in _CONCEPT_PATTERNS
+    return (
+        bool(_words(question) & _WEATHER_WORDS)
+        or any(pattern.search(question) for pattern in _CONCEPT_PATTERNS)
+        or any(pattern.search(question) for pattern in _COMPARISON_PATTERNS)
     )
+
+
+"""Comparisons of one period against another, which are weather questions here by context.
+
+"How does this week compare with the same week last year?" carries no weather word at all — no
+temperature, no rain, no "weather" — so the vocabulary check refused it as out of scope, and the
+deterministic router answered a plain weather question with a refusal. On a weather product, a
+question comparing two calendar windows is about the weather in them; nothing else in Weathra is
+comparable week to week. Kept separate from the concept patterns because these route to the
+*archive*, not to the knowledge base.
+"""
+_COMPARISON_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(
+        r"\bcompare[sd]?\b.{0,40}\b(?:week|month|season|year|period|window|day)s?\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:same|equivalent)\s+(?:week|month|season|period|day)\b.{0,20}\b(?:last|previous|prior)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:week|month|season|year)\b.{0,20}\b(?:versus|vs\.?|against)\b.{0,20}\b(?:last|previous|prior)\b",
+        re.IGNORECASE,
+    ),
+)
 
 
 def _looks_conceptual(question: str) -> bool:
@@ -577,7 +604,13 @@ def fallback_plan(question: str, *, now: datetime | None = None) -> RoutingPlan:
                 )
             )
 
-        if historical and not forecast:
+        # The archive, where the question asked about the past — *beside* a forecast rather than
+        # instead of one. This read `historical and not forecast`, so "compare the forecast against
+        # recent historical conditions" got the forecast half and silently lost the comparison it
+        # was actually asking for: the one question shape that most needs two retrievals was the one
+        # shape guaranteed to get one. The two are independent, as `present` and `satellite` above
+        # already are.
+        if historical:
             end = (moment.date() if moment else date.today()) - timedelta(days=1)
             steps.append(
                 PlanStep(
@@ -588,7 +621,7 @@ def fallback_plan(question: str, *, now: datetime | None = None) -> RoutingPlan:
                     end_date=end,
                 )
             )
-        elif forecast or not (present or satellite):
+        if forecast or not (present or satellite or historical):
             # No forecast step beside a present-tense question that asked for nothing else: the
             # default below exists for a question with *no* tense marker, and "right now" is one.
             steps.append(
