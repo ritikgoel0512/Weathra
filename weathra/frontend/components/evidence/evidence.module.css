@@ -1118,3 +1118,132 @@
   gap: var(--space-2) var(--space-4);
   margin: 0;
 }
+
+/* ================= the artifact's visual language: technical, not editorial ================= */
+
+/*
+ * Section titles as the artifact sets them: small, uppercase, letterspaced, with a rule beneath.
+ *
+ * This is the single largest difference between the two screens at a glance, and it is not about
+ * any one panel. `05-agent-evidence.png` heads its regions "EXECUTION FLOW", "GROUNDED DATA
+ * SOURCES", "RAG KNOWLEDGE EVIDENCE" — the register of an instrument. Sentence-case display type
+ * reads as an article, and eleven of them down a page read as documentation about evidence rather
+ * than the evidence itself.
+ */
+.panelTitle,
+.logTitle {
+  font-family: var(--family-display);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.panelHeader {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.panel[data-empty="true"] .panelHeader {
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+/* The panels themselves sit tighter, so the stack has the artifact's rhythm. */
+.panel {
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.body,
+.footGrid {
+  gap: var(--space-3);
+}
+
+/*
+ * The status strip runs across, not down.
+ *
+ * A two-column grid stacked five pairs into a tall block beside a short heading; the artifact sets
+ * its four readings in one row, which is what makes the header a *band* rather than a panel with
+ * text next to it.
+ */
+@media (min-width: 1024px) {
+  .headerGrid .summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-5);
+    align-items: flex-start;
+  }
+
+  .headerGrid .summaryItem {
+    min-width: 0;
+  }
+
+  /* The agent list is the one reading that runs long, so it wraps to its own line. */
+  .headerGrid .summaryItem:last-child {
+    flex-basis: 100%;
+  }
+}
+
+/*
+ * Each step is a card on the rail, not a row of text.
+ *
+ * The artifact draws a bordered block per stage with its node sitting on the connector beside it.
+ * Bare text under a hairline read as a list; the border is what makes a stage look like a thing
+ * that happened.
+ */
+.step {
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+}
+
+.step::before {
+  left: calc(-1 * var(--space-5) - 1px);
+  top: var(--space-3);
+}
+
+.step[data-status="succeeded"] {
+  border-color: color-mix(in srgb, var(--color-status-ok) 35%, var(--color-border-subtle));
+}
+
+.steps {
+  gap: var(--space-3);
+}
+
+.steps::before {
+  left: 5px;
+}
+
+/* The knowledge cards tighten to the artifact's two-line excerpt. */
+.citationText[data-clamped="true"] {
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.citation {
+  padding: var(--space-3);
+}
+
+/*
+ * The AI accent, restrained — on this screen only.
+ *
+ * `InterpretationPanel` fills and outlines itself in the interpretation colour, which is right on
+ * the Analyst and the Report where one model-written paragraph sits among many deterministic
+ * figures and must not be mistaken for one. Here the whole page is evidence, and a saturated block
+ * at the end of the stack reads as the page's subject rather than as one tier within it — the
+ * artifact integrates its synthesis into the same dark system and marks the tier with an accent.
+ *
+ * The badge keeps its full colour, which is what actually carries the claim; the panel behind it
+ * steps back. Scoped to this screen so the two frozen surfaces are untouched.
+ */
+.screen [data-interpretation="true"] {
+  background: var(--color-surface-raised);
+  border-color: var(--color-border-subtle);
+  border-left: 2px solid var(--color-class-interpretation, var(--color-accent));
+}
