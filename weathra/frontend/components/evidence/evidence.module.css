@@ -1445,3 +1445,29 @@
   font-size: 1em;
   line-height: 1;
 }
+
+/* The figures a run computed beyond the four the band leads with. */
+.moreFigures {
+  margin-top: var(--space-3);
+}
+
+.moreFigures summary {
+  cursor: pointer;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.moreFigures[open] .figures {
+  margin-top: var(--space-3);
+}
+
+/* The audit card's identifiers shorten on screen; the full value stays on the element's title. */
+.auditMono {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

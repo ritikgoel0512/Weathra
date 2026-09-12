@@ -72,6 +72,15 @@ import { placeLabel } from "@/lib/locations/place";
 
 import styles from "./evidence.module.css";
 
+/**
+ * How many computed figures lead the deterministic band.
+ *
+ * The artifact sets three across its analytics row. Four is the ceiling here because a comparison
+ * run genuinely produces four a reader wants together — both periods, their difference, and the
+ * spread — and cutting to three would hide one of them behind a disclosure for symmetry's sake.
+ */
+const LEAD_FIGURES = 4;
+
 /* ------------------------------------------------------------------ formatting */
 
 /** A stored enum value as words, when there is no curated label for it. */
@@ -99,14 +108,47 @@ function statisticLabel(result: StatisticResult): string {
   return measure === null ? statistic : `${statistic} · ${measure}`;
 }
 
-/** The window or the instant a source covers, as the backend resolved it. */
+const SHORT_MONTHS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+] as const;
+
+/** A local timestamp as a calendar day: `06 Sep 2026`. */
+function calendarDay(stamp: string | null | undefined): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(stamp ?? "");
+  if (!match) return null;
+  return `${match[3]} ${SHORT_MONTHS[Number(match[2]) - 1]} ${match[1]}`;
+}
+
+/**
+ * The window a source covers, as a person reads a date range.
+ *
+ * The cell carried `2026-09-04 00:00 to 2026-09-06 00:00 (Europe/Berlin)` — two timestamps, both
+ * midnight, and a zone, to say "these three days". Midnight-to-midnight is how a *window* is
+ * bounded, not a fact about the data, so the table states the days and the exact bounds stay on the
+ * cell's `title` for anyone checking them.
+ */
 function coverageOf(source: EvidenceAttribution): string {
-  const start = formatLocalStamp(source.period?.start_local);
-  const end = formatLocalStamp(source.period?.end_local);
-  if (start !== null && end !== null) {
-    return source.period?.timezone ? `${start} to ${end} (${source.period.timezone})` : `${start} to ${end}`;
+  const from = calendarDay(source.period?.start_local);
+  const to = calendarDay(source.period?.end_local);
+
+  if (from !== null && to !== null) {
+    if (from === to) return from;
+    // Same month and year: "06 – 13 Sep 2026" rather than repeating both.
+    const [fromDay, fromMonth, fromYear] = from.split(" ");
+    const [, toMonth, toYear] = to.split(" ");
+    return fromMonth === toMonth && fromYear === toYear ? `${fromDay} – ${to}` : `${from} – ${to}`;
   }
   return formatInstant(source.timestamp_utc) ?? NOT_REPORTED;
+}
+
+/** The exact bounds, for the cell's title: what the shortened range was shortened from. */
+function exactCoverageOf(source: EvidenceAttribution): string | undefined {
+  const start = formatLocalStamp(source.period?.start_local);
+  const end = formatLocalStamp(source.period?.end_local);
+  if (start === null || end === null) return undefined;
+  return source.period?.timezone
+    ? `${start} to ${end} (${source.period.timezone})`
+    : `${start} to ${end}`;
 }
 
 /* --------------------------------------------------------------------- header */
@@ -524,7 +566,7 @@ export function GroundedSources({
                   >
                     <td>{source.provider}</td>
                     <td>{placeLabel(source.location) ?? NOT_REPORTED}</td>
-                    <td>{coverageOf(source)}</td>
+                    <td title={exactCoverageOf(source)}>{coverageOf(source)}</td>
                     <td>{formatInstant(source.retrieved_at) ?? NOT_REPORTED}</td>
                     <td>{dataClass ? <DataClassBadge dataClass={dataClass} /> : NOT_REPORTED}</td>
                   </tr>
@@ -674,17 +716,51 @@ export function DeterministicAnalytics({ record }: { readonly record: RunRecord 
         been an h2, so the level also changed with the data.
       */}
       <ProvenanceSection dataClass="analytics" title="Deterministic analytics">
+        {/*
+          The band shows the figures worth leading with; the rest are a press away.
+          
+          A run that computed a mean, a minimum, a maximum and a range for two windows recorded ten
+          results, and ten cards is a dump whatever each one says. `05-agent-evidence.png` leads
+          with three. The ordering is the analytics layer's own — the order the run computed them —
+          so "the first four" is not this screen ranking evidence, it is the run's own sequence.
+        */}
         <ul className={styles.figures}>
-          {record.statistics.map((result, index) => (
+          {record.statistics.slice(0, LEAD_FIGURES).map((result, index) => (
             <StatisticFigure key={`${result.statistic}-${result.measure}-${index}`} result={result} />
           ))}
-          {record.anomalies.map((report, index) => (
-            <AnomalyFigure key={`anomaly-${report.measure}-${index}`} report={report} />
-          ))}
-          {record.trends.map((report, index) => (
-            <TrendFigure key={`trend-${report.measure}-${index}`} report={report} />
-          ))}
+          {record.statistics.length <= LEAD_FIGURES
+            ? record.anomalies.map((report, index) => (
+                <AnomalyFigure key={`anomaly-${report.measure}-${index}`} report={report} />
+              ))
+            : null}
+          {record.statistics.length <= LEAD_FIGURES
+            ? record.trends.map((report, index) => (
+                <TrendFigure key={`trend-${report.measure}-${index}`} report={report} />
+              ))
+            : null}
         </ul>
+
+        {record.statistics.length > LEAD_FIGURES ? (
+          <details className={styles.moreFigures}>
+            <summary>
+              Every figure this run computed ({record.statistics.length})
+            </summary>
+            <ul className={styles.figures}>
+              {record.statistics.slice(LEAD_FIGURES).map((result, index) => (
+                <StatisticFigure
+                  key={`rest-${result.statistic}-${result.measure}-${index}`}
+                  result={result}
+                />
+              ))}
+              {record.anomalies.map((report, index) => (
+                <AnomalyFigure key={`anomaly-${report.measure}-${index}`} report={report} />
+              ))}
+              {record.trends.map((report, index) => (
+                <TrendFigure key={`trend-${report.measure}-${index}`} report={report} />
+              ))}
+            </ul>
+          </details>
+        ) : null}
       </ProvenanceSection>
     </div>
   );

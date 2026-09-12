@@ -692,7 +692,15 @@ describe("provenance and the data classes", () => {
     expect(forecastRow).toHaveAttribute("data-source-class", "forecast");
     expect(forecastRow).toHaveTextContent("open-meteo");
     expect(forecastRow).toHaveTextContent("Berlin, Germany");
-    expect(forecastRow).toHaveTextContent("2026-09-05 00:00 to 2026-09-05 23:00 (Europe/Berlin)");
+    /*
+     * The cell states the days; the exact bounds stay on its `title`. Two midnight timestamps and a
+     * zone to say "one day" is how a window is *bounded*, not a fact about the data — and it was
+     * the widest column in the table.
+     */
+    expect(forecastRow).toHaveTextContent("05 Sep 2026");
+    expect(
+      within(forecastRow).getByTitle("2026-09-05 00:00 to 2026-09-05 23:00 (Europe/Berlin)"),
+    ).toBeInTheDocument();
     expect(forecastRow).toHaveTextContent("2026-09-04 09:04 UTC");
     expect(within(forecastRow).getByText("FORECAST")).toBeInTheDocument();
 
