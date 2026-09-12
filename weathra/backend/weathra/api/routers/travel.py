@@ -20,24 +20,30 @@ from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from weathra.api.dependencies import Configuration, CurrentSession, Places, WeatherFor
 from weathra.api.middleware import annotate
 from weathra.api.routers.support import provider_for, units_for
 from weathra.api.routers.weather import ProviderName, Units
 from weathra.auth.deps import OptionalPrincipal
+from weathra.domain.analytics import StatisticResult
 from weathra.domain.errors import ValidationFailed, WeathraError
-from weathra.domain.location import Location
-from weathra.domain.weather import DataClass, Measure
+from weathra.domain.location import Location, Resolved
+from weathra.domain.weather import DataClass, Forecast, Measure, SeriesEntry, UnitSystem
 from weathra.memory.preferences import PreferenceStore
 from weathra.weather.history_service import BaselineComparison, HistoryService
 from weathra.weather.snapshots import WhatChanged, capture, compare_with_previous
 from weathra.weather.travel_service import (
     _RANGE_DASH,
+    ComparedWindow,
+    DailyOutlookEntry,
     SectionFailure,
     TravelEvidence,
     TravelIntelligence,
     TravelIntelligenceService,
+    TravelMetric,
+    TravelViability,
     TripWindow,
 )
 
@@ -228,8 +234,6 @@ async def intelligence(
 
 async def _resolve(geocoder: Places, name: str, *, field: str) -> Location:
     """One place, by name, with an ambiguity surfaced rather than guessed at."""
-    from weathra.geocoding.base import Resolved
-
     resolution = await geocoder.resolve(name)
     if not isinstance(resolution, Resolved):
         raise ValidationFailed(
@@ -247,8 +251,8 @@ async def _baseline(
     destination: Location,
     failures: list[SectionFailure],
     *,
-    unit_system: object,
-    forecast_value: object,
+    unit_system: UnitSystem,
+    forecast_value: StatisticResult,
 ) -> BaselineComparison | None:
     """The trip window against the archive. Secondary: a failure here is reported, not raised."""
     value = getattr(forecast_value, "value", None)
@@ -273,7 +277,7 @@ async def _baseline(
             end=body.end,
             years=_BASELINE_YEARS,
             measure=Measure.TEMPERATURE_MEAN,
-            unit_system=unit_system,  # type: ignore[arg-type]
+            unit_system=unit_system,
         )
         return service.compare_against_baseline(
             baseline=reference, value=float(value), value_data_class=DataClass.FORECAST
@@ -286,7 +290,9 @@ async def _baseline(
         return None
 
 
-async def _changes(session, forecast, failures: list[SectionFailure]) -> WhatChanged | None:
+async def _changes(
+    session: AsyncSession, forecast: Forecast, failures: list[SectionFailure]
+) -> WhatChanged | None:
     """What moved since the last snapshot of this window, where one exists.
 
     Never fabricated. With no earlier snapshot the comparison reports itself unavailable and the
@@ -309,7 +315,14 @@ async def _changes(session, forecast, failures: list[SectionFailure]) -> WhatCha
         return None
 
 
-def _hero(viability, metrics, entries, destination: Location, start: date, end: date):
+def _hero(
+    viability: TravelViability | None,
+    metrics: tuple[TravelMetric, ...],
+    entries: tuple[SeriesEntry, ...],
+    destination: Location,
+    start: date,
+    end: date,
+) -> tuple[str, str]:
     """The headline: what the window is, in a sentence built from the figures beside it."""
     where = destination.display_name
     when = f"{start.strftime('%-d %b')}{_RANGE_DASH}{end.strftime('%-d %b')}"
@@ -348,11 +361,11 @@ def _synthesis(
     destination: Location,
     start: date,
     end: date,
-    viability,
-    outlook,
-    windows,
-    baseline,
-    changed,
+    viability: TravelViability | None,
+    outlook: tuple[DailyOutlookEntry, ...],
+    windows: tuple[ComparedWindow, ...],
+    baseline: BaselineComparison | None,
+    changed: WhatChanged | None,
 ) -> str:
     """The closing read, written by code from the figures already in this response.
 

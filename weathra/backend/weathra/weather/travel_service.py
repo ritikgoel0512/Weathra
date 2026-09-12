@@ -26,7 +26,7 @@ without it there is no trip weather to describe.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -92,6 +92,9 @@ _COOL_EVENING_C = 12.0
 _COLD_C = 4.0
 _WARM_C = 25.0
 _HIGH_UV = 6.0
+# One day, as the step between two adjacent travel windows.
+_ONE_DAY = timedelta(days=1)
+
 # WMO codes that describe weather a traveller should be told about rather than merely shown.
 _DISRUPTIVE_CODES = frozenset({65, 67, 75, 82, 95, 96, 99})
 
@@ -836,15 +839,15 @@ class TravelIntelligenceService:
         candidates = [(start, end)]
         cursor = start
         while True:
-            cursor = cursor + (end - start) + _one_day()
+            cursor = cursor + (end - start) + _ONE_DAY
             close = cursor + (end - start)
             if close > available[-1]:
                 break
             candidates.append((cursor, close))
         # And the window immediately before the trip, where the horizon still holds it.
-        earlier_start = start - (end - start) - _one_day()
+        earlier_start = start - (end - start) - _ONE_DAY
         if earlier_start >= available[0]:
-            candidates.insert(0, (earlier_start, start - _one_day()))
+            candidates.insert(0, (earlier_start, start - _ONE_DAY))
 
         for window_start, window_end in candidates:
             if (window_start, window_end) in seen:
@@ -893,12 +896,6 @@ class TravelIntelligenceService:
             )
 
         return tuple(sorted(windows, key=lambda window: window.start))
-
-
-def _one_day() -> timedelta:  # noqa: F821 - imported below for clarity at the call site
-    from datetime import timedelta
-
-    return timedelta(days=1)
 
 
 # The range dash a reader expects between two dates, named so the literal appears once.

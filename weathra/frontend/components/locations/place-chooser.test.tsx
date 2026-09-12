@@ -14,7 +14,7 @@
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -80,7 +80,6 @@ const SCREENS: readonly { name: string; node: React.ReactElement; summary: RegEx
   { name: "Weather Intelligence Report", node: <WeatherIntelligenceReport />, summary: /report on another place/i },
   { name: "Weather Scenario Lab", node: <WeatherScenarioLab />, summary: /experiment on another place/i },
   { name: "Weather Watch", node: <WeatherWatch />, summary: /watch another place/i },
-  { name: "Travel Intelligence", node: <TravelIntelligence />, summary: /travel to another place/i },
 ];
 
 describe("every Intelligence screen can be pointed at a place on the screen itself", () => {
@@ -114,6 +113,50 @@ describe("every Intelligence screen can be pointed at a place on the screen itse
       expect(screen.queryByRole("link", { name: /open settings/i })).toBeNull();
     });
   }
+});
+
+/*
+ * Travel Intelligence asks a different question, so it is held to the same principle differently.
+ *
+ * The other Intelligence screens are pointed at *a place*, and the loop above checks each one folds
+ * that control away with a default and leads with it without one. Travel's subject is a **trip** —
+ * an origin, a destination and two dates — so its place controls live together in the one trip
+ * editor rather than as a standalone "travel to another place" disclosure. The principle this file
+ * exists to protect is unchanged and asserted here: the screen can be pointed somewhere from the
+ * screen itself, and never dead-ends into Settings.
+ */
+describe("Travel Intelligence is pointed at a trip, from the screen itself", () => {
+  it("keeps its place controls in one editor, opened from the trip header", async () => {
+    mount(<TravelIntelligence />, OSLO);
+
+    // Folded by default: the screen opens on the trip, not on a form.
+    expect(await screen.findByRole("button", { name: "Adjust trip" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Adjust trip" })).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "Adjust trip" }));
+    const editor = await screen.findByRole("region", { name: "Adjust trip" });
+
+    /*
+     * Both places, together, and the dates beside them — one editor, not two stacked forms. Asked
+     * for by each chooser's form label rather than by its disclosure summary, because a chooser
+     * with nothing set yet leads with its field instead of folding behind a summary.
+     */
+    expect(within(editor).getByRole("form", { name: "Travelling from" })).toBeInTheDocument();
+    expect(within(editor).getByRole("form", { name: "Travelling to" })).toBeInTheDocument();
+    expect(within(editor).getByLabelText("Departure")).toBeInTheDocument();
+    expect(within(editor).getByLabelText("Return")).toBeInTheDocument();
+  });
+
+  it("leads with the editor, and no dead end, when there is no default place", async () => {
+    mount(<TravelIntelligence />, null);
+
+    // Reachable without pressing anything, because with no destination there is nothing else to do.
+    const editor = await screen.findByRole("region", { name: "Adjust trip" });
+    expect(within(editor).getAllByRole("textbox").length).toBeGreaterThan(0);
+
+    // The way out is still not "go to Settings and come back".
+    expect(screen.queryByRole("link", { name: /open settings/i })).toBeNull();
+  });
 });
 
 describe("a name typed into it never becomes a weather request directly", () => {
