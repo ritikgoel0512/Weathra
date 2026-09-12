@@ -433,3 +433,52 @@ convergence and any second-provider comparison.
 
 **CLOSE 1 · ACCEPTABLE 2 · NOT CLOSE 6 · UNASSESSED 6.** No screen is graded on the strength of
 this audit; these are the pre-Step-2 positions.
+
+## Historical Analytics — 2026-09-12 (task 34.38)
+
+**Visily target.** `03-historical-analytics.png`: one header row (mark, title, place, window pill,
+unit toggle, EXPORT DATA), six equal metric cards, a dominant combined plot with a compact metadata
+footer, then a two-column band — the baseline comparison on the left with three tiles over deviation
+meters, an intelligence card on the right — and a provenance strip.
+
+**Production before.** The band order was already right and almost nothing else was. The header was
+a title, a sentence describing the screen, a full-width window disclosure, a labelled radio group
+and a sentence about the toggle — five rows before the first figure. The metric row was six cards
+captioned with their own formulas (`arithmetic mean of usable points · 48 points`) and drew the
+extremes as two cards with no pressure card at all. The plot sat in a scroll container that
+advertised itself as scrollable, so a grey edge fade ran down the right of the figure and the region
+took a keyboard tab stop with nothing to reach; three days of precipitation drew three bars the
+width of the plot and the temperature series vanished behind them. The left card ran nine lines of
+method under two figures with a "View analysis" beside each; the deviation meters were a separate
+card below it, a panel away from the z-score they are drawn from. Period-against-period took the
+full content width under all of it.
+
+**Production after.** One header row. Six cards, always six, each captioned with a fact — a spread,
+a delta — and an unavailable one saying so compactly in the place the figure would have been. The
+plot is the page's dominant figure at `clamp(260px, 34vw, 420px)`, with capped bars and no scroll
+container. The left card is three tiles over the deviation meters with every figure and method one
+press in; the right card is a status, a deterministic reading composed only from figures already on
+the screen, and the distribution the percentile was taken against. Period-against-period is intact
+behind `Compare with another period`.
+
+**Verdict: PASS.**
+
+**Truthful divergences.**
+
+* **No 30-year normal.** The artifact compares against `WMO-1991-2020-NORMAL` for `STATION BER-09`.
+  Weathra has a finite baseline of archive years and names it: *Selected period vs historical
+  baseline*, *the 4-year baseline for this calendar period*. Calling five years a climate normal
+  would be the fabrication this screen exists to avoid.
+* **No confidence score and no node count.** The artifact's footer reads `CONFIDENCE SCORE 98.4%`
+  and `SOURCE COUNT 14 Nodes`. Neither is a figure any endpoint produces, so neither is drawn; the
+  coverage the archive actually reported is stated on the plot instead.
+* **No ERA5, no station, no local observations.** One provider, named.
+* **The anomaly card reads deterministically.** The artifact's is badged AI INTERPRETATION over a
+  paragraph about the North Atlantic jet stream and a claim about 1995. Nothing here is written by a
+  model: the status is the sign of a computed difference and the sentences are the z-score and the
+  percentile in words. It is badged DETERMINISTIC, which is a different claim rather than a quieter
+  one.
+* **The capture's provider reads `stub-provider`.** The capture harness is a stub and says so;
+  production reads Open-Meteo.
+* **Pressure reads "not reported"** for this window, because the archive supplied none. The card
+  stays so the row keeps its rhythm.

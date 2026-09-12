@@ -18,6 +18,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 import type { PreferenceView } from "@/lib/api/schema";
+import { NOT_REPORTED } from "@/components/ui";
 import { SessionBoundary } from "@/lib/session/provider";
 
 import { HistoricalAnalytics } from "./historical";
@@ -454,7 +455,7 @@ describe("a baseline comparison", () => {
   it("states the years actually used, and that it is not an official climate normal", async () => {
     renderScreen();
 
-    const panel = await screen.findByRole("region", { name: "Selected period against its baseline" });
+    const panel = await screen.findByRole("region", { name: "Selected period vs historical baseline" });
     expect(
       within(panel).getByText(/6 years of 10 requested: 2019, 2020, 2021, 2022, 2023, 2024/),
     ).toBeInTheDocument();
@@ -467,11 +468,17 @@ describe("a baseline comparison", () => {
   it("shows the difference and z-score the analytics layer computed, with their methods", async () => {
     renderScreen();
 
-    const panel = await screen.findByRole("region", { name: "Selected period against its baseline" });
+    const panel = await screen.findByRole("region", { name: "Selected period vs historical baseline" });
     expect(within(panel).getByText(/Warmer than the 6-year baseline/)).toBeInTheDocument();
     expect(within(panel).getByText("+1.2")).toBeInTheDocument();
     expect(within(panel).getByText("0.8")).toBeInTheDocument();
-    expect(within(panel).getByText(/minus the 6-year baseline/)).toBeInTheDocument();
+    /*
+     * The method is one press in, not captioned under the figure. `specs/deterministic-analytics`
+     * requires it to be reportable and the section's own footer reports it; three tiles each
+     * carrying a formula is the report the customer-level review objected to.
+     */
+    expect(within(panel).queryByText(/minus the 6-year baseline/)).toBeNull();
+    await userEvent.click(within(panel).getByText("Baseline figures and method"));
     expect(within(panel).getAllByText(/Computed by Weathra/).length).toBeGreaterThan(0);
   });
 
@@ -491,9 +498,10 @@ describe("a baseline comparison", () => {
     }) as unknown as Mock;
 
     renderScreen();
-    const panel = await screen.findByRole("region", { name: "Selected period against its baseline" });
+    const panel = await screen.findByRole("region", { name: "Selected period vs historical baseline" });
 
-    expect(within(panel).getByText("Undefined")).toBeInTheDocument();
+    // The shared unavailable state, at the size of a figure rather than a card of explanation.
+    expect(within(panel).getAllByText(NOT_REPORTED).length).toBeGreaterThan(0);
     expect(within(panel).getByText(/no spread, so a z-score is undefined/)).toBeInTheDocument();
     // The signed difference is still reported.
     expect(within(panel).getByText("+1.2")).toBeInTheDocument();
@@ -503,7 +511,7 @@ describe("a baseline comparison", () => {
 describe("data classes and provenance", () => {
   it("keeps retrieved observations and computed statistics in separate labelled regions", async () => {
     const { container } = renderScreen();
-    await screen.findByRole("region", { name: "Selected period against its baseline" });
+    await screen.findByRole("region", { name: "Selected period vs historical baseline" });
 
     const retrieved = container.querySelectorAll('[data-tier="retrieved"]');
     const computed = container.querySelectorAll('[data-tier="computed"]');
@@ -520,18 +528,34 @@ describe("data classes and provenance", () => {
     expect(container.querySelectorAll('[data-tier="interpretation"]')).toHaveLength(0);
   });
 
-  it("badges every headline figure as computed and names the method behind it", async () => {
+  it("draws the artifact's six cards, every one badged as computed", async () => {
     renderScreen();
 
     const tiles = await screen.findByRole("region", { name: "Figures for the selected period" });
-    // Six cards now, as `03-historical-analytics.png` draws them. The claim is that *every* card is
-    // badged computed, not that there are five of them.
-    // One badge per *computed* figure. A statistic the backend could not compute is named in the
-    // footnote beneath the row instead of taking a card, so this count follows the data rather
-    // than being fixed at six.
-    expect(within(tiles).getAllByText("ANALYTICS").length).toBeGreaterThan(0);
+    /*
+     * Six, always six — `03-historical-analytics.png`'s band is six equal cards, and a band that is
+     * four on one window and six on another is not that band. A card whose figure the archive did
+     * not supply stays and says so; it does not leave a gap in the rhythm.
+     */
+    expect(within(tiles).getAllByText("ANALYTICS")).toHaveLength(6);
     expect(within(tiles).getByText("15.6")).toBeInTheDocument();
-    expect(within(tiles).getAllByText(/arithmetic mean of usable points/).length).toBeGreaterThan(0);
+  });
+
+  it("keeps the method off the card and one press away, where the figures are", async () => {
+    renderScreen();
+
+    await screen.findByRole("region", { name: "Figures for the selected period" });
+    /*
+     * `specs/deterministic-analytics` requires the method behind every computed figure to be
+     * reportable, and it still is — on the sections that carry the figures, not on a metric card. A
+     * card captioned "arithmetic mean of usable points · 48 points" is a formula where a reader
+     * expects a comparison.
+     */
+    const tiles = screen.getByRole("region", { name: "Figures for the selected period" });
+    expect(within(tiles).queryByText(/arithmetic mean of usable points/)).toBeNull();
+    expect(within(tiles).queryByText(/points$/)).toBeNull();
+    // And still reachable: the panels that carry the figures carry their method disclosures.
+    expect(screen.getAllByText("Computed by Weathra").length).toBeGreaterThan(0);
   });
 
   it("reports a statistic the backend could not compute, with its reason", async () => {
@@ -539,12 +563,12 @@ describe("data classes and provenance", () => {
 
     const tiles = await screen.findByRole("region", { name: "Figures for the selected period" });
     /*
-     * `specs/deterministic-analytics` requires an unavailable figure to say why, and it still does
-     * — in one footnote under the row rather than in a card of its own. Five identical cards
-     * reading "Not computable" was the requirement met at a size that made the row useless, so
-     * what is asserted now is that the statistic is named and the backend's own reason is carried.
+     * `specs/deterministic-analytics` requires an unavailable figure to say why, and it does — in
+     * the card that would have carried the figure, under the name of the thing that is absent. That
+     * is both smaller than the footnote it replaced and easier to read than it, because an absence
+     * beside its own label needs no sentence to say which statistic it is about.
      */
-    expect(within(tiles).getByText(/Not computed for this window/)).toBeInTheDocument();
+    expect(within(tiles).getAllByText(NOT_REPORTED).length).toBeGreaterThan(0);
     expect(within(tiles).getByText(/supplied no wind speed for this range/)).toBeInTheDocument();
   });
 });
@@ -606,7 +630,7 @@ describe("coverage", () => {
 
     expect(await screen.findByRole("region", { name: "Recorded observations" })).toBeInTheDocument();
     expect(
-      await screen.findByRole("region", { name: "Selected period against its baseline" }),
+      await screen.findByRole("region", { name: "Selected period vs historical baseline" }),
     ).toBeInTheDocument();
     expect(screen.getByText(/No fixture for/)).toBeInTheDocument();
   });
@@ -665,11 +689,13 @@ describe("the toolbar (3.3, 3.6)", () => {
     renderScreen();
     await screen.findByRole("region", { name: "Recorded observations" });
 
-    // The window opens on a range derived from today, so the shape is what is asserted: the place,
-    // the selected window, the window it is held against, and the baseline length.
-    const summary = screen.getByText(
-      /^Berlin, Germany · \d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2} · against \d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2} · 5-year baseline$/,
-    );
+    /*
+     * The summary is the window, and the window alone. It carried the place, the comparison window
+     * and the baseline length too — four facts in a full-width bar above the figures, where the
+     * artifact has a date pill. The place moved to the header, under the title; the other two are
+     * inside the control this opens, which is where they are set.
+     */
+    const summary = screen.getByText(/^\d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2}$/);
     expect(screen.getByLabelText("Location")).not.toBeVisible();
 
     await userEvent.click(summary);
@@ -719,7 +745,7 @@ describe("the toolbar (3.3, 3.6)", () => {
   it("offers the export only once there is a retrieved window to export", async () => {
     renderScreen();
 
-    const download = await screen.findByRole("button", { name: /Export the observations/ });
+    const download = await screen.findByRole("button", { name: /Export data/ });
     await waitFor(() => expect(download).toBeEnabled());
   });
 });
@@ -793,7 +819,7 @@ describe("the session", () => {
 describe("nothing from the design artifact reaches the screen", () => {
   it("shows no sample value, invented source, station, or version string", async () => {
     renderScreen();
-    await screen.findByRole("region", { name: "Selected period against its baseline" });
+    await screen.findByRole("region", { name: "Selected period vs historical baseline" });
 
     const shown = document.body.textContent ?? "";
     for (const sample of ARTIFACT_SAMPLE_VALUES) {
@@ -803,16 +829,23 @@ describe("nothing from the design artifact reaches the screen", () => {
 
   it("offers no control the artifact shows that Weathra refuses to implement", async () => {
     renderScreen();
-    await screen.findByRole("region", { name: "Selected period against its baseline" });
+    await screen.findByRole("region", { name: "Selected period vs historical baseline" });
 
-    for (const refused of [/recalibrat/i, /export data/i, /export pdf/i, /view detailed metadata/i]) {
+    /*
+     * `export data` left this list in task 34.38, and only because the premise changed. It was here
+     * because the artifact's EXPORT DATA button had nothing behind it; Weathra does have that
+     * control — it writes the retrieved window as CSV — so the artifact's *label* now sits on
+     * Weathra's own control rather than on nothing. What stays refused is what would still be a
+     * claim: recalibrating a model nobody trains, a PDF nobody renders, metadata nobody keeps.
+     */
+    for (const refused of [/recalibrat/i, /export pdf/i, /view detailed metadata/i]) {
       expect(screen.queryByRole("button", { name: refused }), String(refused)).not.toBeInTheDocument();
     }
   });
 
   it("shows every figure the backend supplied, and no figure it did not", async () => {
     renderScreen();
-    await screen.findByRole("region", { name: "Selected period against its baseline" });
+    await screen.findByRole("region", { name: "Selected period vs historical baseline" });
 
     for (const supplied of ["15.6", "9.2", "22.1", "4.6", "+2.7", "+1.2", "14.4", "11.8", "18.2"]) {
       expect(screen.getAllByText(new RegExp(supplied.replace("+", "\\+")), { exact: false }).length, supplied)

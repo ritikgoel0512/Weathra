@@ -19,10 +19,50 @@
   min-width: 0;
 }
 
+/*
+ * **One header row, as `03-historical-analytics.png` sets it.**
+ *
+ * A mark, the title, the place under it, and the controls at the far end. Production stacked the
+ * title, a sentence describing the screen, a full-width window disclosure, a labelled radio group
+ * and a sentence about the toggle — five rows before the first figure, on a screen whose subject is
+ * the figures.
+ */
 .heading {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding-block-end: var(--space-4);
+  border-block-end: 1px solid var(--color-border-subtle);
+  min-width: 0;
+}
+
+.headingMark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.headingText {
+  display: flex;
   flex-direction: column;
+  min-width: 0;
+}
+
+/* The place, under the title, without its coordinates — a reader does not navigate by them. */
+.headingPlace {
+  display: flex;
+  align-items: center;
   gap: var(--space-2);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.headingActions {
+  margin-inline-start: auto;
   min-width: 0;
 }
 
@@ -52,8 +92,9 @@
 .toolbar {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--space-2) var(--space-4);
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -181,9 +222,14 @@
   }
 }
 
+/*
+ * The artifact's six equal cards. `auto-fit` with a floor near a sixth of the content width gives
+ * six across at desk width and folds to three then two, which is the rhythm rather than a count
+ * held by a media query.
+ */
 .tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: var(--space-3);
 }
 
@@ -372,9 +418,39 @@
 }
 
 /* Wide content scrolls in its own container, never the page. */
-.chartScroll,
 .tableScroll {
   overflow-x: auto;
+  min-width: 0;
+}
+
+/*
+ * **The plot never scrolls vertically.**
+ *
+ * `overflow-x: auto` computes the *other* axis from `visible` to `auto`, so any pixel the plot
+ * exceeded its box by became a vertical scrollbar inside the card — which is what the 2026-09-12
+ * review photographed, and which no chart should ever have. Pinning the cross axis to `hidden`
+ * means the horizontal scroll a narrow viewport needs cannot grow a vertical one as a side effect.
+ */
+.chartScroll {
+  overflow-x: auto;
+  min-width: 0;
+}
+
+/*
+ * **The overview plot does not scroll, and does not say it does.**
+ *
+ * Historical Analytics' main figure had a scroll container and a 320-pixel floor under the plot,
+ * which is the right shape for a *table* and the wrong one for a chart: `ResponsiveContainer`
+ * already fits the figure to whatever width it is given, so the floor could only be exceeded by
+ * making the container scroll. Worse than the scroll was what advertised it — `ScrollRegion` marks
+ * itself `data-scrollable` when its content overflows in *either* axis, and `globals.css` draws an
+ * inset edge fade on that, which is the grey strip down the right of the plot that the 2026-09-12
+ * review read as a scrollbar. It also added a tab stop to a region with nothing to reach.
+ *
+ * The other two charts in this module are shared with Forecast Explorer, Scenario Lab and Watch and
+ * keep the container they have; this class is the overview plot's own.
+ */
+.chartFigure {
   min-width: 0;
 }
 
@@ -523,7 +599,7 @@
  * row; `auto-fill` still governs below them, where wrapping is right and a 160-pixel card is not.
  */
 .tiles {
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
 }
 
 @media (min-width: 1280px) {
@@ -531,9 +607,13 @@
     grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 
-  /* The side column keeps one per row whatever the viewport: see `.column .tiles` below. */
+  /*
+   * Three across in the comparison card, as the artifact draws them. They were one per row because
+   * the labels were sentences — "Difference from the baseline (mean temperature)" wrapped to five
+   * lines at a third of the column. The labels are three words now, so the row reads as figures.
+   */
   .column .tiles {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -544,13 +624,9 @@
   }
 }
 
-/*
- * Nested inside a side column, the same tiles get one per row. Two 180-pixel tracks technically fit
- * a third of the page, but the labels there — "Difference from the baseline (mean temperature)" —
- * wrap to five lines and the row stops reading as figures.
- */
+/* Below the desk breakpoint the comparison tiles fall back to the shared track. */
 .column .tiles {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
 
 /* The control bar sits tighter than a form: it is a header strip, not the screen's subject. */
@@ -621,9 +697,16 @@
 
 /* The combined archive plot is the screen's centrepiece and is taller than a single-series chart:
    two axes and a bar series need the room to read as one figure rather than a strip. */
+/*
+ * The dominant figure on the page, at the height the artifact gives it.
+ *
+ * `03-historical-analytics.png` hands its plot roughly 440 pixels and the whole content width; at
+ * 340 the series were legible and the card did not read as the screen's subject. It scales down
+ * with the viewport rather than holding a desk-width figure on a phone.
+ */
 .chartPlotTall {
-  min-width: 320px;
-  height: 340px;
+  min-width: 0;
+  height: clamp(260px, 34vw, 420px);
 }
 
 .legendSwatch {
@@ -819,4 +902,93 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-width: 0;
+}
+
+
+/* ---------------------------------------------- task 34.38: the artifact's composition */
+
+/*
+ * The baseline card's own disclosure: every figure and every method, one press in.
+ */
+.baselineDetails {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.baselineSummary,
+.periodSummary {
+  cursor: pointer;
+  color: var(--color-accent);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+}
+
+.baselineSummary:hover,
+.periodSummary:hover {
+  color: var(--color-accent-strong);
+}
+
+.baselineDetails > :not(summary) {
+  margin-block-start: var(--space-3);
+}
+
+/*
+ * Period against period, kept and moved: a compact row on the page, the whole panel behind it.
+ */
+.periodDisclosure {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  min-width: 0;
+}
+
+.periodDisclosure > :not(summary) {
+  margin-block-start: var(--space-3);
+}
+
+/*
+ * **The anomaly card's status**, in the language the Dashboard settled: a mark, then the state in
+ * words. The tone tints the row; the mark differs by shape; the words say the direction. No one of
+ * the three carries the state alone.
+ */
+.anomalyStatus {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+}
+
+.anomalyStatus[data-tone="warning"] {
+  border-color: color-mix(in srgb, var(--color-status-warning) 45%, transparent);
+  background: var(--color-status-warning-surface);
+}
+
+.anomalyStatus[data-tone="accent"] {
+  border-color: color-mix(in srgb, var(--color-accent) 45%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface-inset));
+}
+
+.anomalyStatus[data-tone="ok"] {
+  border-color: color-mix(in srgb, var(--color-status-ok) 45%, transparent);
+  background: var(--color-status-ok-surface);
+}
+
+.anomalyStatusLabel {
+  font-family: var(--family-display);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* The deterministic reading: the figures beside it, in the order somebody reads them. */
+.anomalyReading {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-secondary);
 }

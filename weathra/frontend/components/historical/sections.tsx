@@ -29,7 +29,9 @@ import {
   Meter,
   MethodNote,
   Metric,
+  NOT_REPORTED,
   ProvenanceSection,
+  StatusMark,
 } from "@/components/ui";
 import type {
   Baseline,
@@ -110,6 +112,14 @@ const GLYPHS = {
       <path d="M4 14h13a2.5 2.5 0 1 1-2.5 2.5" />
     </TileGlyph>
   ),
+  // Pressure: stacked isobars.
+  pressure: (
+    <TileGlyph>
+      <path d="M4 8h16" />
+      <path d="M6 12h12" />
+      <path d="M8 16h8" />
+    </TileGlyph>
+  ),
   // Humidity: a drop with a level in it.
   humidity: (
     <TileGlyph>
@@ -119,48 +129,69 @@ const GLYPHS = {
   ),
 } as const;
 
-/** The statistics the tile row reports for the selected period, in the artifact's order. */
-const HEADLINE: readonly {
-  statistic: Statistic;
-  measure: Measure;
-  label: string;
-  icon: ReactNode;
-}[] = [
+/**
+ * The six metrics the tile row reports for the selected period, in the artifact's order.
+ *
+ * `03-historical-analytics.png` sets six equal cards: mean temperature, a min/max *range*,
+ * precipitation, humidity, wind and pressure. Production drew the extremes as two separate cards
+ * and had no pressure card at all, which is five of the artifact's six in a different rhythm.
+ *
+ * A `range` entry reads two statistics into one figure. It is not arithmetic — both numbers are the
+ * backend's and neither is derived here — it is two of its figures printed as the pair they are.
+ */
+type HeadlineEntry = {
+  readonly key: string;
+  readonly label: string;
+  readonly icon: ReactNode;
+  readonly statistic: Statistic;
+  readonly measure: Measure;
+  /** A second statistic, where the card reports a range rather than a figure. */
+  readonly upper?: { readonly statistic: Statistic; readonly measure: Measure };
+};
+
+const HEADLINE: readonly HeadlineEntry[] = [
   {
-    statistic: "mean",
-    measure: "temperature_mean",
+    key: "mean-temperature",
     label: "Mean temperature",
     icon: GLYPHS.temperature,
+    statistic: "mean",
+    measure: "temperature_mean",
   },
   {
+    key: "range",
+    label: "Min / max range",
+    icon: GLYPHS.range,
     statistic: "minimum",
     measure: "temperature_min",
-    label: "Lowest temperature",
-    icon: GLYPHS.range,
+    upper: { statistic: "maximum", measure: "temperature_max" },
   },
   {
-    statistic: "maximum",
-    measure: "temperature_max",
-    label: "Highest temperature",
-    icon: GLYPHS.range,
-  },
-  {
+    key: "precipitation",
+    label: "Precipitation",
+    icon: GLYPHS.precipitation,
     statistic: "total",
     measure: "precipitation_sum",
-    label: "Total precipitation",
-    icon: GLYPHS.precipitation,
   },
   {
-    statistic: "mean",
-    measure: "wind_speed_max",
-    label: "Mean wind speed",
-    icon: GLYPHS.wind,
-  },
-  {
+    key: "humidity",
+    label: "Average humidity",
+    icon: GLYPHS.humidity,
     statistic: "mean",
     measure: "relative_humidity",
-    label: "Mean humidity",
-    icon: GLYPHS.humidity,
+  },
+  {
+    key: "wind",
+    label: "Wind speed",
+    icon: GLYPHS.wind,
+    statistic: "mean",
+    measure: "wind_speed_max",
+  },
+  {
+    key: "pressure",
+    label: "Average pressure",
+    icon: GLYPHS.pressure,
+    statistic: "mean",
+    measure: "surface_pressure_mean",
   },
 ];
 
@@ -296,74 +327,92 @@ export interface HeadlineFiguresProps {
  */
 export function HeadlineFigures({ comparison }: HeadlineFiguresProps): ReactNode {
   /*
-   * Only the figures the backend computed.
+   * **Six cards, always six, and never a figure the backend did not produce.**
    *
-   * This row used to render all six regardless, and an archive window that supplied one statistic
-   * produced one figure beside five cards reading "Not computable" — half the screen, in the
-   * artifact's most prominent band, saying nothing. Each of those cards was individually honest and
-   * collectively useless: a reader learns nothing from being told five times that a figure does not
-   * exist, and the panel it sat above is where an absent statistic is genuinely worth explaining.
-   *
-   * So an uncomputed statistic has no tile, exactly as an unreported measure has no metric card in
-   * the row above. When the backend computed none at all the section is absent rather than empty.
+   * The row used to drop an uncomputed statistic and collect the absences into a sentence beneath,
+   * which kept the row honest and cost it its rhythm: the artifact's band is six equal cards, and a
+   * band that is four cards on one window and six on another is not that band. A card whose figure
+   * the archive did not supply now stays, compactly, and says so in the place the figure would have
+   * been — which is both smaller than the old sentence and easier to read than it, because the
+   * absence sits under the name of the thing that is absent.
    */
-  const evaluated = HEADLINE.map((entry) => ({
-    entry,
-    result: statisticFor(comparison.later, entry.statistic, entry.measure),
-  }));
-  const computable = evaluated.filter(({ result }) => formatStatistic(result) !== null);
-  const uncomputed = evaluated.filter(({ result }) => formatStatistic(result) === null);
+  const cards = HEADLINE.map((entry) => {
+    const lower = statisticFor(comparison.later, entry.statistic, entry.measure);
+    const upper = entry.upper
+      ? statisticFor(comparison.later, entry.upper.statistic, entry.upper.measure)
+      : undefined;
 
-  if (computable.length === 0 && uncomputed.length === 0) return null;
+    const lowerText = formatStatistic(lower);
+    const upperText = entry.upper ? formatStatistic(upper) : null;
+
+    /*
+     * A range needs both ends. One end without the other is not a range, and printing it as though
+     * it were would be this row inventing the half the archive did not supply.
+     */
+    const value = entry.upper
+      ? lowerText !== null && upperText !== null
+        ? `${lowerText} – ${upperText}`
+        : null
+      : lowerText;
+
+    return { entry, lower, upper, value };
+  });
+
+  if (cards.every(({ value }) => value === null)) return null;
 
   return (
     <section className={styles.tiles} aria-label="Figures for the selected period">
-      {computable.map(({ entry: { statistic, measure, label, icon }, result }) => {
-        const value = formatStatistic(result);
-        return (
-          <Metric
-            key={`${statistic}-${measure}`}
-            dataClass="analytics"
-            icon={icon}
-            label={label}
-            value={value ?? "Not computable"}
-            delta={value === null ? undefined : tileDelta(comparison, statistic, measure)}
-            unit={value === null ? undefined : (result?.unit ?? undefined)}
-            note={
-              value === null ? (
-                // An absent statistic says why, in the backend's own words. Never a dash that
-                // could be read as a zero, and never a method note implying it was computed.
-                <span className={styles.tileNote}>{unavailableReason(result)}</span>
-              ) : (
-                <span className={styles.tileNote}>
-                  {result?.method} · {result?.points_used} points
-                </span>
-              )
-            }
-          />
-        );
-      })}
-
-      {/*
-        The ones the backend could not compute, in one line rather than in six cards.
-        *
-        `specs/deterministic-analytics` requires an unavailable figure to say *why* it is
-        unavailable, and that requirement is met here — but it was being met at full card size, so
-        an archive window that supplied one statistic drew one figure beside five identical panels
-        reading "Not computable". Each was honest and the row was useless. The reason is grouped
-        with the statistic it belongs to and set at footnote weight, which is what an absence is
-        worth beside a figure.
-      */}
-      {uncomputed.length === 0 ? null : (
-        <p className={styles.tilesUnavailable}>
-          <span className={styles.tilesUnavailableLead}>Not computed for this window:</span>{" "}
-          {uncomputed
-            .map(({ entry, result }) => `${entry.label.toLowerCase()} — ${unavailableReason(result)}`)
-            .join(" ")}
-        </p>
-      )}
+      {cards.map(({ entry, lower, upper, value }) => (
+        <Metric
+          key={entry.key}
+          dataClass="analytics"
+          icon={entry.icon}
+          label={entry.label}
+          value={value ?? NOT_REPORTED}
+          unit={value === null ? undefined : (lower?.unit ?? undefined)}
+          /*
+            The compact secondary fact the artifact puts under every figure. For a range it is the
+            spread between the two ends the card already shows; for everything else it is the
+            backend's own delta against the earlier period. Never the method and never a point
+            count: `specs/deterministic-analytics` requires both to be reportable and neither is
+            what somebody reads a metric card for, so they are one press away on the card's own
+            section footer.
+          */
+          delta={
+            value === null
+              ? undefined
+              : entry.upper
+                ? spreadCaption(lower, upper)
+                : tileDelta(comparison, entry.statistic, entry.measure)
+          }
+          note={
+            value === null ? (
+              <span className={styles.tileNote}>{unavailableReason(lower)}</span>
+            ) : undefined
+          }
+        />
+      ))}
     </section>
   );
+}
+
+/**
+ * How wide the range is, from the two ends the card already shows.
+ *
+ * The one figure on this row that is not read straight off a `StatisticResult` — and it is a
+ * subtraction of two numbers printed beside it rather than a statistic, which is why it is captioned
+ * as a spread rather than badged as a computed result.
+ */
+function spreadCaption(
+  lower: StatisticResult | undefined,
+  upper: StatisticResult | undefined,
+): { text: string; tone: "up" | "down" | "flat" } | undefined {
+  const low = lower?.value;
+  const high = upper?.value;
+  if (typeof low !== "number" || typeof high !== "number") return undefined;
+  const spread = Math.round((high - low) * 10) / 10;
+  const unit = lower?.unit ? ` ${lower.unit}` : "";
+  return { text: `${spread}${unit} spread`, tone: "flat" };
 }
 
 /* --------------------------------------------------------------- period comparison */
@@ -466,14 +515,18 @@ export interface BaselinePanelProps {
  * rather than a published climate normal — `specs/historical-weather` requires both, and the
  * artifact's "1991-2020 WMO baseline" is the claim they exist to prevent.
  */
-export function BaselinePanel({ comparison }: BaselinePanelProps): ReactNode {
+export function BaselinePanel({
+  comparison,
+  children = null,
+}: BaselinePanelProps & { readonly children?: ReactNode }): ReactNode {
   const baseline: Baseline = comparison.baseline;
   const difference = formatSigned(comparison.difference);
+  const rank = comparison.percentile_rank;
 
   return (
     <ProvenanceSection
       dataClass="analytics"
-      title="Selected period against its baseline"
+      title="Selected period vs historical baseline"
       attribution={{
         provider: baseline.provider,
         location: placeLabel(baseline.location),
@@ -485,68 +538,95 @@ export function BaselinePanel({ comparison }: BaselinePanelProps): ReactNode {
         units: baseline.unit_system,
       }}
     >
+      {/*
+        **Not "Historical Normal".**
+
+        `03-historical-analytics.png` titles this "Selected Period vs Historical Normal" over a
+        1991–2020 WMO baseline it does not have. What Weathra has is a finite baseline of archive
+        years it names, so the title says baseline and this line says how many — a "normal" is a
+        thirty-year climatological standard and calling five years one would be the fabrication the
+        whole screen is built to avoid.
+      */}
       <p className={styles.statement}>{comparison.characterization}</p>
 
+      {/*
+        The artifact's three tiles, and the three figures worth that prominence: how far this window
+        sits from the baseline, how far that is in the baseline's own spread, and where it ranks
+        among the years. The method behind each is on the section's footer and in the figures
+        below, not captioned under the number.
+      */}
       <div className={styles.tiles}>
         <Metric
           dataClass="analytics"
-          label={`Difference from the baseline (${measureLabel(comparison.measure)})`}
-          value={difference ?? "Not computable"}
+          label="Difference from baseline"
+          value={difference ?? NOT_REPORTED}
           unit={difference === null ? undefined : (comparison.difference.unit || undefined)}
-          note={<span className={styles.tileNote}>{comparison.difference.method}</span>}
         />
         <Metric
           dataClass="analytics"
-          label="Z-score against the baseline"
-          value={formatStatistic(comparison.z_score) ?? "Undefined"}
+          label="Z-score"
+          value={formatStatistic(comparison.z_score) ?? NOT_REPORTED}
           note={
-            <span className={styles.tileNote}>
-              {isComputed(comparison.z_score)
-                ? comparison.z_score.method
-                : // A baseline with no spread has no z-score, and the reason is the backend's.
-                  unavailableReason(comparison.z_score)}
-            </span>
+            isComputed(comparison.z_score) ? undefined : (
+              // A baseline with no spread has no z-score, and the reason is the backend's.
+              <span className={styles.tileNote}>{unavailableReason(comparison.z_score)}</span>
+            )
+          }
+        />
+        <Metric
+          dataClass="analytics"
+          label="Percentile"
+          value={
+            isComputed(rank) ? `${Math.round(rank.value as number)}th` : NOT_REPORTED
+          }
+          note={
+            isComputed(rank) ? undefined : (
+              <span className={styles.tileNote}>{unavailableReason(rank)}</span>
+            )
           }
         />
       </div>
 
-      {/* The baseline's own figures, so the comparison above can be checked against them. */}
-      <ul className={styles.figures}>
-        <StatisticFigure result={baseline.mean} label="Baseline mean" />
-        <StatisticFigure result={baseline.standard_deviation} label="Baseline standard deviation" />
-        <StatisticFigure result={baseline.minimum} label="Baseline minimum" />
-        <StatisticFigure result={baseline.maximum} label="Baseline maximum" />
-      </ul>
+      {/* The deviation meters, inside the card whose figures they are computed from. */}
+      {children}
 
       {/*
-        The baseline's own caveats — not a second attribution.
-        *
-        This was an `AttributionFooter` carrying the same provider, place, period and units as the
-        `ProvenanceSection` wrapping it, so the panel printed its provenance twice, one block under
-        the other. The 1440 capture of 2026-09-10 shows both. The section's footer is the
-        attribution `specs/web-ui` requires; what belongs here is only what is true of the
-        *baseline* specifically, and it is set as notes rather than as a second footer.
+        **Every figure still here, one press in.**
+
+        The baseline's own mean, spread and extremes, the years it was built from, its coverage note
+        and its labelling used to run down the face of this card — nine lines of method under three
+        figures, which is the report the customer-level review objected to. `specs/deterministic-
+        analytics` requires all of it to be reportable; it does not require it to be the first thing
+        read.
       */}
-      <div className={styles.baselineNotes}>
-        <p className={styles.noteStrong} data-baseline-years="true">
-          Baseline years: {baselineYearsStatement(baseline)}
-        </p>
-        {baseline.coverage_note ? <p className={styles.note}>{baseline.coverage_note}</p> : null}
-        <p className={styles.note}>{baseline.labelling}</p>
-        {comparison.forecast_side_caveat ? (
-          <p className={styles.note}>{comparison.forecast_side_caveat}</p>
-        ) : null}
-        <p className={styles.note}>
-          Both sides are observations. This is not a measure of how accurate a past forecast was.
-        </p>
-      </div>
+      <details className={styles.baselineDetails}>
+        <summary className={styles.baselineSummary}>Baseline figures and method</summary>
+
+        <ul className={styles.figures}>
+          <StatisticFigure result={baseline.mean} label="Baseline mean" />
+          <StatisticFigure result={baseline.standard_deviation} label="Baseline standard deviation" />
+          <StatisticFigure result={baseline.minimum} label="Baseline minimum" />
+          <StatisticFigure result={baseline.maximum} label="Baseline maximum" />
+        </ul>
+
+        <div className={styles.baselineNotes}>
+          <p className={styles.noteStrong} data-baseline-years="true">
+            Baseline years: {baselineYearsStatement(baseline)}
+          </p>
+          {baseline.coverage_note ? <p className={styles.note}>{baseline.coverage_note}</p> : null}
+          <p className={styles.note}>{baseline.labelling}</p>
+          {comparison.forecast_side_caveat ? (
+            <p className={styles.note}>{comparison.forecast_side_caveat}</p>
+          ) : null}
+          <p className={styles.note}>
+            Both sides are observations. This is not a measure of how accurate a past forecast was.
+          </p>
+        </div>
+      </details>
     </ProvenanceSection>
   );
 }
 
-/* ------------------------------------------------------------------- the data class */
-
-/** The pair of badges the artifact puts above the chart card: what is retrieved, what is computed. */
 export function ClassKey(): ReactNode {
   return (
     <p className={styles.classKey}>
@@ -612,26 +692,66 @@ export function DeviationAnalysis({ comparison }: DeviationAnalysisProps): React
  * What it does carry are the key figures the deterministic comparison produced, which is what a
  * reader wants from a panel in that position.
  */
+/**
+ * Where this window sits, said once and strongly — the artifact's right-hand intelligence card.
+ *
+ * **Deterministic, and badged as such.** `03-historical-analytics.png` badges its own version AI
+ * INTERPRETATION over a paragraph about the North Atlantic jet stream and a claim about October
+ * 1995. Nothing here is written by a model and nothing here is inferred: the status is the sign of
+ * a difference the backend computed, and the sentences below it are the backend's own figures in
+ * an order somebody reads. That is why the badge says DETERMINISTIC — the honest version of the
+ * artifact's is not a quieter claim, it is a different one.
+ */
 export function AnomalyIntelligence({ comparison }: DeviationAnalysisProps): ReactNode {
   const zResult = comparison?.z_score;
   const z = isComputed(zResult) ? (zResult?.value ?? null) : null;
   const difference = comparison ? formatSigned(comparison.difference) : null;
   const rankResult = comparison?.percentile_rank;
-
-  // The distribution the rank was taken against. Sorted by value rather than by year, because the
-  // track is a number line: the years are marks on it, not a sequence along it.
+  const unit = comparison?.baseline.mean.unit ?? "";
   const years = [...(comparison?.baseline.yearly_means ?? [])].sort(
     (left, right) => left.value - right.value,
   );
   const compared = comparison?.observed_or_forecast_value ?? null;
-  const unit = comparison?.baseline.mean.unit ?? "";
-  // The track spans the reference years, extended to include the compared value when it falls
-  // outside them — otherwise a record-breaking window would sit exactly on an end and read as
-  // merely equal to the extreme it beat.
   const bounds = years.map((entry) => entry.value);
   const low = Math.min(...bounds, compared ?? Number.POSITIVE_INFINITY);
   const high = Math.max(...bounds, compared ?? Number.NEGATIVE_INFINITY);
   const span = high - low;
+
+  /*
+   * **The status is the sign of a computed number, and nothing more.**
+   *
+   * Not a threshold: Weathra does not define what makes a window "extreme", and a card that
+   * declared one would be inventing the classification the artifact invents. Above, below, or level
+   * with the baseline is a fact about `difference`, and how *far* is the z-score and the percentile
+   * beside it, which a reader can weigh themselves.
+   */
+  const value = isComputed(comparison?.difference) ? (comparison?.difference.value ?? null) : null;
+  const status =
+    value === null
+      ? { label: "Not computed", tone: "neutral" as const }
+      : value > 0
+        ? { label: "Above the historical baseline", tone: "warning" as const }
+        : value < 0
+          ? { label: "Below the historical baseline", tone: "accent" as const }
+          : { label: "Level with the historical baseline", tone: "ok" as const };
+
+  /*
+   * Two or three sentences, each one a figure already on this screen put into words. Nothing is
+   * characterised beyond what the figures say: no cause, no persistence, no record, no season.
+   */
+  const yearCount = comparison?.baseline.years_used.length ?? 0;
+  const sentences = [
+    difference !== null && comparison
+      ? `The selected period is ${difference} ${comparison.difference.unit ?? ""}`.trim() +
+        ` against Weathra's ${yearCount}-year historical baseline for this calendar period.`
+      : null,
+    typeof z === "number"
+      ? `Its z-score of ${z.toFixed(2)} measures that distance in the baseline's own spread.`
+      : null,
+    isComputed(rankResult) && rankResult
+      ? `It ranks at the ${Math.round(rankResult.value as number)}th percentile of the ${yearCount} reference years.`
+      : null,
+  ].filter((sentence): sentence is string => sentence !== null);
 
   return (
     <section className={styles.anomaly} aria-label="Anomaly intelligence">
@@ -640,51 +760,25 @@ export function AnomalyIntelligence({ comparison }: DeviationAnalysisProps): Rea
         <Badge tone="neutral">Deterministic</Badge>
       </header>
 
-      <p className={styles.note}>
-        Deterministic. Every figure is retrieved or computed.
-      </p>
-
-      <dl className={styles.anomalyFacts}>
-        <div className={styles.anomalyFact}>
-          <dt>Difference from baseline</dt>
-          <dd>{difference ?? "Not computed"}</dd>
-        </div>
-        <div className={styles.anomalyFact}>
-          <dt>Z-score</dt>
-          <dd>{typeof z === "number" ? z.toFixed(2) : "Not computed"}</dd>
-        </div>
-        <div className={styles.anomalyFact}>
-          <dt>Percentile</dt>
-          {/*
-            The artifact shows one, and this used to say "Not reported" for a stated reason: a
-            rank needs the distribution the baseline was drawn from, and `BaselineComparison`
-            carried the mean, the deviation and the extremes only. The baseline now carries each
-            reference year's own mean, so the rank is computed against those — like with like, a
-            window mean against window means — and the backend states its convention and its
-            resolution in the method. Where there are too few years to rank, the reason it gives
-            is shown instead of the number.
-          */}
-          <dd>
-            {isComputed(rankResult) ? (
-              `${Math.round(rankResult!.value as number)}th`
-            ) : (
-              <span className={styles.anomalyReason}>
-                {rankResult?.reason ?? "Not computed"}
-              </span>
-            )}
-          </dd>
-        </div>
-      </dl>
-
       {/*
-        The years behind the baseline, and where this window falls among them.
-
-        `03-historical-analytics.png` states its percentile as a bare figure. A rank over four or
-        five years is coarse enough that the figure alone overstates its own precision, so the
-        distribution it came from is drawn beside it: one mark per reference year at its own mean,
-        and the compared window on the same scale. Every mark is an archive observation mean — no
-        curve is fitted and no density is estimated, because five points do not support either.
+        The Dashboard's own anomaly mark, reused rather than redrawn: shape as well as colour, so
+        neither carries the state alone. `flag` for a window away from its baseline in either
+        direction, `calm` for one level with it — the *direction* is in the words beside it, which is
+        where a direction belongs.
       */}
+      <div className={styles.anomalyStatus} data-tone={status.tone}>
+        <StatusMark tone={value !== null && value !== 0 ? "flag" : "calm"} />
+        <span className={styles.anomalyStatusLabel}>{status.label}</span>
+      </div>
+
+      {sentences.length > 0 ? (
+        <p className={styles.anomalyReading}>{sentences.join(" ")}</p>
+      ) : (
+        <p className={styles.note}>
+          The backend computed no comparison for this window, so there is nothing to characterise.
+        </p>
+      )}
+
       {years.length >= 2 && span > 0 ? (
         <figure className={styles.spread}>
           <figcaption className={styles.spreadCaption}>

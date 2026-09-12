@@ -36,8 +36,8 @@ import {
   LoadingState,
   Select,
 } from "@/components/ui";
+import type { ApiClient } from "@/lib/api/client";
 import type {
-  HistoryResponse,
   Location,
   PreferenceView,
   SavedLocationsResponse,
@@ -224,18 +224,38 @@ function Controls({
  * the current selection in words, so what is being analysed is readable without opening anything.
  * The disclosure opens on demand and stays open while it is being used.
  */
+/**
+ * The archive read, described once.
+ *
+ * The header's export and the page's chart are the same window, and the header sits above the
+ * component that fetches it — so both ask for it by the same key. TanStack dedupes on the key, so
+ * this is one request with two readers rather than two requests, and there is no path by which the
+ * button could export a different window from the one on screen.
+ */
+function historyQuery(enquiry: Enquiry) {
+  const place = {
+    latitude: enquiry.location.latitude,
+    longitude: enquiry.location.longitude,
+    units: enquiry.units,
+  };
+  return {
+    key: ["historical", "history", place, enquiry.selected],
+    request: (client: ApiClient) => client.history({ ...place, ...enquiry.selected }),
+  };
+}
+
 function Toolbar({
   enquiry,
   controls,
   onUnits,
-  observed,
 }: {
   readonly enquiry: Enquiry;
   readonly controls: ReactNode;
   readonly onUnits: (units: UnitSystem) => void;
-  /** The retrieved window, for the export. Absent until it has arrived. */
-  readonly observed: HistoryResponse | null;
 }): ReactNode {
+  const history = useApiQuery(historyQuery(enquiry));
+  const observed = history.state.kind === "ready" ? history.state.data : null;
+
   const download = useCallback(() => {
     if (observed === null) return;
     /*
@@ -253,58 +273,55 @@ function Toolbar({
   }, [observed]);
 
   return (
+    /*
+      **The artifact's control row, and only what it controls.**
+
+      `03-historical-analytics.png` sets three things to the right of the title: the window, the unit
+      toggle and Export Data. Production had the window as a wide disclosure bar on its own line, a
+      labelled radio group, a button captioned with a sentence, and an explanatory line under all of
+      it — four stacked rows where the artifact has one, and the explanation was the tallest part.
+
+      Nothing is dropped. The window still opens to the full control, the toggle is still a
+      fieldset with a legend, the export still writes the same CSV, and the sentence about the
+      toggle not being a preference is still on the screen — as the toggle's own description, where
+      somebody reads it when they reach for the toggle rather than before they have seen the page.
+    */
     <div className={styles.toolbar}>
       <details className={styles.enquiryDisclosure}>
         <summary className={styles.enquirySummary}>
-          {placeLabel(enquiry.location)} · {enquiry.selected.start} to {enquiry.selected.end} ·
-          against {enquiry.earlier.start} to {enquiry.earlier.end} · {enquiry.years}-year baseline
+          {enquiry.selected.start} to {enquiry.selected.end}
         </summary>
         {controls}
       </details>
 
-      <div className={styles.toolbarActions}>
-        <fieldset className={styles.unitToggle}>
-          <legend className={styles.unitLegend}>Units</legend>
-          {UNIT_OPTIONS.map((option) => (
-            <label className={styles.unitOption} key={option.value}>
-              <input
-                type="radio"
-                name="historical-units"
-                value={option.value}
-                checked={enquiry.units === option.value}
-                onChange={() => onUnits(option.value)}
-              />
-              <span>{option.label}</span>
-            </label>
-          ))}
-        </fieldset>
+      <fieldset className={styles.unitToggle}>
+        <legend className="weathra-visually-hidden">Units</legend>
+        {UNIT_OPTIONS.map((option) => (
+          <label className={styles.unitOption} key={option.value}>
+            <input
+              type="radio"
+              name="historical-units"
+              value={option.value}
+              checked={enquiry.units === option.value}
+              onChange={() => onUnits(option.value)}
+            />
+            <span>{option.label}</span>
+          </label>
+        ))}
+        <p className="weathra-visually-hidden">
+          The unit toggle changes this reading only. Your saved preference is unchanged.
+        </p>
+      </fieldset>
 
-        <Button size="sm" onClick={download} disabled={observed === null}>
-          Export the observations (CSV)
-        </Button>
-      </div>
-
-      {/*
-        Stated, because a toggle that looks like a preference control and is not would be the more
-        confusing of the two. `specs/memory`: a preference is chosen in Settings, never inferred.
-      */}
-      <p className={styles.note}>
-        The unit toggle changes this reading only. Your saved preference is unchanged.
-      </p>
+      <Button size="sm" onClick={download} disabled={observed === null}>
+        Export data
+      </Button>
     </div>
   );
 }
 
 /** The three requests, and the surfaces they produce. */
-function Analysis({
-  enquiry,
-  controls,
-  onUnits,
-}: {
-  readonly enquiry: Enquiry;
-  readonly controls: ReactNode;
-  readonly onUnits: (units: UnitSystem) => void;
-}): ReactNode {
+function Analysis({ enquiry }: { readonly enquiry: Enquiry }): ReactNode {
   const place = {
     latitude: enquiry.location.latitude,
     longitude: enquiry.location.longitude,
@@ -324,10 +341,7 @@ function Analysis({
    * that also need it, instead of three simultaneous misses racing each other. And when the first
    * read is refused, the other two are never sent — the screen reports one limit instead of three.
    */
-  const history = useApiQuery({
-    key: ["historical", "history", place, enquiry.selected],
-    request: (client) => client.history({ ...place, ...enquiry.selected }),
-  });
+  const history = useApiQuery(historyQuery(enquiry));
 
   const observedReady = history.state.kind === "ready";
 
@@ -369,13 +383,6 @@ function Analysis({
 
   return (
     <div className={styles.analysis}>
-      {/*
-        The artifact's header row, above the tiles: the selection, the units, and the export. It is
-        rendered here rather than by the screen because the export is of the window this component
-        retrieved, and handing the response back up to be exported would mean two owners for it.
-      */}
-      <Toolbar enquiry={enquiry} controls={controls} onUnits={onUnits} observed={observed} />
-
       {/*
         The artifact's metric row: `HeadlineFigures`, which is the backend's own statistics for the
         selected period — mean temperature, the extremes, precipitation, wind and humidity, each
@@ -463,11 +470,16 @@ function Analysis({
           ) : baseline.state.kind === "error" ? (
             <ErrorState failure={baseline.state.failure} onRetry={baseline.retry} />
           ) : baseline.state.kind === "ready" ? (
-            <BaselinePanel comparison={baseline.state.data} />
+            /*
+              The deviation meters live *inside* the card whose figures they are computed from.
+              They were a card of their own beneath it, which put a bar labelled "temperature
+              drift" a panel away from the z-score it is drawn from and left the lower row
+              lopsided — the artifact draws them under the three tiles, in the same card.
+            */
+            <BaselinePanel comparison={baseline.state.data}>
+              <DeviationAnalysis comparison={baseline.state.data} />
+            </BaselinePanel>
           ) : null}
-          <DeviationAnalysis
-            comparison={baseline.state.kind === "ready" ? baseline.state.data : null}
-          />
         </div>
         <div className={styles.column}>
           <AnomalyIntelligence
@@ -476,13 +488,25 @@ function Analysis({
         </div>
       </div>
 
-      {comparison.state.kind === "loading" ? (
-        <LoadingState label="Comparing the two periods" lines={4} />
-      ) : comparison.state.kind === "error" ? (
-        <ErrorState failure={comparison.state.failure} onRetry={comparison.retry} />
-      ) : comparison.state.kind === "ready" ? (
-        <PeriodComparisonPanel comparison={comparison.state.data} />
-      ) : null}
+      {/*
+        **Period against period, kept whole and moved out of the way.**
+
+        It is real analytics over two real windows and nothing about it is dropped — but
+        `03-historical-analytics.png` has no such band, and production gave it the full content
+        width below the comparison row, six figures each with its own "View analysis". A reader who
+        came for the archive met it before they met the page's own footer. Behind one press it is
+        still a press away; in front of them it was the last thing on the screen.
+      */}
+      <details className={styles.periodDisclosure}>
+        <summary className={styles.periodSummary}>Compare with another period</summary>
+        {comparison.state.kind === "loading" ? (
+          <LoadingState label="Comparing the two periods" lines={4} />
+        ) : comparison.state.kind === "error" ? (
+          <ErrorState failure={comparison.state.failure} onRetry={comparison.retry} />
+        ) : comparison.state.kind === "ready" ? (
+          <PeriodComparisonPanel comparison={comparison.state.data} />
+        ) : null}
+      </details>
     </div>
   );
 }
@@ -499,18 +523,86 @@ function Analysis({
  * Found by `tests/e2e/fidelity.spec.ts`, which sweeps every screen in every runtime state rather
  * than in the one the fixtures produce — the whole reason that sweep exists.
  */
-function HistoricalFrame({ children }: { readonly children: ReactNode }): ReactNode {
+function HistoricalFrame({
+  children,
+  place = null,
+  actions = null,
+}: {
+  readonly children: ReactNode;
+  /** The place being analysed, once there is one. The artifact sets it under the title. */
+  readonly place?: string | null;
+  /** The window, unit toggle and export, once there is a retrieval to control. */
+  readonly actions?: ReactNode;
+}): ReactNode {
   return (
     <section className={styles.screen} aria-label="Historical Analytics">
+      {/*
+        The artifact's one header row: a mark, the title, the place under it, and the controls at
+        the far end. Production had the title and a sentence, then the controls on two more rows
+        below — the sentence explained the screen to somebody already looking at it, and the space
+        it took is the space the artifact gives the figures.
+
+        The heading survives every state, which is finding 1.1 of the runtime audit of 2026-09-08:
+        `place` and `actions` are absent while the screen is loading, failing or empty, and the
+        `h1` is not.
+      */}
       <header className={styles.heading}>
-        <h1 className={styles.title}>Historical Analytics</h1>
-        <p className={styles.subtitle}>
-          The archive, an earlier window, and the years behind them. Nothing estimated.
-        </p>
+        <span className={styles.headingMark} aria-hidden="true">
+          <ArchiveMark />
+        </span>
+        <div className={styles.headingText}>
+          <h1 className={styles.title}>Historical Analytics</h1>
+          {place ? <p className={styles.headingPlace}>{place}</p> : null}
+        </div>
+        {actions ? <div className={styles.headingActions}>{actions}</div> : null}
       </header>
 
       {children}
     </section>
+  );
+}
+
+/**
+ * The screen's own mark: strata, which is what an archive of days looks like from the side.
+ *
+ * Drawn rather than fetched, and drawn here rather than lifted into the primitive layer, because
+ * one screen uses it — `docs/design/design-system.md` puts a mark in the primitive layer when a
+ * second screen needs it, not before.
+ */
+function ArchiveMark(): ReactNode {
+  return (
+    <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id="historical-mark" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="var(--color-class-historical)" stopOpacity="0.9" />
+          <stop offset="100%" stopColor="var(--color-accent)" stopOpacity="0.7" />
+        </linearGradient>
+      </defs>
+      <rect x="3" y="3" width="26" height="26" rx="8" fill="url(#historical-mark)" opacity="0.18" />
+      <path
+        d="M8 21.5c3-1.2 5-3.4 8-3.4s5 2.2 8 3.4"
+        fill="none"
+        stroke="var(--color-class-historical)"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M8 16.5c3-1.2 5-3.4 8-3.4s5 2.2 8 3.4"
+        fill="none"
+        stroke="var(--color-accent)"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        opacity="0.85"
+      />
+      <path
+        d="M8 11.5c3-1.2 5-3.4 8-3.4s5 2.2 8 3.4"
+        fill="none"
+        stroke="var(--color-accent)"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        opacity="0.45"
+      />
+    </svg>
   );
 }
 
@@ -594,14 +686,19 @@ export function HistoricalAnalytics(): ReactNode {
   };
 
   return (
-    <HistoricalFrame>
-      <Analysis
-        enquiry={initial}
-        controls={
-          <Controls places={places} enquiry={initial} onSubmit={setEnquiry} busy={false} />
-        }
-        onUnits={(units) => setEnquiry({ ...initial, units })}
-      />
+    <HistoricalFrame
+      place={placeLabel(initial.location)}
+      actions={
+        <Toolbar
+          enquiry={initial}
+          controls={
+            <Controls places={places} enquiry={initial} onSubmit={setEnquiry} busy={false} />
+          }
+          onUnits={(units) => setEnquiry({ ...initial, units })}
+        />
+      }
+    >
+      <Analysis enquiry={initial} />
     </HistoricalFrame>
   );
 }

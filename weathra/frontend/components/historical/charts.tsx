@@ -308,7 +308,12 @@ export function ArchiveOverviewChart({
         </span>
       </figcaption>
 
-      <ScrollRegion label={`${title} chart`} className={styles.chartScroll}>
+      {/*
+        A plain box, not a `ScrollRegion`: this plot is responsive and has nothing to scroll to, and
+        a scroll region that cannot scroll still draws the edge fade and still takes a tab stop.
+        See `.chartFigure` for what that looked like.
+      */}
+      <div className={styles.chartFigure}>
         <div
           className={styles.chartPlotTall}
           role="img"
@@ -379,6 +384,10 @@ export function ArchiveOverviewChart({
               )}
               {precipitation === null ? null : (
                 <Bar
+                  /* Capped: a three-day window otherwise draws three columns the width of the plot
+                     and the temperature line disappears behind them. The artifact's bars are slim
+                     marks beside a dominant line. */
+                  maxBarSize={28}
                   yAxisId="precipitation"
                   dataKey="precipitation"
                   name="Precipitation"
@@ -408,7 +417,7 @@ export function ArchiveOverviewChart({
             </ComposedChart>
           </ResponsiveContainer>
         </div>
-      </ScrollRegion>
+      </div>
 
       <p className={styles.chartNote} id={described}>
         {missing === 0
@@ -614,6 +623,7 @@ export function PrecipitationChart({
                 content={<ChartTooltip unit={unit} name={seriesLabel} />}
               />
               <Bar
+                maxBarSize={28}
                 dataKey="value"
                 name={seriesLabel}
                 fill="var(--color-class-historical)"
