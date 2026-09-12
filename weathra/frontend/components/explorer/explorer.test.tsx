@@ -164,23 +164,46 @@ describe("the explorer", () => {
     mount(client({ forecast }));
     await screen.findByRole("heading", { name: "Forecast Explorer" });
 
-    await userEvent.selectOptions(screen.getByLabelText("Horizon"), "3");
+    /*
+     * The artifact's segmented control, which is a radio group: the four horizons are one choice,
+     * so a keyboard reaches the group once and moves inside it. It was a labelled `Select`.
+     */
+    await userEvent.click(screen.getByRole("radio", { name: "3 days" }));
     expect(forecast).toHaveBeenCalledWith(expect.objectContaining({ days: 3 }));
   });
 
-  it("tabulates every hourly entry, at the resolution the provider reported", async () => {
+  it("leads the matrix with representative periods, not the whole hourly dataset", async () => {
     mount(client());
-    const table = await screen.findByRole("table");
+    const table = await screen.findByRole("table", { name: "Forecast matrix" });
 
+    /*
+     * `11-forecast-explorer.png` shows five rows and calls the table high-resolution. Production
+     * rendered every entry the provider sent — 28 rows at three days — which is the dataset
+     * presented as a page. The rule that picks these is in `lib/explorer/reading`, and the whole
+     * series is still one press away; the case below asserts that.
+     */
     const rows = within(table).getAllByRole("row");
-    // A header plus one row per entry — nothing interpolated to fill a grid.
-    expect(rows).toHaveLength(FORECAST.hourly.entries.length + 1);
+    expect(rows.length).toBeLessThanOrEqual(FORECAST.hourly.entries.length + 1);
     expect(within(table).getByText("14.8 °C")).toBeInTheDocument();
+
+    // Human local time, never the ISO instant the provider sends.
+    expect(within(table).queryByText(/\dT\d{2}:\d{2}:\d{2}/)).toBeNull();
+  });
+
+  it("keeps every hourly entry the provider reported, one press away", async () => {
+    mount(client());
+    await screen.findByRole("table", { name: "Forecast matrix" });
+
+    await userEvent.click(screen.getByText(/View all hourly data/));
+    const all = screen.getByRole("table", { name: "All hourly entries" });
+    expect(within(all).getAllByRole("row")).toHaveLength(
+      FORECAST.hourly.entries.length + 1,
+    );
   });
 
   it("states the forecast's own confidence, with the basis the backend gave", async () => {
     mount(client());
-    await screen.findByRole("heading", { name: "Confidence" });
+    await screen.findByRole("heading", { name: "Intelligence layer" });
 
     expect(screen.getByText("high")).toBeInTheDocument();
     expect(
@@ -190,7 +213,7 @@ describe("the explorer", () => {
 
   it("shows the deterministic findings and the summary code wrote", async () => {
     mount(client());
-    await screen.findByRole("heading", { name: "Computed findings" });
+    await screen.findByRole("heading", { name: "Intelligence layer" });
 
     expect(screen.getByText(ANALYSIS.summary)).toBeInTheDocument();
     expect(screen.getByText("15.1 °C")).toBeInTheDocument();
@@ -242,15 +265,23 @@ describe("what the explorer never claims", () => {
     }
   });
 
-  it("names the provider that actually answered", async () => {
+  it("names the provider that actually answered, in the control bar and its source card", async () => {
     mount(client());
-    expect(await screen.findByText(/open-meteo/)).toBeInTheDocument();
+    /*
+     * Twice on purpose, and both are the response's own `attribution.provider`. The artifact puts
+     * a source line in the control bar (`Source: ECMWF-HRES-09`) and a provider card in the rail
+     * (`ECMWF Core v4.2`); Weathra fills both slots with whichever provider actually answered, and
+     * invents neither a model name nor an accuracy figure for it.
+     */
+    expect((await screen.findAllByText(/open-meteo/)).length).toBeGreaterThanOrEqual(1);
+    const source = screen.getByRole("region", { name: "Forecast source" });
+    expect(within(source).getByText(/open-meteo/)).toBeInTheDocument();
   });
 
   it("spends no model call to fill the intelligence column", async () => {
     const ask = vi.fn();
     mount(client({ ask }));
-    await screen.findByRole("heading", { name: "Computed findings" });
+    await screen.findByRole("heading", { name: "Intelligence layer" });
     expect(ask).not.toHaveBeenCalled();
   });
 });

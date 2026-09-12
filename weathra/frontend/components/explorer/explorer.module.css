@@ -190,3 +190,362 @@
   overflow-x: auto;
   min-width: 0;
 }
+
+/* ================================ task 34.39: the artifact's composition ================ */
+
+/*
+ * **One control bar where there were five bands.**
+ *
+ * `11-forecast-explorer.png` opens on a single row — the place, four horizon buttons, and a line
+ * naming what answered — and then goes straight to the figures. Production spent the first half of
+ * the viewport on a display title, a subtitle repeating the place and the timezone, a labelled
+ * dropdown, an always-open place disclosure and a 290-pixel photograph of the city.
+ */
+.controlBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  min-width: 0;
+}
+
+.placeControl {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.placeSummary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+  cursor: pointer;
+  min-width: 0;
+}
+
+.placeName {
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.placeHint {
+  margin-inline-start: auto;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.placeControl > :not(summary) {
+  margin-block-start: var(--space-3);
+}
+
+/*
+ * The artifact's segmented horizon control. A radio group underneath, so the four read as one
+ * choice to a keyboard as well as to an eye.
+ */
+.horizon {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+}
+
+.horizonOption {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.25rem;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.horizonOption input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  cursor: pointer;
+}
+
+.horizonOption:hover {
+  color: var(--color-text-primary);
+}
+
+.horizonOption:has(input:checked) {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+.horizonOption:has(input:focus-visible) {
+  box-shadow: var(--shadow-focus);
+}
+
+/* What answered, and when. The artifact's `Source: ECMWF-HRES-09`, with the provider that did. */
+.sourceLine {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  margin-inline-start: auto;
+  text-align: end;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+  min-width: 0;
+}
+
+.sourceProvider {
+  color: var(--color-text-secondary);
+  font-weight: var(--type-label-weight);
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------ the seven cards */
+
+/*
+ * Seven across at desk width, as the artifact draws them, folding to four and then two. The floor
+ * is what decides the count rather than a media query, so an intermediate width never leaves one
+ * card alone on a row.
+ */
+.metrics {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+@media (min-width: 1280px) {
+  .metrics {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+}
+
+.metricHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The artifact captions every card. One fact, and only where the forecast carries one. */
+.metricFact {
+  margin: 0;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* Everything the provider reported that the strip does not name. */
+.moreConditions,
+.allHours,
+.allFindings {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.moreSummary {
+  cursor: pointer;
+  color: var(--color-accent);
+}
+
+.moreSummary:hover {
+  color: var(--color-accent-strong);
+}
+
+.moreConditions > :not(summary),
+.allHours > :not(summary),
+.allFindings > :not(summary) {
+  margin-block-start: var(--space-3);
+}
+
+.extras {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+}
+
+.extra {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.extra dt {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.extra dd {
+  margin: 0;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* --------------------------------------------------- the chart and the rail */
+
+/*
+ * The artifact's proportions: the plot takes roughly three quarters of the row and the intelligence
+ * column the rest. Production split it near the middle, which left the screen's dominant figure
+ * looking like one of two panels.
+ */
+@media (min-width: 1100px) {
+  .body {
+    grid-template-columns: minmax(0, 2.9fr) minmax(19rem, 1fr);
+  }
+}
+
+.trend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  min-width: 0;
+}
+
+/*
+ * Tall enough to be the page's subject, and scaled to the viewport rather than pinned — the
+ * artifact's plot is about 440 pixels at desk width. No scroll container: `ResponsiveContainer`
+ * already fits the figure to its box, so there is nothing to scroll to.
+ */
+.trendPlot {
+  width: 100%;
+  min-width: 0;
+  height: clamp(240px, 30vw, 400px);
+}
+
+.trendPlot :global(svg) {
+  display: block;
+}
+
+.tooltip {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-overlay);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.tooltipTitle {
+  margin: 0 0 var(--space-1);
+  color: var(--color-text-primary);
+  font-weight: var(--type-ui-weight);
+}
+
+.tooltipRow {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+/* ------------------------------------------------------ the intelligence rail */
+
+.railHeading {
+  margin-block-start: var(--space-3);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.railHeading:first-child {
+  margin-block-start: 0;
+}
+
+.railNote {
+  margin: 0;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+}
+
+.signals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.signal {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-primary);
+  min-width: 0;
+}
+
+.signalMark {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-block-start: 0.45em;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+}
+
+.signalWhen {
+  color: var(--color-text-muted);
+}
+
+.sourceFacts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.sourceFact {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sourceFact dt {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.sourceFact dd {
+  margin: 0;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------- the matrix */
+
+/* The condition, drawn and named, from the provider's own code. */
+.condition {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-primary);
+}
