@@ -396,6 +396,67 @@ export function readableProse(text: string): string {
   });
 }
 
+/** One logical stage of a run: an agent, and every action it took. */
+export interface AgentStage {
+  readonly agent: string;
+  readonly status: string;
+  readonly actions: readonly AgentStep[];
+  readonly durationMs: number | null;
+  readonly startedAt: string | null;
+  readonly reasons: readonly string[];
+}
+
+/**
+ * The run's agents as *stages*, one per agent, in the order they first ran.
+ *
+ * A supervisor that routes two archive windows records two historical steps, and the flow drew two
+ * cards headed "Historical agent" — then two more for the analytics over them. Six cards for four
+ * stages, and a reader counting agents got the wrong number. `05-agent-evidence.png` draws one card
+ * per agent; what an agent did more than once belongs inside its card, not beside it.
+ *
+ * The stage's duration is the sum of its actions, which is what that agent cost the run. Its status
+ * is the worst of them: a stage with one failed retrieval did not succeed, and rolling it up as
+ * success because the other worked would hide the failure this screen exists to show.
+ */
+export function agentStages(record: RunRecord): AgentStage[] {
+  const order: string[] = [];
+  const byAgent = new Map<string, AgentStep[]>();
+
+  for (const step of record.agents) {
+    const agent = String(step.agent);
+    if (!byAgent.has(agent)) {
+      byAgent.set(agent, []);
+      order.push(agent);
+    }
+    byAgent.get(agent)?.push(step);
+  }
+
+  return order.map((agent) => {
+    const actions = byAgent.get(agent) ?? [];
+    const durations = actions
+      .map((step) => step.duration_ms)
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+
+    return {
+      agent,
+      status: worstStatus(actions),
+      actions,
+      durationMs: durations.length > 0 ? durations.reduce((sum, value) => sum + value, 0) : null,
+      startedAt: actions.find((step) => step.started_at)?.started_at ?? null,
+      reasons: actions
+        .map((step) => step.reason)
+        .filter((reason): reason is string => typeof reason === "string" && reason.length > 0),
+    };
+  });
+}
+
+/** The worst outcome among a stage's actions: a failure is never rolled up into a success. */
+function worstStatus(actions: readonly AgentStep[]): string {
+  if (actions.some((step) => step.status === "failed")) return "failed";
+  if (actions.some((step) => step.status === "skipped")) return "skipped";
+  return actions[0]?.status ?? "succeeded";
+}
+
 /**
  * Statistics the run recorded inside a *tool result* rather than in its analytics list.
  *

@@ -46,7 +46,6 @@ import {
   formatLocalStamp,
 } from "@/components/ui";
 import type {
-  AgentStep,
   AnomalyReport,
   EvidenceAttribution,
   KnowledgeCitation,
@@ -57,6 +56,7 @@ import { agentLabel, confidenceOf, horizonHoursOf, ROUTING_SOURCE_LABELS } from 
 import { measureLabel } from "@/lib/dashboard/briefing";
 import { dataClassFor } from "@/lib/design/data-class";
 import {
+  agentStages,
   statisticsFromTools,
   formatDurationMs,
   readableProse,
@@ -245,10 +245,20 @@ export function RunHeader({ record }: { readonly record: RunRecord }): ReactNode
  * than decorative.
  */
 export function ExecutionFlow({ record }: { readonly record: RunRecord }): ReactNode {
-  /** The slowest recorded step, which is what every bar below is a share of. */
-  const longest = record.agents.reduce(
-    (slowest, step) =>
-      typeof step.duration_ms === "number" ? Math.max(slowest, step.duration_ms) : slowest,
+  /*
+   * One card per agent, not one per action.
+   *
+   * A supervisor routing two archive windows records two historical steps, and this drew two cards
+   * headed "Historical agent" and then two more for the analytics over them — six cards for four
+   * stages, so a reader counting agents got the wrong number. What an agent did more than once is
+   * inside its card now.
+   */
+  const stages = agentStages(record);
+
+  /** The slowest stage, which is what every bar below is a share of. */
+  const longest = stages.reduce(
+    (slowest, stage) =>
+      typeof stage.durationMs === "number" ? Math.max(slowest, stage.durationMs) : slowest,
     0,
   );
   const routing = record.routingSource
@@ -270,50 +280,52 @@ export function ExecutionFlow({ record }: { readonly record: RunRecord }): React
         <p className={styles.note}>Routing: {routing}</p>
       ) : null}
 
-      {record.agents.length === 0 ? (
+      {stages.length === 0 ? (
         <p className={styles.note}>This run recorded no agent steps.</p>
       ) : (
         <ol className={styles.steps} data-agent-sequence="true">
-          {record.agents.map((step: AgentStep, index) => {
-            /*
-             * The step's own duration as a share of the longest step in this run.
-             *
-             * `05-agent-evidence.png` draws the execution as a connected timeline where each node
-             * carries a latency; production drew the same figures as a list of lines, which is the
-             * gap the 2026-09-10 fidelity review named. The bar is the recorded `duration_ms` and
-             * nothing else — scaled against the slowest recorded step, so the geometry compares
-             * steps within one run and makes no claim about any other. A step the backend recorded
-             * no duration for gets no bar; the figure beside it says `not reported`, which is not
-             * the same fact as zero milliseconds and is not drawn as one.
-             */
+          {stages.map((stage, index) => {
             const share =
-              longest > 0 && typeof step.duration_ms === "number"
-                ? Math.max((step.duration_ms / longest) * 100, 2)
+              longest > 0 && typeof stage.durationMs === "number"
+                ? Math.max((stage.durationMs / longest) * 100, 2)
                 : null;
 
             return (
               <li
                 className={styles.step}
-                key={`${step.sequence ?? index}-${step.agent}`}
-                data-status={step.status}
-                data-agent={step.agent}
+                key={stage.agent}
+                data-status={stage.status}
+                data-agent={stage.agent}
               >
                 <span className={styles.stepHead}>
                   <span className={styles.stepName}>
-                    {index + 1}. {agentLabel(step.agent)}
+                    {index + 1}. {agentLabel(stage.agent)}
                   </span>
-                  <span className={styles.stepMeta}>{stepStatusLabel(step.status)}</span>
+                  <span className={styles.stepMeta}>{stepStatusLabel(stage.status)}</span>
                 </span>
                 <span className={styles.stepMeta}>
-                  {formatDurationMs(step.duration_ms) ?? NOT_REPORTED}
-                  {step.started_at ? ` · started ${formatInstant(step.started_at)}` : null}
+                  {formatDurationMs(stage.durationMs) ?? NOT_REPORTED}
+                  {stage.actions.length > 1 ? ` \u00b7 ${stage.actions.length} actions` : null}
+                  {stage.startedAt ? ` \u00b7 started ${formatInstant(stage.startedAt)}` : null}
                 </span>
                 {share === null ? null : (
                   <span className={styles.stepBar} aria-hidden="true">
                     <span className={styles.stepBarFill} style={{ inlineSize: `${share}%` }} />
                   </span>
                 )}
-                {step.reason ? <span className={styles.stepReason}>{step.reason}</span> : null}
+                {/*
+                  What the agent did. One line for one action; a list when it did several, which is
+                  the detail the duplicate cards used to carry and the reason they existed.
+                */}
+                {stage.reasons.length === 1 ? (
+                  <span className={styles.stepReason}>{stage.reasons[0]}</span>
+                ) : stage.reasons.length > 1 ? (
+                  <ul className={styles.stepActions}>
+                    {stage.reasons.map((reason, position) => (
+                      <li key={`${stage.agent}-${position}`}>{reason}</li>
+                    ))}
+                  </ul>
+                ) : null}
               </li>
             );
           })}

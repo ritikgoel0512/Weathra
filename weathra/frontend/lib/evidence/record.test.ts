@@ -8,7 +8,12 @@
 
 import { describe, expect, it } from "vitest";
 
-import { readableProse, statisticsFromTools, type RunRecord } from "./record";
+import {
+  agentStages,
+  readableProse,
+  statisticsFromTools,
+  type RunRecord,
+} from "./record";
 
 describe("prose a person can read", () => {
   it("trims the float tail a model repeats from its input", () => {
@@ -130,5 +135,72 @@ describe("statistics a run recorded through its tools", () => {
     );
 
     expect(found).toEqual([]);
+  });
+});
+
+/** A record carrying only the agent steps these cases read. */
+function runWith(agents: unknown[]): RunRecord {
+  return { agents } as unknown as RunRecord;
+}
+
+describe("the run's agents as logical stages", () => {
+  it("draws one card per agent, however many times it ran", () => {
+    /*
+     * A supervisor routing two archive windows records two historical steps, and the flow drew two
+     * cards headed "Historical agent" — then two more for the analytics over them. Six cards for
+     * four stages, so a reader counting agents got the wrong number.
+     */
+    const stages = agentStages(
+      runWith([
+        { sequence: 1, agent: "supervisor", status: "succeeded", duration_ms: 90, reason: "Planned." },
+        { sequence: 2, agent: "historical", status: "succeeded", duration_ms: 300, reason: "This week." },
+        { sequence: 3, agent: "historical", status: "succeeded", duration_ms: 200, reason: "Last year." },
+        { sequence: 4, agent: "analytics", status: "succeeded", duration_ms: 100, reason: "Mean." },
+        { sequence: 5, agent: "analytics", status: "succeeded", duration_ms: 50, reason: "Difference." },
+        { sequence: 6, agent: "synthesis", status: "succeeded", duration_ms: 800 },
+      ]),
+    );
+
+    expect(stages.map((stage) => stage.agent)).toEqual([
+      "supervisor",
+      "historical",
+      "analytics",
+      "synthesis",
+    ]);
+
+    const historical = stages[1];
+    // The stage costs what its actions cost together, and keeps both reasons inside it.
+    expect(historical?.durationMs).toBe(500);
+    expect(historical?.actions).toHaveLength(2);
+    expect(historical?.reasons).toEqual(["This week.", "Last year."]);
+  });
+
+  it("never rolls a failed action up into a succeeded stage", () => {
+    /*
+     * The case that must not be smoothed over: an agent that retrieved one window and failed the
+     * other did not succeed, and a green stage would hide the failure this screen exists to show.
+     */
+    const stages = agentStages(
+      runWith([
+        { sequence: 1, agent: "historical", status: "succeeded", duration_ms: 300 },
+        { sequence: 2, agent: "historical", status: "failed", duration_ms: 20 },
+      ]),
+    );
+
+    expect(stages).toHaveLength(1);
+    expect(stages[0]?.status).toBe("failed");
+  });
+
+  it("keeps the order the agents first ran in", () => {
+    const stages = agentStages(
+      runWith([
+        { sequence: 1, agent: "supervisor", status: "succeeded" },
+        { sequence: 2, agent: "forecast", status: "succeeded" },
+        { sequence: 3, agent: "historical", status: "succeeded" },
+        { sequence: 4, agent: "forecast", status: "succeeded" },
+      ]),
+    );
+
+    expect(stages.map((stage) => stage.agent)).toEqual(["supervisor", "forecast", "historical"]);
   });
 });

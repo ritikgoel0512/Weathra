@@ -1471,3 +1471,16 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* What an agent did, when it did more than one thing. */
+.stepActions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-4);
+  list-style: disc;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+}
