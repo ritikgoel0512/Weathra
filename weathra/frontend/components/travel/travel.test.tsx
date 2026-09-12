@@ -102,7 +102,20 @@ const TRAVEL_FORECAST = {
       { time_local: "2026-09-12T18:00:00+01:00", time_utc: "c", values: { temperature: 20.2, precipitation: 0 } },
     ],
   },
-  daily: { granularity: "daily" as const, units: {}, entries: [] },
+  /*
+   * The provider's own daily entries, which the outlook cards, the metric row and the guidance all
+   * read. This was an empty series, so every region that draws the *sky* over a day — the glyph,
+   * the high and low, the chance of rain — was untested here while the capture drew them from a
+   * fixture that had them. Same measures the real provider sends.
+   */
+  daily: {
+    granularity: "daily" as const,
+    units: { temperature_max: "°C", temperature_min: "°C", precipitation_sum: "mm", precipitation_probability_max: "%", uv_index_max: "index", weather_code_dominant: "WMO code" },
+    entries: [
+      { time_local: "2026-09-12T00:00:00+01:00", time_utc: "a", values: { temperature_max: 26.1, temperature_min: 17.3, precipitation_sum: 0, precipitation_probability_max: 8, uv_index_max: 7.2, weather_code_dominant: 0 } },
+      { time_local: "2026-09-13T00:00:00+01:00", time_utc: "b", values: { temperature_max: 21.4, temperature_min: 15.9, precipitation_sum: 3.1, precipitation_probability_max: 74, uv_index_max: 2.6, weather_code_dominant: 63 } },
+    ],
+  },
   uncertainty: { basis: "b", provider: "stub-provider", reference_time_utc: "x", spread_available: false, horizon: [] },
 };
 
@@ -194,6 +207,50 @@ describe("ranking a weather window", () => {
 
     await vi.waitFor(() => expect(compareLocations).toHaveBeenCalledTimes(1));
     expect((await screen.findAllByText("Best")).length).toBeGreaterThan(0);
+  });
+});
+
+describe("empty and populated", () => {
+  it("offers a compact setup, not a dead end, when no place is chosen", async () => {
+    mount(
+      client({
+        preferences: vi.fn().mockResolvedValue({
+          unit_system: "metric",
+          forecast_horizon_days: 7,
+          default_location: null,
+          sources: {},
+        }),
+      }),
+    );
+
+    // The empty state names what the screen would show and gives the control that fills it, rather
+    // than sending the reader to Settings to configure a preference somewhere else first.
+    expect(await screen.findByText(/Travel Intelligence ranks the days at one destination/)).toBeInTheDocument();
+    expect(screen.getByRole("form", { name: "Travel to a place" })).toBeInTheDocument();
+    // Nothing is ranked, so nothing is claimed.
+    expect(screen.queryByRole("region", { name: "Destination daily outlook" })).toBeNull();
+  });
+
+  it("re-ranks and stays populated when the window changes", async () => {
+    const compareLocations = vi.fn().mockResolvedValue(RANKING);
+    mount(client({ compareLocations }));
+    await screen.findAllByText("Best");
+
+    await userEvent.selectOptions(screen.getByLabelText("Trip window"), "3");
+
+    /*
+     * The populated experience must survive its own controls. A screen that fell back to the setup
+     * view whenever a select changed would be the empty state the reader already left.
+     */
+    await vi.waitFor(() =>
+      expect(compareLocations).toHaveBeenLastCalledWith({
+        criterion: "outdoor_suitability",
+        location: "Lisbon, Portugal",
+        days: 3,
+      }),
+    );
+    expect((await screen.findAllByText("Best")).length).toBeGreaterThan(0);
+    expect(screen.getByRole("region", { name: "Destination daily outlook" })).toBeInTheDocument();
   });
 });
 
@@ -291,6 +348,67 @@ describe("the lower bands", () => {
     expect(within(band).queryByText("AI INTERPRETATION")).toBeNull();
   });
 
+  it("speaks the days, and never prints the identifier the backend ranks them by", async () => {
+    mount(client());
+    await screen.findAllByText("Best");
+
+    /*
+     * `compare_days` labels a candidate with its ISO date, because a label in a ranking is an
+     * identifier. The screen rendered it verbatim into "Score for 2026-09-12", which is a timestamp
+     * in front of a customer — and it was invisible to the capture, whose fixture answered with
+     * place names instead of dates.
+     */
+    expect(document.body.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+    expect(document.body.innerHTML).not.toMatch(/Score for \d{4}-\d{2}-\d{2}/);
+  });
+
+  it("draws the sky over each day, not only the statistic the score came from", async () => {
+    mount(client());
+    await screen.findAllByText("Best");
+    const outlook = await screen.findByRole("region", { name: "Destination daily outlook" });
+
+    // The provider's own dominant code, translated — and its reported high and low. None of this is
+    // in the ranking's `supporting` list, which holds only what the score was computed from. Awaited
+    // rather than read: the forecast is a second call, issued once the ranking has settled.
+    expect(await within(outlook).findByText("Clear")).toBeInTheDocument();
+    expect(await within(outlook).findByText("Rain")).toBeInTheDocument();
+    expect(await within(outlook).findByText("26.1 °C")).toBeInTheDocument();
+    expect(await within(outlook).findByText(/Low 17.3 °C/)).toBeInTheDocument();
+  });
+
+  it("fills the fourth metric card from the day's own forecast entry", async () => {
+    mount(client());
+    await screen.findAllByText("Best");
+    const row = await screen.findByRole("region", { name: "Figures for the best-ranked day" });
+
+    // A day-level ranking supports its score with temperature, precipitation and wind and nothing
+    // else, so a row reading only `supporting` drew three cards and a gap.
+    expect(await within(row).findByText("Chance of rain")).toBeInTheDocument();
+    expect(await within(row).findByText("8%")).toBeInTheDocument();
+  });
+
+  it("raises sun protection from the day's own UV index, and nothing from a catalogue", async () => {
+    mount(client());
+    await screen.findAllByText("Best");
+    const band = await screen.findByRole("region", { name: "Weather-aware trip guidance" });
+
+    expect(await within(band).findByText("Sun protection")).toBeInTheDocument();
+    expect(await within(band).findByText(/peak UV index of 7.2/)).toBeInTheDocument();
+    // The artifact's own recommends "Light Breathable Linen" as ESSENTIAL. Weathra sells nothing.
+    expect(band.textContent).not.toMatch(/linen|essential|recommended gear/i);
+  });
+
+  it("reports a snapshot that does exist, from the backend's own statement", async () => {
+    mount(client());
+    await screen.findAllByText("Best");
+    const band = await screen.findByRole("region", { name: "What changed?" });
+
+    expect(await within(band).findByText(/The forecast has moved since it was last retrieved/)).toBeInTheDocument();
+    expect(await within(band).findByText(/12 Sep is 1.5 °C warmer than the previous forecast/)).toBeInTheDocument();
+    // Nothing is compared in the browser, and nothing about model convergence is claimed.
+    expect(band.textContent).not.toMatch(/convergence|vector|realignment/i);
+  });
+
   it("carries the provenance a reader would need, and no hash or node count", async () => {
     mount(client());
     await screen.findAllByText("Best");
@@ -300,12 +418,19 @@ describe("the lower bands", () => {
     expect(band.textContent).not.toMatch(/hash|node|alignment|convergence/i);
   });
 
-  it("omits the historical band entirely when no baseline came back", async () => {
+  it("keeps the historical band, and says so, when no baseline came back", async () => {
     mount(client({ baselineComparison: vi.fn().mockRejectedValue(new Error("no archive")) }));
     await screen.findAllByText("Best");
 
-    // Not an empty card and not a zero: the band is absent, which is what an absent baseline is.
-    expect(screen.queryByRole("region", { name: "Historical context" })).toBeNull();
+    /*
+     * The band used to be removed when the archive did not answer, which is the composition
+     * changing shape because of an absence — the screen's closing region simply disappeared. An
+     * archive that cannot reach a calendar period is a real state, and it is stated rather than
+     * hidden. Not a zero and not an invented baseline: a sentence saying what is missing.
+     */
+    const band = await screen.findByRole("region", { name: "Historical context" });
+    expect(await within(band).findByText(/could not retrieve archive observations/i)).toBeInTheDocument();
+    expect(band.textContent).not.toMatch(/\bWMO\b|climate normal/i);
   });
 
   it("names the archive years it actually got, never a climate normal", async () => {

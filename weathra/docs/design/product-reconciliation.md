@@ -518,3 +518,42 @@ represented, each from data Weathra actually holds.
   in that slice rather than computed over them.
 * **The capture's provider reads `stub-provider`** because the harness is a stub; production reads
   Open-Meteo.
+
+### Travel Intelligence — real-production acceptance (supersedes the a9c1fab verdict)
+
+**The earlier PASS at `a9c1fab` is superseded.** It was graded from `capture/15-travel-1440.png`,
+and that picture was taken against a fixture answering `POST /weather/comparison` with
+`mode: "locations"` — Berlin ranked against Munich, scored on raw temperature, carrying `basis`,
+`weights`, `retrieved_at`, a correlation and a data density. Travel sends one `location` and a
+`days` horizon, which the real service answers from `compare_days`: ISO-dated candidates, scores on
+0–1, the two cross-place statistics `null`, and none of those three fields, which `ComparisonResult`
+forbids. The screenshot therefore showed a screen fed a shape production never returns, and a
+synthetic capture is not evidence of production correctness.
+
+**What the real path could not do, and now can.** The historical band asked
+`/weather/history/baseline/comparison` for the *trip's own* window. That window is in the future,
+and the route refused it (`RangeOutsideCoverage`) — so in production the band returned `null` and
+vanished, and the synthesis lost its baseline sentence, while the stub answered both happily. The
+forecast-side comparison already existed in the domain (`compare_against_baseline` with
+`DataClass.FORECAST`, and `BaselineComparison.forecast_side_caveat` written for exactly this) and
+was simply unreachable over HTTP. `compare_forecast_against_baseline` composes it, and the route
+branches on whether the window has happened. Verified against live Open-Meteo for London,
+12–18 Sep 2026: a 4-year baseline of 15.48 °C, a forecast mean of 18.24 °C, +2.76 °C, z = 1.03,
+100th percentile, caveat present.
+
+**Other real defects this pass fixed.** Day-level candidates are labelled with their ISO date, and
+the screen rendered that verbatim into "Score for 2026-09-14" — a timestamp in front of a customer,
+invisible to a capture whose fixture used place names. The outlook cards drew a mean temperature and
+no weather, though the provider's condition code, high, low and chance of rain were already in the
+forecast the screen retrieves for its chart. The metric row asked `supporting` for a fourth measure
+a day ranking does not carry, so it drew three cards and a gap. The historical band removed itself
+when the archive did not answer, which is the composition changing shape because of an absence; it
+now states what is missing instead.
+
+**The fixture may not outrank the contract.** `frontend/tests/travel-schema-parity.test.ts` runs the
+capture stub and validates its answers against `backend/openapi.json`, so a fixture offering
+capabilities the route does not — or withholding ones it does — fails as a test rather than as a
+screenshot somebody trusts.
+
+**Verdict: PASS on real-production acceptance.** Every band populates from contracts Weathra
+actually serves; `stub-provider` in the capture is the harness, and production reads Open-Meteo.

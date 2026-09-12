@@ -94,14 +94,15 @@ const ALL_SCREENS = [
   { name: "12-report", path: "/report" },
   { name: "13-scenarios", path: "/scenarios", prepare: "Run this scenario" },
   { name: "14-watch", path: "/watch" },
-  {
-    name: "15-travel",
-    path: "/travel",
-    // The ranking is on demand, so an unprepared capture photographs the empty state and says
-    // nothing about the screen. Pressing the control the screen exists for is what the picture is
-    // supposed to show; the figures behind it are the stub's, shaped as the endpoint returns them.
-    prepare: "Rank these days",
-  },
+  /*
+   * Travel Intelligence, which ranks on arrival.
+   *
+   * This carried `prepare: "Rank these days"` from when the screen opened on a form. The button is
+   * gone — the defaults are a real question and the screen answers it on load — and because
+   * `prepare` skips silently when its control is not visible, the stale entry neither failed nor
+   * did anything. Left in place it would keep implying the populated capture depends on a press.
+   */
+  { name: "15-travel", path: "/travel" },
   /*
    * Agent Evidence, photographed as a populated record.
    *

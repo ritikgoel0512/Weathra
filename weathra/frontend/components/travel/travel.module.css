@@ -479,6 +479,29 @@
   color: var(--color-text-muted);
 }
 
+/*
+ * The sky over the day, glyph and word together.
+ *
+ * The icon is decorative and `aria-hidden`; the label beside it is what carries the meaning, which
+ * is the rule `WeatherIcon` is written to.
+ */
+.dayCondition {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-1) 0 0;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-secondary);
+  min-width: 0;
+}
+
+.dayCondition span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .dayFigure {
   margin: var(--space-1) 0 0;
   font-family: var(--family-display);
@@ -486,6 +509,14 @@
   line-height: var(--type-card-line);
   font-weight: var(--type-card-weight);
   color: var(--color-text-primary);
+}
+
+/* The cold end of the day, set under its high rather than beside it. */
+.dayRange {
+  margin: 0;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
 }
 
 .dayRain {

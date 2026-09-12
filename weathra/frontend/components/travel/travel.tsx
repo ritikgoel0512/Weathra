@@ -34,6 +34,7 @@ import {
   LocationImage,
   formatInstant,
   Meter,
+  WeatherIcon,
 } from "@/components/ui";
 import type {
   ComparisonCandidate,
@@ -55,6 +56,7 @@ import { ForecastTrendChart, type TrendPoint } from "@/components/explorer/trend
 import { hourLabel, localLabel } from "@/lib/explorer/reading";
 import { baselineYearsStatement, formatSigned } from "@/lib/historical/analysis";
 import { friendlyName } from "@/lib/locations/place";
+import { conditionFor } from "@/lib/weather/condition";
 import { useApiQuery } from "@/lib/query/hooks";
 import { PREFERENCES_KEY } from "@/lib/query/keys";
 
@@ -105,6 +107,56 @@ function dayLabel(candidate: ComparisonCandidate): { weekday: string; date: stri
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * The day a candidate stands for, written the way a person says it.
+ *
+ * The backend labels a day-level candidate with its ISO date, because a label in a ranking is an
+ * identifier and `2026-09-14` is the only unambiguous one. That is the right thing to send and the
+ * wrong thing to show: this screen was rendering it verbatim into "Score for 2026-09-14", which is
+ * a timestamp on a customer's screen. Every visible use of a candidate's identity goes through
+ * here instead.
+ */
+function candidateLabel(candidate: ComparisonCandidate): string {
+  const { weekday, date } = dayLabel(candidate);
+  const spoken = `${weekday} ${date}`.trim();
+  return spoken === "" ? candidate.label : spoken;
+}
+
+/**
+ * The provider's own daily entries, keyed by the local date they fall on.
+ *
+ * The ranking scores a day and returns the statistics that produced the score; the *sky* over that
+ * day — its condition code, its high and low, how likely rain is — is in the daily series of the
+ * forecast this screen already retrieves for the hourly chart. It was being fetched and then read
+ * only for its hours, so the outlook cards drew a mean temperature where the artifact draws a
+ * condition and a range. Nothing new is requested for this; it is the same response, read twice.
+ */
+function dailyByDate(forecast: ForecastResponse | null): Map<string, Record<string, number | null>> {
+  const byDate = new Map<string, Record<string, number | null>>();
+  for (const entry of forecast?.daily?.entries ?? []) {
+    const match = /^(\d{4}-\d{2}-\d{2})/.exec(entry.time_local ?? "");
+    if (match?.[1]) byDate.set(match[1], entry.values ?? {});
+  }
+  return byDate;
+}
+
+/** A finite number from a daily entry, or `null` where the provider reported none. */
+function numberOf(values: Record<string, number | null> | undefined, key: string): number | null {
+  const found = values?.[key];
+  return typeof found === "number" && Number.isFinite(found) ? found : null;
+}
+
+/** A figure and its unit, as the daily series expresses it. */
+function dailyReading(
+  forecast: ForecastResponse | null,
+  values: Record<string, number | null> | undefined,
+  key: string,
+): string | null {
+  const value = numberOf(values, key);
+  if (value === null) return null;
+  return formatReading({ value, unit: forecast?.daily?.units?.[key] ?? null });
+}
 
 /**
  * The destination hero — the artifact's dominant photographic band, carrying the decision.
@@ -231,25 +283,75 @@ function SuitabilityCard({
   );
 }
 
-/** The four compact cards the artifact sets under the hero, from the best day's own statistics. */
-function TravelMetrics({ best }: { readonly best: ComparisonCandidate | null }): ReactNode {
-  const cards = [
+/**
+ * The four compact cards the artifact sets under the hero, from the best day's own figures.
+ *
+ * The artifact's four are Temp Variance, Flight Stability, Precip Cluster and Sun Exposure. Two of
+ * those are aviation measures Weathra has no data for and does not offer; what stands here instead
+ * are four measures it really holds for that day.
+ *
+ * **Three came from the ranking and the fourth did not.** A day-level ranking supports its score
+ * with temperature, precipitation and wind — and nothing else, so a row asking `supporting` for a
+ * fourth measure rendered three cards and a gap. The fourth is read from the provider's daily
+ * entry for the same day, which is the same retrieval the outlook cards and the chart already use.
+ */
+function TravelMetrics({
+  best,
+  forecast,
+  daily,
+}: {
+  readonly best: ComparisonCandidate | null;
+  readonly forecast: ForecastResponse | null;
+  readonly daily: Record<string, number | null> | undefined;
+}): ReactNode {
+  const statCards = [
     { key: "temperature", label: "Best-day temperature", stat: statOf(best, ["temperature_max", "temperature_mean", "temperature"]) },
     { key: "precipitation", label: "Rain in the window", stat: statOf(best, ["precipitation_sum", "precipitation"]) },
     { key: "wind", label: "Wind", stat: statOf(best, ["wind_gust_max", "wind_speed_max", "wind_speed"]) },
-    { key: "humidity", label: "Humidity", stat: statOf(best, ["relative_humidity_mean", "relative_humidity", "cloud_cover_mean"]) },
-  ].filter((card) => card.stat !== null);
+  ]
+    .filter((card) => card.stat !== null)
+    .map((card) => ({
+      key: card.key,
+      label: card.label,
+      value: reading(card.stat) as string,
+      note: card.stat!.method,
+    }));
 
+  /*
+   * The fourth, in the order a traveller would ask for it: how likely rain is, then how strong the
+   * sun is, then how wide the day swings. Whichever the provider reported first is the one drawn,
+   * and where it reported none the row is three cards rather than a card with nothing in it.
+   */
+  const chance = numberOf(daily, "precipitation_probability_max");
+  const uv = numberOf(daily, "uv_index_max");
+  const high = numberOf(daily, "temperature_max");
+  const low = numberOf(daily, "temperature_min");
+
+  const fourth =
+    chance !== null
+      ? { key: "chance", label: "Chance of rain", value: `${Math.round(chance)}%`, note: "highest hourly chance the provider reported for this day" }
+      : uv !== null
+        ? { key: "uv", label: "Strongest sun", value: `${Math.round(uv * 10) / 10} UV`, note: "the day's peak UV index, as the provider reported it" }
+        : high !== null && low !== null
+          ? {
+              key: "range",
+              label: "High and low",
+              value: `${dailyReading(forecast, daily, "temperature_max")} / ${dailyReading(forecast, daily, "temperature_min")}`,
+              note: "the day's reported high and low",
+            }
+          : null;
+
+  const cards = fourth === null ? statCards : [...statCards, fourth];
   if (cards.length === 0) return null;
 
   return (
     <section className={styles.metrics} aria-label="Figures for the best-ranked day">
       {cards.map((card) => (
         <div className={styles.metric} key={card.key}>
-          <DataClassBadge dataClass="analytics" />
+          <DataClassBadge dataClass={card.key === "chance" || card.key === "uv" || card.key === "range" ? "forecast" : "analytics"} />
           <p className={styles.metricLabel}>{card.label}</p>
-          <p className={styles.metricValue}>{reading(card.stat)}</p>
-          <p className={styles.metricNote}>{card.stat!.method}</p>
+          <p className={styles.metricValue}>{card.value}</p>
+          <p className={styles.metricNote}>{card.note}</p>
         </div>
       ))}
     </section>
@@ -265,25 +367,54 @@ function TravelMetrics({ best }: { readonly best: ComparisonCandidate | null }):
 function DayCard({
   candidate,
   best,
+  forecast,
+  daily,
 }: {
   readonly candidate: ComparisonCandidate;
   readonly best: number;
+  readonly forecast: ForecastResponse | null;
+  readonly daily: Record<string, number | null> | undefined;
 }): ReactNode {
   const { weekday, date } = dayLabel(candidate);
   const temperature = statOf(candidate, ["temperature_max", "temperature_mean", "temperature"]);
   const rain = statOf(candidate, ["precipitation_sum", "precipitation"]);
 
+  /*
+   * The sky, the range and the chance of rain, from the provider's own daily entry for this date.
+   *
+   * The artifact's outlook cards carry a glyph, a high, a low and a precipitation figure. The
+   * ranking's `supporting` list carries none of those — it holds the statistics the *score* was
+   * computed from — so a card built only from it showed one temperature and no weather at all.
+   * These three reads are the provider's values as retrieved, not figures derived here.
+   */
+  const condition = conditionFor(numberOf(daily, "weather_code_dominant"));
+  const high = dailyReading(forecast, daily, "temperature_max");
+  const low = dailyReading(forecast, daily, "temperature_min");
+  const chance = numberOf(daily, "precipitation_probability_max");
+
   return (
     <li className={styles.day} data-best={candidate.rank === 1 ? "true" : undefined}>
       <p className={styles.dayWeekday}>{weekday}</p>
       <p className={styles.dayDate}>{date}</p>
-      <p className={styles.dayFigure}>{reading(temperature) ?? "—"}</p>
-      <p className={styles.dayRain}>{reading(rain) ?? "No rain reported"}</p>
+
+      {condition ? (
+        <p className={styles.dayCondition}>
+          <WeatherIcon condition={condition} size={26} />
+          <span>{condition.label}</span>
+        </p>
+      ) : null}
+
+      <p className={styles.dayFigure}>{high ?? reading(temperature) ?? "—"}</p>
+      {low ? <p className={styles.dayRange}>Low {low}</p> : null}
+      <p className={styles.dayRain}>
+        {reading(rain) ?? "No rain reported"}
+        {chance === null ? "" : ` · ${Math.round(chance)}% chance`}
+      </p>
       {candidate.rank === 1 ? <Badge tone="ok">Best</Badge> : null}
       {candidate.tied ? <Badge tone="neutral">Tied</Badge> : null}
 
       <Meter
-        label={`Score for ${candidate.label}`}
+        label={`Score for ${candidateLabel(candidate)}`}
         value={best === 0 ? null : Math.max(0, Math.min(1, candidate.score / best))}
       />
 
@@ -328,11 +459,30 @@ function DayCard({
  * justify — each one naming the figure that raised it, so a reader can check it against the card
  * above rather than trust it.
  */
-function TripGuidance({ best }: { readonly best: ComparisonCandidate | null }): ReactNode {
+function TripGuidance({
+  best,
+  forecast,
+  daily,
+}: {
+  readonly best: ComparisonCandidate | null;
+  readonly forecast: ForecastResponse | null;
+  readonly daily: Record<string, number | null> | undefined;
+}): ReactNode {
   const rain = statOf(best, ["precipitation_sum", "precipitation"]);
   const wind = statOf(best, ["wind_gust_max", "wind_speed_max", "wind_speed"]);
   const temperature = statOf(best, ["temperature_max", "temperature_mean", "temperature"]);
-  const low = statOf(best, ["temperature_min"]);
+  const low = statOf(best, ["temperature_min"]) ?? null;
+
+  /*
+   * The day's own low and its peak sun, where the ranking did not supply them.
+   *
+   * A day-level ranking supports its score with a mean temperature, so "a warmer layer" was being
+   * raised against the *mean* rather than against the cold end of the day, and strong sun could
+   * not be raised at all. Both figures are in the provider's daily entry for this date.
+   */
+  const dayLow = numberOf(daily, "temperature_min");
+  const dayHigh = numberOf(daily, "temperature_max");
+  const uv = numberOf(daily, "uv_index_max");
 
   const notes: { key: string; text: string; because: string }[] = [];
   if (rain && (rain.value as number) > 0) {
@@ -349,19 +499,33 @@ function TripGuidance({ best }: { readonly best: ComparisonCandidate | null }): 
       because: `${reading(wind)} expected`,
     });
   }
-  const lowValue = (low?.value ?? temperature?.value) as number | undefined;
+  const lowValue = dayLow ?? ((low?.value ?? temperature?.value) as number | undefined);
   if (typeof lowValue === "number" && lowValue <= 12) {
     notes.push({
       key: "cool",
       text: "A warmer layer",
-      because: `${reading(low ?? temperature)} at the low end`,
+      because:
+        dayLow === null
+          ? `${reading(low ?? temperature)} at the low end`
+          : `${dailyReading(forecast, daily, "temperature_min")} at the low end`,
     });
   }
-  if (temperature && (temperature.value as number) >= 25) {
+  const highValue = dayHigh ?? ((temperature?.value ?? null) as number | null);
+  if (typeof highValue === "number" && highValue >= 25) {
     notes.push({
       key: "warm",
-      text: "Sun and heat protection",
-      because: `${reading(temperature)} at the high end`,
+      text: "Light, cool clothing",
+      because:
+        dayHigh === null
+          ? `${reading(temperature)} at the high end`
+          : `${dailyReading(forecast, daily, "temperature_max")} at the high end`,
+    });
+  }
+  if (uv !== null && uv >= 6) {
+    notes.push({
+      key: "uv",
+      text: "Sun protection",
+      because: `a peak UV index of ${Math.round(uv * 10) / 10} on this day`,
     });
   }
 
@@ -745,11 +909,56 @@ function SynthesisBand({
 function HistoricalContext({
   location,
   baseline,
+  pending,
 }: {
   readonly location: Location;
   readonly baseline: BaselineComparison | null;
+  /** True while the archive is still answering, false once it has answered or failed. */
+  readonly pending: boolean;
 }): ReactNode {
-  if (baseline === null) return null;
+  /*
+   * **The band is drawn either way.**
+   *
+   * This used to return `null` whenever the archive had not answered, which is the composition
+   * changing shape because of an absence — the artifact's closing region simply disappeared, and
+   * the page ended on the synthesis. An archive that cannot reach back far enough for a place is a
+   * real state and a truthful one; it is said here rather than hidden by removing the region.
+   */
+  if (baseline === null) {
+    return (
+      <div className={styles.historical}>
+        <Card aria-labelledby="travel-historical">
+          <CardHeader
+            title="Historical context"
+            titleId="travel-historical"
+            badge={<DataClassBadge dataClass="analytics" />}
+            subtitle="Against the archive years Weathra can retrieve for this calendar period."
+          />
+          <CardBody>
+            {pending ? (
+              <LoadingState label="Reading the archive for this calendar period" lines={3} />
+            ) : (
+              <p className={styles.quiet}>
+                Weathra could not retrieve archive observations for this calendar period at{" "}
+                {friendlyName(location)}, so the window is not placed against a baseline here. The
+                forecast figures above are unaffected.
+              </p>
+            )}
+          </CardBody>
+        </Card>
+
+        <LocationImage
+          displayName={friendlyName(location)}
+          latitude={location.latitude}
+          longitude={location.longitude}
+          variant="banner"
+          scrim="strong"
+        >
+          <span className={styles.heroZone}>{friendlyName(location)}</span>
+        </LocationImage>
+      </div>
+    );
+  }
 
   const difference = formatSigned(baseline.difference);
   const years = baseline.baseline.years_used.length;
@@ -903,6 +1112,16 @@ function TravelFor({
   const changedData = changed.state.kind === "ready" ? changed.state.data : null;
   const baselineData = baseline.state.kind === "ready" ? baseline.state.data : null;
 
+  /*
+   * The provider's daily entries, indexed once for every band that reads one.
+   *
+   * The outlook cards, the metric row and the guidance each want the sky over a particular date.
+   * Indexing here rather than in each of them is what stops three regions from walking the same
+   * series three times and disagreeing about which entry is which day.
+   */
+  const byDate = dailyByDate(forecastData);
+  const bestDaily = byDate.get(dateOf(best) ?? "");
+
   return (
     <div className={styles.screen}>
       <h1 className="weathra-visually-hidden">Travel Intelligence</h1>
@@ -984,7 +1203,7 @@ function TravelFor({
 
       {result ? (
         <>
-          <TravelMetrics best={best} />
+          <TravelMetrics best={best} forecast={forecastData} daily={bestDaily} />
 
           <div className={styles.outlook}>
             <Card aria-labelledby="travel-window">
@@ -997,7 +1216,13 @@ function TravelFor({
               <CardBody>
                 <ul className={styles.days}>
                   {result.candidates.map((candidate) => (
-                    <DayCard key={candidate.label} candidate={candidate} best={bestScore} />
+                    <DayCard
+                      key={candidate.label}
+                      candidate={candidate}
+                      best={bestScore}
+                      forecast={forecastData}
+                      daily={byDate.get(dateOf(candidate) ?? "")}
+                    />
                   ))}
                 </ul>
                 {(result.excluded?.length ?? 0) > 0 ? (
@@ -1010,7 +1235,7 @@ function TravelFor({
               </CardBody>
             </Card>
 
-            <TripGuidance best={best} />
+            <TripGuidance best={best} forecast={forecastData} daily={bestDaily} />
           </div>
 
           <IntradayTrend forecast={forecastData} best={best} />
@@ -1028,7 +1253,11 @@ function TravelFor({
             forecast={forecastData}
           />
 
-          <HistoricalContext location={location} baseline={baselineData} />
+          <HistoricalContext
+            location={location}
+            baseline={baselineData}
+            pending={baseline.state.kind === "loading"}
+          />
 
           <p className={styles.advisory}>
             This ranks days by the weather forecast for one place. It is not advice about flights,

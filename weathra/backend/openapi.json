@@ -10548,7 +10548,7 @@
     },
     "/api/v1/weather/history/baseline/comparison": {
       "get": {
-        "description": "**Public.** Places a supplied past period against its baseline. Reads no user-owned row.\n\nHow an observed past period compares with the same calendar period in the years before it.\n\nBoth sides are the same statistic over daily values, computed by the same function, so the\nsigned difference means what a reader will take it to mean. The z-score comes back undefined\n*with its reason* when the baseline has no spread, and the difference is reported either way.\n\nBoth sides are observations: this is not a measure of forecast accuracy, and the comparison's\nown data classes say so.",
+        "description": "**Public.** Places a supplied past period against its baseline. Reads no user-owned row.\n\nHow a period compares with the same calendar period in the years before it.\n\nBoth sides are the same statistic over daily values, computed by the same function, so the\nsigned difference means what a reader will take it to mean. The z-score comes back undefined\n*with its reason* when the baseline has no spread, and the difference is reported either way.\n\n**A window still ahead is answered from the forecast.** The archive cannot be asked about days\nthat have not happened, and a trip being planned is exactly that question \u2014 so a period ending\nin the future takes its value from the forecast and the baseline from the archive, and the\nresult carries ``forecast_side_caveat`` saying which side is uncertain. A past window is\nobservation on both sides, and is still not a measure of forecast accuracy.",
         "operationId": "baseline_comparison_api_v1_weather_history_baseline_comparison_get",
         "parameters": [
           {

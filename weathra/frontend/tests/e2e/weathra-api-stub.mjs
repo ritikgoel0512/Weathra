@@ -169,6 +169,44 @@ function statistic(name, measure, value, unit, method) {
   };
 }
 
+/**
+ * One day in a day-level ranking, shaped as `compare_days` returns it.
+ *
+ * The label is the ISO date, because that is what the service sends: a label in a ranking is an
+ * identifier, and the screen is responsible for speaking it. Keeping that here is deliberate — a
+ * fixture that handed the screen a pre-formatted "Fri 04 Sep" would hide exactly the bug that put
+ * a raw timestamp in front of a customer.
+ */
+function dayCandidate(date, rank, score, { temperature, rain, wind }, tied) {
+  const period = {
+    start_local: `${date}T00:00:00+02:00`,
+    end_local: `${date}T23:59:59+02:00`,
+    start_utc: `${date}T22:00:00Z`,
+    end_utc: `${date}T21:59:59Z`,
+    timezone: "Europe/Berlin",
+  };
+  const supporting = [
+    statistic("mean", "temperature_mean", temperature, "°C", "arithmetic mean of usable points"),
+    statistic("total", "precipitation_sum", rain, "mm", "sum of usable points"),
+    statistic("mean", "wind_speed_max", wind, "km/h", "arithmetic mean of usable points"),
+  ];
+  return {
+    label: date,
+    location: BERLIN,
+    period,
+    rank,
+    score,
+    tied,
+    // The weighted parts of the score, summing to it, as `score_candidate` reports them.
+    contributions: [
+      { measure: "temperature_mean", value: temperature, unit: "°C", direction: "above", weight: 0.5, contribution: Math.round(score * 0.54 * 1000) / 1000, supporting: supporting[0] },
+      { measure: "precipitation_sum", value: rain, unit: "mm", direction: "below", weight: 0.3, contribution: Math.round(score * 0.31 * 1000) / 1000, supporting: supporting[1] },
+      { measure: "wind_speed_max", value: wind, unit: "km/h", direction: "below", weight: 0.2, contribution: Math.round(score * 0.15 * 1000) / 1000, supporting: supporting[2] },
+    ],
+    supporting,
+  };
+}
+
 const MUNICH = {
   display_name: "Munich",
   latitude: 48.14,
@@ -650,37 +688,44 @@ const FIXTURES = {
      */
     daily: {
       granularity: "daily",
-      units: { temperature_max: "°C", temperature_min: "°C", precipitation_sum: "mm", weather_code_dominant: "WMO code" },
+      /*
+       * The two measures Travel's metric row and its guidance read, which the real provider sends
+       * on every daily entry and this fixture did not. Without them the fourth metric card and the
+       * sun-protection note were unreachable in a capture but reachable in production — a stub that
+       * is *narrower* than the contract hides a populated region rather than inventing one, and is
+       * still a fixture disagreeing with the route.
+       */
+      units: { temperature_max: "°C", temperature_min: "°C", precipitation_sum: "mm", precipitation_probability_max: "%", uv_index_max: "index", weather_code_dominant: "WMO code" },
       entries: [
         {
           time_utc: "2026-09-03T22:00:00Z",
           time_local: "2026-09-04T00:00:00+02:00",
-          values: { temperature_max: 19.6, temperature_min: 10.4, precipitation_sum: 1.6, weather_code_dominant: 61 },
+          values: { temperature_max: 19.6, temperature_min: 10.4, precipitation_sum: 1.6, precipitation_probability_max: 62, uv_index_max: 3.1, weather_code_dominant: 61 },
         },
         {
           time_utc: "2026-09-04T22:00:00Z",
           time_local: "2026-09-05T00:00:00+02:00",
-          values: { temperature_max: 20.8, temperature_min: 11.2, precipitation_sum: 2.1, weather_code_dominant: 63 },
+          values: { temperature_max: 20.8, temperature_min: 11.2, precipitation_sum: 2.1, precipitation_probability_max: 71, uv_index_max: 2.8, weather_code_dominant: 63 },
         },
         {
           time_utc: "2026-09-05T22:00:00Z",
           time_local: "2026-09-06T00:00:00+02:00",
-          values: { temperature_max: 24.5, temperature_min: 13.1, precipitation_sum: 0, weather_code_dominant: 0 },
+          values: { temperature_max: 24.5, temperature_min: 13.1, precipitation_sum: 0, precipitation_probability_max: 6, uv_index_max: 6.4, weather_code_dominant: 0 },
         },
         {
           time_utc: "2026-09-06T22:00:00Z",
           time_local: "2026-09-07T00:00:00+02:00",
-          values: { temperature_max: 22.8, temperature_min: 12.4, precipitation_sum: 0.2, weather_code_dominant: 61 },
+          values: { temperature_max: 22.8, temperature_min: 12.4, precipitation_sum: 0.2, precipitation_probability_max: 24, uv_index_max: 5.2, weather_code_dominant: 61 },
         },
         {
           time_utc: "2026-09-07T22:00:00Z",
           time_local: "2026-09-08T00:00:00+02:00",
-          values: { temperature_max: 19.1, temperature_min: 11.8, precipitation_sum: 3.4, weather_code_dominant: 63 },
+          values: { temperature_max: 19.1, temperature_min: 11.8, precipitation_sum: 3.4, precipitation_probability_max: 78, uv_index_max: 2.4, weather_code_dominant: 63 },
         },
         {
           time_utc: "2026-09-08T22:00:00Z",
           time_local: "2026-09-09T00:00:00+02:00",
-          values: { temperature_max: 16.5, temperature_min: 9.7, precipitation_sum: 5.2, weather_code_dominant: 80 },
+          values: { temperature_max: 16.5, temperature_min: 9.7, precipitation_sum: 5.2, precipitation_probability_max: 88, uv_index_max: 1.9, weather_code_dominant: 80 },
         },
         {
           // The provider reported a minimum for this day and no maximum. Not a zero.
@@ -1574,79 +1619,66 @@ const FIXTURES = {
     baseline: BASELINE,
   },
 
+  /*
+   * A day-level ranking, because that is the request the Travel screen actually makes.
+   *
+   * This fixture used to answer with `mode: "locations"` — Berlin ranked against Munich, scored on
+   * raw temperature, carrying `correlation`, `data_density`, `basis`, `weights` and `retrieved_at`.
+   * Travel asks `POST /weather/comparison` with a single `location` and a `days` horizon, which the
+   * real service answers from `compare_days`: ISO-dated candidates, scores on 0–1, the two
+   * cross-place statistics `null`, and no `basis`/`weights`/`retrieved_at` fields at all — the
+   * model forbids them. So the capture was photographing a screen fed a shape production never
+   * returns for that request, which is the one thing a fixture must not do. Verified against the
+   * live service for London before it was written here; `travel-schema-parity.test.ts` holds the
+   * two consumers to one view model so this cannot drift back.
+   *
+   * The values are the stub's own and deterministic. The *shape and capabilities* are the
+   * contract's.
+   */
   "/api/v1/weather/comparison": {
-    criterion: "warmest",
-    mode: "locations",
+    mode: "days",
+    criterion: "outdoor_suitability",
     data_class: "forecast",
     provider: "stub-provider",
     unit_system: "metric",
     period: PERIOD,
-    retrieved_at: RETRIEVED_AT,
-    basis: "Every place measured over the same window in its own local time.",
-    weights: {},
+    local_time_basis: true,
+    tie_tolerance: 0.05,
     /*
-     * The artifact's two bars, shaped as `association.py` returns them.
-     *
-     * Deliberately not a round 96%: 0.87 with two of twenty-four instants excluded is what a real
-     * pair of nearby cities and a real provider look like, and a figure that lands on a suspiciously
-     * clean number is the kind of fixture that hides a formatting bug.
+     * Both `null`, as `compare_days` returns them. Pearson's r describes a *pair of places* and
+     * density counts instants every candidate reported; neither means anything when the candidates
+     * are the days of one place, so the service leaves them unset and the screen must not rely on
+     * them.
      */
-    correlation: {
-      ...statistic("correlation", "temperature", 0.87, "correlation coefficient", "Pearson correlation of the two places' values at the instants both reported, paired on UTC time: r = sum((x-mean(x))*(y-mean(y))) / sqrt(sum((x-mean(x))^2) * sum((y-mean(y))^2)), between Berlin, Germany and Munich, Germany"),
-      minimum_points: 3,
-      points_used: 22,
-      points_excluded: 2,
-    },
-    data_density: {
-      ...statistic("data_density", "temperature", 91.7, "%", "instants every candidate reported a value for, over the instants the window asked for, as a percentage; 2 candidates: Berlin, Germany, Munich, Germany"),
-      // The denominator, as `data_density` reports it: 22 of 24 instants usable = 91.7%, which is
-      // the same 22 the correlation paired. A fixture whose two figures disagreed about the same
-      // window would be a picture that proves the layout and hides the arithmetic.
-      points_used: 24,
-      points_excluded: 2,
-    },
-    /*
-     * The statistics a real ranking applies, which is more than one — task 34.31.
-     *
-     * The comparison service computes the whole set for every location and returns them as each
-     * candidate's `supporting` list; this fixture carried only the mean, so the reconstructed
-     * screen's metrics rail had exactly one difference in it and the capture said nothing about
-     * how three of them lay out. These are the same measures `statistics_applied` names elsewhere
-     * in this file, with figures for two nearby cities that differ the way two nearby cities do.
-     */
+    correlation: null,
+    data_density: null,
     statistics_applied: [
-      "temperature_mean: mean",
-      "precipitation_sum: total",
-      "wind_speed_max: maximum",
+      "temperature_mean: mean (weight 0.5)",
+      "precipitation_sum: total (weight 0.3)",
+      "wind_speed_max: mean (weight 0.2)",
     ],
+    weighting_disclosure:
+      "The outdoor-suitability score is Weathra's own heuristic, not an authoritative index. It combines temperature comfort (weight 0.5), precipitation (weight 0.3) and wind (weight 0.2).",
     candidates: [
-      {
-        label: "Berlin, Germany",
-        location: BERLIN,
-        period: PERIOD,
-        rank: 1,
-        score: 18.4,
-        supporting: [
-          statistic("mean", "temperature", 18.4, "°C", "arithmetic mean of usable points"),
-          statistic("total", "precipitation_sum", 12.5, "mm", "sum of usable points"),
-          statistic("maximum", "wind_speed_max", 31.4, "km/h", "maximum of usable points"),
-        ],
-      },
-      {
-        label: "Munich, Germany",
-        location: MUNICH,
-        period: PERIOD,
-        rank: 2,
-        score: 16.1,
-        supporting: [
-          statistic("mean", "temperature", 16.1, "°C", "arithmetic mean of usable points"),
-          statistic("total", "precipitation_sum", 18.2, "mm", "sum of usable points"),
-          statistic("maximum", "wind_speed_max", 24.8, "km/h", "maximum of usable points"),
-        ],
-      },
+      dayCandidate("2026-09-06", 1, 0.913, { temperature: 24.5, rain: 0, wind: 13.7 }, true),
+      dayCandidate("2026-09-07", 1, 0.886, { temperature: 22.8, rain: 0.2, wind: 14.8 }, true),
+      dayCandidate("2026-09-05", 3, 0.841, { temperature: 20.8, rain: 2.1, wind: 18.4 }, false),
+      dayCandidate("2026-09-04", 4, 0.792, { temperature: 19.6, rain: 1.6, wind: 20.2 }, false),
+      dayCandidate("2026-09-08", 5, 0.741, { temperature: 19.1, rain: 3.4, wind: 22.3 }, false),
+      dayCandidate("2026-09-09", 6, 0.688, { temperature: 16.5, rain: 5.2, wind: 31.4 }, false),
     ],
+    /*
+     * One day left out, with its reason, as the real service excludes a day it cannot score. It is
+     * the seventh daily entry above — the one reporting no maximum — so the fixture's own two
+     * halves agree about which day the provider under-reported.
+     */
     excluded: [
-      { label: "Nowhere", location: null, code: "location_not_found", reason: "No location matches that name." },
+      {
+        label: "2026-09-10",
+        location: BERLIN,
+        code: "insufficient_data",
+        reason: "The provider reported too few values for this day to score it.",
+      },
     ],
   },
 
@@ -2303,6 +2335,32 @@ function shiftValues(values, offset) {
   return shifted;
 }
 
+/** The stub's own "today", so a window is ahead or behind the same instant in every run. */
+const STUB_TODAY = RETRIEVED_AT.slice(0, 10);
+
+/** Whether the requested window ends on or after the stub's today — the route's own branch. */
+function windowIsAhead(url) {
+  const end = url.searchParams.get("end");
+  return typeof end === "string" && end >= STUB_TODAY;
+}
+
+/**
+ * The same comparison, stated as the forecast-sided one it is for a window still ahead.
+ *
+ * Only the three things the real branch changes: which side supplied the value, the caveat that
+ * travels with it, and a characterization that does not call a forecast an observation. The
+ * baseline itself is untouched, because the archive side is the archive side either way.
+ */
+function forecastSided(fixture) {
+  if (fixture === null || typeof fixture !== "object") return fixture;
+  return {
+    ...structuredClone(fixture),
+    observed_data_class: "forecast",
+    forecast_side_caveat:
+      "One side of this comparison is a forecast and is therefore uncertain; the baseline side is built from observed archive data.",
+  };
+}
+
 function byPlace(fixture, url) {
   const offset = placeOffset(url);
   if (offset === 0 || fixture === null || typeof fixture !== "object") return fixture;
@@ -2730,6 +2788,21 @@ const server = createServer((request, response) => {
     envelope(response, 404, "route_not_found", `This stub does not model ${path}.`);
     return;
   }
+  /*
+   * A baseline comparison for a window still ahead is forecast-sided, as the route now answers it.
+   *
+   * `GET /weather/history/baseline/comparison` branches on whether the period has happened: a past
+   * window is observation on both sides, and a window ending in the future takes its value from the
+   * forecast and says so in `forecast_side_caveat`. Historical Analytics asks the first question and
+   * Travel asks the second, so one canned body could only be truthful for one of them — and it was
+   * the observation-sided one, which is why Travel's historical band was photographed carrying a
+   * caveat-free comparison that production cannot produce for a trip.
+   */
+  if (path === "/api/v1/weather/history/baseline/comparison" && windowIsAhead(url)) {
+    send(response, 200, byPlace(inUnits(forecastSided(fixture), requestedUnits(url)), url));
+    return;
+  }
+
   // Weather reads are answered in the unit system the request asked for, which is what makes a
   // saved unit preference observable on screen rather than merely stored — task 21.10, flow 3.
   //

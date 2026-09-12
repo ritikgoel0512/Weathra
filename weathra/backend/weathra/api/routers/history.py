@@ -25,7 +25,7 @@ this exposes its result.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Request
@@ -45,6 +45,7 @@ from weathra.weather.history_service import (
     HistoryService,
     PeriodComparison,
 )
+from weathra.weather.windows import today_at
 
 __all__ = ["router"]
 
@@ -283,14 +284,17 @@ async def baseline_comparison(
     units: Units = None,
     provider: ProviderName = None,
 ) -> BaselineComparison:
-    """How an observed past period compares with the same calendar period in the years before it.
+    """How a period compares with the same calendar period in the years before it.
 
     Both sides are the same statistic over daily values, computed by the same function, so the
     signed difference means what a reader will take it to mean. The z-score comes back undefined
     *with its reason* when the baseline has no spread, and the difference is reported either way.
 
-    Both sides are observations: this is not a measure of forecast accuracy, and the comparison's
-    own data classes say so.
+    **A window still ahead is answered from the forecast.** The archive cannot be asked about days
+    that have not happened, and a trip being planned is exactly that question — so a period ending
+    in the future takes its value from the forecast and the baseline from the archive, and the
+    result carries ``forecast_side_caveat`` saying which side is uncertain. A past window is
+    observation on both sides, and is still not a measure of forecast accuracy.
     """
     place = await resolve_one(geocoder, location=location, latitude=latitude, longitude=longitude)
     unit_system, _ = await units_for(
@@ -305,8 +309,15 @@ async def baseline_comparison(
     service = HistoryService(
         provider=provider_for(request, weather, provider, settings), settings=settings
     )
-    result = await service.compare_period_against_baseline(
-        place, start=start, end=end, years=years, measure=measure, unit_system=unit_system
+    ahead = end >= today_at(place, datetime.now(UTC))
+    result = await (
+        service.compare_forecast_against_baseline(
+            place, start=start, end=end, years=years, measure=measure, unit_system=unit_system
+        )
+        if ahead
+        else service.compare_period_against_baseline(
+            place, start=start, end=end, years=years, measure=measure, unit_system=unit_system
+        )
     )
     annotate(
         request,

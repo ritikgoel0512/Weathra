@@ -559,6 +559,104 @@ class HistoryService:
             value_data_class=DataClass.HISTORICAL_OBSERVATION,
         )
 
+    async def compare_forecast_against_baseline(
+        self,
+        location: Location,
+        *,
+        start: date,
+        end: date,
+        years: int,
+        measure: Measure = Measure.TEMPERATURE_MEAN,
+        unit_system: UnitSystem = UnitSystem.METRIC,
+    ) -> BaselineComparison:
+        """Place a *forecast* window against the baseline of the same calendar period.
+
+        The mirror of ``compare_period_against_baseline``, for a window that has not happened yet.
+        A trip being planned is the case this exists for: the archive cannot be asked about days in
+        the future, so the forecast supplies the value and the archive supplies only the baseline
+        it is placed against.
+
+        The composition is the same three pieces, and no arithmetic of its own: the forecast's own
+        daily series, the baseline for that calendar period, and ``compare_against_baseline`` —
+        which marks the result as forecast-sided, so the uncertainty travels with the figure.
+
+        ``reference_year`` is left at its default here, unlike the past-side method. The window's
+        own year holds no archive data to find for a period still ahead, so it drops out by itself;
+        forcing the count back a year would silently discard a year the archive really does have.
+        """
+        if measure not in DAILY_AGGREGATES:
+            raise ValidationFailed(
+                f"{measure.value} is an instantaneous measure, and a baseline is computed from "
+                "daily aggregates. Ask for one of those instead — for temperature that is "
+                "temperature_mean, temperature_max or temperature_min.",
+                details={
+                    "measure": measure.value,
+                    "usable_measures": [aggregate.value for aggregate in DAILY_AGGREGATES],
+                },
+            )
+
+        today = today_at(location, self._instant())
+        if end < today:
+            raise ValidationFailed(
+                "This window is already in the past, so the archive can answer it directly.",
+                details={"start": start.isoformat(), "end": end.isoformat()},
+            )
+
+        # The horizon is counted from today rather than from `start`, because a provider's forecast
+        # always begins at today: asking for `end - start` days would stop short whenever the trip
+        # does not begin this morning.
+        horizon = (end - today).days + 1
+        forecast = await self._provider.forecast(location, days=horizon, unit_system=unit_system)
+
+        within = Series(
+            granularity=forecast.daily.granularity,
+            units=forecast.daily.units,
+            entries=tuple(
+                entry for entry in forecast.daily.entries if start <= entry.time_local.date() <= end
+            ),
+        )
+        period = Period(
+            start_utc=forecast.period.start_utc,
+            end_utc=forecast.period.end_utc,
+            start_local=forecast.period.start_local,
+            end_local=forecast.period.end_local,
+            timezone=forecast.period.timezone,
+        )
+        provenance = Provenance(
+            location=location,
+            period=period,
+            provider=forecast.provider,
+            unit_system=unit_system,
+            source_data_class=DataClass.FORECAST,
+            retrieved_at=forecast.retrieved_at,
+        )
+        window_mean = descriptive.mean(within, measure, provenance)
+        if window_mean.value is None:
+            raise NoDataForRange(
+                f"The forecast holds no usable {measure.value} values for this window, so there "
+                "is nothing to place against the baseline.",
+                details={
+                    "measure": measure.value,
+                    "reason": window_mean.reason,
+                    "start": start.isoformat(),
+                    "end": end.isoformat(),
+                },
+            )
+
+        reference = await self.baseline(
+            location,
+            start=start,
+            end=end,
+            years=years,
+            measure=measure,
+            unit_system=unit_system,
+        )
+        return self.compare_against_baseline(
+            baseline=reference,
+            value=window_mean.value,
+            value_data_class=DataClass.FORECAST,
+        )
+
     def compare_against_baseline(
         self,
         *,
