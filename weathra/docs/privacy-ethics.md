@@ -27,6 +27,7 @@ findings the graph computed and handed it. It is never the thing that calculates
 | `forecast` | A model's projection of conditions ahead |
 | `historical_observation` | What was recorded in the past |
 | `computed_statistic` | Derived by Weathra from one of the above, with its method stated |
+| `satellite_observation` | Imagery of a region at a stated time, retrieved and not interpreted |
 | `ai_interpretation` | Language a model wrote |
 
 Every value carries its class through the whole stack — tool result, API payload, and screen — and

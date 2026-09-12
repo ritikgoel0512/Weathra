@@ -309,6 +309,7 @@ class Settings(BaseSettings):
             "weather_compare",
             "weather_statistics",
             "weather_anomaly",
+            "weather_satellite",
         ),
         validation_alias="mcp_enabled_tools",
     )

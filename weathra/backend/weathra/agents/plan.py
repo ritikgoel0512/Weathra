@@ -49,10 +49,16 @@ logger = logging.getLogger("weathra.agents.plan")
 
 
 class Capability(StrEnum):
-    """The five capabilities the supervisor may route to, and nothing else.
+    """The six capabilities the supervisor may route to, and nothing else.
 
     A closed enum on purpose: this *is* the catalog as far as the model is concerned, so a proposed
     capability outside it fails validation rather than reaching an executor.
+
+    ``SATELLITE`` reaches ``weather_satellite``, which retrieves *observational evidence* — imagery
+    of a region at a stated time, carrying no figure. It is a capability of its own rather than a
+    flavour of ``CURRENT`` because the two answer different questions and support different claims:
+    a current reading is a provider's number for a place, and a satellite image is a picture nobody
+    here has looked at.
 
     ``CURRENT`` reaches ``weather_current``, the tool that has always been in the MCP catalog and
     that nothing in this graph could ask for. Until it was here the routing prompt described the
@@ -63,6 +69,7 @@ class Capability(StrEnum):
     """
 
     CURRENT = "current"
+    SATELLITE = "satellite"
     FORECAST = "forecast"
     HISTORICAL = "historical"
     ANALYTICS = "analytics"
@@ -271,6 +278,22 @@ _CURRENT_WORDS = frozenset(
     }
 )
 
+# Asking to *see* something, rather than to be told a number.
+#
+# Deliberately narrow, and narrow in one direction: "satellite" and "imagery" are what the
+# capability answers, and nothing else routes to it. A generous set here would spend a retrieval on
+# every question containing "show" — and imagery cannot answer "show me tomorrow's high".
+_SATELLITE_WORDS = frozenset(
+    {
+        "satellite",
+        "satellites",
+        "imagery",
+        "image",
+        "images",
+        "observational",
+    }
+)
+
 _ANALYTICS_WORDS = frozenset(
     {
         "average",
@@ -371,6 +394,13 @@ _WEATHER_WORDS = frozenset(
         "meteorological",
         "heatwave",
         "drought",
+        # Weathra's subject grew a capability, so its vocabulary grew with it. Without these,
+        # "show me the latest satellite observation for Berlin" contains no word this router
+        # recognises as weather and is refused as out of scope — by the one router that runs when
+        # no model is available.
+        "satellite",
+        "imagery",
+        "observational",
     }
 )
 
@@ -501,6 +531,7 @@ def fallback_plan(question: str, *, now: datetime | None = None) -> RoutingPlan:
     historical = bool(words & _HISTORICAL_WORDS)
     forecast = bool(words & _FORECAST_WORDS)
     present = bool(words & _CURRENT_WORDS)
+    satellite = bool(words & _SATELLITE_WORDS)
     analytics_words = words & _ANALYTICS_WORDS
     if conceptual:
         analytics_words -= _AMBIGUOUS_ANALYTICS_WORDS
@@ -520,7 +551,7 @@ def fallback_plan(question: str, *, now: datetime | None = None) -> RoutingPlan:
     # A question with no tense marker is about now, which is a forecast-window question. Defaulting
     # to the archive instead would answer a "what is it like?" with last week. A purely conceptual
     # question retrieves nothing: "what does dew point mean?" is answered from the knowledge base.
-    wants_data = not conceptual or historical or forecast or present or analytics
+    wants_data = not conceptual or historical or forecast or present or satellite or analytics
     if wants_data:
         # The present, where the question asked for it. Independent of the two below rather than
         # instead of them: "what is it like now, and what about the weekend?" is both, and "how does
@@ -531,6 +562,18 @@ def fallback_plan(question: str, *, now: datetime | None = None) -> RoutingPlan:
                     capability=Capability.CURRENT,
                     location=place,
                     reason="The deterministic router matched present-tense vocabulary.",
+                )
+            )
+
+        # Observational evidence, where the question asked to see some. Alongside whatever else the
+        # question wants rather than instead of it: "use satellite evidence with the forecast" is
+        # two capabilities, and imagery on its own answers no numeric question.
+        if satellite:
+            steps.append(
+                PlanStep(
+                    capability=Capability.SATELLITE,
+                    location=place,
+                    reason="The deterministic router matched a request for satellite imagery.",
                 )
             )
 
@@ -545,7 +588,7 @@ def fallback_plan(question: str, *, now: datetime | None = None) -> RoutingPlan:
                     end_date=end,
                 )
             )
-        elif forecast or not present:
+        elif forecast or not (present or satellite):
             # No forecast step beside a present-tense question that asked for nothing else: the
             # default below exists for a question with *no* tense marker, and "right now" is one.
             steps.append(

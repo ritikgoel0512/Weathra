@@ -281,7 +281,7 @@ code that does not exist. So each names the group 26-34 task that owes it, and t
 that task to being open. Close one of those tasks and the first assertion starts demanding its
 tests. Both directions stay honest without anyone maintaining a list of which spec is which.
 
-Of **219** requirements across twenty specs, **218** are implemented and tested, **1** is
+Of **227** requirements across twenty-one specs, **226** are implemented and tested, **1** is
 manual-pending, and **0** are open. Exactly **0** requirements have no test. The one that remains
 manual-pending is `web-ui`'s accessibility and responsive layout, which is automatically tested as
 far as automation reaches and still owes a human pass (task 21.8).
@@ -307,6 +307,7 @@ model access or an allowance** and **the Visily design gate** are closed outrigh
 | `location-comparison` | 6 | 6 | 0 | 0 | 9 |
 | `location-resolution` | 7 | 7 | 0 | 0 | 6 |
 | `mcp-weather-server` | 7 | 7 | 0 | 0 | 10 |
+| `satellite-observation` | 8 | 8 | 0 | 0 | 34 |
 | `memory` | 10 | 10 | 0 | 0 |12, 34 |
 | `rag-knowledge` | 8 | 8 | 0 | 0 | 11 |
 | `safety-grounding` | 10 | 10 | 0 | 0 | 17 |
@@ -317,7 +318,7 @@ model access or an allowance** and **the Visily design gate** are closed outrigh
 | `llm-telemetry` | 7 | 7 | 0 | 0 | 29 |
 | `usage-limits` | 9 | 9 | 0 | 0 | 30 |
 | `model-lab` | 6 | 6 | 0 | 0 | 32 |
-| **Total** | **219** | **218** | **1** | **0** | |
+| **Total** | **227** | **226** | **1** | **0** | |
 
 ### `agent-orchestration`
 
@@ -490,6 +491,19 @@ model access or an allowance** and **the Visily design gate** are closed outrigh
 | Input validation | 10.5 | mcp/schemas.py | unit/test_mcp_server.py | IMPLEMENTED |
 | Error semantics | 10.6 | mcp/errors.py | unit/test_mcp_server.py | IMPLEMENTED |
 | Transport and configuration | 10.8 | mcp/client.py, config.py | unit/test_mcp_server.py, test_config.py | IMPLEMENTED |
+
+### `satellite-observation`
+
+| Requirement | Tasks | Implementation | Tests | Status |
+|---|---|---|---|---|
+| A real, open, credential-free source | 34.34 | providers/gibs.py, docs/satellite-source.md | unit/test_satellite.py | IMPLEMENTED |
+| A normalized observation carrying no measurement | 34.34 | domain/satellite.py | unit/test_satellite.py | IMPLEMENTED |
+| A tool on the existing MCP boundary | 34.34 | mcp/server.py, mcp/schemas.py | unit/test_satellite.py, unit/test_agent_catalog.py, unit/test_mcp_server.py | IMPLEMENTED |
+| Routed only where imagery was asked for | 34.34 | agents/plan.py, agents/supervisor.py | unit/test_satellite.py | IMPLEMENTED |
+| Observation is not inference | 34.34 | agents/nodes/synthesize.py | unit/test_satellite.py | IMPLEMENTED |
+| No claim of image interpretation | 34.34 | agents/nodes/synthesize.py, domain/satellite.py | unit/test_satellite.py, frontend/components/analyst/analyst.test.tsx | IMPLEMENTED |
+| Provenance in the evidence record | 34.34 | agents/nodes/satellite.py, agents/evidence.py, frontend/components/analyst/rail.tsx | unit/test_satellite.py, frontend/components/analyst/analyst.test.tsx | IMPLEMENTED |
+| Optional, and honest when unavailable | 34.34 | agents/nodes/satellite.py, providers/gibs.py | unit/test_satellite.py | IMPLEMENTED |
 
 ### `memory`
 

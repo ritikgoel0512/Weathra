@@ -1,6 +1,6 @@
 # Agents and orchestration
 
-Weathra answers a question by running a small graph over five specialized agents. The shape of that
+Weathra answers a question by running a small graph over six specialized agents. The shape of that
 graph follows from one decision, and everything else in this document is a consequence of it.
 
 ## The decision: the graph executes tools; the model proposes and explains
@@ -66,23 +66,31 @@ as one function, and would make the concurrent execution of an independent group
 easier. LangGraph is used for what it is good at here: the checkpointer that persists
 conversational state across turns.
 
-## The five capabilities
+## The six capabilities
 
-The catalogue is a closed enum — `current`, `forecast`, `historical`, `analytics`, `rag` — and that
-enum *is* the guard: a routing plan naming anything else fails schema validation, the model is told
-the five valid names, and nothing executes. A capability cannot be requested into existence by a
-persuasively-worded plan.
+The catalogue is a closed enum — `current`, `satellite`, `forecast`, `historical`, `analytics`,
+`rag` — and that enum *is* the guard: a routing plan naming anything else fails schema validation,
+the model is told the six valid names, and nothing executes. A capability cannot be requested into
+existence by a persuasively-worded plan.
 
 | Agent | What it does | How it gets data |
 |---|---|---|
 | **current** | What the weather is doing right now at a place | `weather_current` |
+| **satellite** | The latest satellite imagery over a place, as observational evidence | `weather_satellite` |
 | **forecast** | Forecast windows, with the deterministic analysis of the window | `weather_forecast` |
 | **historical** | Archive retrieval, period comparison, baseline comparison | `weather_history`, then `weather_statistics` for the headline figures |
 | **analytics** | Descriptive statistics, distribution, trend, anomaly, thresholds | `weather_statistics`, `weather_anomaly`, over a series a prior step retrieved |
 | **rag** | Weather concepts and terminology from the knowledge corpus | pgvector retrieval, threshold-gated |
 
 Two agents frame the run and are not capabilities: **supervisor** routes, **synthesis** writes.
-All seven appear in the evidence record with their status and timing.
+All eight appear in the evidence record with their status and timing.
+
+**`satellite` retrieves evidence, not a number.** It is the only capability whose result carries no
+figure at all: the source supplies imagery, a product name and a date, so that is what the
+observation carries. Nothing looks at the image — no vision-capable process is in this pipeline —
+and the image is never given to the language model, which is what makes "Weathra did not interpret
+it" a property rather than a promise. `docs/satellite-source.md` records the source, the licence and
+the limitations; `specs/satellite-observation` records the boundary.
 
 **`current` is its own capability, and was not always.** This table used to give `weather_current`
 to the forecast agent, and the routing prompt described that capability as "current conditions and

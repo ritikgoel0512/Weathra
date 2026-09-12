@@ -83,10 +83,11 @@
         "type": "string"
       },
       "AgentName": {
-        "description": "The five specialized agents, plus the two nodes that frame a run.\n\nKept as an enum because ``specs/agent-orchestration`` requires each agent's responsibility to\nstay separately identifiable in the execution record, not merged into a free-text label.\n\n``CURRENT`` is separate from ``FORECAST`` rather than folded into it, and the reason is the one\nthis enum exists for: a reading of what it is doing *now* and a model's projection of the days\nahead are two different claims, they come back under two different data classes, and an\nexecution record that credited both to \"forecast\" could not tell a reader which of them was\nretrieved.",
+        "description": "The six specialized agents, plus the two nodes that frame a run.\n\nKept as an enum because ``specs/agent-orchestration`` requires each agent's responsibility to\nstay separately identifiable in the execution record, not merged into a free-text label.\n\n``CURRENT`` is separate from ``FORECAST`` rather than folded into it, and the reason is the one\nthis enum exists for: a reading of what it is doing *now* and a model's projection of the days\nahead are two different claims, they come back under two different data classes, and an\nexecution record that credited both to \"forecast\" could not tell a reader which of them was\nretrieved.",
         "enum": [
           "supervisor",
           "current",
+          "satellite",
           "forecast",
           "historical",
           "analytics",
@@ -577,6 +578,15 @@
                 "type": "null"
               }
             ]
+          },
+          "satellite": {
+            "default": [],
+            "description": "Satellite imagery this run retrieved, as observational evidence. Empty on a run that did not retrieve any, which is most of them. Never a figure: an observation carries a provider, a product, the day it covers, the region it covers and an image reference, and nothing has interpreted the image.",
+            "items": {
+              "$ref": "#/components/schemas/SatelliteObservation"
+            },
+            "title": "Satellite",
+            "type": "array"
           },
           "thread_id": {
             "anyOf": [
@@ -2143,7 +2153,8 @@
           "forecast",
           "historical_observation",
           "computed_statistic",
-          "ai_interpretation"
+          "ai_interpretation",
+          "satellite_observation"
         ],
         "title": "DataClass",
         "type": "string"
@@ -4837,6 +4848,156 @@
           "grants"
         ],
         "title": "RoleListResponse",
+        "type": "object"
+      },
+      "SatelliteCoverage": {
+        "additionalProperties": false,
+        "description": "The box the imagery covers, in degrees.\n\nSatellite imagery covers a region, never a point, and saying so is the difference between \"the\nlatest imagery over the Berlin area\" and a claim about a street.",
+        "properties": {
+          "east": {
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "East",
+            "type": "number"
+          },
+          "north": {
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "North",
+            "type": "number"
+          },
+          "south": {
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "South",
+            "type": "number"
+          },
+          "west": {
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "West",
+            "type": "number"
+          }
+        },
+        "required": [
+          "south",
+          "west",
+          "north",
+          "east"
+        ],
+        "title": "SatelliteCoverage",
+        "type": "object"
+      },
+      "SatelliteObservation": {
+        "additionalProperties": false,
+        "description": "One retrieved satellite image, with everything needed to say what it is.\n\n``image_url`` is the provider's own request URL. It is a reference rather than the bytes on\npurpose: the image is never put in front of a language model, and an envelope carrying a\nmegabyte of base64 would make that far too easy to do by accident.",
+        "properties": {
+          "attribution": {
+            "description": "The acknowledgement the source asks for.",
+            "minLength": 1,
+            "title": "Attribution",
+            "type": "string"
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/SatelliteCoverage"
+          },
+          "coverage_note": {
+            "minLength": 1,
+            "title": "Coverage Note",
+            "type": "string"
+          },
+          "data_class": {
+            "$ref": "#/components/schemas/DataClass",
+            "default": "satellite_observation"
+          },
+          "freshness_note": {
+            "minLength": 1,
+            "title": "Freshness Note",
+            "type": "string"
+          },
+          "image_bytes": {
+            "description": "The size of the response, as a fact about it.",
+            "minimum": 0.0,
+            "title": "Image Bytes",
+            "type": "integer"
+          },
+          "image_media_type": {
+            "minLength": 1,
+            "title": "Image Media Type",
+            "type": "string"
+          },
+          "image_url": {
+            "description": "Where the imagery was retrieved from.",
+            "minLength": 1,
+            "title": "Image Url",
+            "type": "string"
+          },
+          "instrument": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The instrument and platform, where the provider names them.",
+            "title": "Instrument"
+          },
+          "interpretation_note": {
+            "default": "Weathra retrieves and displays this imagery. It does not interpret it: no image analysis was performed, and nothing in this answer is derived from the picture.",
+            "title": "Interpretation Note",
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "observed_date": {
+            "description": "The UTC day the composite covers.",
+            "format": "date",
+            "title": "Observed Date",
+            "type": "string"
+          },
+          "product": {
+            "description": "The provider's own name for what this is.",
+            "minLength": 1,
+            "title": "Product",
+            "type": "string"
+          },
+          "provider": {
+            "description": "The service that served the imagery.",
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "retrieved_at": {
+            "format": "date-time",
+            "title": "Retrieved At",
+            "type": "string"
+          },
+          "source_url": {
+            "description": "The service's own documentation.",
+            "minLength": 1,
+            "title": "Source Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location",
+          "coverage",
+          "provider",
+          "product",
+          "observed_date",
+          "retrieved_at",
+          "image_url",
+          "image_media_type",
+          "image_bytes",
+          "attribution",
+          "source_url",
+          "coverage_note",
+          "freshness_note"
+        ],
+        "title": "SatelliteObservation",
         "type": "object"
       },
       "SavedLocationRecord": {

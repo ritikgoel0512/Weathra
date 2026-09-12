@@ -69,6 +69,11 @@ class DataClass(StrEnum):
     HISTORICAL_OBSERVATION = "historical_observation"
     COMPUTED_STATISTIC = "computed_statistic"
     AI_INTERPRETATION = "ai_interpretation"
+    # Imagery observed from orbit. Its own class rather than ``CURRENT`` because it is a different
+    # kind of claim: a current reading is a provider's figure for a place, and this is a picture of
+    # a region at a stated time, carrying no figure at all. Collapsing the two would let an answer
+    # credit a temperature to a satellite.
+    SATELLITE_OBSERVATION = "satellite_observation"
 
 
 class Granularity(StrEnum):

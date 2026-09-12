@@ -154,6 +154,24 @@ const SOURCE_ROLES: Readonly<Record<string, string>> = {
   current: "Current conditions",
   forecast: "Forecast data",
   historical_observation: "Archive observations",
+  /*
+   * Imagery, and the role says so. A satellite row is a claim that a picture was retrieved, never
+   * that anything read it — `docs/satellite-source.md` records that no vision model is in this
+   * pipeline, and the observation carries its own boundary sentence for any surface that shows it.
+   */
+  satellite_observation: "Satellite imagery",
+};
+
+/**
+ * The colour a source row's mark carries, for a class the design system has no token for.
+ *
+ * `design-system.md` §9 fixes five data classes and their colours, and satellite observation is not
+ * one of them — adding a sixth is a design-system change rather than a wiring change, and this pass
+ * is wiring. It is an observation, so it takes the observed colour, and the role beneath the name
+ * is what says which kind of observation it is.
+ */
+const SOURCE_MARK_CLASSES: Readonly<Record<string, DataClassName>> = {
+  satellite_observation: "observed",
 };
 
 /** One row of the Active data sources panel. */
@@ -190,7 +208,8 @@ function sourcesFrom(answer: AnswerEnvelope | null): readonly SourceRow[] {
 
   for (const entry of answer.attribution ?? []) {
     const role = SOURCE_ROLES[entry.data_class ?? ""];
-    const dataClass = dataClassFor(entry.data_class);
+    const dataClass =
+      dataClassFor(entry.data_class) ?? SOURCE_MARK_CLASSES[entry.data_class ?? ""] ?? null;
     // A class with no customer-facing role is one this build does not recognise, and a source row
     // reading "computed_statistic" under a provider's name is the raw field it was meant to replace.
     if (role === undefined || dataClass === null) continue;

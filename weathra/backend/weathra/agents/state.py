@@ -40,6 +40,7 @@ from weathra.domain.evidence import (
 )
 from weathra.domain.identity import Principal
 from weathra.domain.location import Location
+from weathra.domain.satellite import SatelliteObservation
 from weathra.domain.weather import DataClass, Period, Series, UnitSystem
 
 __all__ = ["GraphState", "Retrieval"]
@@ -145,6 +146,7 @@ class GraphState(BaseModel):
 
     retrievals: tuple[Retrieval, ...] = ()
     findings: tuple[Finding, ...] = ()
+    satellite_observations: tuple[SatelliteObservation, ...] = ()
     citations: tuple[KnowledgeCitation, ...] = ()
     attributions: tuple[Attribution, ...] = ()
     data_classes: tuple[DataClass, ...] = ()
@@ -243,6 +245,18 @@ class GraphState(BaseModel):
             classes = _appended(classes, finding.data_class)
         return self.model_copy(
             update={"findings": (*self.findings, *findings), "data_classes": classes}
+        )
+
+    def with_satellite(self, observation: SatelliteObservation) -> Self:
+        """Record one retrieved satellite observation, and the class it belongs to."""
+        classes = self.data_classes
+        if DataClass.SATELLITE_OBSERVATION not in classes:
+            classes = (*classes, DataClass.SATELLITE_OBSERVATION)
+        return self.model_copy(
+            update={
+                "satellite_observations": (*self.satellite_observations, observation),
+                "data_classes": classes,
+            }
         )
 
     def with_citations(self, citations: tuple[KnowledgeCitation, ...]) -> Self:

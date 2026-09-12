@@ -2098,3 +2098,111 @@ describe("the rail beside a successful answer", () => {
     expect(within(rail).queryByText("100%")).toBeNull();
   });
 });
+
+/* ------------------------------------- task 34.34: satellite observation */
+
+/**
+ * What the Analyst does with a run that retrieved satellite imagery.
+ *
+ * Minimal on purpose: this pass adds the capability, not the panel. What has to be true now is that
+ * the existing surfaces consume the new evidence truthfully — the source is named and credited to
+ * the provider that served it, the agent row is the record's, and nothing on the screen says
+ * anything about what the picture shows.
+ */
+describe("a run that retrieved satellite imagery", () => {
+  const SATELLITE_SOURCE = {
+    provider: "nasa-gibs",
+    location: BERLIN,
+    data_class: "satellite_observation",
+    period: null,
+    retrieved_at: "2026-09-12T07:59:23Z",
+  };
+
+  function withSatellite() {
+    return {
+      ...ANSWER,
+      satellite: [
+        {
+          data_class: "satellite_observation",
+          location: BERLIN,
+          coverage: { south: 50.52, west: 11.405, north: 54.52, east: 15.405 },
+          provider: "nasa-gibs",
+          product: "Corrected Reflectance (True Colour)",
+          instrument: "VIIRS on NOAA-20",
+          observed_date: "2026-09-11",
+          retrieved_at: "2026-09-12T07:59:23Z",
+          image_url: "https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?x=1",
+          image_media_type: "image/jpeg",
+          image_bytes: 91533,
+          attribution: "We acknowledge the use of imagery provided by services from NASA's GIBS.",
+          source_url: "https://nasa-gibs.github.io/gibs-api-docs/",
+          coverage_note: "Covers roughly 4° of latitude around Berlin — the region, not the place.",
+          freshness_note: "A daily composite for 2026-09-11 (UTC).",
+          interpretation_note:
+            "Weathra retrieves and displays this imagery. It does not interpret it.",
+        },
+      ],
+      attribution: [FORECAST_SOURCE, SATELLITE_SOURCE],
+      evidence: {
+        ...EVIDENCE,
+        agents: [
+          { sequence: 1, agent: "satellite", status: "succeeded", started_at: "2026-09-04T06:15:00Z", duration_ms: 480 },
+          ...EVIDENCE.agents,
+        ],
+      },
+    };
+  }
+
+  it("credits the satellite provider as its own source, with imagery as its role", async () => {
+    fetchMock = respondingWith(() => streaming(runFrames(withSatellite())));
+    renderAnalyst();
+    await ask("Show me the latest satellite observation for Berlin.");
+    await screen.findByRole("region", { name: "AI interpretation" });
+
+    const sources = screen.getByRole("region", { name: "Active data sources" });
+    expect(within(sources).getByText("NASA GIBS")).toBeInTheDocument();
+    expect(within(sources).getByText("Satellite imagery")).toBeInTheDocument();
+    // Beside the weather provider, not instead of it: two sources, two roles.
+    expect(within(sources).getByText("Open-Meteo")).toBeInTheDocument();
+  });
+
+  it("names the satellite agent from the record, and only where it ran", async () => {
+    fetchMock = respondingWith(() => streaming(runFrames(withSatellite())));
+    renderAnalyst();
+    await ask("Show me the latest satellite observation for Berlin.");
+    await screen.findByRole("region", { name: "AI interpretation" });
+
+    const status = screen.getByRole("region", { name: "Agent status" });
+    expect(within(status).getByText("Satellite agent")).toBeInTheDocument();
+  });
+
+  it("says nothing about what the imagery shows, because nothing looked at it", async () => {
+    fetchMock = respondingWith(() => streaming(runFrames(withSatellite())));
+    renderAnalyst();
+    await ask("Show me the latest satellite observation for Berlin.");
+    await screen.findByRole("region", { name: "AI interpretation" });
+
+    const shown = (document.body.textContent ?? "").toLowerCase();
+    for (const claim of [
+      "analysed the image",
+      "analyzed the image",
+      "the image shows",
+      "detected",
+      "cloud cover detected",
+      "we can see",
+    ]) {
+      expect(shown, claim).not.toContain(claim);
+    }
+  });
+
+  it("shows no satellite source on a run that retrieved none", async () => {
+    fetchMock = respondingWith();
+    renderAnalyst();
+    await ask("What should I expect over the next few days in Berlin?");
+    await screen.findByRole("region", { name: "AI interpretation" });
+
+    const sources = screen.getByRole("region", { name: "Active data sources" });
+    expect(within(sources).queryByText("NASA GIBS")).toBeNull();
+    expect(within(sources).queryByText("Satellite imagery")).toBeNull();
+  });
+});

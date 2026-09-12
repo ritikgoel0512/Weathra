@@ -34,6 +34,7 @@ __all__ = [
     "ForecastInput",
     "GeocodeInput",
     "HistoryInput",
+    "SatelliteInput",
     "StatisticsInput",
     "ToolAttribution",
     "ToolLocation",
@@ -41,7 +42,7 @@ __all__ = [
     "ToolSeries",
 ]
 
-# The seven tools, in the order ``specs/mcp-weather-server``'s catalog lists them.
+# The eight tools, in the order ``specs/mcp-weather-server``'s catalog lists them.
 TOOL_NAMES: tuple[str, ...] = (
     "geocode_location",
     "weather_current",
@@ -50,6 +51,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "weather_compare",
     "weather_statistics",
     "weather_anomaly",
+    "weather_satellite",
 )
 
 Latitude = Annotated[float, Field(ge=-90.0, le=90.0)]
@@ -110,6 +112,15 @@ class CurrentInput(_LocationArguments):
     provider: str | None = Field(
         default=None, description="A registered provider name. The configured default if omitted."
     )
+
+
+class SatelliteInput(_LocationArguments):
+    """The latest satellite imagery available over a location.
+
+    Location-oriented and nothing else. There is no product argument because there is one product
+    (`docs/satellite-source.md` records which and why), and a parameter offering a choice that does
+    not exist would be an invitation to a model to ask for something that cannot be served.
+    """
 
 
 class ForecastInput(_LocationArguments):

@@ -111,6 +111,7 @@ def assemble_envelope(
         thread_id=state.thread_id,
         answer_prose=state.answer_prose,
         findings=state.findings,
+        satellite=state.satellite_observations,
         uncertainty=uncertainty,
         attribution=state.attributions,
         resolved=_resolved_context(state),

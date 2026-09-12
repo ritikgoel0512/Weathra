@@ -39,10 +39,17 @@ export function withoutComments(source: string): string {
 /**
  * Phrases that cannot be true of Weathra, whatever surrounds them.
  *
- * Each is something an artifact draws. Weathra reads one weather provider and one model gateway;
- * it owns no instrument, trains no model, integrates with no institution, and runs nothing on a
- * timer — so none of these can appear in a rendered string, and a negated form ("no sensor network
- * exists") belongs in a comment rather than on screen.
+ * Each is something an artifact draws. Weathra owns no instrument, trains no model and runs nothing
+ * on a timer — so none of these can appear in a rendered string, and a negated form ("no sensor
+ * network exists") belongs in a comment rather than on screen.
+ *
+ * **"NASA" left this list in task 34.34, and the reason is the only reason that would justify it.**
+ * The premise of the rule was that Weathra integrates with no institution. That stopped being true:
+ * the satellite capability retrieves from NASA's Global Imagery Browse Services, openly and without
+ * a credential, and NASA's own terms ask to be acknowledged. Suppressing the name would break the
+ * licence to satisfy a lint. So the noun is permitted exactly where it is the provider's own name,
+ * and `the one institution Weathra actually reads from` below is what keeps that narrow — every
+ * other institution stays forbidden, and NASA may not be claimed as a forecast source.
  */
 const UNSUPPORTABLE = [
   "sensor network",
@@ -52,7 +59,6 @@ const UNSUPPORTABLE = [
   "neural network",
   "neural model",
   "ECMWF",
-  "NASA",
   "WMO",
   "flight telemetry",
   "24/7",
@@ -145,6 +151,25 @@ describe("shipped product copy", () => {
     );
 
     expect(offenders, `"${phrase}" appears in shipped source outside a comment`).toEqual([]);
+  });
+
+  /**
+   * The one institution Weathra actually reads from, kept to the one place it may be named.
+   *
+   * `lib/analyst/run.ts` holds the provider-id-to-display-name table, which is where "nasa-gibs"
+   * becomes "NASA GIBS" for a source row. Anywhere else — a heading, a claim about a forecast, a
+   * badge on a figure — is the affiliation this rule exists to prevent, so the allowlist is one
+   * file and widening it is a line in a diff somebody has to justify.
+   */
+  it("names NASA only as the satellite provider, and nowhere else", () => {
+    const permitted = ["lib/analyst/run.ts"];
+    const offenders = shippedSources().filter(
+      (path) =>
+        !permitted.includes(path) &&
+        withoutComments(readFileSync(join(ROOT, path), "utf8")).includes("NASA"),
+    );
+
+    expect(offenders, "NASA is named outside the satellite provider's own label").toEqual([]);
   });
 });
 

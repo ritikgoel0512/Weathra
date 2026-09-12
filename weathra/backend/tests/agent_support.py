@@ -132,6 +132,7 @@ async def connected_tools(
     provider: StubProvider | None = None,
     geocoder: StubGeocoder | None = None,
     now: datetime | None = None,
+    http_transport: httpx.MockTransport | None = None,
 ) -> AsyncIterator[McpToolClient]:
     """A connected MCP tool client over the in-process transport.
 
@@ -140,9 +141,13 @@ async def connected_tools(
     task" over the top of whatever actually happened.
     """
     resolved = settings or agent_settings()
-    # A client the tools must never reach for: the stub provider and stub geocoder answer every
-    # call, so an outbound request here would mean a tool went around them.
-    async with httpx.AsyncClient(transport=httpx.MockTransport(_refuse_outbound)) as never_used:
+    # Refusing by default, and that is the guarantee: a tool that went around the stub provider
+    # fails rather than reaching the network. The satellite tool is the one that legitimately uses
+    # this client — it talks to a public service rather than to a `WeatherProvider` — so a test of
+    # it supplies a transport that answers, and every other test still gets the refusal.
+    async with httpx.AsyncClient(
+        transport=http_transport or httpx.MockTransport(_refuse_outbound)
+    ) as never_used:
         context = ToolContext(
             settings=resolved,
             client=never_used,

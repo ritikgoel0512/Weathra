@@ -25,8 +25,8 @@ export interface AccountDeletionReport {
 /** What an administrative write did. The verb half of an audit row. */
 export type AdminAction = "catalog_create" | "catalog_edit" | "catalog_enable" | "catalog_disable" | "policy_create" | "policy_edit" | "plan_mapping_edit" | "allowance_set" | "plan_assign" | "role_grant" | "role_revoke";
 
-/** The five specialized agents, plus the two nodes that frame a run. */
-export type AgentName = "supervisor" | "current" | "forecast" | "historical" | "analytics" | "rag" | "synthesis";
+/** The six specialized agents, plus the two nodes that frame a run. */
+export type AgentName = "supervisor" | "current" | "satellite" | "forecast" | "historical" | "analytics" | "rag" | "synthesis";
 
 /** One agent's turn in the run, in order, with what it cost. */
 export interface AgentStep {
@@ -135,6 +135,8 @@ export interface AnswerEnvelope {
   readonly prose_data_class?: "ai_interpretation";
   readonly request_id: string;
   readonly resolved?: ResolvedContext | null;
+  /** Satellite imagery this run retrieved, as observational evidence. Empty on a run that did not retrieve any, which is most of them. Never a figure: an observation carries a provider, a product, the day it covers, the region it covers and an image reference, and nothing has interpreted the image. */
+  readonly satellite?: SatelliteObservation[];
   readonly thread_id?: string | null;
   /** Parts of a multi-part question that could not be answered, named explicitly rather than silently dropped. */
   readonly unanswered_parts?: string[];
@@ -440,7 +442,7 @@ export interface CurrentResponse {
 }
 
 /** What kind of thing a reported value is. */
-export type DataClass = "current" | "forecast" | "historical_observation" | "computed_statistic" | "ai_interpretation";
+export type DataClass = "current" | "forecast" | "historical_observation" | "computed_statistic" | "ai_interpretation" | "satellite_observation";
 
 /** How one day's figures moved between two retrievals of the same window. */
 export interface DayChange {
@@ -1028,6 +1030,42 @@ export interface RoleGrantResponse {
 export interface RoleListResponse {
   readonly count: number;
   readonly grants: RoleGrantResponse[];
+}
+
+/** The box the imagery covers, in degrees. */
+export interface SatelliteCoverage {
+  readonly east: number;
+  readonly north: number;
+  readonly south: number;
+  readonly west: number;
+}
+
+/** One retrieved satellite image, with everything needed to say what it is. */
+export interface SatelliteObservation {
+  /** The acknowledgement the source asks for. */
+  readonly attribution: string;
+  readonly coverage: SatelliteCoverage;
+  readonly coverage_note: string;
+  readonly data_class?: DataClass;
+  readonly freshness_note: string;
+  /** The size of the response, as a fact about it. */
+  readonly image_bytes: number;
+  readonly image_media_type: string;
+  /** Where the imagery was retrieved from. */
+  readonly image_url: string;
+  /** The instrument and platform, where the provider names them. */
+  readonly instrument?: string | null;
+  readonly interpretation_note?: string;
+  readonly location: Location;
+  /** The UTC day the composite covers. */
+  readonly observed_date: string;
+  /** The provider's own name for what this is. */
+  readonly product: string;
+  /** The service that served the imagery. */
+  readonly provider: string;
+  readonly retrieved_at: string;
+  /** The service's own documentation. */
+  readonly source_url: string;
 }
 
 /** One saved location as a caller sees it. */

@@ -23,6 +23,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validato
 
 from weathra.domain.analytics import AnomalyReport, StatisticResult, TrendReport
 from weathra.domain.location import Location
+from weathra.domain.satellite import SatelliteObservation
 from weathra.domain.weather import DataClass, Period, UncertaintyStatement
 
 __all__ = [
@@ -45,7 +46,7 @@ __all__ = [
 
 
 class AgentName(StrEnum):
-    """The five specialized agents, plus the two nodes that frame a run.
+    """The six specialized agents, plus the two nodes that frame a run.
 
     Kept as an enum because ``specs/agent-orchestration`` requires each agent's responsibility to
     stay separately identifiable in the execution record, not merged into a free-text label.
@@ -59,6 +60,7 @@ class AgentName(StrEnum):
 
     SUPERVISOR = "supervisor"
     CURRENT = "current"
+    SATELLITE = "satellite"
     FORECAST = "forecast"
     HISTORICAL = "historical"
     ANALYTICS = "analytics"
@@ -536,6 +538,15 @@ class AnswerEnvelope(BaseModel):
     )
     prose_data_class: Literal[DataClass.AI_INTERPRETATION] = DataClass.AI_INTERPRETATION
     findings: tuple[Finding, ...] = ()
+    satellite: tuple[SatelliteObservation, ...] = Field(
+        default=(),
+        description=(
+            "Satellite imagery this run retrieved, as observational evidence. Empty on a run that "
+            "did not retrieve any, which is most of them. Never a figure: an observation carries a "
+            "provider, a product, the day it covers, the region it covers and an image reference, "
+            "and nothing has interpreted the image."
+        ),
+    )
     uncertainty: UncertaintyStatement | None = Field(
         default=None, description="Present whenever the answer contains a forecast figure."
     )
@@ -559,9 +570,15 @@ class AnswerEnvelope(BaseModel):
     @model_validator(mode="after")
     def _envelope_is_honest(self) -> Self:
         # Prose with nothing behind it is exactly what the zero-retrieval guard exists to prevent.
-        # A clarifying question or a citation is a legitimate answer carrying no findings.
+        # A clarifying question or a citation is a legitimate answer carrying no findings — and so
+        # is a satellite observation, which is retrieved evidence that is deliberately not a figure:
+        # the source supplies imagery and metadata and no measurement, so an answer resting on one
+        # has something behind it and no finding to show.
         nothing_behind_the_prose = not (
-            self.findings or self.evidence.citations or self.clarification_question
+            self.findings
+            or self.satellite
+            or self.evidence.citations
+            or self.clarification_question
         )
         if (
             self.answer_prose.strip()

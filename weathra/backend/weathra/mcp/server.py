@@ -71,6 +71,7 @@ from weathra.mcp.schemas import (
     ForecastInput,
     GeocodeInput,
     HistoryInput,
+    SatelliteInput,
     StatisticsInput,
     ToolAttribution,
     ToolLocation,
@@ -78,6 +79,7 @@ from weathra.mcp.schemas import (
 )
 from weathra.providers.base import WeatherProvider
 from weathra.providers.cache import CachedProvider
+from weathra.providers.gibs import GibsSatelliteProvider, SatelliteProvider
 from weathra.providers.registry import build_provider
 from weathra.providers.validation import resolve_horizon
 from weathra.weather.comparison_service import ComparisonService, parse_criterion
@@ -116,9 +118,25 @@ class ToolContext:
     provider: WeatherProvider | None = None
     geocoder: Geocoder | None = None
     now: datetime | None = None
+    satellite_provider: SatelliteProvider | None = None
 
     def instant(self) -> datetime:
         return self.now or datetime.now(UTC)
+
+    def satellite(self) -> SatelliteProvider:
+        """The satellite source, built once on the shared HTTP client.
+
+        Held rather than rebuilt per call for the same reason the weather provider is: one client,
+        one connection pool, and no per-call construction between ordinary use and a public
+        service's rate limiter. It takes no credential, so there is nothing to inject.
+        """
+        if self.satellite_provider is None:
+            object.__setattr__(
+                self, "satellite_provider", GibsSatelliteProvider(self.client, now=self.now)
+            )
+        held = self.satellite_provider
+        assert held is not None  # set immediately above
+        return held
 
     def weather(self, name: str | None = None) -> WeatherProvider:
         """The provider for a call, cached, honouring a per-call provider name.
@@ -445,6 +463,37 @@ def build_server(context: ToolContext) -> MCPServer:
             }
         )
 
+    # ---------------------------------------------------------------- weather_satellite
+
+    satellite_description = (
+        "The latest satellite imagery available over a location, as observational evidence. "
+        "Returns data class 'satellite_observation' — a picture of the region at a stated time, "
+        "NOT a forecast and NOT a measurement. It carries no cloud fraction, temperature, rain "
+        "rate or classification, because the source supplies none: what comes back is the "
+        "provider, the product, the UTC day it covers, the box it covers, an image reference and "
+        "the attribution the source requires. Weathra does not interpret the image and no claim "
+        "about the weather may be drawn from it."
+    )
+
+    async def weather_satellite(arguments: SatelliteInput) -> dict[str, Any]:
+        location = await _resolve(context, arguments)
+        observation = await context.satellite().observe(location)
+
+        return _ok(
+            {
+                "attribution": ToolAttribution(
+                    location=ToolLocation.of(location),
+                    timestamp_utc=observation.retrieved_at,
+                    units=UnitSystem.METRIC,
+                    provider=observation.provider,
+                    retrieved_at=observation.retrieved_at,
+                    from_cache=False,
+                    data_class=DataClass.SATELLITE_OBSERVATION,
+                ).model_dump(mode="json"),
+                "observation": observation.model_dump(mode="json"),
+            }
+        )
+
     # ---------------------------------------------------------------- weather_forecast
 
     forecast_description = (
@@ -768,6 +817,7 @@ def build_server(context: ToolContext) -> MCPServer:
         ("weather_compare", compare_description, CompareInput, weather_compare),
         ("weather_statistics", statistics_description, StatisticsInput, weather_statistics),
         ("weather_anomaly", anomaly_description, AnomalyInput, weather_anomaly),
+        ("weather_satellite", satellite_description, SatelliteInput, weather_satellite),
     ):
         if name in context.settings.mcp_enabled_tools:
             register(name=name, description=description, model=model, handler=handler)

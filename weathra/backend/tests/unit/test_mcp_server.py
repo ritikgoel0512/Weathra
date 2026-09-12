@@ -787,7 +787,7 @@ async def test_the_client_connects_and_lists_the_catalog() -> None:
     async with McpToolClient(settings=provider_settings(), server=server) as client:
         assert set(client.tool_names()) == set(TOOL_NAMES)
         catalog = client.catalog_for_prompt()
-        assert len(catalog) == 7
+        assert len(catalog) == 8
         assert all(entry["description"] and entry["input_schema"] for entry in catalog)
 
 
@@ -922,7 +922,9 @@ async def test_every_tool_is_exercisable_without_a_graph_or_a_principal() -> Non
 def test_the_tool_context_carries_no_identity_or_session() -> None:
     """There is nothing to scope here, so there is nothing to get wrong."""
     fields = set(ToolContext.__dataclass_fields__)
-    assert fields == {"settings", "client", "provider", "geocoder", "now"}
+    # `satellite_provider` is held the way `provider` is — one adapter on the shared HTTP client,
+    # built once. Neither is an identity and neither is a session, which is what this asserts.
+    assert fields == {"settings", "client", "provider", "geocoder", "now", "satellite_provider"}
     assert not any(
         term in field for field in fields for term in ("principal", "user", "session", "token")
     )
@@ -933,7 +935,7 @@ async def test_the_server_starts_with_no_inference_credential_configured() -> No
     assert settings.openrouter_api_key is None
     server = build_server(context(settings=settings))
     async with McpToolClient(settings=settings, server=server) as client:
-        assert len(client.tools) == 7
+        assert len(client.tools) == 8
 
 
 def test_the_tools_are_reachable_without_the_open_meteo_provider_class() -> None:

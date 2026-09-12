@@ -64,6 +64,7 @@ export const AGENT_LABELS: Readonly<Record<string, string>> = {
   // which is what the *source* row under Active data sources is called, and two adjacent cards
   // saying the same words about two different things read as one thing said twice.
   current: "Conditions agent",
+  satellite: "Satellite agent",
   forecast: "Forecast agent",
   historical: "Historical agent",
   analytics: "Analytics agent",
@@ -469,6 +470,7 @@ export function dataCoverageOf(envelope: AnswerEnvelope | null): {
  * screen has a rule against those.
  */
 export const PROVIDER_LABELS: Readonly<Record<string, string>> = {
+  "nasa-gibs": "NASA GIBS",
   "open-meteo": "Open-Meteo",
   open_meteo: "Open-Meteo",
   "open-meteo-archive": "Open-Meteo Archive",

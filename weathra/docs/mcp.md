@@ -32,6 +32,7 @@ registered at all, so a plan naming it gets a `tool_not_found` error rather than
 | `weather_compare` | Rank candidate locations on a criterion | `criterion` | `candidates`, `location`, `day_level`, `mode`, `days`, `start`, `end`, `units`, `provider` |
 | `weather_statistics` | Descriptive statistics, percentiles, rolling windows, trend | `measure`, `unit`, `points` | `statistics`, `percentile`, `rolling_window`, `location`, `timezone`, `provider` |
 | `weather_anomaly` | Anomaly detection over a series | `measure`, `unit`, `points` | `threshold`, `location`, `timezone`, `provider` |
+| `weather_satellite` | Latest satellite imagery over a place, as observational evidence | — | `location`, `latitude`, `longitude` |
 
 A location may be given as a name **or** as coordinates; supplying neither is a validation error,
 and supplying a name that matches several places returns the candidates rather than a guess.

@@ -417,6 +417,7 @@ def test_every_tool_is_documented_with_its_arguments() -> None:
         "weather_compare": schemas.CompareInput,
         "weather_statistics": schemas.StatisticsInput,
         "weather_anomaly": schemas.AnomalyInput,
+        "weather_satellite": schemas.SatelliteInput,
     }
     assert set(models) == set(schemas.TOOL_NAMES), (
         "this test's tool-to-schema map is out of step with TOOL_NAMES"
@@ -1634,7 +1635,7 @@ def test_the_traceability_table_has_a_section_for_each_saas_spec() -> None:
 def test_every_saas_spec_requirement_has_a_row_in_its_own_section() -> None:
     """34.6's first half: the five specs' requirements are traced, spec by spec.
 
-    `test_every_requirement_is_traced` already asserts this across all twenty specs at once. This
+    `test_every_requirement_is_traced` already asserts this across every spec at once. This
     asserts each requirement is under *its own* spec's heading, which the aggregate check cannot
     see — a row filed under the wrong spec satisfies the aggregate and misdirects the reader.
     """
@@ -1760,7 +1761,11 @@ def test_the_prose_counts_match_the_recounted_totals() -> None:
     open_rows = sum(1 for row in rows if row[4] == "OPEN")
     untested = sum(1 for row in rows if _names_no_test(row[3]))
 
-    assert f"Of **{len(rows)}** requirements across twenty specs" in flat
+    # The spec count is counted, not spelled into this assertion. It was "twenty specs" written
+    # out, so adding the twenty-first spec failed here rather than in the prose that was actually
+    # stale — which is the wrong end to notice it from.
+    spelled = {20: "twenty", 21: "twenty-one", 22: "twenty-two", 23: "twenty-three"}[len(grouped)]
+    assert f"Of **{len(rows)}** requirements across {spelled} specs" in flat
     assert f"**{implemented}** are implemented and tested" in flat
     assert f"**{manual}** is\nmanual-pending".replace("\n", " ") in flat or (
         f"**{manual}** is manual-pending" in flat

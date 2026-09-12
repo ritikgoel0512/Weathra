@@ -895,6 +895,9 @@ def test_every_agent_in_the_execution_record_is_separately_identifiable() -> Non
         # it projects for the days ahead are two claims under two data classes, and a record that
         # credited both to one agent could not say which of them was retrieved (task 34.33).
         "current",
+        # Observational imagery is its own agent: a picture of a region at a time supports
+        # different claims from a provider's figure for a place (task 34.34).
+        "satellite",
         "forecast",
         "historical",
         "analytics",
