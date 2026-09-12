@@ -34,6 +34,8 @@ import type {
   CatalogListResponse,
   ComparisonRequest,
   ComparisonResult,
+  TravelIntelligence,
+  TravelIntelligenceRequest,
   CurrentResponse,
   DeletionResponse,
   EvidenceResponse,
@@ -236,6 +238,16 @@ export interface ApiClient {
   baselineComparison(query: BaselineComparisonQuery): Promise<BaselineComparison>;
   periodComparison(query: PeriodComparisonQuery): Promise<PeriodComparison>;
   compareLocations(request: ComparisonRequest): Promise<ComparisonResult>;
+  /**
+   * One trip's weather intelligence, from one request.
+   *
+   * Travel Intelligence used to assemble itself in the browser out of four unrelated endpoints,
+   * each resolving the same place and each reaching for the same week of weather — which is what
+   * exhausted the provider's quota and left the screen unable to rank anything. The backend now
+   * composes the whole answer from a single forecast retrieval, and a section it could not produce
+   * names itself in `partial_failures` rather than taking the trip down with it.
+   */
+  travelIntelligence(request: TravelIntelligenceRequest): Promise<TravelIntelligence>;
   /**
    * A stated assumption applied to a real forecast.
    *
@@ -539,6 +551,8 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
       get<PeriodComparison>("/api/v1/weather/history/comparison", { ...query }),
     compareLocations: (request) =>
       call<ComparisonResult>("POST", "/api/v1/weather/comparison", {}, request, true),
+    travelIntelligence: (request) =>
+      call<TravelIntelligence>("POST", "/api/v1/travel/intelligence", {}, request, true),
     scenario: (request) =>
       call<ScenarioResponse>("POST", "/api/v1/weather/scenario", {}, request, true),
 

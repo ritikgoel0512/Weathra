@@ -371,21 +371,48 @@ A model-written synthesis of those figures MAY be offered, and SHALL be produced
 
 ### Requirement: Travel Intelligence
 
-The frontend SHALL provide a Travel Intelligence screen that ranks the days in a forecast window at one destination against a criterion the backend scores, showing each day's rank, the statistics that supported its score, and the contributions that produced it.
+The frontend SHALL provide a Travel Intelligence screen whose subject is a **trip**: a destination, a departure date and a return date, with an optional origin carried as context. It SHALL NOT require a scoring criterion or a rolling forecast horizon to be chosen, because those state Forecast Explorer's question rather than a traveller's, and it SHALL offer exactly one place editor rather than a second hidden location form.
 
-The ranking SHALL come from the backend's own comparison, and the screen SHALL NOT compute a score, index or weighting of its own. It SHALL state that it describes weather only, and SHALL NOT present flight, airline, transport, booking or sensor information, none of which Weathra holds. Days the provider reported too little to score SHALL be reported as excluded rather than ranked last.
+The screen SHALL obtain its whole analysis from a single backend request, and SHALL NOT assemble the trip by issuing several weather retrievals from the browser. It SHALL present the weather window, a travel viability index, analytical metrics, the destination's daily outlook, a packing strategy, a comparison against other travel windows, a synthesis, grounding evidence, and the historical baseline.
 
-#### Scenario: A window is ranked
+Every figure SHALL come from the backend. The screen SHALL NOT compute a score, index or weighting of its own, and the viability index SHALL disclose that its weighting is Weathra's own heuristic rather than an authoritative index. It SHALL state that it describes weather only, and SHALL NOT present flight, airline, transport, booking or sensor information, none of which Weathra holds — including in the name of any metric.
 
-- **WHEN** a person asks for a window to be ranked against a criterion
-- **THEN** each day's rank, supporting statistics and score contributions are shown
-- **AND** the ranking is the backend's, with no score computed by the screen
+A section the backend could not produce SHALL be reported as unavailable with its reason, and SHALL NOT be fabricated or silently removed. A forecast-change comparison SHALL be shown only where an earlier snapshot exists.
+
+#### Scenario: A trip is analysed
+
+- **WHEN** a person sets a destination and travel dates
+- **THEN** the whole dashboard is produced from one backend request
+- **AND** the viability index, metrics, daily outlook, packing strategy, temporal comparison, synthesis and evidence are shown
+- **AND** no score, index or weighting is computed by the screen
+
+#### Scenario: It asks about a trip, not about a criterion
+
+- **WHEN** the screen is inspected
+- **THEN** the trip is stated as origin, destination and dates
+- **AND** no criterion selector and no rolling-window selector is offered
+- **AND** exactly one place editor exists
+
+#### Scenario: A secondary section is unavailable
+
+- **WHEN** the archive or the snapshot history cannot answer for a trip
+- **THEN** that section states that it is unavailable, with the reason
+- **AND** every other section still renders
+- **AND** no baseline, normal or forecast change is invented in its place
+
+#### Scenario: The core retrieval fails
+
+- **WHEN** the destination forecast cannot be retrieved
+- **THEN** one compact surface states so and offers a retry
+- **AND** the trip's origin, destination and dates are preserved
+- **AND** no hero, empty index or placeholder section is drawn beneath it
 
 #### Scenario: It says what it is not
 
 - **WHEN** the screen is inspected
 - **THEN** it states that it describes weather only
 - **AND** no flight, airline, transport, booking or sensor content appears
+- **AND** no metric is named in a way that implies aviation data
 
 ### Requirement: Weather Scenario Lab
 

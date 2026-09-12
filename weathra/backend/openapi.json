@@ -1476,6 +1476,94 @@
         "title": "CatalogStatus",
         "type": "string"
       },
+      "ComparedWindow": {
+        "additionalProperties": false,
+        "description": "One travel window measured the same way as the trip, for comparison against it.",
+        "properties": {
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "label": {
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "precipitation_sum": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precipitation Sum"
+          },
+          "selected": {
+            "title": "Selected",
+            "type": "boolean"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          },
+          "temperature_mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature Mean"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          },
+          "viability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Viability"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "label",
+          "selected"
+        ],
+        "title": "ComparedWindow",
+        "type": "object"
+      },
       "ComparisonCandidate": {
         "additionalProperties": false,
         "description": "One ranked candidate \u2014 a location, or a day at one location \u2014 with its evidence.",
@@ -2144,6 +2232,157 @@
           "units"
         ],
         "title": "CurrentResponse",
+        "type": "object"
+      },
+      "DailyOutlookEntry": {
+        "additionalProperties": false,
+        "description": "One day of the trip, as the provider reported it and the ranking scored it.",
+        "properties": {
+          "apparent_temperature_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apparent Temperature Max"
+          },
+          "condition_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition Code"
+          },
+          "local_date": {
+            "format": "date",
+            "title": "Local Date",
+            "type": "string"
+          },
+          "precipitation_probability_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precipitation Probability Max"
+          },
+          "precipitation_sum": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precipitation Sum"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
+          },
+          "temperature_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature Max"
+          },
+          "temperature_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature Min"
+          },
+          "units": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Units",
+            "type": "object"
+          },
+          "uv_index_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uv Index Max"
+          },
+          "viability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "This day's own 0-100 score.",
+            "title": "Viability"
+          },
+          "weekday": {
+            "minLength": 1,
+            "title": "Weekday",
+            "type": "string"
+          },
+          "wind_gust_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wind Gust Max"
+          },
+          "wind_speed_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wind Speed Max"
+          }
+        },
+        "required": [
+          "local_date",
+          "weekday"
+        ],
+        "title": "DailyOutlookEntry",
         "type": "object"
       },
       "DataClass": {
@@ -3630,6 +3869,36 @@
         ],
         "title": "Measure",
         "type": "string"
+      },
+      "PackingItem": {
+        "additionalProperties": false,
+        "description": "One packing recommendation, and the figure that raised it.",
+        "properties": {
+          "because": {
+            "description": "The figure this was derived from.",
+            "minLength": 1,
+            "title": "Because",
+            "type": "string"
+          },
+          "item": {
+            "minLength": 1,
+            "title": "Item",
+            "type": "string"
+          },
+          "tier": {
+            "description": "Essential, Recommended or Optional.",
+            "minLength": 1,
+            "title": "Tier",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item",
+          "tier",
+          "because"
+        ],
+        "title": "PackingItem",
+        "type": "object"
       },
       "Period": {
         "additionalProperties": false,
@@ -5461,6 +5730,39 @@
         "title": "SearchResponse",
         "type": "object"
       },
+      "SectionFailure": {
+        "additionalProperties": false,
+        "description": "A section that could not be produced, named with the reason it could not.",
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "section": {
+            "minLength": 1,
+            "title": "Section",
+            "type": "string"
+          }
+        },
+        "required": [
+          "section",
+          "reason"
+        ],
+        "title": "SectionFailure",
+        "type": "object"
+      },
       "Series": {
         "additionalProperties": false,
         "description": "An ordered run of entries at one granularity, with one units map for the whole series.",
@@ -6061,6 +6363,418 @@
         "title": "ToolResult",
         "type": "object"
       },
+      "TravelEvidence": {
+        "additionalProperties": false,
+        "description": "What a reader needs to check the figures: who answered, for where, over what, and when.",
+        "properties": {
+          "archive_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archive Provider"
+          },
+          "archive_years_used": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Archive Years Used",
+            "type": "array"
+          },
+          "data_classes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DataClass"
+            },
+            "title": "Data Classes",
+            "type": "array"
+          },
+          "destination_resolved_as": {
+            "minLength": 1,
+            "title": "Destination Resolved As",
+            "type": "string"
+          },
+          "forecast_from_cache": {
+            "title": "Forecast From Cache",
+            "type": "boolean"
+          },
+          "forecast_provider": {
+            "minLength": 1,
+            "title": "Forecast Provider",
+            "type": "string"
+          },
+          "forecast_retrieved_at": {
+            "format": "date-time",
+            "title": "Forecast Retrieved At",
+            "type": "string"
+          },
+          "horizon_days": {
+            "title": "Horizon Days",
+            "type": "integer"
+          },
+          "origin_resolved_as": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Resolved As"
+          },
+          "unit_system": {
+            "$ref": "#/components/schemas/UnitSystem"
+          }
+        },
+        "required": [
+          "forecast_provider",
+          "forecast_retrieved_at",
+          "forecast_from_cache",
+          "horizon_days",
+          "unit_system",
+          "destination_resolved_as"
+        ],
+        "title": "TravelEvidence",
+        "type": "object"
+      },
+      "TravelIntelligence": {
+        "additionalProperties": false,
+        "description": "One coherent answer to \"is this a good weather window for this trip\".",
+        "properties": {
+          "daily_outlook": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DailyOutlookEntry"
+            },
+            "title": "Daily Outlook",
+            "type": "array"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/TravelEvidence"
+          },
+          "forecast_changes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WhatChanged"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How this forecast has moved since the last earlier snapshot of the same window. Null where the snapshot history could not be read; a comparison that is simply not available yet says so in its own `comparison_available`, and is never invented."
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "hero_state": {
+            "minLength": 1,
+            "title": "Hero State",
+            "type": "string"
+          },
+          "hero_summary": {
+            "minLength": 1,
+            "title": "Hero Summary",
+            "type": "string"
+          },
+          "historical_baseline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BaselineComparison"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trip window against the archive, where the archive could answer."
+          },
+          "metrics": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/TravelMetric"
+            },
+            "title": "Metrics",
+            "type": "array"
+          },
+          "packing_insight": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Packing Insight"
+          },
+          "packing_strategy": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PackingItem"
+            },
+            "title": "Packing Strategy",
+            "type": "array"
+          },
+          "partial_failures": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SectionFailure"
+            },
+            "title": "Partial Failures",
+            "type": "array"
+          },
+          "synthesis": {
+            "minLength": 1,
+            "title": "Synthesis",
+            "type": "string"
+          },
+          "synthesis_data_class": {
+            "$ref": "#/components/schemas/DataClass",
+            "default": "computed_statistic"
+          },
+          "temporal_comparison": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ComparedWindow"
+            },
+            "title": "Temporal Comparison",
+            "type": "array"
+          },
+          "trip": {
+            "$ref": "#/components/schemas/TripWindow"
+          },
+          "viability": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TravelViability"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "trip",
+          "generated_at",
+          "hero_summary",
+          "hero_state",
+          "synthesis",
+          "evidence"
+        ],
+        "title": "TravelIntelligence",
+        "type": "object"
+      },
+      "TravelIntelligenceRequest": {
+        "additionalProperties": false,
+        "description": "A trip: where from, where to, and when.\n\nA POST body rather than a query string because a trip is a small object, not a filter, and\nbecause the origin and destination are names that need resolving rather than coordinates a\nscreen already holds.",
+        "properties": {
+          "destination": {
+            "description": "Where the trip goes. Resolved by name.",
+            "minLength": 1,
+            "title": "Destination",
+            "type": "string"
+          },
+          "end": {
+            "description": "Last day of the trip, inclusive.",
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the traveller sets out from, carried as trip context. Weathra holds no transport data, so this does not affect the destination's weather.",
+            "title": "Origin"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A registered provider. The configured default if omitted.",
+            "title": "Provider"
+          },
+          "start": {
+            "description": "First day of the trip, in the destination's local calendar.",
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "units": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnitSystem"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides your saved preference for this request only."
+          }
+        },
+        "required": [
+          "destination",
+          "start",
+          "end"
+        ],
+        "title": "TravelIntelligenceRequest",
+        "type": "object"
+      },
+      "TravelMetric": {
+        "additionalProperties": false,
+        "description": "One analytical card: a figure, its unit, and the method that produced it.",
+        "properties": {
+          "data_class": {
+            "$ref": "#/components/schemas/DataClass",
+            "default": "computed_statistic"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "display": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pre-formatted where a unit is not enough.",
+            "title": "Display"
+          },
+          "key": {
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "method": {
+            "description": "How the figure was arrived at.",
+            "minLength": 1,
+            "title": "Method",
+            "type": "string"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when it could not be computed.",
+            "title": "Value"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "method"
+        ],
+        "title": "TravelMetric",
+        "type": "object"
+      },
+      "TravelViability": {
+        "additionalProperties": false,
+        "description": "Weathra's own travel-viability index, and the components that produced it.",
+        "properties": {
+          "basis": {
+            "minLength": 1,
+            "title": "Basis",
+            "type": "string"
+          },
+          "contributions": {
+            "items": {
+              "$ref": "#/components/schemas/ComponentContribution"
+            },
+            "title": "Contributions",
+            "type": "array"
+          },
+          "disclosure": {
+            "description": "Whose heuristic the weights are.",
+            "minLength": 1,
+            "title": "Disclosure",
+            "type": "string"
+          },
+          "score": {
+            "description": "0-100. Weathra's own heuristic.",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "type": "number"
+          },
+          "state": {
+            "description": "Excellent, Good, Mixed or Poor.",
+            "minLength": 1,
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "score",
+          "state",
+          "contributions",
+          "basis",
+          "disclosure"
+        ],
+        "title": "TravelViability",
+        "type": "object"
+      },
       "TrendDirection": {
         "description": "The classification a trend slope falls into, against its insignificance margin.",
         "enum": [
@@ -6146,6 +6860,49 @@
           "provenance"
         ],
         "title": "TrendReport",
+        "type": "object"
+      },
+      "TripWindow": {
+        "additionalProperties": false,
+        "description": "The trip as the traveller stated it, resolved to real places and real dates.",
+        "properties": {
+          "destination": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "nights": {
+            "minimum": 0.0,
+            "title": "Nights",
+            "type": "integer"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Location"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the traveller sets out from, carried as trip context. Weathra holds no transport data and this does not affect the destination's weather."
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "destination",
+          "start",
+          "end",
+          "nights"
+        ],
+        "title": "TripWindow",
         "type": "object"
       },
       "UncertaintyStatement": {
@@ -9558,6 +10315,48 @@
         "summary": "One of your threads",
         "tags": [
           "evidence"
+        ]
+      }
+    },
+    "/api/v1/travel/intelligence": {
+      "post": {
+        "description": "Everything the Travel Intelligence screen shows, from one forecast retrieval.",
+        "operationId": "intelligence_api_v1_travel_intelligence_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TravelIntelligenceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TravelIntelligence"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Analyse a trip's weather",
+        "tags": [
+          "travel"
         ]
       }
     },

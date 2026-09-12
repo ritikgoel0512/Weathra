@@ -783,3 +783,237 @@
   color: var(--color-text-primary);
   font-variant-numeric: tabular-nums;
 }
+
+/* ================== the trip workspace: one trip, one request, one dashboard ================== */
+
+/*
+ * The trip header's own parts.
+ *
+ * Origin, an arrow, destination and dates on one row with the actions at the end — the artifact's
+ * strip, and the only place any of the three is changed. What stood here before was a destination
+ * label, two selects asking Forecast Explorer's question, and two nested place forms.
+ */
+.tripArrow {
+  align-self: center;
+  color: var(--color-text-muted);
+  font-size: var(--type-ui-size);
+}
+
+.tripNights {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.tripActions {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+  align-items: center;
+}
+
+/* The one editor. Two places and two dates, side by side while it is open. */
+.editor {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.editorPlace {
+  min-width: 0;
+}
+
+.editorDates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
+  gap: var(--space-3);
+  align-content: start;
+  min-width: 0;
+}
+
+/* The hero's sentence, and the two figures under it. */
+.heroLede {
+  margin: var(--space-2) 0 0;
+  max-width: 52ch;
+  color: var(--color-text-secondary);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-body-line);
+}
+
+.heroFigures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  margin-top: var(--space-3);
+}
+
+.heroFigureLabel {
+  display: block;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.heroFigureValue {
+  display: block;
+  font-family: var(--family-display);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+}
+
+/* The index inside the ring: a real 0-100 score, and the band it falls in. */
+.ringScore {
+  font-family: var(--family-display);
+  font-size: var(--type-display-size);
+  line-height: 1;
+  font-weight: var(--type-display-weight);
+  color: var(--color-text-primary);
+}
+
+.ringState {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+/* What produced the score, one row per weighted component. */
+.components {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.component {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px var(--space-3);
+  min-width: 0;
+}
+
+.componentName {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.componentValue {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-size: var(--type-ui-size);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+/* Packing: the item, the figure that raised it, and the tier. */
+.packing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+}
+
+.packItem {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle);
+  min-width: 0;
+}
+
+.packItem:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.packText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.packName {
+  font-size: var(--type-ui-size);
+  color: var(--color-text-primary);
+}
+
+.packBecause {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+}
+
+/* The planning insight, set apart from the list it follows. */
+.insight {
+  padding: var(--space-3);
+  border-left: 2px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-inset);
+  margin-bottom: var(--space-3);
+}
+
+.insightLabel {
+  display: block;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.insightText {
+  margin: var(--space-1) 0 0;
+  font-size: var(--type-ui-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-secondary);
+}
+
+.windowScore {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/*
+ * The loading shape, laid out like the dashboard that replaces it.
+ *
+ * Same grid, same proportions, so nothing jumps when the answer arrives — and no error card is
+ * flashed before the request has had a chance to complete.
+ */
+.loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* The itinerary a person prints: the analysis, without the furniture around it. */
+@media print {
+  .tripActions,
+  .editor,
+  .why {
+    display: none !important;
+  }
+
+  .screen {
+    gap: var(--space-4);
+  }
+}

@@ -141,132 +141,103 @@ afterAll(() => {
   stub?.kill();
 });
 
-/** The request the Travel screen actually issues, with the screen's own defaults. */
-const TRAVEL_RANKING = {
-  criterion: "outdoor_suitability",
-  location: "Berlin, Germany",
-  days: 7,
+/** The request the Travel screen actually issues: a destination and two dates. */
+const TRIP = {
+  destination: "Barcelona, Spain",
+  origin: "Berlin, Germany",
+  start: "2026-09-14",
+  end: "2026-09-18",
 };
 
 describe("the Travel fixture answers Travel's own request", () => {
-  it("returns a ranking the contract would accept", async () => {
-    const response = await fetch(`${BASE}/api/v1/weather/comparison`, {
+  async function analyse() {
+    const response = await fetch(`${BASE}/api/v1/travel/intelligence`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(TRAVEL_RANKING),
+      body: JSON.stringify(TRIP),
     });
-    expect(response.status).toBe(200);
+    return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+  }
 
-    const body = (await response.json()) as Record<string, unknown>;
-    expect(violations(body, component("ComparisonResult"))).toEqual([]);
+  it("returns a trip analysis the contract would accept", async () => {
+    const { status, body } = await analyse();
+    expect(status).toBe(200);
+    expect(violations(body, component("TravelIntelligence"))).toEqual([]);
   });
 
-  it("ranks days, because that is what a single location and a horizon ask for", async () => {
-    const response = await fetch(`${BASE}/api/v1/weather/comparison`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(TRAVEL_RANKING),
-    });
-    const body = (await response.json()) as { mode: string; candidates: { label: string }[] };
+  it("answers the whole screen from one call", async () => {
+    const { body } = await analyse();
 
-    expect(body.mode).toBe("days");
-    // `compare_days` labels a candidate with its ISO date. The screen is responsible for speaking
-    // that; the fixture must not pre-format it, or the bug that put a raw date in front of a
-    // customer becomes invisible to every capture.
-    for (const candidate of body.candidates) {
-      expect(candidate.label).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    /*
+     * Every region the screen draws comes from this one response. The fixture may not be narrower
+     * than the contract: a stub missing a section hides a populated region rather than inventing
+     * one, and is still a fixture that disagrees with the route.
+     */
+    for (const section of [
+      "trip",
+      "hero_summary",
+      "viability",
+      "metrics",
+      "daily_outlook",
+      "packing_strategy",
+      "temporal_comparison",
+      "synthesis",
+      "evidence",
+    ]) {
+      expect(body[section]).toBeTruthy();
     }
   });
 
-  it("leaves the cross-place statistics unset, as a day ranking does", async () => {
-    const response = await fetch(`${BASE}/api/v1/weather/comparison`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(TRAVEL_RANKING),
-    });
-    const body = (await response.json()) as Record<string, unknown>;
+  it("scores viability on 0-100 and discloses whose heuristic it is", async () => {
+    const { body } = await analyse();
+    const viability = body.viability as { score: number; state: string; disclosure: string };
 
-    // Pearson's r describes a pair of places and density counts instants every candidate reported.
-    // Neither means anything across the days of one place, and `compare_days` returns neither.
-    expect(body.correlation ?? null).toBeNull();
-    expect(body.data_density ?? null).toBeNull();
+    expect(viability.score).toBeGreaterThanOrEqual(0);
+    expect(viability.score).toBeLessThanOrEqual(100);
+    expect(["Excellent", "Good", "Mixed", "Poor"]).toContain(viability.state);
+    expect(viability.disclosure).toMatch(/Weathra's own heuristic/);
   });
 
-  it("scores on the 0–1 scale the criterion produces", async () => {
-    const response = await fetch(`${BASE}/api/v1/weather/comparison`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(TRAVEL_RANKING),
-    });
-    const body = (await response.json()) as { candidates: { score: number }[] };
+  it("names no metric Weathra has no data for", async () => {
+    const { body } = await analyse();
+    const metrics = body.metrics as { label: string; method: string }[];
+    const text = metrics.map((m) => `${m.label} ${m.method}`).join(" ");
 
-    for (const candidate of body.candidates) {
-      expect(candidate.score).toBeGreaterThan(0);
-      expect(candidate.score).toBeLessThanOrEqual(1);
-    }
+    // The artifact's "Flight Stability" implies aviation data Weathra does not hold.
+    expect(text).not.toMatch(/flight stability|turbulence|airline operations/i);
   });
 
-  it("supports each day with the statistics the ranking actually applies", async () => {
-    const response = await fetch(`${BASE}/api/v1/weather/comparison`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(TRAVEL_RANKING),
-    });
-    const body = (await response.json()) as {
-      candidates: { supporting: { measure: string }[] }[];
-    };
+  it("reports a section it could not produce rather than filling it in", async () => {
+    const { body } = await analyse();
+    const failures = (body.partial_failures ?? []) as { section: string; reason: string }[];
 
-    for (const candidate of body.candidates) {
-      const measures = candidate.supporting.map((entry) => entry.measure);
-      expect(measures).toEqual(["temperature_mean", "precipitation_sum", "wind_speed_max"]);
-    }
-  });
-});
-
-describe("the Travel fixture answers Travel's other reads", () => {
-  it("places a window still ahead against the baseline from the forecast side", async () => {
-    const response = await fetch(
-      `${BASE}/api/v1/weather/history/baseline/comparison?latitude=52.52&longitude=13.405&start=2026-09-04&end=2026-09-10&years=5&measure=temperature_mean`,
-    );
-    expect(response.status).toBe(200);
-
-    const body = (await response.json()) as Record<string, unknown>;
-    expect(violations(body, component("BaselineComparison"))).toEqual([]);
-
-    // The archive cannot be asked about days that have not happened, so the value is the
-    // forecast's and the result says which side is uncertain.
-    expect(body.observed_data_class).toBe("forecast");
-    expect(body.forecast_side_caveat).toBeTruthy();
+    // The archive could not answer, so the band is null and the reason is stated. A fixture that
+    // returned a happy baseline here would photograph a screen production cannot produce.
+    expect(body.historical_baseline ?? null).toBeNull();
+    expect(failures.some((failure) => failure.section === "historical_baseline")).toBe(true);
   });
 
-  it("still answers a past window as observation on both sides", async () => {
-    const response = await fetch(
-      `${BASE}/api/v1/weather/history/baseline/comparison?latitude=52.52&longitude=13.405&start=2025-09-01&end=2025-09-07&years=5&measure=temperature_mean`,
-    );
-    const body = (await response.json()) as Record<string, unknown>;
-
-    expect(body.observed_data_class).toBe("historical_observation");
-    expect(body.forecast_side_caveat ?? null).toBeNull();
+  it("never fabricates a forecast change", async () => {
+    const { body } = await analyse();
+    expect(body.forecast_changes ?? null).toBeNull();
+    expect(JSON.stringify(body)).not.toMatch(/convergence|vector alignment|sync delta/i);
   });
 
-  it("carries the daily measures the outlook cards and the metric row read", async () => {
-    const response = await fetch(
-      `${BASE}/api/v1/weather/forecast?latitude=52.52&longitude=13.405&days=7`,
-    );
-    const body = (await response.json()) as {
-      daily: { entries: { values: Record<string, number | null> }[] };
-    };
+  it("carries the daily fields the outlook cards read", async () => {
+    const { body } = await analyse();
+    const days = body.daily_outlook as Record<string, unknown>[];
 
-    const first = body.daily.entries[0]?.values ?? {};
-    // The condition glyph, the high and low, and the fourth metric card each read one of these.
-    for (const measure of [
-      "weather_code_dominant",
+    expect(days.length).toBeGreaterThan(0);
+    for (const key of [
+      "local_date",
+      "weekday",
+      "condition_code",
       "temperature_max",
       "temperature_min",
-      "precipitation_probability_max",
-      "uv_index_max",
+      "precipitation_sum",
+      "viability",
     ]) {
-      expect(Object.keys(first)).toContain(measure);
+      expect(Object.keys(days[0] as object)).toContain(key);
     }
   });
 });

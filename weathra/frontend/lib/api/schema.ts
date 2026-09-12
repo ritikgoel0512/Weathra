@@ -300,6 +300,19 @@ export interface CatalogObservation {
 /** Whether an entry may be resolved at all. */
 export type CatalogStatus = "enabled" | "disabled";
 
+/** One travel window measured the same way as the trip, for comparison against it. */
+export interface ComparedWindow {
+  readonly end: string;
+  readonly label: string;
+  readonly precipitation_sum?: number | null;
+  readonly selected: boolean;
+  readonly start: string;
+  readonly state?: string | null;
+  readonly temperature_mean?: number | null;
+  readonly unavailable_reason?: string | null;
+  readonly viability?: number | null;
+}
+
 /** One ranked candidate — a location, or a day at one location — with its evidence. */
 export interface ComparisonCandidate {
   /** Populated for the composite criterion; empty for a single-measure one. */
@@ -439,6 +452,25 @@ export interface CurrentResponse {
   readonly units: Record<string, string>;
   /** Per measure. Null means 'not reported' and is never a zero. */
   readonly values: Record<string, number | null>;
+}
+
+/** One day of the trip, as the provider reported it and the ranking scored it. */
+export interface DailyOutlookEntry {
+  readonly apparent_temperature_max?: number | null;
+  readonly condition_code?: number | null;
+  readonly local_date: string;
+  readonly precipitation_probability_max?: number | null;
+  readonly precipitation_sum?: number | null;
+  readonly rank?: number | null;
+  readonly temperature_max?: number | null;
+  readonly temperature_min?: number | null;
+  readonly units?: Record<string, string>;
+  readonly uv_index_max?: number | null;
+  /** This day's own 0-100 score. */
+  readonly viability?: number | null;
+  readonly weekday: string;
+  readonly wind_gust_max?: number | null;
+  readonly wind_speed_max?: number | null;
 }
 
 /** What kind of thing a reported value is. */
@@ -761,6 +793,15 @@ export interface MeResponse {
   readonly profile_created_at: string;
   /** Your Supabase Auth subject. Weathra's only identifier for you. */
   readonly user_id: string;
+}
+
+/** One packing recommendation, and the figure that raised it. */
+export interface PackingItem {
+  /** The figure this was derived from. */
+  readonly because: string;
+  readonly item: string;
+  /** Essential, Recommended or Optional. */
+  readonly tier: string;
 }
 
 /** A half-open time window ``[start_utc, end_utc)``, resolved from a location's timezone. */
@@ -1162,6 +1203,13 @@ export interface SearchResponse {
   readonly results: Location[];
 }
 
+/** A section that could not be produced, named with the reason it could not. */
+export interface SectionFailure {
+  readonly code?: string | null;
+  readonly reason: string;
+  readonly section: string;
+}
+
 /** An ordered run of entries at one granularity, with one units map for the whole series. */
 export interface Series {
   readonly entries?: SeriesEntry[];
@@ -1294,6 +1342,86 @@ export interface ToolResult {
   readonly tool: string;
 }
 
+/** What a reader needs to check the figures: who answered, for where, over what, and when. */
+export interface TravelEvidence {
+  readonly archive_provider?: string | null;
+  readonly archive_years_used?: number[];
+  readonly data_classes?: DataClass[];
+  readonly destination_resolved_as: string;
+  readonly forecast_from_cache: boolean;
+  readonly forecast_provider: string;
+  readonly forecast_retrieved_at: string;
+  readonly horizon_days: number;
+  readonly origin_resolved_as?: string | null;
+  readonly unit_system: UnitSystem;
+}
+
+/** One coherent answer to "is this a good weather window for this trip". */
+export interface TravelIntelligence {
+  readonly daily_outlook?: DailyOutlookEntry[];
+  readonly evidence: TravelEvidence;
+  /** How this forecast has moved since the last earlier snapshot of the same window. Null where the snapshot history could not be read; a comparison that is simply not available yet says so in its own `comparison_available`, and is never invented. */
+  readonly forecast_changes?: WhatChanged | null;
+  readonly generated_at: string;
+  readonly hero_state: string;
+  readonly hero_summary: string;
+  /** The trip window against the archive, where the archive could answer. */
+  readonly historical_baseline?: BaselineComparison | null;
+  readonly metrics?: TravelMetric[];
+  readonly packing_insight?: string | null;
+  readonly packing_strategy?: PackingItem[];
+  readonly partial_failures?: SectionFailure[];
+  readonly synthesis: string;
+  readonly synthesis_data_class?: DataClass;
+  readonly temporal_comparison?: ComparedWindow[];
+  readonly trip: TripWindow;
+  readonly viability?: TravelViability | null;
+}
+
+/** A trip: where from, where to, and when. */
+export interface TravelIntelligenceRequest {
+  /** Where the trip goes. Resolved by name. */
+  readonly destination: string;
+  /** Last day of the trip, inclusive. */
+  readonly end: string;
+  /** Where the traveller sets out from, carried as trip context. Weathra holds no transport data, so this does not affect the destination's weather. */
+  readonly origin?: string | null;
+  /** A registered provider. The configured default if omitted. */
+  readonly provider?: string | null;
+  /** First day of the trip, in the destination's local calendar. */
+  readonly start: string;
+  /** Overrides your saved preference for this request only. */
+  readonly units?: UnitSystem | null;
+}
+
+/** One analytical card: a figure, its unit, and the method that produced it. */
+export interface TravelMetric {
+  readonly data_class?: DataClass;
+  readonly detail?: string | null;
+  /** Pre-formatted where a unit is not enough. */
+  readonly display?: string | null;
+  readonly key: string;
+  readonly label: string;
+  /** How the figure was arrived at. */
+  readonly method: string;
+  readonly unavailable_reason?: string | null;
+  readonly unit?: string | null;
+  /** Null when it could not be computed. */
+  readonly value?: number | null;
+}
+
+/** Weathra's own travel-viability index, and the components that produced it. */
+export interface TravelViability {
+  readonly basis: string;
+  readonly contributions: ComponentContribution[];
+  /** Whose heuristic the weights are. */
+  readonly disclosure: string;
+  /** 0-100. Weathra's own heuristic. */
+  readonly score: number;
+  /** Excellent, Good, Mixed or Poor. */
+  readonly state: string;
+}
+
 /** The classification a trend slope falls into, against its insignificance margin. */
 export type TrendDirection = "rising" | "falling" | "steady";
 
@@ -1313,6 +1441,16 @@ export interface TrendReport {
   readonly provenance: Provenance;
   readonly slope_per_day: number;
   readonly unit: string;
+}
+
+/** The trip as the traveller stated it, resolved to real places and real dates. */
+export interface TripWindow {
+  readonly destination: Location;
+  readonly end: string;
+  readonly nights: number;
+  /** Where the traveller sets out from, carried as trip context. Weathra holds no transport data and this does not affect the destination's weather. */
+  readonly origin?: Location | null;
+  readonly start: string;
 }
 
 /** What a forecast figure's confidence rests on, disclosed rather than implied. */
@@ -2144,6 +2282,17 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     parameters: [
       { name: "thread_id", in: "path", required: true },
     ],
+  },
+  {
+    operationId: "intelligence_api_v1_travel_intelligence_post",
+    method: "POST",
+    path: "/api/v1/travel/intelligence",
+    requiresToken: false,
+    administrative: false,
+    request: "TravelIntelligenceRequest",
+    successStatus: 200,
+    response: "TravelIntelligence",
+    parameters: [],
   },
   {
     operationId: "analysis_api_v1_weather_analysis_get",

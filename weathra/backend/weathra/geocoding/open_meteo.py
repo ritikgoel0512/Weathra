@@ -138,6 +138,11 @@ def _matches_qualifier(location: Location, qualifier: str) -> bool:
     return all(any(part == candidate for candidate in haystack) for part in parts)
 
 
+# The precision a cached point is keyed at, matching `providers.cache.COORDINATE_DECIMALS`:
+# roughly a hundred metres, which is far finer than any timezone or country boundary.
+_POINT_DECIMALS = 4
+
+
 class OpenMeteoGeocoder:
     """Open-Meteo's geocoding API behind the ``Geocoder`` contract."""
 
@@ -154,6 +159,9 @@ class OpenMeteoGeocoder:
         self._client = client
         self._clock = clock
         self._cache: OrderedDict[str, tuple[float, tuple[_Candidate, ...]]] = OrderedDict()
+        # Points already resolved to a place. Separate from `_cache` because the values are a
+        # different shape, and because a coordinate pair is not a search query.
+        self._resolved: OrderedDict[str, tuple[float, Location]] = OrderedDict()
         self.upstream_calls = 0
 
     # ---------------------------------------------------------------- resolution
@@ -195,7 +203,33 @@ class OpenMeteoGeocoder:
         return Ambiguous(query=query, candidates=distinct)
 
     async def resolve_coordinates(self, latitude: float, longitude: float) -> Location:
+        """The place at a point, from cache where this pair has been resolved before.
+
+        **This was the screen-killer.** Turning a coordinate pair into a timezone costs a call to
+        the provider's *forecast* endpoint, and this method reached for it every single time —
+        while `_search` beside it had been cached from the start. Any screen that passes latitude
+        and longitude rather than a name therefore paid one uncached provider call per request, on
+        every load, forever: Travel Intelligence issues three such requests, so three calls of its
+        nine were pure repetition that no amount of forecast caching could remove. It is what
+        exhausted the free tier's quota and produced "open-meteo rate-limited the request" on a
+        screen whose actual weather data was already being shared correctly.
+
+        A point resolves to a timezone, a country and an elevation, none of which change. The
+        geocoding TTL is the right one, and rounding the point to the same precision the weather
+        cache uses is the right key: two requests for the same place from different screens round
+        to the same entry.
+        """
         latitude, longitude = validate_coordinates(latitude, longitude)
+
+        point = (round(latitude, _POINT_DECIMALS), round(longitude, _POINT_DECIMALS))
+        key = f"point:{point[0]},{point[1]}"
+        settled = self._resolved.get(key)
+        if settled is not None:
+            expires_at, location = settled
+            if expires_at > self._clock():
+                self._resolved.move_to_end(key)
+                return location
+            del self._resolved[key]
 
         endpoint, credential = self._endpoint(FORECAST_URL, CUSTOMER_FORECAST_URL)
         payload = await request_json(
@@ -222,14 +256,23 @@ class OpenMeteoGeocoder:
                 details={"provider": OPEN_METEO_NAME},
             )
 
+        self.upstream_calls += 1
         elevation = payload.get("elevation")
-        return Location(
+        resolved = Location(
             display_name=self._coordinate_label(latitude, longitude),
             latitude=latitude,
             longitude=longitude,
             timezone=timezone,
             elevation_metres=float(elevation) if isinstance(elevation, (int, float)) else None,
         )
+
+        ttl = self._settings.cache_geocoding_ttl_seconds
+        if ttl > 0:
+            self._resolved[key] = (self._clock() + ttl, resolved)
+            self._resolved.move_to_end(key)
+            while len(self._resolved) > self._settings.cache_max_entries:
+                self._resolved.popitem(last=False)
+        return resolved
 
     async def search(
         self, query: str, *, limit: int = DEFAULT_SEARCH_LIMIT

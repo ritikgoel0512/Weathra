@@ -196,6 +196,55 @@ async def test_an_upstream_result_with_a_bad_coordinate_is_dropped() -> None:
 # =========================================================================== 6.3 coordinates
 
 
+async def test_a_point_resolved_twice_costs_one_upstream_call() -> None:
+    """The uncached call that exhausted the provider's quota.
+
+    Turning a coordinate pair into a timezone costs a call to the provider's *forecast* endpoint,
+    and this path reached for it every time while name search beside it had been cached from the
+    start. Any screen passing latitude and longitude therefore paid one provider call per request,
+    on every load, forever — Travel Intelligence issues three such requests, and those three were
+    pure repetition no amount of forecast caching could remove. A point's timezone, country and
+    elevation do not change.
+    """
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, json=fixture("timezone_lookup_reykjavik"))
+
+    resolver = OpenMeteoGeocoder(
+        settings=provider_settings(),
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )
+
+    first = await resolver.resolve_coordinates(64.15, -21.94)
+    second = await resolver.resolve_coordinates(64.15, -21.94)
+
+    assert calls == 1
+    assert second == first
+
+
+async def test_two_points_resolve_separately() -> None:
+    """Rounding keys the cache; it must not collapse places that are genuinely different."""
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, json=fixture("timezone_lookup_reykjavik"))
+
+    resolver = OpenMeteoGeocoder(
+        settings=provider_settings(),
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )
+
+    await resolver.resolve_coordinates(64.15, -21.94)
+    await resolver.resolve_coordinates(52.52, 13.405)
+
+    assert calls == 2
+
+
 async def test_valid_coordinates_resolve_with_a_timezone() -> None:
     resolver = geocoder(fixture("timezone_lookup_reykjavik"))
     location = await resolver.resolve_coordinates(64.15, -21.94)

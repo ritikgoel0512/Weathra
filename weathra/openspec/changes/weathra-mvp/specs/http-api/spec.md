@@ -480,6 +480,33 @@ The API SHALL report a health endpoint stating that the service is running, and 
 - **AND** the service still reports itself healthy
 - **AND** no credential value appears in the response
 
+### Requirement: Travel intelligence endpoint
+
+The HTTP API SHALL expose an endpoint that analyses one trip — a destination, a departure date and a return date, with an optional origin — and returns the whole analysis in a single typed response: the trip and its resolved locations, a hero summary, a travel viability index, analytical metrics, the destination's daily outlook, a packing strategy, a comparison against other travel windows, any forecast change, a synthesis, the historical baseline, a grounding evidence bundle, and the sections that could not be produced.
+
+The endpoint SHALL compute every section from a **single** destination forecast retrieval. It SHALL NOT retrieve the same forecast more than once to serve different sections of one response.
+
+The viability index SHALL be derived from the deterministic scoring the backend already defines, expressed on a 0-100 scale, and SHALL carry the disclosure that its weighting is Weathra's own heuristic. No figure in the response SHALL be fabricated: a statistic that cannot be computed SHALL be returned as unavailable with its reason.
+
+A failure in a secondary section — the archive, or the forecast snapshot history — SHALL be reported in the response's partial failures and SHALL NOT fail the request. A failure to retrieve the destination forecast SHALL fail the request, because there is no trip weather without it.
+
+#### Scenario: A trip is analysed from one retrieval
+
+- **WHEN** a trip is submitted
+- **THEN** one response carries every section the screen renders
+- **AND** the destination forecast was retrieved once
+
+#### Scenario: A secondary source fails
+
+- **WHEN** the archive cannot answer for the trip's calendar period
+- **THEN** the historical baseline is null and the reason appears in partial failures
+- **AND** the rest of the response is returned with a success status
+
+#### Scenario: The forecast cannot be retrieved
+
+- **WHEN** the provider cannot serve the destination forecast
+- **THEN** the request fails rather than returning a response with no trip weather in it
+
 ### Requirement: Request correlation and observability
 
 Every request SHALL be assigned a correlation identifier, accepted from the client when supplied and generated otherwise, returned in the response and in error bodies, and present in that request's log records and stream events. Logs SHALL record the endpoint, outcome, duration, provider used, cache status, and — for agent requests — the agents and tools invoked, and SHALL contain no credentials.

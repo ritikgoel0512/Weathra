@@ -1,9 +1,10 @@
 /**
- * Travel Intelligence — a backend-computed ranking, and nothing about flights.
+ * Travel Intelligence — one trip, one request, and nothing invented.
  *
- * The two cases that matter: the score comes from `/weather/comparison` with its contributions
- * shown, so no index is invented here; and none of the artifact's aviation content appears, because
- * Weathra knows nothing about any of it.
+ * The cases that matter: the screen asks the backend once for a whole trip rather than fanning out
+ * to four endpoints in the browser; it asks about a *trip* rather than about a criterion and a
+ * rolling window; a section the backend could not produce says so instead of being filled in; and
+ * a failed core retrieval ends the screen rather than drawing a hero over empty skeletons.
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -17,106 +18,92 @@ import { createQueryClient } from "@/lib/query/provider";
 
 import { TravelIntelligence } from "./travel";
 
-const LISBON = {
-  display_name: "Lisbon",
-  latitude: 38.72,
-  longitude: -9.14,
-  timezone: "Europe/Lisbon",
-  region: "Lisbon",
-  country: "Portugal",
-  country_code: "PT",
+const BARCELONA = {
+  display_name: "Barcelona",
+  latitude: 41.3874,
+  longitude: 2.1686,
+  timezone: "Europe/Madrid",
+  region: "Catalonia",
+  country: "Spain",
+  country_code: "ES",
 };
 
-const RANKING = {
-  criterion: "outdoor_suitability" as const,
-  mode: "days" as const,
-  data_class: "forecast" as const,
-  provider: "open-meteo",
-  period: {
-    start_local: "a",
-    end_local: "b",
-    start_utc: "c",
-    end_utc: "d",
-    timezone: "Europe/Lisbon",
+const BERLIN = {
+  display_name: "Berlin",
+  latitude: 52.52,
+  longitude: 13.405,
+  timezone: "Europe/Berlin",
+  region: "State of Berlin",
+  country: "Germany",
+  country_code: "DE",
+};
+
+function statistic(measure: string, value: number, unit: string) {
+  return {
+    measure,
+    statistic: "mean",
+    value,
+    unit,
+    method: "m",
+    minimum_points: 1,
+    points_used: 5,
+    provenance: {},
+  };
+}
+
+const RESULT = {
+  trip: { origin: BERLIN, destination: BARCELONA, start: "2026-09-14", end: "2026-09-18", nights: 4 },
+  generated_at: "2026-09-12T10:00:00Z",
+  hero_state: "Good",
+  hero_summary:
+    "Across 5 days at Barcelona, 14 Sep–18 Sep scores 71.4 of 100 for outdoor suitability — good.",
+  viability: {
+    score: 71.4,
+    state: "Good",
+    contributions: [
+      { measure: "temperature_mean", value: 23.4, unit: "°C", direction: "above", weight: 0.5, contribution: 0.38, supporting: statistic("temperature_mean", 23.4, "°C") },
+      { measure: "precipitation_sum", value: 9.3, unit: "mm", direction: "below", weight: 0.3, contribution: 0.21, supporting: statistic("precipitation_sum", 9.3, "mm") },
+    ],
+    basis: "Computed over the trip's own days.",
+    disclosure: "The outdoor-suitability score is Weathra's own heuristic, not an authoritative index.",
   },
-  candidates: [
-    {
-      label: "2026-09-12",
-      location: LISBON,
-      period: { start_local: "2026-09-12T00:00:00+01:00", end_local: "2026-09-13T00:00:00+01:00", start_utc: "c", end_utc: "d", timezone: "Europe/Lisbon" },
-      rank: 1,
-      score: 0.92,
-      supporting: [
-        { measure: "temperature", statistic: "mean", value: 23.4, unit: "°C", method: "m", minimum_points: 1, points_used: 24, provenance: {} },
-      ],
-      contributions: [{ measure: "precipitation", contribution: 0.4 }],
-    },
-    {
-      label: "2026-09-13",
-      location: LISBON,
-      period: { start_local: "2026-09-13T00:00:00+01:00", end_local: "2026-09-14T00:00:00+01:00", start_utc: "c", end_utc: "d", timezone: "Europe/Lisbon" },
-      rank: 2,
-      score: 0.61,
-      supporting: [],
-      contributions: [],
-    },
+  metrics: [
+    { key: "temperature_variance", label: "Temperature variance", value: 12.6, unit: "°C", detail: "18.1–30.7°C across the trip", method: "highest maximum minus lowest minimum", data_class: "computed_statistic" },
+    { key: "transit_stability", label: "Transit weather stability", value: 100, unit: "%", detail: "No disruptive weather reported", method: "share of settled days", data_class: "computed_statistic" },
+    { key: "sun_exposure", label: "Strongest sun", value: null, unit: null, method: "highest daily peak UV index", data_class: "forecast", unavailable_reason: "The provider reported no UV index for these days." },
   ],
-};
-
-const BASELINE = {
-  location: LISBON,
-  measure: "temperature_mean" as const,
-  observed_or_forecast_value: 22.1,
-  observed_data_class: "forecast" as const,
-  characterization: "Warmer than the 2-year baseline for this calendar period.",
-  forecast_side_caveat: "One side is a forecast, which is uncertain.",
-  difference: { measure: "temperature_mean", statistic: "delta", value: 1.4, unit: "°C", method: "m", minimum_points: 1, points_used: 2, provenance: {} },
-  z_score: { measure: "temperature_mean", statistic: "z_score", value: 0.8, unit: "", method: "m", minimum_points: 1, points_used: 2, provenance: {} },
-  percentile_rank: { measure: "temperature_mean", statistic: "percentile", value: 90, unit: "", method: "m", minimum_points: 1, points_used: 2, provenance: {} },
-  baseline: {
-    provider: "stub-archive",
-    location: LISBON,
-    unit_system: "metric" as const,
-    years_used: [2024, 2025],
-    years_requested: 5,
-    labelling: "A historical statistic computed by Weathra. It is not an official climate normal.",
-    calendar_period: RANKING.candidates[0]!.period,
-    mean: { measure: "temperature_mean", statistic: "mean", value: 20.7, unit: "°C", method: "m", minimum_points: 1, points_used: 2, provenance: {} },
-    standard_deviation: { measure: "temperature_mean", statistic: "standard_deviation", value: 1.1, unit: "°C", method: "m", minimum_points: 1, points_used: 2, provenance: {} },
-    minimum: { measure: "temperature_mean", statistic: "minimum", value: 19.4, unit: "°C", method: "m", minimum_points: 1, points_used: 2, provenance: {} },
-    maximum: { measure: "temperature_mean", statistic: "maximum", value: 21.8, unit: "°C", method: "m", minimum_points: 1, points_used: 2, provenance: {} },
-    yearly_means: [{ year: 2024, value: 19.4, points_used: 1 }, { year: 2025, value: 21.8, points_used: 1 }],
+  daily_outlook: [
+    { local_date: "2026-09-14", weekday: "Mon", condition_code: 1, temperature_max: 30.7, temperature_min: 20.7, precipitation_sum: 0, precipitation_probability_max: 5, viability: 77.4, rank: 3, units: { temperature_max: "°C", precipitation_sum: "mm" } },
+    { local_date: "2026-09-15", weekday: "Tue", condition_code: 61, temperature_max: 28.7, temperature_min: 21.6, precipitation_sum: 4.2, precipitation_probability_max: 62, viability: 91.5, rank: 1, units: { temperature_max: "°C", precipitation_sum: "mm" } },
+  ],
+  packing_strategy: [
+    { item: "Waterproof outer layer", tier: "Essential", because: "2 of 5 days carry rain, 9.3 mm over the trip" },
+    { item: "Sun protection", tier: "Recommended", because: "the peak UV index reaches 6.1" },
+  ],
+  packing_insight: "Daytime highs reach 30.7 °C but nights fall to 18.1 °C, so one layer covers the difference.",
+  temporal_comparison: [
+    { start: "2026-09-14", end: "2026-09-18", label: "14–18 Sep", selected: true, viability: 71.4, state: "Good", temperature_mean: 23.4, precipitation_sum: 9.3 },
+    { start: "2026-09-19", end: "2026-09-23", label: "19–23 Sep", selected: false, viability: 80.1, state: "Excellent", temperature_mean: 22.1, precipitation_sum: 0.4 },
+  ],
+  forecast_changes: null,
+  historical_baseline: null,
+  synthesis: "The weather over 14 Sep–18 Sep at Barcelona rates 71.4 of 100, which Weathra calls good.",
+  synthesis_data_class: "computed_statistic",
+  evidence: {
+    forecast_provider: "open-meteo",
+    forecast_retrieved_at: "2026-09-12T09:55:00Z",
+    forecast_from_cache: false,
+    horizon_days: 16,
+    unit_system: "metric",
+    destination_resolved_as: "Barcelona",
+    origin_resolved_as: "Berlin",
+    archive_provider: null,
+    archive_years_used: [],
+    data_classes: ["forecast", "computed_statistic"],
   },
-};
-
-const TRAVEL_FORECAST = {
-  attribution: { provider: "stub-provider", retrieved_at: "2026-09-12T06:00:00Z", location: LISBON, data_class: "forecast" as const, units: "metric" as const, from_cache: false },
-  horizon_days: 7,
-  period: RANKING.candidates[0]!.period,
-  hourly: {
-    granularity: "hourly" as const,
-    units: { temperature: "°C", precipitation: "mm" },
-    entries: [
-      { time_local: "2026-09-12T06:00:00+01:00", time_utc: "a", values: { temperature: 17.1, precipitation: 0 } },
-      { time_local: "2026-09-12T12:00:00+01:00", time_utc: "b", values: { temperature: 23.4, precipitation: 0.2 } },
-      { time_local: "2026-09-12T18:00:00+01:00", time_utc: "c", values: { temperature: 20.2, precipitation: 0 } },
-    ],
-  },
-  /*
-   * The provider's own daily entries, which the outlook cards, the metric row and the guidance all
-   * read. This was an empty series, so every region that draws the *sky* over a day — the glyph,
-   * the high and low, the chance of rain — was untested here while the capture drew them from a
-   * fixture that had them. Same measures the real provider sends.
-   */
-  daily: {
-    granularity: "daily" as const,
-    units: { temperature_max: "°C", temperature_min: "°C", precipitation_sum: "mm", precipitation_probability_max: "%", uv_index_max: "index", weather_code_dominant: "WMO code" },
-    entries: [
-      { time_local: "2026-09-12T00:00:00+01:00", time_utc: "a", values: { temperature_max: 26.1, temperature_min: 17.3, precipitation_sum: 0, precipitation_probability_max: 8, uv_index_max: 7.2, weather_code_dominant: 0 } },
-      { time_local: "2026-09-13T00:00:00+01:00", time_utc: "b", values: { temperature_max: 21.4, temperature_min: 15.9, precipitation_sum: 3.1, precipitation_probability_max: 74, uv_index_max: 2.6, weather_code_dominant: 63 } },
-    ],
-  },
-  uncertainty: { basis: "b", provider: "stub-provider", reference_time_utc: "x", spread_available: false, horizon: [] },
+  partial_failures: [
+    { section: "historical_baseline", reason: "The archive holds no observations for this calendar period.", code: "no_data_for_range" },
+  ],
 };
 
 function client(overrides: Partial<ApiClient> = {}): ApiClient {
@@ -124,25 +111,10 @@ function client(overrides: Partial<ApiClient> = {}): ApiClient {
     preferences: vi.fn().mockResolvedValue({
       unit_system: "metric",
       forecast_horizon_days: 7,
-      default_location: LISBON,
+      default_location: BARCELONA,
       sources: {},
     }),
-    compareLocations: vi.fn().mockResolvedValue(RANKING),
-    forecast: vi.fn().mockResolvedValue(TRAVEL_FORECAST),
-    changes: vi.fn().mockResolvedValue({
-      comparison_available: true,
-      statement: "The forecast has moved since it was last retrieved.",
-      changes: [
-        { local_date: "2026-09-12", measure: "temperature_max", current: 23.4, previous: 21.9, change: 1.5, material: true, statement: "12 Sep is 1.5 °C warmer than the previous forecast.", unit: "°C" },
-      ],
-      location: LISBON,
-      provider: "stub-provider",
-      current_retrieved_at: "2026-09-12T06:00:00Z",
-      previous_retrieved_at: "2026-09-11T06:00:00Z",
-      period: RANKING.candidates[0]!.period,
-      unit_system: "metric",
-    }),
-    baselineComparison: vi.fn().mockResolvedValue(BASELINE),
+    travelIntelligence: vi.fn().mockResolvedValue(RESULT),
     ...overrides,
   } as unknown as ApiClient;
 }
@@ -157,107 +129,191 @@ function mount(api: ApiClient) {
   );
 }
 
-describe("ranking a weather window", () => {
-  it("asks the backend to rank the days, against the criterion chosen", async () => {
-    const compareLocations = vi.fn().mockResolvedValue(RANKING);
-    mount(client({ compareLocations }));
-    await vi.waitFor(() => expect(screen.getAllByText("Lisbon, Portugal").length).toBeGreaterThan(0));
-
-    await vi.waitFor(() =>
-      expect(compareLocations).toHaveBeenCalledWith({
-      criterion: "outdoor_suitability",
-      location: "Lisbon, Portugal",
-        days: 7,
-      }),
-    );
-  });
-
-  it("shows each day's rank, and the figures behind its score", async () => {
-    mount(client());
+describe("the trip, not a weather filter", () => {
+  it("asks the backend once, for a trip", async () => {
+    const travelIntelligence = vi.fn().mockResolvedValue(RESULT);
+    mount(client({ travelIntelligence }));
+    await screen.findByText(/Weather window identified/i);
 
     /*
-     * The day cards carry the weekday and the date the backend stated, not the raw label — a
-     * customer reading a travel screen is choosing between days, and `2026-09-12` is a key.
+     * One call, carrying a destination and two dates. The screen used to issue four — a ranking, a
+     * forecast, a snapshot check and a baseline comparison — each resolving the same place, which
+     * is what exhausted the provider's quota.
      */
-    expect((await screen.findAllByText("Best")).length).toBeGreaterThan(0);
-    // The supporting statistic the backend returned, not a figure computed here.
-    expect(screen.getAllByText("23.4 °C").length).toBeGreaterThan(0);
-
-    // Every figure behind the score is still here, one press in rather than down the page.
-    await userEvent.click(screen.getAllByText("Show details")[0]!);
-    expect(screen.getAllByText(/Precipitation/).length).toBeGreaterThan(0);
+    expect(travelIntelligence).toHaveBeenCalledTimes(1);
+    const [sent] = travelIntelligence.mock.calls[0] as [Record<string, unknown>];
+    expect(sent).toHaveProperty("destination");
+    expect(sent).toHaveProperty("start");
+    expect(sent).toHaveProperty("end");
   });
 
-  it("leads with the destination beside its suitability, as the artifact composes it", async () => {
+  it("offers no criterion or rolling-window control", async () => {
+    const { container } = mount(client());
+    await screen.findByText(/Weather window identified/i);
+
+    // These asked Forecast Explorer's question on a travel screen, and they are Forecast Explorer's
+    // to ask. A trip is where from, where to and when.
+    expect(screen.queryByLabelText(/What you want/i)).toBeNull();
+    expect(screen.queryByLabelText(/Trip window/i)).toBeNull();
+    // No select at all in the header: the trip is two places and two dates.
+    expect(container.querySelectorAll("select")).toHaveLength(0);
+    expect(container.textContent).not.toMatch(/Next 7 days|Next 3 days|Next 14 days/i);
+  });
+
+  it("carries origin, destination and dates in one header", async () => {
     mount(client());
-    await screen.findAllByText("Best");
-    expect(screen.getByRole("heading", { name: "Weather suitability" })).toBeInTheDocument();
-    expect(screen.getByText(/of 2 days/)).toBeInTheDocument();
+    await screen.findByText(/Weather window identified/i);
+
+    expect(screen.getByText("Origin")).toBeInTheDocument();
+    expect(screen.getByText("Destination")).toBeInTheDocument();
+    expect(screen.getByText("Dates")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Adjust trip" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export itinerary" })).toBeInTheDocument();
   });
 
-  it("answers the default question on arrival rather than after a press", async () => {
-    /*
-     * The screen used to open on a form and an empty state telling the person to choose what they
-     * wanted from the weather, so the product existed only after a button. The defaults are a real
-     * question already — which days here are good to be outside, over the next week — so it answers
-     * that, and the controls change the answer.
-     */
-    const compareLocations = vi.fn().mockResolvedValue(RANKING);
-    mount(client({ compareLocations }));
+  it("keeps one place editor, opened from the header", async () => {
+    mount(client());
+    await screen.findByText(/Weather window identified/i);
 
-    await vi.waitFor(() => expect(compareLocations).toHaveBeenCalledTimes(1));
-    expect((await screen.findAllByText("Best")).length).toBeGreaterThan(0);
+    // Closed until asked for: production carried an always-present "Travel to another place"
+    // disclosure *and* a second place form below it.
+    expect(screen.queryByRole("region", { name: "Adjust trip" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Adjust trip" }));
+    const editor = await screen.findByRole("region", { name: "Adjust trip" });
+    expect(within(editor).getByText("Change destination")).toBeInTheDocument();
+    expect(within(editor).getByLabelText("Departure")).toBeInTheDocument();
+    expect(within(editor).getByLabelText("Return")).toBeInTheDocument();
   });
 });
 
-describe("empty and populated", () => {
-  it("offers a compact setup, not a dead end, when no place is chosen", async () => {
-    mount(
-      client({
-        preferences: vi.fn().mockResolvedValue({
-          unit_system: "metric",
-          forecast_horizon_days: 7,
-          default_location: null,
-          sources: {},
-        }),
-      }),
-    );
+describe("the dashboard", () => {
+  it("leads with the weather window beside the viability index", async () => {
+    mount(client());
+    await screen.findByText(/Weather window identified/i);
 
-    // The empty state names what the screen would show and gives the control that fills it, rather
-    // than sending the reader to Settings to configure a preference somewhere else first.
-    expect(await screen.findByText(/Travel Intelligence ranks the days at one destination/)).toBeInTheDocument();
-    expect(screen.getByRole("form", { name: "Travel to a place" })).toBeInTheDocument();
-    // Nothing is ranked, so nothing is claimed.
-    expect(screen.queryByRole("region", { name: "Destination daily outlook" })).toBeNull();
+    const band = await screen.findByRole("region", { name: "Travel viability index" });
+    expect(within(band).getByText("71.4")).toBeInTheDocument();
+    expect(within(band).getByText("Good")).toBeInTheDocument();
+    // The score is the backend's, and it says whose heuristic the weights are.
+    await userEvent.click(within(band).getByText("How this is scored"));
+    expect(within(band).getByText(/Weathra's own heuristic/)).toBeInTheDocument();
   });
 
-  it("re-ranks and stays populated when the window changes", async () => {
-    const compareLocations = vi.fn().mockResolvedValue(RANKING);
-    mount(client({ compareLocations }));
-    await screen.findAllByText("Best");
+  it("states why a metric is missing rather than showing a zero", async () => {
+    mount(client());
+    const row = await screen.findByRole("region", { name: "Trip weather metrics" });
 
-    await userEvent.selectOptions(screen.getByLabelText("Trip window"), "3");
+    expect(within(row).getByText("Temperature variance")).toBeInTheDocument();
+    expect(within(row).getByText("12.6 °C")).toBeInTheDocument();
+    expect(within(row).getByText(/no UV index for these days/)).toBeInTheDocument();
+  });
+
+  it("names transit stability for what it measures, never flight operations", async () => {
+    mount(client());
+    const row = await screen.findByRole("region", { name: "Trip weather metrics" });
 
     /*
-     * The populated experience must survive its own controls. A screen that fell back to the setup
-     * view whenever a select changed would be the empty state the reader already left.
+     * The artifact's card reads "Flight Stability 96% — Low Turbulence Risk". Weathra holds no
+     * aviation data of any kind, so the card is named for the thing it actually measures: how
+     * settled the weather is. The page's closing advisory still *disclaims* flights by name, which
+     * is why this is asserted against the metric row rather than the whole document.
      */
-    await vi.waitFor(() =>
-      expect(compareLocations).toHaveBeenLastCalledWith({
-        criterion: "outdoor_suitability",
-        location: "Lisbon, Portugal",
-        days: 3,
-      }),
-    );
-    expect((await screen.findAllByText("Best")).length).toBeGreaterThan(0);
-    expect(screen.getByRole("region", { name: "Destination daily outlook" })).toBeInTheDocument();
+    expect(within(row).getByText("Transit weather stability")).toBeInTheDocument();
+    expect(row.textContent).not.toMatch(/flight|airline|aviation|airport|turbulence/i);
+  });
+
+  it("draws each day of the trip with its condition and range", async () => {
+    mount(client());
+    const outlook = await screen.findByRole("region", { name: "Destination daily outlook" });
+
+    expect(within(outlook).getByText("Mostly clear")).toBeInTheDocument();
+    expect(within(outlook).getByText("Light rain")).toBeInTheDocument();
+    expect(within(outlook).getByText("30.7 °C")).toBeInTheDocument();
+    expect(within(outlook).getByText(/Low 20.7 °C/)).toBeInTheDocument();
+    expect(within(outlook).getByText("Best day")).toBeInTheDocument();
+  });
+
+  it("packs from the trip's figures, and names the figure behind each", async () => {
+    mount(client());
+    const band = await screen.findByRole("region", { name: "Packing strategy" });
+
+    expect(within(band).getByText("Waterproof outer layer")).toBeInTheDocument();
+    expect(within(band).getByText(/2 of 5 days carry rain/)).toBeInTheDocument();
+    expect(within(band).getByText(/Planning insight/i)).toBeInTheDocument();
+    // The artifact's own recommends branded gear as ESSENTIAL. Weathra sells nothing.
+    expect(band.textContent).not.toMatch(/linen|performance protection|recommended gear/i);
+    expect(band.textContent).toMatch(/no language model wrote this/i);
+  });
+
+  it("compares the trip against other windows, and says when one is stronger", async () => {
+    mount(client());
+    const band = await screen.findByRole("region", { name: "Temporal comparison" });
+
+    expect(within(band).getByText("14–18 Sep")).toBeInTheDocument();
+    expect(within(band).getByText("19–23 Sep")).toBeInTheDocument();
+    expect(within(band).getByText("Your trip")).toBeInTheDocument();
+  });
+
+  it("never invents a forecast change when no snapshot exists", async () => {
+    mount(client());
+    const band = await screen.findByRole("region", { name: "What changed?" });
+
+    expect(within(band).getByText(/another forecast snapshot/i)).toBeInTheDocument();
+    // The artifact's own claims model convergence and vector realignment from nothing.
+    expect(band.textContent).not.toMatch(/convergence|vector|realignment|sync delta/i);
+  });
+
+  it("badges the synthesis as analytics, never as a model's work", async () => {
+    mount(client());
+    const band = await screen.findByRole("region", { name: "Travel intelligence synthesis" });
+
+    expect(within(band).getByText("ANALYTICS")).toBeInTheDocument();
+    expect(within(band).queryByText("AI INTERPRETATION")).toBeNull();
+    expect(band.textContent).toMatch(/No language model was called/i);
+  });
+
+  it("grounds the result in what a reader would need to check it", async () => {
+    mount(client());
+    const band = await screen.findByRole("region", { name: "Grounding evidence" });
+
+    expect(within(band).getByText("open-meteo")).toBeInTheDocument();
+    expect(within(band).getByText("Barcelona")).toBeInTheDocument();
+    // No hashes, no node counts, no fabricated confidence.
+    expect(band.textContent).not.toMatch(/hash|node|alignment|convergence/i);
+  });
+
+  it("keeps the historical band and states why it is empty", async () => {
+    mount(client());
+    const band = await screen.findByRole("region", { name: "Historical baseline" });
+
+    expect(within(band).getByText(/archive holds no observations/i)).toBeInTheDocument();
+    expect(within(band).getByText(/forecast figures above are unaffected/i)).toBeInTheDocument();
+    // Never a climate normal Weathra does not have.
+    expect(band.textContent).not.toMatch(/\bWMO\b|climate normal/i);
+  });
+
+  it("renders the whole dashboard even though a section failed", async () => {
+    mount(client());
+    await screen.findByText(/Weather window identified/i);
+
+    // One failed secondary source must not destroy the experience.
+    for (const region of [
+      "Travel viability index",
+      "Destination daily outlook",
+      "Packing strategy",
+      "Temporal comparison",
+      "Travel intelligence synthesis",
+      "Grounding evidence",
+    ]) {
+      expect(screen.getByRole("region", { name: region })).toBeInTheDocument();
+    }
   });
 });
 
-describe("when the provider rate-limits the ranking", () => {
+describe("when the core retrieval fails", () => {
   function limited() {
     return client({
-      compareLocations: vi.fn().mockRejectedValue(
+      travelIntelligence: vi.fn().mockRejectedValue(
         new ApiError(429, {
           code: "provider_rate_limited",
           message: "open-meteo rate-limited the request.",
@@ -268,39 +324,23 @@ describe("when the provider rate-limits the ranking", () => {
     });
   }
 
-  it("says so plainly, and offers the retry", async () => {
+  it("shows one compact surface and no empty dashboard", async () => {
     mount(limited());
-    expect(
-      await screen.findByText(/Travel weather data is temporarily unavailable/i, undefined, {
-        timeout: 5_000,
-      }),
-    ).toBeInTheDocument();
+    await screen.findByText(/temporarily unavailable/i, undefined, { timeout: 5_000 });
+
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
-  });
-
-  it("draws no hero and no empty suitability card", async () => {
-    mount(limited());
-    await screen.findByText(/temporarily unavailable/i, undefined, { timeout: 5_000 });
-
-    /*
-     * Production drew the destination photograph over a Weather suitability card with an empty ring
-     * and skeletons below it — a screen implying an analysis was on its way that was never coming.
-     * Nothing downstream of the ranking has anything to render, so nothing downstream is rendered.
-     */
-    expect(screen.queryByRole("region", { name: "Weather suitability" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Travel viability index" })).toBeNull();
     expect(screen.queryByRole("region", { name: "Destination daily outlook" })).toBeNull();
-    expect(screen.queryByRole("region", { name: "Intra-day weather trend" })).toBeNull();
-    expect(screen.queryByRole("region", { name: "Historical context" })).toBeNull();
-    expect(screen.queryByText("Ranking the days in your window")).toBeNull();
+    expect(screen.queryByRole("region", { name: "Historical baseline" })).toBeNull();
   });
 
-  it("keeps the trip settings, so a retry costs no re-entry", async () => {
+  it("keeps the trip so a retry costs no re-entry", async () => {
     mount(limited());
     await screen.findByText(/temporarily unavailable/i, undefined, { timeout: 5_000 });
 
-    expect(screen.getAllByText("Lisbon, Portugal").length).toBeGreaterThan(0);
-    expect(screen.getByLabelText("What you want from the weather")).toHaveValue("outdoor_suitability");
-    expect(screen.getByLabelText("Trip window")).toHaveValue("7");
+    expect(screen.getByText("Destination")).toBeInTheDocument();
+    expect(screen.getAllByText(/Barcelona/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Dates")).toBeInTheDocument();
   });
 
   it("keeps the request id out of the customer's way", async () => {
@@ -310,203 +350,9 @@ describe("when the provider rate-limits the ranking", () => {
     const card = screen.getByRole("region", {
       name: "Travel weather data is temporarily unavailable",
     });
-    // Present for anyone reporting the failure, but behind a disclosure rather than in the message.
     const disclosure = card.querySelector("details");
     expect(disclosure?.textContent).toContain("req_5450abc");
     expect(disclosure?.open).toBe(false);
-    // The statement a customer reads names no identifier and no provider internals.
     expect(screen.getByRole("alert").textContent).not.toMatch(/req_|rate-limited the request/i);
-  });
-});
-
-describe("what travel intelligence never claims", () => {
-  it("offers no aviation or booking content, and says plainly that it has none", async () => {
-    const { container } = mount(client());
-    await screen.findAllByText("Best");
-
-    const text = container.textContent ?? "";
-    // The artifact's aviation apparatus, none of which Weathra knows anything about.
-    for (const invented of [
-      "Flight Stability",
-      "Airline Operations",
-      "Departure",
-      "Book now",
-      "sensor",
-      "Sensor",
-      "convergence",
-    ]) {
-      expect(text, `travel claims ${invented}`).not.toContain(invented);
-    }
-
-    /*
-     * And the absence is stated rather than left to be noticed — twice. It was a card of its own
-     * headed "What this is, and is not" at the foot of the page; the artifact sets an advisory in
-     * its footer rule, so the same words are there, and the suitability card carries the shorter
-     * version beside the figure somebody would otherwise read as a travel verdict.
-     */
-    expect(text).toContain("not advice about");
-    expect(screen.getAllByText(/not transport or safety advice/).length).toBeGreaterThan(0);
-  });
-});
-
-/* ---------------------------------------- task 34.41: the four lower bands */
-
-/**
- * The bands the previous pass left out, and the one property each of them has to hold.
- *
- * Every one is built from a contract another screen already uses — the Explorer's hourly forecast,
- * the Dashboard's movement check, Historical Analytics' baseline — so what is worth asserting is
- * not that the request works but that the band says only what the response supports.
- */
-describe("the lower bands", () => {
-  it("plots the best-ranked day's own hours, and no other day's", async () => {
-    mount(client());
-    await screen.findAllByText("Best");
-
-    const band = await screen.findByRole("region", { name: "Intra-day weather trend" });
-    // Captioned for the day it plots, so a reader knows which of the ranked days this is.
-    expect(within(band).getByText(/Best-ranked day/)).toBeInTheDocument();
-  });
-
-  it("compares slices of the ranked window, never a date the provider did not send", async () => {
-    mount(client());
-    await screen.findAllByText("Best");
-
-    const band = await screen.findByRole("region", { name: "Temporal comparison" });
-    const rows = within(band).getAllByRole("row");
-    // A header plus at most one row per ranked day: the windows are slices of what came back.
-    expect(rows.length).toBeGreaterThan(1);
-    expect(rows.length).toBeLessThanOrEqual(RANKING.candidates.length + 1);
-  });
-
-  it("says plainly when there is no earlier snapshot, rather than dropping the card", async () => {
-    mount(
-      client({
-        changes: vi.fn().mockResolvedValue({
-          comparison_available: false,
-          statement: "x",
-          changes: [],
-          location: LISBON,
-          provider: "stub",
-          current_retrieved_at: "2026-09-12T06:00:00Z",
-          period: RANKING.candidates[0]!.period,
-          unit_system: "metric",
-        }),
-      }),
-    );
-    await screen.findAllByText("Best");
-
-    const band = await screen.findByRole("region", { name: "What changed?" });
-    expect(within(band).getByText(/No earlier forecast snapshot/)).toBeInTheDocument();
-  });
-
-  it("summarises from the figures on the screen, and says no model wrote it", async () => {
-    mount(client());
-    await screen.findAllByText("Best");
-
-    const band = await screen.findByRole("region", { name: "Travel intelligence synthesis" });
-    expect(within(band).getByText(/scores first for/)).toBeInTheDocument();
-    expect(within(band).getByText(/No language model was called/)).toBeInTheDocument();
-    // Badged for what it is. Labelling deterministic text as a model's is the one mislabelling
-    // this product must not make.
-    expect(within(band).getByText("ANALYTICS")).toBeInTheDocument();
-    expect(within(band).queryByText("AI INTERPRETATION")).toBeNull();
-  });
-
-  it("speaks the days, and never prints the identifier the backend ranks them by", async () => {
-    mount(client());
-    await screen.findAllByText("Best");
-
-    /*
-     * `compare_days` labels a candidate with its ISO date, because a label in a ranking is an
-     * identifier. The screen rendered it verbatim into "Score for 2026-09-12", which is a timestamp
-     * in front of a customer — and it was invisible to the capture, whose fixture answered with
-     * place names instead of dates.
-     */
-    expect(document.body.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
-    expect(document.body.innerHTML).not.toMatch(/Score for \d{4}-\d{2}-\d{2}/);
-  });
-
-  it("draws the sky over each day, not only the statistic the score came from", async () => {
-    mount(client());
-    await screen.findAllByText("Best");
-    const outlook = await screen.findByRole("region", { name: "Destination daily outlook" });
-
-    // The provider's own dominant code, translated — and its reported high and low. None of this is
-    // in the ranking's `supporting` list, which holds only what the score was computed from. Awaited
-    // rather than read: the forecast is a second call, issued once the ranking has settled.
-    expect(await within(outlook).findByText("Clear")).toBeInTheDocument();
-    expect(await within(outlook).findByText("Rain")).toBeInTheDocument();
-    expect(await within(outlook).findByText("26.1 °C")).toBeInTheDocument();
-    expect(await within(outlook).findByText(/Low 17.3 °C/)).toBeInTheDocument();
-  });
-
-  it("fills the fourth metric card from the day's own forecast entry", async () => {
-    mount(client());
-    await screen.findAllByText("Best");
-    const row = await screen.findByRole("region", { name: "Figures for the best-ranked day" });
-
-    // A day-level ranking supports its score with temperature, precipitation and wind and nothing
-    // else, so a row reading only `supporting` drew three cards and a gap.
-    expect(await within(row).findByText("Chance of rain")).toBeInTheDocument();
-    expect(await within(row).findByText("8%")).toBeInTheDocument();
-  });
-
-  it("raises sun protection from the day's own UV index, and nothing from a catalogue", async () => {
-    mount(client());
-    await screen.findAllByText("Best");
-    const band = await screen.findByRole("region", { name: "Weather-aware trip guidance" });
-
-    expect(await within(band).findByText("Sun protection")).toBeInTheDocument();
-    expect(await within(band).findByText(/peak UV index of 7.2/)).toBeInTheDocument();
-    // The artifact's own recommends "Light Breathable Linen" as ESSENTIAL. Weathra sells nothing.
-    expect(band.textContent).not.toMatch(/linen|essential|recommended gear/i);
-  });
-
-  it("reports a snapshot that does exist, from the backend's own statement", async () => {
-    mount(client());
-    await screen.findAllByText("Best");
-    const band = await screen.findByRole("region", { name: "What changed?" });
-
-    expect(await within(band).findByText(/The forecast has moved since it was last retrieved/)).toBeInTheDocument();
-    expect(await within(band).findByText(/12 Sep is 1.5 °C warmer than the previous forecast/)).toBeInTheDocument();
-    // Nothing is compared in the browser, and nothing about model convergence is claimed.
-    expect(band.textContent).not.toMatch(/convergence|vector|realignment/i);
-  });
-
-  it("carries the provenance a reader would need, and no hash or node count", async () => {
-    mount(client());
-    await screen.findAllByText("Best");
-
-    const band = await screen.findByRole("region", { name: "Data & evidence" });
-    expect(within(band).getByText("Forecast provider")).toBeInTheDocument();
-    expect(band.textContent).not.toMatch(/hash|node|alignment|convergence/i);
-  });
-
-  it("keeps the historical band, and says so, when no baseline came back", async () => {
-    mount(client({ baselineComparison: vi.fn().mockRejectedValue(new Error("no archive")) }));
-    await screen.findAllByText("Best");
-
-    /*
-     * The band used to be removed when the archive did not answer, which is the composition
-     * changing shape because of an absence — the screen's closing region simply disappeared. An
-     * archive that cannot reach a calendar period is a real state, and it is stated rather than
-     * hidden. Not a zero and not an invented baseline: a sentence saying what is missing.
-     */
-    const band = await screen.findByRole("region", { name: "Historical context" });
-    expect(await within(band).findByText(/could not retrieve archive observations/i)).toBeInTheDocument();
-    expect(band.textContent).not.toMatch(/\bWMO\b|climate normal/i);
-  });
-
-  it("names the archive years it actually got, never a climate normal", async () => {
-    mount(client());
-    await screen.findAllByText("Best");
-    const band = await screen.findByRole("region", { name: "Historical context" });
-
-    expect(within(band).getByText(/available 2-year archive baseline/)).toBeInTheDocument();
-    // The artifact's "30-year WMO coastal baseline (1991-2020)", refused. What the card carries is
-    // the backend's own labelling, which *denies* being a climate normal rather than claiming one.
-    expect(band.textContent).not.toMatch(/WMO|30-year/i);
-    expect(band.textContent).toMatch(/not an official climate normal/i);
   });
 });
