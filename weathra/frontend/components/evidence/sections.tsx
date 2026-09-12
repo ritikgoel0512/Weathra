@@ -120,33 +120,39 @@ export function RunHeader({ record }: { readonly record: RunRecord }): ReactNode
   const status = runStatusOf(record);
   const duration = formatDurationMs(record.timing.totalDurationMs);
   const started = formatInstant(record.timing.startedAt);
-  const completed = formatInstant(record.timing.completedAt);
   const involved = [...new Set(record.agents.map((step) => agentLabel(step.agent)))];
 
   return (
+    /*
+     * The artifact's header band: who this run was, on the left; what it did, on the right.
+     *
+     * These were stacked — a title, the question, a three-line paragraph explaining what an
+     * evidence record is, and then a full-width strip of figures — so the band alone took a third
+     * of the first screen before the trace began. The explanation is the page's least useful line
+     * for someone who navigated here on purpose; it goes, and the two halves sit side by side.
+     */
     <header className={styles.header} data-run-header="true">
-      <div className={styles.headerTop}>
+      <div className={styles.headerGrid}>
         <div className={styles.heading}>
-          <h1 className={styles.title}>Agent evidence</h1>
-          <p className={styles.question}>{record.question}</p>
-          <p className={styles.subtitle}>
-            The record of one run: the agents that ran, every tool call and what it returned, the
-            deterministic analytics and their methods, the knowledge cited, and the timings. It is
-            a run record kept for observability, not a compliance artifact.
+          <p className={styles.identifiers}>
+            <span className={styles.auditId}>Evidence {record.id}</span>
+            {record.timing.storedAt ? (
+              <span>Stored {formatInstant(record.timing.storedAt)}</span>
+            ) : null}
           </p>
+          <h1 className={styles.title}>Agent evidence log</h1>
+          <p className={styles.question}>{record.question}</p>
         </div>
-        <Badge tone={status.tone}>{status.label}</Badge>
-      </div>
 
-      <dl className={styles.summary}>
+        <dl className={styles.summary}>
         <div className={styles.summaryItem}>
           <dt className={styles.summaryTerm}>Status</dt>
           <dd className={styles.summaryValue} data-run-status={status.label.toLowerCase()}>
-            {status.label}
+            <Badge tone={status.tone}>{status.label}</Badge>
           </dd>
         </div>
         <div className={styles.summaryItem}>
-          <dt className={styles.summaryTerm}>Started</dt>
+          <dt className={styles.summaryTerm}>Timestamp</dt>
           <dd className={styles.summaryValue}>
             {started && record.timing.startedAt ? (
               <time dateTime={record.timing.startedAt}>{started}</time>
@@ -156,48 +162,31 @@ export function RunHeader({ record }: { readonly record: RunRecord }): ReactNode
           </dd>
         </div>
         <div className={styles.summaryItem}>
-          <dt className={styles.summaryTerm}>Completed</dt>
-          <dd className={styles.summaryValue}>
-            {completed && record.timing.completedAt ? (
-              <time dateTime={record.timing.completedAt}>{completed}</time>
-            ) : (
-              NOT_REPORTED
-            )}
-          </dd>
-        </div>
-        <div className={styles.summaryItem}>
-          <dt className={styles.summaryTerm}>Duration</dt>
+          <dt className={styles.summaryTerm}>Execution</dt>
           <dd className={styles.summaryValue} data-run-duration="true">
             {duration ?? NOT_REPORTED}
           </dd>
         </div>
         <div className={styles.summaryItem}>
-          <dt className={styles.summaryTerm}>Graph steps</dt>
+          <dt className={styles.summaryTerm}>Steps</dt>
           <dd className={styles.summaryValue} data-run-steps="true">
             {record.timing.stepsUsed ?? NOT_REPORTED}
           </dd>
         </div>
         <div className={styles.summaryItem}>
-          <dt className={styles.summaryTerm}>Agents involved</dt>
+          <dt className={styles.summaryTerm}>Agents</dt>
           <dd className={styles.summaryValue} data-agents-involved="true">
             {involved.length > 0 ? involved.join(", ") : "None recorded"}
           </dd>
         </div>
-      </dl>
+        </dl>
+      </div>
 
       {status.reason ? (
         <p className={styles.noteStrong} role="note">
           This run is partial: {status.reason}
         </p>
       ) : null}
-
-      {/* The identifiers the backend actually returns. No audit id, no signature, no node name. */}
-      <p className={styles.identifiers}>
-        <span>Evidence {record.id}</span>
-        <span>Request {record.requestId}</span>
-        {record.threadId ? <span>Conversation {record.threadId}</span> : null}
-        {record.timing.storedAt ? <span>Stored {formatInstant(record.timing.storedAt)}</span> : null}
-      </p>
     </header>
   );
 }
@@ -933,6 +922,70 @@ export function RecordProvenance({ record }: { readonly record: RunRecord }): Re
         )}
       </p>
     </AttributionFooter>
+  );
+}
+
+/**
+ * The audit card the artifact closes on, from identifiers Weathra actually holds.
+ *
+ * Its own carries a signature hash, a chain of custody, an agent version and an "audit stability
+ * index", none of which exist — Weathra keeps a run record for observability, and saying otherwise
+ * would be the most consequential possible lie on an evidence screen. What sits in that slot is
+ * what a person tracing this run would actually need: the three identifiers, when it was stored,
+ * what answered it, and whether the record is complete.
+ */
+export function RecordAudit({ record }: { readonly record: RunRecord }): ReactNode {
+  const status = runStatusOf(record);
+  const model = record.llmModel ?? null;
+  const provider = record.llmProvider ?? null;
+
+  return (
+    <section
+      className={styles.panel}
+      aria-label="Record and traceability"
+      data-evidence-section="audit"
+    >
+      <header className={styles.panelHeader}>
+        <h2 className={styles.panelTitle}>Record and traceability</h2>
+      </header>
+
+      <dl className={styles.auditFacts}>
+        <div className={styles.auditFact}>
+          <dt>Evidence</dt>
+          <dd className={styles.auditMono}>{record.id}</dd>
+        </div>
+        <div className={styles.auditFact}>
+          <dt>Request</dt>
+          <dd className={styles.auditMono}>{record.requestId}</dd>
+        </div>
+        {record.threadId ? (
+          <div className={styles.auditFact}>
+            <dt>Conversation</dt>
+            <dd className={styles.auditMono}>{record.threadId}</dd>
+          </div>
+        ) : null}
+        <div className={styles.auditFact}>
+          <dt>Stored</dt>
+          <dd>
+            {record.timing.storedAt ? formatInstant(record.timing.storedAt) : NOT_REPORTED}
+          </dd>
+        </div>
+        <div className={styles.auditFact}>
+          <dt>Record</dt>
+          <dd>{status.label}</dd>
+        </div>
+        <div className={styles.auditFact}>
+          <dt>Answered by</dt>
+          <dd>
+            {model ? `${provider ? `${provider} · ` : ""}${model}` : "No model recorded"}
+          </dd>
+        </div>
+      </dl>
+
+      <p className={styles.emptyNote}>
+        Kept for observability. Weathra does not sign or seal a run record, and does not claim to.
+      </p>
+    </section>
   );
 }
 

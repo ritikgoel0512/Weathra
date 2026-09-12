@@ -32,9 +32,6 @@ import { useState, type ReactNode } from "react";
 
 import {
   Badge,
-  Card,
-  CardBody,
-  CardHeader,
   ErrorState,
   LoadingState,
   formatInstant,
@@ -143,34 +140,40 @@ function Log({ records }: { readonly records: readonly EvidenceSummary[] }): Rea
         More than one run is worth switching between; exactly one is not, and a switcher offering a
         single choice is furniture. With one record the page is simply that record.
       */}
+      {/*
+        A compact selector, not a run browser.
+        
+        The switcher was a full card of pills above the record, so the trace — the thing the page
+        exists to show — began a third of the way down. `05-agent-evidence.png` is an evidence
+        *record*; choosing which one is a control on it, and folds away.
+      */}
       {records.length > 1 ? (
-        <Card aria-labelledby="evidence-runs">
-          <CardHeader
-            title="Recent runs"
-            titleId="evidence-runs"
-            subtitle={`${records.length} of your most recent runs, newest first. Select one to see its record.`}
-          />
-          <CardBody>
-            <ul className={styles.chips}>
-              {records.map((record) => (
-                <RunChip
-                  key={record.id}
-                  record={record}
-                  selected={record.id === current.id}
-                  onSelect={() => setSelected(record.id)}
-                />
-              ))}
-            </ul>
-          </CardBody>
-        </Card>
+        <details className={styles.switcher}>
+          <summary className={styles.switcherSummary}>
+            <span className={styles.switcherLabel}>Run</span>
+            <span className={styles.switcherCurrent}>{current.question}</span>
+            <span className={styles.switcherCount}>{records.length} recent</span>
+          </summary>
+          <ul className={styles.chips}>
+            {records.map((record) => (
+              <RunChip
+                key={record.id}
+                record={record}
+                selected={record.id === current.id}
+                onSelect={() => setSelected(record.id)}
+              />
+            ))}
+          </ul>
+        </details>
       ) : null}
 
-      <p className={styles.note}>
-        Showing the record for the run selected above.{" "}
+      <p className={styles.recordLink}>
         <Link className={styles.link} href={`/evidence/${current.id}`}>
-          Open it on its own page
+          Open this run on its own page
         </Link>
-        .
+        <span className={styles.note}>
+          Records are readable only by the account that produced them.
+        </span>
       </p>
 
       {/* The record itself, rendered by the same component `/evidence/{id}` uses. One screen. */}
@@ -189,19 +192,6 @@ export function EvidenceLog(): ReactNode {
 
   return (
     <section className={styles.log} aria-label="Agent Evidence">
-      <header className={styles.logHead}>
-        <h1 className={styles.logTitle}>Agent evidence log</h1>
-        <p className={styles.logLead}>
-          Every question Weathra answered through its agents, with the full record of how it got
-          there: what ran, what each step retrieved, the analytics it computed and the knowledge it
-          cited.
-        </p>
-        <p className={styles.note}>
-          Run records are private to the person whose question produced them: this page is behind
-          sign-in, and a run is readable only by the account that created it.
-        </p>
-      </header>
-
       {records.state.kind === "loading" ? (
         <LoadingState label="Reading your evidence records" lines={5} />
       ) : records.state.kind === "error" ? (

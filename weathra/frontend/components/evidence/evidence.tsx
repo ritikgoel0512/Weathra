@@ -48,6 +48,7 @@ import {
   FinalSynthesis,
   GroundedSources,
   KnowledgeEvidence,
+  RecordAudit,
   RecordProvenance,
   ResolvedContextPanel,
   RunHeader,
@@ -130,7 +131,12 @@ function RecordView({ response }: { readonly response: EvidenceResponse }): Reac
         </div>
       </div>
 
-      <ResolvedContextPanel record={record} />
+      {/* The artifact closes on two panels side by side: what the run was about, and how to trace it. */}
+      <div className={styles.footGrid}>
+        <ResolvedContextPanel record={record} />
+        <RecordAudit record={record} />
+      </div>
+
       <RecordProvenance record={record} />
     </>
   );

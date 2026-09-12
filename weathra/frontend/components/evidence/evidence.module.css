@@ -979,3 +979,142 @@
   font-size: var(--type-label-size);
   line-height: var(--type-label-line);
 }
+
+/* ============ the artifact's macro geometry: header band, foot grid, selector ============ */
+
+/*
+ * The header band: identity left, the run's figures right.
+ *
+ * Stacked, these took a third of the first screen before the trace began — a title, the question,
+ * a paragraph explaining what an evidence record is, then a full-width strip of figures. Side by
+ * side they take one band, which is what `05-agent-evidence.png` spends on them.
+ */
+.headerGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .headerGrid {
+    grid-template-columns: minmax(0, 1fr) minmax(22rem, auto);
+  }
+}
+
+.auditId {
+  font-family: var(--family-mono, monospace);
+  color: var(--color-accent);
+}
+
+/* The stat panel, bordered as its own block rather than running the page's width. */
+.headerGrid .summary {
+  gap: var(--space-3) var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+}
+
+/*
+ * The two panels the artifact closes on: what the run was about, and how to trace it.
+ * Wider left, narrower right, as its own bottom row is proportioned.
+ */
+.footGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .footGrid {
+    grid-template-columns: minmax(0, 8fr) minmax(0, 5fr);
+  }
+}
+
+.auditFacts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
+  gap: var(--space-2) var(--space-4);
+  margin: 0 0 var(--space-3);
+}
+
+.auditFact dt {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.auditFact dd {
+  margin: 2px 0 0;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.auditMono {
+  font-family: var(--family-mono, monospace);
+}
+
+/* ---------------------------------------------------- the run selector, folded */
+
+.switcher {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+}
+
+.switcherSummary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  min-width: 0;
+}
+
+.switcherLabel {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.switcherCurrent {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--type-ui-size);
+  color: var(--color-text-primary);
+  min-width: 0;
+}
+
+.switcherCount {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-accent);
+  white-space: nowrap;
+}
+
+.switcher[open] .chips {
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.recordLink {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}

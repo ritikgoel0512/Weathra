@@ -7,7 +7,7 @@
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -94,7 +94,7 @@ describe("the evidence log", () => {
      */
     await vi.waitFor(() => expect(evidence).toHaveBeenCalledWith("run-1"));
     expect(
-      await screen.findByRole("link", { name: "Open it on its own page" }),
+      await screen.findByRole("link", { name: "Open this run on its own page" }),
     ).toHaveAttribute("href", "/evidence/run-1");
   });
 
@@ -102,8 +102,12 @@ describe("the evidence log", () => {
     const evidence = vi.fn().mockResolvedValue(RECORD);
     mount(client({ evidence }));
 
-    const runs = await screen.findByRole("region", { name: "Recent runs" });
-    const chips = within(runs).getAllByRole("button");
+    // Folded by default: the record is the page's subject, and choosing which one is a control.
+    const switcher = await screen.findByText("Run");
+    await userEvent.click(switcher);
+    const chips = screen
+      .getAllByRole("button")
+      .filter((element) => element.hasAttribute("aria-pressed"));
     expect(chips).toHaveLength(2);
     expect(chips[0]).toHaveAttribute("aria-pressed", "true");
     expect(chips[1]).toHaveAttribute("aria-pressed", "false");
@@ -113,20 +117,20 @@ describe("the evidence log", () => {
   });
 
   it("names the places a run resolved, and never their coordinates", async () => {
-    mount(client());
-    const runs = await screen.findByRole("region", { name: "Recent runs" });
+    const { container } = mount(client());
+    await userEvent.click(await screen.findByText("Run"));
 
-    expect(within(runs).getByText("Berlin, Germany")).toBeInTheDocument();
-    expect(within(runs).getByText("Munich, Germany")).toBeInTheDocument();
+    expect(screen.getByText("Berlin, Germany")).toBeInTheDocument();
+    expect(screen.getByText("Munich, Germany")).toBeInTheDocument();
     // A coordinate pair is internal metadata here as it is everywhere else in Weathra.
-    expect(runs.textContent).not.toMatch(/\d+\.\d+°\s*[NSEW]|\d{2}\.\d{3,}/);
+    expect(container.textContent).not.toMatch(/\d+\.\d+°\s*[NSEW]|\d{2}\.\d{3,}/);
   });
 
   it("marks a partial run, so an incomplete record is not read as a complete one", async () => {
     mount(client());
-    const runs = await screen.findByRole("region", { name: "Recent runs" });
+    await userEvent.click(await screen.findByText("Run"));
 
-    expect(within(runs).getByText("Partial")).toBeInTheDocument();
+    expect(screen.getByText("Partial")).toBeInTheDocument();
   });
 
   it("says where a run comes from when there are none, rather than reading as a failure", async () => {
@@ -149,7 +153,7 @@ describe("the evidence log", () => {
   it("states that a record is readable only by the account that produced it", async () => {
     mount(client());
     expect(
-      await screen.findByText(/readable only by the account that created it/i),
+      await screen.findByText(/readable only by the account that produced them/i),
     ).toBeInTheDocument();
   });
 

@@ -441,12 +441,19 @@ describe("a populated evidence record", () => {
   it("renders the run's question, status and identifiers", async () => {
     renderScreen();
 
-    const heading = await screen.findByRole("heading", { name: "Agent evidence", level: 1 });
+    const heading = await screen.findByRole("heading", { name: "Agent evidence log", level: 1 });
     expect(heading).toBeInTheDocument();
     expect(screen.getByText(STORED_EVIDENCE.question)).toBeInTheDocument();
+    /*
+     * The header carries the record's own identifier; the request and conversation identifiers moved
+     * to the audit panel that closes the page, where a person tracing a run looks for them. All
+     * three are still on the screen, and all three are still the backend's own.
+     */
     expect(screen.getByText("Evidence run-1")).toBeInTheDocument();
-    expect(screen.getByText("Request req-77")).toBeInTheDocument();
-    expect(screen.getByText("Conversation thread-3")).toBeInTheDocument();
+
+    const audit = screen.getByRole("region", { name: "Record and traceability" });
+    expect(within(audit).getByText("req-77")).toBeInTheDocument();
+    expect(within(audit).getByText("thread-3")).toBeInTheDocument();
   });
 
   it("names every agent the run involved", async () => {
@@ -634,15 +641,15 @@ describe("the timings", () => {
     expect(document.querySelector('[data-run-duration="true"]')?.textContent).toBe("4.2 s");
     expect(document.querySelector('[data-run-steps="true"]')?.textContent).toBe("6");
 
-    const started = screen.getByText("Started").closest("div") as HTMLElement;
-    const completed = screen.getByText("Completed").closest("div") as HTMLElement;
+    /*
+     * One timestamp, not two. The header strip carries the run's start beside its duration — the
+     * artifact's own pairing — and a second cell restating the same minute earned none of the width
+     * it took. The completion instant is still in the record and still shown in the audit panel.
+     */
+    const started = screen.getByText("Timestamp").closest("div") as HTMLElement;
     expect(within(started).getByText("2026-09-04 09:04 UTC")).toHaveAttribute(
       "datetime",
       "2026-09-04T09:04:55Z",
-    );
-    expect(within(completed).getByText("2026-09-04 09:04 UTC")).toHaveAttribute(
-      "datetime",
-      "2026-09-04T09:04:59Z",
     );
   });
 
