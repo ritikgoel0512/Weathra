@@ -57,12 +57,15 @@ import { agentLabel, confidenceOf, horizonHoursOf, ROUTING_SOURCE_LABELS } from 
 import { measureLabel } from "@/lib/dashboard/briefing";
 import { dataClassFor } from "@/lib/design/data-class";
 import {
+  figuresFromTools,
   formatDurationMs,
+  readableProse,
   hasAnalytics,
   runStatusOf,
   type EvidenceField,
   type RunRecord,
   type ToolActivity,
+  type ToolFigure,
 } from "@/lib/evidence/record";
 import { formatStatistic, unavailableReason } from "@/lib/historical/analysis";
 import { inferenceMetadataFrom } from "@/lib/inference/served";
@@ -614,6 +617,35 @@ function TrendFigure({ report }: { readonly report: TrendReport }): ReactNode {
  * each carries the method that produced it.
  */
 export function DeterministicAnalytics({ record }: { readonly record: RunRecord }): ReactNode {
+  /*
+   * A run that computed through the tool boundary rather than through the analytics agent records
+   * its figures in the tool's own result. Recovering them is not inventing a statistic — it is
+   * reading one the record already holds, and it stops the band from saying "no statistics" on a
+   * screen whose synthesis above quotes them.
+   */
+  const recovered = hasAnalytics(record) ? [] : figuresFromTools(record);
+
+  if (!hasAnalytics(record) && recovered.length > 0) {
+    return (
+      <div data-evidence-section="analytics">
+        <ProvenanceSection dataClass="analytics" title="Deterministic analytics">
+          <ul className={styles.figures}>
+            {recovered.map((figure: ToolFigure) => (
+              <li className={styles.figure} key={figure.key} data-statistic={figure.label}>
+                <span className={styles.figureLabel}>{figure.label}</span>
+                <span className={styles.figureValue}>{figure.value}</span>
+                <span className={styles.note}>Returned by {figure.tool}</span>
+              </li>
+            ))}
+          </ul>
+          <p className={styles.note}>
+            Recovered from this run&rsquo;s own tool results, which is where it recorded them.
+          </p>
+        </ProvenanceSection>
+      </div>
+    );
+  }
+
   if (!hasAnalytics(record)) {
     return (
       <section
@@ -938,7 +970,7 @@ export function FinalSynthesis({ record }: { readonly record: RunRecord }): Reac
       >
         {clarification ? <p>{clarification}</p> : null}
         {record.answerProse ? (
-          <p>{record.answerProse}</p>
+          <p className={styles.synthesisProse}>{readableProse(record.answerProse)}</p>
         ) : clarification ? null : (
           <p>
             No interpretation was stored for this run. The retrieved and computed evidence above is

@@ -1358,3 +1358,41 @@
 .table td {
   padding: var(--space-1) var(--space-3);
 }
+
+/*
+ * The conclusion reads at reading size; everything explaining how it was produced steps back.
+ *
+ * The boundary sentence, the model, the policy and the grounding verdict were all set at the same
+ * weight as the answer, so the paragraph a person came for competed with four lines of provenance.
+ */
+.synthesisProse {
+  font-size: var(--type-card-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-primary);
+  max-width: 68ch;
+}
+
+/* Section headings carry a little more weight and a cyan tick, as the artifact heads its regions. */
+.panelTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--type-meta-size);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.panelTitle::before {
+  content: "";
+  width: 3px;
+  height: 0.85em;
+  border-radius: 1px;
+  background: var(--color-accent);
+}
+
+/* The tool summary reads as a card of its own, not a paragraph with a list under it. */
+.toolTotals {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-accent);
+}
