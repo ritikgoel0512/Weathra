@@ -91,26 +91,33 @@ export const WEATHER_CODE = "weather_code";
 export const WEATHER_CODE_DOMINANT = "weather_code_dominant";
 
 /**
- * The "unit" a condition code carries, from `weathra/domain/weather.py`'s own units table.
+ * What the backend labels the condition reading inside a current-conditions result.
  *
- * A code is not a quantity, so the domain gives it a unit that says what the number *is* rather
- * than what it measures. That string is how a figure arriving as an anonymous `Finding` — a label,
- * a value and a unit, with no measure key on it — can be recognised as a code rather than rendered
- * as one: "3 WMO code" is a true sentence nobody wants to read.
+ * `weathra/agents/nodes/support.py`'s own `_CURRENT_LABELS`, which is a fixed table rather than
+ * free text, and `test_the_condition_reading_is_labelled_what_the_frontend_looks_for` pins it from
+ * the other side so the two cannot drift apart quietly.
+ *
+ * **Why the label and not the unit.** A `Finding` reaches a screen as a label, a value and a unit,
+ * with no measure key on it, so something has to identify the one figure that is a published code
+ * rather than a quantity. The unit would be the natural key — the domain gives a code one that
+ * names what the number *is* — but that string contains the name of a standards body, and
+ * `lib/design/product-copy.test.ts` forbids those in shipped source without exception. The rule is
+ * right and the exception is not worth making: the label is the backend's own constant, it is what
+ * the panel renders anyway, and it is pinned on both sides.
  */
-export const WEATHER_CODE_UNIT = "WMO code";
+export const CONDITION_FINDING_LABEL = "Condition";
 
 /**
- * The condition a reported figure describes, when that figure is a condition code.
+ * The condition a reported figure describes, when that figure is the condition reading.
  *
  * `null` for everything else, so a caller can ask this of every figure it renders and get an answer
  * only where there is one. It is the same `conditionFor` the Dashboard, Compare, the Explorer and
  * Watch use — this only recognises the carrier, so the Analyst's Current conditions panel and the
  * Dashboard's hero cannot describe code 3 two different ways.
  */
-export function conditionForReported(
+export function conditionForFinding(
+  label: string | null | undefined,
   value: number | null | undefined,
-  unit: string | null | undefined,
 ): Condition | null {
-  return typeof unit === "string" && unit.trim() === WEATHER_CODE_UNIT ? conditionFor(value) : null;
+  return label?.trim() === CONDITION_FINDING_LABEL ? conditionFor(value) : null;
 }

@@ -28,6 +28,7 @@ from tests.agent_support import (
 )
 from weathra.agents.graph import RunDependencies, run_agent
 from weathra.agents.llm.fake import FakeLLMClient
+from weathra.agents.nodes.support import current_label
 from weathra.agents.plan import Capability, PlanStep, RoutingPlan
 from weathra.agents.state import GraphState
 from weathra.domain.evidence import AgentName, DataClass, StepStatus
@@ -302,6 +303,14 @@ async def test_the_condition_is_carried_as_the_provider_code_and_described_nowhe
     assert condition.value == 3.0
     assert condition.unit == "WMO code"
     assert condition.text_value is None
+
+    # The half of the contract that lives on the other side of the API.
+    #
+    # `lib/weather/condition.ts` picks this reading out of an otherwise anonymous finding by its
+    # label — a `Finding` carries no measure key, and the unit that would be the natural key names a
+    # standards body, which `lib/design/product-copy.test.ts` forbids in shipped frontend source. So
+    # the label is the join, and it is pinned from both ends rather than from neither.
+    assert current_label("weather_code") == "Condition"
 
 
 async def test_now_and_the_days_ahead_are_two_steps_and_two_classes() -> None:

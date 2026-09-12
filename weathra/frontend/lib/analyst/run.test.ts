@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 
 import type { AgentEvent } from "@/hooks/use-agent-stream";
 import type { AnswerEnvelope, EvidenceAttribution, Finding } from "@/lib/api/schema";
-import { conditionForReported } from "@/lib/weather/condition";
+import { conditionForFinding } from "@/lib/weather/condition";
 
 import {
   agentLabel,
@@ -395,15 +395,15 @@ describe("the order a current-conditions panel reads in", () => {
   });
 });
 
-describe("a condition code, recognised by the unit the domain gives it", () => {
+describe("a condition code, recognised by the label the backend gives it", () => {
   it("translates it through the one vocabulary the rest of the product uses", () => {
-    expect(conditionForReported(3, "WMO code")?.label).toBe("Overcast");
-    expect(conditionForReported(3, "WMO code")?.kind).toBe("overcast");
+    expect(conditionForFinding("Condition", 3)?.label).toBe("Overcast");
+    expect(conditionForFinding("Condition", 3)?.kind).toBe("overcast");
   });
 
   it("leaves an ordinary figure alone, whatever its value happens to be", () => {
-    expect(conditionForReported(3, "°C")).toBeNull();
-    expect(conditionForReported(3, null)).toBeNull();
-    expect(conditionForReported(null, "WMO code")).toBeNull();
+    expect(conditionForFinding("Humidity", 3)).toBeNull();
+    expect(conditionForFinding(null, 3)).toBeNull();
+    expect(conditionForFinding("Condition", null)).toBeNull();
   });
 });

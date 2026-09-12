@@ -59,7 +59,7 @@ import { inferenceMetadataFrom } from "@/lib/inference/served";
 import { evidencePath } from "@/lib/routes";
 import { placeLabel } from "@/lib/locations/place";
 import { runIntentOf } from "@/lib/analyst/intent";
-import { conditionForReported } from "@/lib/weather/condition";
+import { conditionForFinding } from "@/lib/weather/condition";
 
 import styles from "./analyst.module.css";
 
@@ -610,12 +610,13 @@ function FigureList({ findings }: { readonly findings: readonly Finding[] }): Re
       {findings.map((finding, index) => {
         /*
           A condition code is a figure the way a postcode is a number.
-          `conditionForReported` recognises it by the unit the domain gives it and translates it
+          `conditionForFinding` recognises it by the label the backend gives it and translates it
           through the product's one condition vocabulary — the same `conditionFor` the Dashboard
-          hero, the hourly strip and Compare use, so WMO 3 cannot be "Overcast" here and something
-          else there. Where it is not a code this is null and the figure renders as itself.
+          hero, the hourly strip and Compare use, so one code cannot be "Overcast" here and
+          something else there. Where it is not the condition this is null and the figure renders
+          as itself.
         */
-        const condition = conditionForReported(finding.value, finding.unit);
+        const condition = conditionForFinding(finding.label, finding.value);
         const value = findingValue(finding);
         return (
           <div className={styles.factRow} key={`${finding.label}-${index}`}>
