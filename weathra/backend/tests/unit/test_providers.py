@@ -818,6 +818,57 @@ async def test_an_upstream_failure_is_not_cached() -> None:
     assert inner.forecast_calls == 2
 
 
+async def test_a_rate_limit_is_answered_from_the_last_value_obtained() -> None:
+    """A limited provider should cost freshness, not the whole screen.
+
+    Travel Intelligence failed in production with "open-meteo rate-limited the request" and ranked
+    nothing, while an hour-old forecast for the same place and horizon was sitting in this cache
+    with nothing but an expired TTL against it. A TTL is a statement about freshness, not about
+    usefulness: past it, the entry is still the best answer available when upstream refuses to give
+    a better one, and `from_cache` with the original `retrieved_at` says exactly how old it is.
+    """
+    inner = StubProvider()
+    now = 1_000.0
+    wrapper = CachedProvider(
+        inner, settings=provider_settings(cache_forecast_ttl_seconds=60), clock=lambda: now
+    )
+
+    first = await wrapper.forecast(f.BERLIN, days=3)
+    assert inner.forecast_calls == 1
+
+    now += 120  # past the TTL, so the next call really does go upstream
+    inner._failure = ProviderRateLimited("open-meteo rate-limited the request.")
+
+    served = await wrapper.forecast(f.BERLIN, days=3)
+
+    assert inner.forecast_calls == 2, "upstream was asked exactly once more, and not retried"
+    assert served.from_cache is True
+    assert served.retrieved_at == first.retrieved_at, "the age is stated, not refreshed"
+    assert wrapper.stale_served == 1
+
+
+async def test_a_rate_limit_with_nothing_cached_still_fails() -> None:
+    """Nothing to serve is not the same as something old to serve, and is not disguised as it."""
+    inner = StubProvider(failure=ProviderRateLimited("open-meteo rate-limited the request."))
+    wrapper = cached(inner)
+
+    with pytest.raises(ProviderRateLimited):
+        await wrapper.forecast(f.BERLIN, days=3)
+
+
+async def test_a_rate_limit_is_never_retried_in_a_loop() -> None:
+    """The one thing that must not happen to a provider that just refused: being asked again."""
+    inner = StubProvider(failure=ProviderRateLimited("open-meteo rate-limited the request."))
+    wrapper = cached(inner)
+
+    for _ in range(3):
+        with pytest.raises(ProviderRateLimited):
+            await wrapper.forecast(f.BERLIN, days=3)
+
+    # Three callers, three upstream attempts — never more. No retry is issued inside the cache.
+    assert inner.forecast_calls == 3
+
+
 def test_no_cache_key_carries_user_identifying_material() -> None:
     """specs/authentication: the provider cache is shared, non-user-owned data."""
     from weathra.providers.cache import CacheKey

@@ -24,6 +24,7 @@ import { useState, type ReactNode } from "react";
 
 import {
   Badge,
+  Button,
   Card,
   CardBody,
   CardHeader,
@@ -58,6 +59,7 @@ import { baselineYearsStatement, formatSigned } from "@/lib/historical/analysis"
 import { friendlyName } from "@/lib/locations/place";
 import { conditionFor } from "@/lib/weather/condition";
 import { useApiQuery } from "@/lib/query/hooks";
+import type { ViewFailure } from "@/lib/query/state";
 import { PREFERENCES_KEY } from "@/lib/query/keys";
 
 import styles from "./travel.module.css";
@@ -107,6 +109,32 @@ function dayLabel(candidate: ComparisonCandidate): { weekday: string; date: stri
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * Where a day's score sits between the worst and the best in this ranking.
+ *
+ * The meters divided by the best score, which is only meaningful while scores are positive. Ask the
+ * backend for "coolest" and it ranks on *negative* temperature — the best day at London scored
+ * −15.5 — so every other day divided to more than one and clamped to a full bar: seven days, seven
+ * identical meters, and the ranking illegible in exactly the composite-free criteria a traveller is
+ * most likely to pick. Placing each score in the range the ranking actually spans is right for both
+ * signs, and gives the worst day an empty bar rather than a near-full one.
+ *
+ * `null` where every day scored alike: a bar implying a distinction the figures do not make would
+ * be the screen inventing one.
+ */
+function scoreSpan(candidates: readonly ComparisonCandidate[]): (score: number) => number | null {
+  const scores = candidates
+    .map((candidate) => candidate.score)
+    .filter((score): score is number => typeof score === "number" && Number.isFinite(score));
+  if (scores.length === 0) return () => null;
+
+  const lowest = Math.min(...scores);
+  const highest = Math.max(...scores);
+  if (highest === lowest) return () => null;
+
+  return (score) => Math.max(0, Math.min(1, (score - lowest) / (highest - lowest)));
+}
 
 /**
  * The day a candidate stands for, written the way a person says it.
@@ -366,12 +394,13 @@ function TravelMetrics({
  */
 function DayCard({
   candidate,
-  best,
+  place,
   forecast,
   daily,
 }: {
   readonly candidate: ComparisonCandidate;
-  readonly best: number;
+  /** Where this day's score sits in the range the ranking spans. */
+  readonly place: (score: number) => number | null;
   readonly forecast: ForecastResponse | null;
   readonly daily: Record<string, number | null> | undefined;
 }): ReactNode {
@@ -413,10 +442,7 @@ function DayCard({
       {candidate.rank === 1 ? <Badge tone="ok">Best</Badge> : null}
       {candidate.tied ? <Badge tone="neutral">Tied</Badge> : null}
 
-      <Meter
-        label={`Score for ${candidateLabel(candidate)}`}
-        value={best === 0 ? null : Math.max(0, Math.min(1, candidate.score / best))}
-      />
+      <Meter label={`Score for ${candidateLabel(candidate)}`} value={place(candidate.score)} />
 
       {(candidate.supporting ?? []).length > 0 || (candidate.contributions ?? []).length > 0 ? (
         <details className={styles.why}>
@@ -647,10 +673,10 @@ function IntradayTrend({
  */
 function WindowMatrix({
   result,
-  best,
+  place,
 }: {
   readonly result: ComparisonResult;
-  readonly best: ComparisonCandidate | null;
+  readonly place: (score: number) => number | null;
 }): ReactNode {
   const days = [...result.candidates].sort((left, right) =>
     (left.period?.start_local ?? "").localeCompare(right.period?.start_local ?? ""),
@@ -666,8 +692,6 @@ function WindowMatrix({
   for (let index = 0; index < days.length; index += size) {
     windows.push(days.slice(index, index + size));
   }
-
-  const bestScore = best?.score ?? 0;
 
   return (
     <Card aria-labelledby="travel-windows">
@@ -712,14 +736,7 @@ function WindowMatrix({
                   </th>
                   <td>#{leader.rank}</td>
                   <td className={styles.windowMeter}>
-                    <Meter
-                      label={`Suitability for ${span}`}
-                      value={
-                        bestScore === 0
-                          ? null
-                          : Math.max(0, Math.min(1, leader.score / bestScore))
-                      }
-                    />
+                    <Meter label={`Suitability for ${span}`} value={place(leader.score)} />
                   </td>
                   <td>{reading(temperature) ?? "—"}</td>
                   <td>{reading(rain) ?? "—"}</td>
@@ -1027,6 +1044,52 @@ function HistoricalContext({
   );
 }
 
+/**
+ * The one thing a rate-limited ranking should put on screen.
+ *
+ * The provider's own message is a sentence about *its* limits ("open-meteo rate-limited the
+ * request"), and the request id beside it is a correlation handle for an engineer. Neither is what
+ * a customer needs in order to decide what to do, so the plain statement and the retry are what
+ * this carries; the technical detail stays behind a disclosure for anyone reporting it.
+ */
+function RankingUnavailable({
+  failure,
+  onRetry,
+}: {
+  readonly failure: ViewFailure;
+  readonly onRetry: () => void;
+}): ReactNode {
+  const limited = failure.code === "provider_rate_limited";
+
+  return (
+    <Card aria-labelledby="travel-unavailable">
+      <CardHeader
+        title={limited ? "Travel weather data is temporarily unavailable" : "Those days were not ranked"}
+        titleId="travel-unavailable"
+      />
+      <CardBody>
+        <p className={styles.railNote} role="alert">
+          {limited
+            ? "The weather provider limited this request. Your trip settings above are unchanged — try again shortly."
+            : failure.message}
+        </p>
+        <Button variant="secondary" size="sm" onClick={onRetry}>
+          Try again
+        </Button>
+        {limited || failure.requestId ? (
+          <details className={styles.why}>
+            <summary>Technical detail</summary>
+            {limited ? <p className={styles.quiet}>{failure.message}</p> : null}
+            {failure.requestId ? (
+              <p className={styles.quiet}>Request {failure.requestId}</p>
+            ) : null}
+          </details>
+        ) : null}
+      </CardBody>
+    </Card>
+  );
+}
+
 function TravelFor({
   location,
   chooser,
@@ -1059,9 +1122,10 @@ function TravelFor({
 
   const result = ranking.state.kind === "ready" ? ranking.state.data : null;
   const best = result?.candidates?.[0] ?? null;
-  const bestScore = best?.score ?? 0;
+  /** Where each day's score sits in the range this ranking spans; right for negative scores too. */
+  const place = scoreSpan(result?.candidates ?? []);
 
-  const place = { latitude: location.latitude, longitude: location.longitude };
+  const point = { latitude: location.latitude, longitude: location.longitude };
 
   /*
    * **The three reads the lower bands need, all through contracts Weathra already has.**
@@ -1077,15 +1141,15 @@ function TravelFor({
   const settled = ranking.state.kind === "ready";
 
   const forecast = useApiQuery<ForecastResponse>({
-    key: ["travel", "forecast", place, days],
+    key: ["travel", "forecast", point, days],
     enabled: settled,
-    request: (client) => client.forecast({ ...place, days: Number(days) }),
+    request: (client) => client.forecast({ ...point, days: Number(days) }),
   });
 
   const changed = useApiQuery<WhatChanged>({
-    key: ["travel", "changes", place, days],
+    key: ["travel", "changes", point, days],
     enabled: settled,
-    request: (client) => client.changes({ ...place, days: Number(days) }),
+    request: (client) => client.changes({ ...point, days: Number(days) }),
   });
 
   /*
@@ -1096,11 +1160,11 @@ function TravelFor({
   const first = dateOf(result?.candidates?.[0] ?? null);
   const last = dateOf(result?.candidates?.[(result?.candidates.length ?? 1) - 1] ?? null);
   const baseline = useApiQuery<BaselineComparison>({
-    key: ["travel", "baseline", place, first, last],
+    key: ["travel", "baseline", point, first, last],
     enabled: settled && first !== null && last !== null,
     request: (client) =>
       client.baselineComparison({
-        ...place,
+        ...point,
         start: first as string,
         end: last as string,
         years: 5,
@@ -1174,10 +1238,19 @@ function TravelFor({
         </details>
       </div>
 
-      {ranking.state.kind === "error" ? (
-        <ErrorState failure={ranking.state.failure} title="Those days were not ranked" />
-      ) : null}
+      {/*
+        **A failed ranking ends the screen here.**
 
+        Production rate-limited the ranking and still drew the destination hero over an empty
+        Weather suitability card — a photograph of a place, a ring with nothing in it, and skeletons
+        below implying an analysis was on its way that was never coming. Nothing downstream of the
+        ranking has anything to render, so nothing downstream is rendered: one compact surface,
+        beside the controls that produced the request, with the trip's own settings still in them.
+      */}
+      {ranking.state.kind === "error" ? (
+        <RankingUnavailable failure={ranking.state.failure} onRetry={ranking.retry} />
+      ) : (
+        <>
       <div className={styles.lead}>
         {/*
           The hero is wrapped rather than placed directly. `LocationImage` sizes itself from its own
@@ -1219,7 +1292,7 @@ function TravelFor({
                     <DayCard
                       key={candidate.label}
                       candidate={candidate}
-                      best={bestScore}
+                      place={place}
                       forecast={forecastData}
                       daily={byDate.get(dateOf(candidate) ?? "")}
                     />
@@ -1241,7 +1314,7 @@ function TravelFor({
           <IntradayTrend forecast={forecastData} best={best} />
 
           <div className={styles.comparison}>
-            <WindowMatrix result={result} best={best} />
+            <WindowMatrix result={result} place={place} />
             <WhatChangedCard changed={changed.state.kind === "error" ? null : changedData} />
           </div>
 
@@ -1266,6 +1339,8 @@ function TravelFor({
           </p>
         </>
       ) : null}
+        </>
+      )}
     </div>
   );
 }

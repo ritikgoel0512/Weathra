@@ -11,7 +11,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { type ApiClient } from "@/lib/api/client";
+import { ApiError, type ApiClient } from "@/lib/api/client";
 import { ApiProvider } from "@/lib/api/context";
 import { createQueryClient } from "@/lib/query/provider";
 
@@ -251,6 +251,71 @@ describe("empty and populated", () => {
     );
     expect((await screen.findAllByText("Best")).length).toBeGreaterThan(0);
     expect(screen.getByRole("region", { name: "Destination daily outlook" })).toBeInTheDocument();
+  });
+});
+
+describe("when the provider rate-limits the ranking", () => {
+  function limited() {
+    return client({
+      compareLocations: vi.fn().mockRejectedValue(
+        new ApiError(429, {
+          code: "provider_rate_limited",
+          message: "open-meteo rate-limited the request.",
+          request_id: "req_5450abc",
+          details: null,
+        }),
+      ),
+    });
+  }
+
+  it("says so plainly, and offers the retry", async () => {
+    mount(limited());
+    expect(
+      await screen.findByText(/Travel weather data is temporarily unavailable/i, undefined, {
+        timeout: 5_000,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+
+  it("draws no hero and no empty suitability card", async () => {
+    mount(limited());
+    await screen.findByText(/temporarily unavailable/i, undefined, { timeout: 5_000 });
+
+    /*
+     * Production drew the destination photograph over a Weather suitability card with an empty ring
+     * and skeletons below it — a screen implying an analysis was on its way that was never coming.
+     * Nothing downstream of the ranking has anything to render, so nothing downstream is rendered.
+     */
+    expect(screen.queryByRole("region", { name: "Weather suitability" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Destination daily outlook" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Intra-day weather trend" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Historical context" })).toBeNull();
+    expect(screen.queryByText("Ranking the days in your window")).toBeNull();
+  });
+
+  it("keeps the trip settings, so a retry costs no re-entry", async () => {
+    mount(limited());
+    await screen.findByText(/temporarily unavailable/i, undefined, { timeout: 5_000 });
+
+    expect(screen.getAllByText("Lisbon, Portugal").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("What you want from the weather")).toHaveValue("outdoor_suitability");
+    expect(screen.getByLabelText("Trip window")).toHaveValue("7");
+  });
+
+  it("keeps the request id out of the customer's way", async () => {
+    mount(limited());
+    await screen.findByText(/temporarily unavailable/i, undefined, { timeout: 5_000 });
+
+    const card = screen.getByRole("region", {
+      name: "Travel weather data is temporarily unavailable",
+    });
+    // Present for anyone reporting the failure, but behind a disclosure rather than in the message.
+    const disclosure = card.querySelector("details");
+    expect(disclosure?.textContent).toContain("req_5450abc");
+    expect(disclosure?.open).toBe(false);
+    // The statement a customer reads names no identifier and no provider internals.
+    expect(screen.getByRole("alert").textContent).not.toMatch(/req_|rate-limited the request/i);
   });
 });
 

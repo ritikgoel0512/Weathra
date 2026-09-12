@@ -34,6 +34,7 @@ from datetime import date
 from typing import Any
 
 from weathra.config import Settings
+from weathra.domain.errors import ProviderRateLimited
 from weathra.domain.location import Location
 from weathra.domain.weather import CurrentConditions, Forecast, HistoricalObservations, UnitSystem
 from weathra.providers.base import ProviderCapabilities, WeatherProvider
@@ -110,6 +111,7 @@ class CachedProvider:
         self.hits = 0
         self.misses = 0
         self.upstream_calls = 0
+        self.stale_served = 0
 
     # ---------------------------------------------------------------- contract
 
@@ -172,10 +174,16 @@ class CachedProvider:
         if entry is None:
             return None
         if entry.expires_at <= self._clock():
-            del self._entries[key]
+            # Expired, but not forgotten: `_stale` can still serve it when upstream refuses to
+            # answer at all. Kept rather than deleted, and evicted by size like any other entry.
             return None
         self._entries.move_to_end(key)
         return entry.value
+
+    def _stale(self, key: CacheKey) -> CachedValue | None:
+        """The last value obtained for a key, however old — for when upstream will not answer."""
+        entry = self._entries.get(key)
+        return None if entry is None else entry.value
 
     async def _resolve(
         self,
@@ -199,7 +207,27 @@ class CachedProvider:
 
             self.misses += 1
             self.upstream_calls += 1
-            value: CachedValue = await fetch()
+            try:
+                value: CachedValue = await fetch()
+            except ProviderRateLimited:
+                """
+                Rate-limited, with something already on the shelf.
+
+                The entry has outlived its TTL, which is a statement about freshness, not about
+                usefulness: an hour-old forecast is a far better answer than a screen that cannot
+                rank anything, and `_as_cached` marks it `from_cache` without touching
+                `retrieved_at`, so the reader is told exactly how old the figures are. Nothing is
+                retried here — a provider that just refused a request is the last thing that should
+                be asked again in a loop.
+                """
+                stale = self._stale(key)
+                if stale is None:
+                    raise
+                self.stale_served += 1
+                logger.warning(
+                    "provider rate-limited %s; serving the last value obtained for it", key
+                )
+                return self._as_cached(stale)
             self._store(key, value, ttl_seconds)
             return value
 
