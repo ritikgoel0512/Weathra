@@ -550,14 +550,18 @@ export interface AgentStage {
 /**
  * Agents that share a logical stage on screen.
  *
- * A reading of conditions now and a projection of the days ahead are different claims under
- * different data classes, which is why the domain keeps `current` and `forecast` as separate
- * agents — and the *sources* table keeps them separate for exactly that reason. But a reader
- * looking at the execution column is asking which parts of the pipeline ran, and "retrieved the
- * conditions, then retrieved the window" is one part doing two things. Grouping is presentation;
- * no evidence is merged, and both data classes still appear in their own right.
+ * A reading of conditions now, a projection of the days ahead and an imagery pass are different
+ * claims under different data classes, which is why the domain keeps `current`, `satellite` and
+ * `forecast` as separate agents — and the *sources* table keeps a row for each, for exactly that
+ * reason. But a reader looking at the execution column is asking which parts of the pipeline ran,
+ * and "fetched the conditions, the window and the imagery" is one part — retrieval — doing three
+ * things. Grouping is presentation only: no evidence is merged, every data class still appears in
+ * its own right, and every action is still listed inside the card.
  */
-const STAGE_ALIASES: Readonly<Record<string, string>> = { current: "forecast" };
+const STAGE_ALIASES: Readonly<Record<string, string>> = {
+  current: "forecast",
+  satellite: "forecast",
+};
 
 export function agentStages(record: RunRecord): AgentStage[] {
   const order: string[] = [];

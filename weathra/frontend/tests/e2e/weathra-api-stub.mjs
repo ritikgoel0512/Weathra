@@ -218,6 +218,22 @@ const LONDON = {
 };
 
 /** The rich run's own window, in its own zone. */
+/*
+ * The satellite source Weathra actually integrates, for the rich record below.
+ *
+ * `nasa-gibs` is the provider this project really calls; the artifact's "NASA POWER" is a different
+ * dataset and is not one of ours. Declared here because the record literal is built before the
+ * capture helpers further down the file.
+ */
+const SATELLITE_SOURCE = {
+  provider: "nasa-gibs",
+  units: "metric",
+  retrieved_at: RETRIEVED_AT,
+  from_cache: false,
+  data_class: "satellite_observation",
+  units_source: "preferences",
+};
+
 const LONDON_PERIOD = {
   start_local: "2026-09-04T00:00:00+01:00",
   end_local: "2026-09-11T00:00:00+01:00",
@@ -1843,7 +1859,7 @@ const FIXTURES = {
         partial: false,
         weather_provider: "stub-provider",
         llm_model: "stub-model",
-        steps: 10,
+        steps: 11,
         locations: ["London, United Kingdom"],
       },
       {
@@ -1948,8 +1964,9 @@ const FIXTURES = {
         { sequence: 6, agent: "analytics", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 210, reason: "Computed the mean for each window." },
         { sequence: 7, agent: "analytics", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 160, reason: "Computed the difference and its z-score." },
         { sequence: 8, agent: "analytics", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 120, reason: "Computed the precipitation totals." },
-        { sequence: 9, agent: "rag", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 310, reason: "Retrieved context on blocking patterns and forecast skill." },
-        { sequence: 10, agent: "synthesis", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 1240 },
+        { sequence: 9, agent: "satellite", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 470, reason: "Retrieved the cloud imagery pass over the region." },
+        { sequence: 10, agent: "rag", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 310, reason: "Retrieved context on blocking patterns and forecast skill." },
+        { sequence: 11, agent: "synthesis", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 1240 },
       ],
       tool_calls: [
         { sequence: 1, tool: "weather_current", agent: "current", arguments: { latitude: 51.5085, longitude: -0.1257 }, started_at: RETRIEVED_AT, duration_ms: 260 },
@@ -1958,6 +1975,7 @@ const FIXTURES = {
         { sequence: 4, tool: "weather_history", agent: "historical", arguments: { latitude: 51.5085, longitude: -0.1257, start: "2025-09-04", end: "2025-09-10" }, started_at: RETRIEVED_AT, duration_ms: 380 },
         { sequence: 5, tool: "weather_statistics", agent: "analytics", arguments: { measure: "temperature_mean" }, started_at: RETRIEVED_AT, duration_ms: 210 },
         { sequence: 6, tool: "weather_statistics", agent: "analytics", arguments: { measure: "precipitation_sum" }, started_at: RETRIEVED_AT, duration_ms: 120 },
+        { sequence: 7, tool: "weather_satellite", agent: "satellite", arguments: { latitude: 51.5085, longitude: -0.1257, layer: "cloud_top" }, started_at: RETRIEVED_AT, duration_ms: 470 },
       ],
       tool_results: [
         { sequence: 1, tool: "weather_current", ok: true, data_class: "current", attribution: { ...ATTRIBUTION, location: LONDON, data_class: "current", period: LONDON_PERIOD }, payload: { values: 8, units: { temperature: "°C" } } },
@@ -1966,6 +1984,7 @@ const FIXTURES = {
         { sequence: 4, tool: "weather_history", ok: true, data_class: "historical_observation", attribution: { ...ATTRIBUTION, location: LONDON, data_class: "historical_observation", period: LONDON_PERIOD }, payload: { daily: 7 } },
         { sequence: 5, tool: "weather_statistics", ok: true, data_class: "computed_statistic", attribution: { ...ATTRIBUTION, location: LONDON, data_class: "computed_statistic", period: LONDON_PERIOD }, payload: { results: 3 } },
         { sequence: 6, tool: "weather_statistics", ok: true, data_class: "computed_statistic", attribution: { ...ATTRIBUTION, location: LONDON, data_class: "computed_statistic", period: LONDON_PERIOD }, payload: { results: 2 } },
+        { sequence: 7, tool: "weather_satellite", ok: true, data_class: "satellite_observation", attribution: { ...SATELLITE_SOURCE, location: LONDON, period: LONDON_PERIOD }, payload: { layer: "cloud_top", tiles: 4 } },
       ],
       /*
        * Ten recorded figures, three of which lead the band. The extremes and the per-window means
@@ -2017,14 +2036,15 @@ const FIXTURES = {
         { ...ATTRIBUTION, location: LONDON, period: LONDON_PERIOD },
         { ...ATTRIBUTION, location: LONDON, data_class: "historical_observation", period: LONDON_PERIOD },
         { ...ATTRIBUTION, location: LONDON, data_class: "computed_statistic", period: LONDON_PERIOD },
+        { ...SATELLITE_SOURCE, location: LONDON, period: LONDON_PERIOD },
       ],
-      data_classes: ["current", "forecast", "historical_observation", "computed_statistic", "ai_interpretation"],
+      data_classes: ["current", "forecast", "historical_observation", "computed_statistic", "satellite_observation", "ai_interpretation"],
       llm_provider: "stub-gateway",
       llm_model: "stub-model",
       started_at: RETRIEVED_AT,
       completed_at: "2026-09-04T06:15:04Z",
       total_duration_ms: 4180,
-      steps_used: 10,
+      steps_used: 11,
       partial: false,
       partial_reason: null,
     },

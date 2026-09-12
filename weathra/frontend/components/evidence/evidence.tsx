@@ -123,7 +123,7 @@ function RecordView({ response }: { readonly response: EvidenceResponse }): Reac
         </div>
 
         <div className={styles.column}>
-          <GroundedSources sources={record.sources} />
+          <GroundedSources sources={record.sources} citations={record.citations} />
           <DeterministicAnalytics record={record} />
           <UncertaintyPanel record={record} />
           <KnowledgeEvidence citations={record.citations} />

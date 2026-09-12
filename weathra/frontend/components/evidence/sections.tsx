@@ -44,7 +44,6 @@ import {
   UncertaintyIndicator,
   formatInstant,
   formatLocalStamp,
-  Meter,
 } from "@/components/ui";
 import type {
   AnomalyReport,
@@ -557,22 +556,34 @@ export function ToolActivityPanel({ record }: { readonly record: RunRecord }): R
  */
 export function GroundedSources({
   sources,
+  citations = [],
 }: {
   readonly sources: readonly EvidenceAttribution[];
+  /** Passages the run cited. The corpus is a grounded source and belongs in this table. */
+  readonly citations?: readonly KnowledgeCitation[];
 }): ReactNode {
+  /*
+   * The knowledge corpus, as a row of its own.
+   *
+   * A retrieval records an attribution; the corpus records citations instead, so a run that leaned
+   * on documentation showed nothing in the table that said where the explanation came from. The row
+   * is derived from citations the run actually recorded — the documents it read, counted — and is
+   * omitted entirely when it cited none. Weathra's own corpus, so the provider is Weathra.
+   */
+  const documents = [...new Set(citations.map((citation) => citation.document_id))];
   return (
     <section
       className={styles.panel}
       aria-label="Grounded data sources"
       data-evidence-section="sources"
       data-tier="retrieved"
-      data-empty={sources.length === 0 ? "true" : undefined}
+      data-empty={sources.length === 0 && documents.length === 0 ? "true" : undefined}
     >
       <header className={styles.panelHeader}>
         <h2 className={styles.panelTitle}>Grounded data sources</h2>
       </header>
 
-      {sources.length === 0 ? (
+      {sources.length === 0 && documents.length === 0 ? (
         <p className={styles.emptyNote}>
           No provider data — this run answered from knowledge rather than from a weather retrieval.
         </p>
@@ -588,7 +599,6 @@ export function GroundedSources({
                 <th scope="col">Provider</th>
                 <th scope="col">Resolved location</th>
                 <th scope="col">Period covered</th>
-                <th scope="col">Retrieved</th>
                 <th scope="col">Data class</th>
               </tr>
             </thead>
@@ -603,11 +613,25 @@ export function GroundedSources({
                     <td>{source.provider}</td>
                     <td>{placeLabel(source.location) ?? NOT_REPORTED}</td>
                     <td title={exactCoverageOf(source)}>{coverageOf(source)}</td>
-                    <td>{formatInstant(source.retrieved_at) ?? NOT_REPORTED}</td>
                     <td>{dataClass ? <DataClassBadge dataClass={dataClass} /> : NOT_REPORTED}</td>
                   </tr>
                 );
               })}
+
+              {/* The corpus, where the run cited it. Derived from real citations, never invented. */}
+              {documents.length > 0 ? (
+                <tr data-source-class="knowledge">
+                  <td>Weathra knowledge corpus</td>
+                  <td>&mdash;</td>
+                  <td>
+                    {documents.length} {documents.length === 1 ? "document" : "documents"},{" "}
+                    {citations.length} {citations.length === 1 ? "passage" : "passages"}
+                  </td>
+                  <td>
+                    <Badge tone="neutral">KNOWLEDGE</Badge>
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </ScrollRegion>
@@ -958,12 +982,12 @@ export function ResolvedContextPanel({ record }: { readonly record: RunRecord })
   return (
     <section
       className={styles.panel}
-      aria-label="Context this run resolved to"
+      aria-label="Context used (agent memory)"
       data-evidence-section="context"
       data-empty={resolved === null ? "true" : undefined}
     >
       <header className={styles.panelHeader}>
-        <h2 className={styles.panelTitle}>Context this run resolved to</h2>
+        <h2 className={styles.panelTitle}>Context used (agent memory)</h2>
       </header>
 
       {resolved === null ? (
@@ -1217,11 +1241,11 @@ export function RecordAudit({
   return (
     <section
       className={styles.panel}
-      aria-label="Evidence integrity"
+      aria-label="Record and traceability"
       data-evidence-section="audit"
     >
       <header className={styles.panelHeader}>
-        <h2 className={styles.panelTitle}>Evidence integrity</h2>
+        <h2 className={styles.panelTitle}>Record and traceability</h2>
         <span className={styles.integrityState} data-state={audit.state.toLowerCase()}>
           {audit.state}
         </span>
@@ -1232,25 +1256,29 @@ export function RecordAudit({
         completeness checks below that passed. Not a model's confidence in its own answer — which is
         what a percentage on an evidence screen usually is, and what nothing here can honestly be.
       */}
-      <Meter
-        label="Evidence completeness"
-        value={audit.completeness / 100}
-        valueLabel={`${audit.passed} of ${audit.total}`}
-      />
-
-      <ul className={styles.checks}>
-        {audit.checks.map((check) => (
-          <li className={styles.check} key={check.id} data-passed={check.passed ? "true" : "false"}>
-            <span className={styles.checkMark} aria-hidden="true">
-              {check.passed ? "✓" : "✕"}
-            </span>
-            <span>
-              {check.label}
-              {check.note ? <span className={styles.quiet}> — {check.note}</span> : null}
-            </span>
-          </li>
-        ))}
-      </ul>
+      {/*
+        The checks are the figure's working, and they belong under it rather than beside it: this is
+        the artifact's audit slot, not a feature of its own. Folded away when everything passed,
+        because a reader only needs the list when the state is not "optimal".
+      */}
+      <details className={styles.moreFigures} open={audit.state !== "Optimal"}>
+        <summary>
+          Evidence complete — {audit.passed} of {audit.total} checks
+        </summary>
+        <ul className={styles.checks}>
+          {audit.checks.map((check) => (
+            <li className={styles.check} key={check.id} data-passed={check.passed ? "true" : "false"}>
+              <span className={styles.checkMark} aria-hidden="true">
+                {check.passed ? "\u2713" : "\u2715"}
+              </span>
+              <span>
+                {check.label}
+                {check.note ? <span className={styles.quiet}> — {check.note}</span> : null}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </details>
 
       <dl className={styles.auditFacts}>
         <div className={styles.auditFact}>

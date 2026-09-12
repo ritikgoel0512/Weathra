@@ -466,7 +466,7 @@ describe("a populated evidence record", () => {
      */
     expect(screen.getByText("Evidence run-1")).toBeInTheDocument();
 
-    const audit = screen.getByRole("region", { name: "Evidence integrity" });
+    const audit = screen.getByRole("region", { name: "Record and traceability" });
     expect(within(audit).getByText("req-77")).toBeInTheDocument();
     expect(within(audit).getByText("thread-3")).toBeInTheDocument();
   });
@@ -685,7 +685,14 @@ describe("provenance and the data classes", () => {
 
     expect(sources).toHaveAttribute("data-tier", "retrieved");
 
-    const rows = within(sources).getAllByRole("row").slice(1);
+    /*
+     * Attribution rows only. The corpus row that follows them is derived from citations rather than
+     * from a retrieval, and is asserted separately.
+     */
+    const rows = within(sources)
+      .getAllByRole("row")
+      .slice(1)
+      .filter((row) => row.getAttribute("data-source-class") !== "knowledge");
     expect(rows).toHaveLength(2);
 
     const forecastRow = at(rows, 0);
@@ -701,7 +708,10 @@ describe("provenance and the data classes", () => {
     expect(
       within(forecastRow).getByTitle("2026-09-05 00:00 to 2026-09-05 23:00 (Europe/Berlin)"),
     ).toBeInTheDocument();
-    expect(forecastRow).toHaveTextContent("2026-09-04 09:04 UTC");
+    /*
+     * The retrieval instant left this table and lives in the provenance timeline instead: five
+     * columns cost the data class its width, and "when" is a question the audit panel answers.
+     */
     expect(within(forecastRow).getByText("FORECAST")).toBeInTheDocument();
 
     const archiveRow = at(rows, 1);
@@ -729,7 +739,7 @@ describe("provenance and the data classes", () => {
 
   it("shows the location and period the run resolved to, and where each came from", async () => {
     renderScreen();
-    const context = await screen.findByRole("region", { name: "Context this run resolved to" });
+    const context = await screen.findByRole("region", { name: "Context used (agent memory)" });
 
     expect(context).toHaveTextContent("Berlin, Germany (from the preferences)");
     expect(context).toHaveTextContent("2026-09-05 00:00 to 2026-09-05 23:00 (Europe/Berlin)");
@@ -902,9 +912,13 @@ describe("nothing on the screen came from anywhere but the record", () => {
     expect(
       toolCalls(),
     ).toHaveLength(STORED_EVIDENCE.tool_calls.length);
+    /*
+     * A header row, one row per stored attribution, and — because this record cites knowledge — the
+     * corpus row derived from those citations. Every row traces to something the record holds.
+     */
     expect(
       within(screen.getByRole("region", { name: "Grounded data sources" })).getAllByRole("row"),
-    ).toHaveLength(STORED_EVIDENCE.attributions.length + 1);
+    ).toHaveLength(STORED_EVIDENCE.attributions.length + 2);
     expect(
       within(screen.getByRole("region", { name: "Retrieved knowledge" })).getAllByRole("listitem"),
     ).toHaveLength(CITATIONS.length);
