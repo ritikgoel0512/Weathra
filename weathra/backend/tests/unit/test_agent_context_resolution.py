@@ -54,7 +54,7 @@ def _plan(*, location: str | None = None) -> RoutingPlan:
                 location=location,
                 days=3,
             ),
-        )
+        ),
     )
 
 

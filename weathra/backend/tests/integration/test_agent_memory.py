@@ -690,7 +690,7 @@ async def test_a_conversation_focus_answers_a_question_that_names_no_place(
 async def test_a_place_named_in_the_question_beats_the_focus(
     engines: Engines, db_settings: Settings, clean_database: None
 ) -> None:
-    """"How about Munich?" with the focus on Berlin means Munich.
+    """ "How about Munich?" with the focus on Berlin means Munich.
 
     The focus is what the conversation is pointed at; naming a place is a more recent choice than
     setting one, so it overrides without the person having to move the control first.
