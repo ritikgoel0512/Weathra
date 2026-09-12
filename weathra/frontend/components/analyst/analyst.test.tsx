@@ -2153,17 +2153,57 @@ describe("a run that retrieved satellite imagery", () => {
     };
   }
 
-  it("credits the satellite provider as its own source, with imagery as its role", async () => {
+  it("names the evidence, says what served it, and says what it is", async () => {
     fetchMock = respondingWith(() => streaming(runFrames(withSatellite())));
     renderAnalyst();
     await ask("Show me the latest satellite observation for Berlin.");
     await screen.findByRole("region", { name: "AI interpretation" });
 
     const sources = screen.getByRole("region", { name: "Active data sources" });
-    expect(within(sources).getByText("NASA GIBS")).toBeInTheDocument();
-    expect(within(sources).getByText("Satellite imagery")).toBeInTheDocument();
+    expect(within(sources).getByText("Satellite Observation")).toBeInTheDocument();
+    // The provider and the instrument, read off the observation the run holds.
+    expect(within(sources).getByText("NASA GIBS · VIIRS on NOAA-20")).toBeInTheDocument();
+    expect(within(sources).getByText("Observed imagery")).toBeInTheDocument();
     // Beside the weather provider, not instead of it: two sources, two roles.
     expect(within(sources).getByText("Open-Meteo")).toBeInTheDocument();
+  });
+
+  it("draws the observation as its own evidence panel, with its provenance", async () => {
+    fetchMock = respondingWith(() => streaming(runFrames(withSatellite())));
+    const { container } = renderAnalyst();
+    await ask("Show me the latest satellite observation for Berlin.");
+
+    const panel = (await screen.findByRole("region", {
+      name: "Satellite observation",
+    })) as HTMLElement;
+
+    expect(within(panel).getByText("2026-09-11")).toBeInTheDocument();
+    expect(within(panel).getByText("Corrected Reflectance (True Colour)")).toBeInTheDocument();
+    expect(within(panel).getByText("VIIRS on NOAA-20")).toBeInTheDocument();
+    expect(within(panel).getByText("NASA GIBS")).toBeInTheDocument();
+    // The region it covers, and the acknowledgement the source requires, beside the imagery.
+    expect(within(panel).getByText(/the region, not the place/)).toBeInTheDocument();
+    expect(within(panel).getByText(/We acknowledge the use of imagery/)).toBeInTheDocument();
+
+    // The imagery itself, from the provider's own URL, described as what it is rather than as
+    // what it shows.
+    const image = panel.querySelector("img") as HTMLImageElement;
+    expect(image.src).toBe("https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi?x=1");
+    expect(image.alt).toContain("Not interpreted by Weathra");
+
+    // And the boundary sentence on the face of the panel, not in a disclosure.
+    expect(within(panel).getByText(/It does not interpret it/)).toBeInTheDocument();
+    expect(container.querySelector('[data-satellite="true"]')).toBeInTheDocument();
+  });
+
+  it("draws no satellite panel on a run that retrieved no imagery", async () => {
+    fetchMock = respondingWith();
+    renderAnalyst();
+    await ask("What should I expect over the next few days in Berlin?");
+    await screen.findByRole("region", { name: "AI interpretation" });
+
+    // Weathra has the capability. This run did not use it, so there is no panel.
+    expect(screen.queryByRole("region", { name: "Satellite observation" })).toBeNull();
   });
 
   it("names the satellite agent from the record, and only where it ran", async () => {
@@ -2202,7 +2242,8 @@ describe("a run that retrieved satellite imagery", () => {
     await screen.findByRole("region", { name: "AI interpretation" });
 
     const sources = screen.getByRole("region", { name: "Active data sources" });
-    expect(within(sources).queryByText("NASA GIBS")).toBeNull();
-    expect(within(sources).queryByText("Satellite imagery")).toBeNull();
+    expect(within(sources).queryByText("Satellite Observation")).toBeNull();
+    expect(within(sources).queryByText("Observed imagery")).toBeNull();
+    expect(sources.textContent).not.toContain("NASA");
   });
 });

@@ -85,6 +85,18 @@ const ALL_SCREENS = [
     clearDefault: true,
     ask: "What should I expect over the next few days?",
   },
+  /*
+   * The Analyst with satellite evidence in the answer — task 34.35.
+   *
+   * Its own picture rather than a change to `02-analyst`, because the two states are both real and
+   * a screen has to be judged in each: a run that retrieved imagery draws a panel a run that did
+   * not must not draw, and only a photograph of both settles whether that reads.
+   */
+  {
+    name: "02-analyst-satellite",
+    path: "/analyst",
+    ask: "Show me the latest satellite imagery for Berlin alongside the forecast.",
+  },
   { name: "03-historical", path: "/historical" },
   { name: "04-compare", path: "/compare", prepare: "Compare" },
   { name: "06-locations", path: "/locations" },

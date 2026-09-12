@@ -41,7 +41,12 @@ import {
   formatInstant,
   formatLocalStamp,
 } from "@/components/ui";
-import type { AnswerEnvelope, EvidenceAttribution, Finding } from "@/lib/api/schema";
+import type {
+  AnswerEnvelope,
+  EvidenceAttribution,
+  Finding,
+  SatelliteObservation,
+} from "@/lib/api/schema";
 import type { DataClassName } from "@/lib/design/tokens";
 import {
   agentLabel,
@@ -52,6 +57,7 @@ import {
   GROUP_TITLES,
   headlineFindings,
   findingValue,
+  providerLabel,
   horizonHoursOf,
   type RunStep,
 } from "@/lib/analyst/run";
@@ -416,6 +422,17 @@ export function AnswerView({
           ) : null}
 
           {/*
+            **Satellite observation, where the run actually retrieved one.**
+
+            Conditional on the evidence rather than on the capability: Weathra can retrieve imagery,
+            and a panel drawn because it *can* would be claiming it did. Absent on every run that
+            did not, which is most of them.
+          */}
+          {(answer.satellite ?? []).map((observation, index) => (
+            <SatellitePanel key={`${observation.provider}-${index}`} observation={observation} />
+          ))}
+
+          {/*
             **The artifact's highlighted interpretation box, filled with what Weathra computed.**
             Its own reads "Convergence zones have shifted 4km Eastward from standard ECMWF models",
             which is an atmosphere this product does not model. What earns the same emphasis here is
@@ -540,6 +557,88 @@ export function AnswerView({
  * settled — a method note per row turned this region into the log the customer-level review of
  * 2026-09-11 objected to, and the methods are still one press away on that rule.
  */
+/**
+ * One retrieved satellite observation, as observational context and nothing more.
+ *
+ * **What this panel may say, and what it may not.** It shows the imagery, names the provider and
+ * the product, states the UTC day it covers and the region it covers, and carries the
+ * acknowledgement the source requires. It says nothing about what is *in* the picture — no cloud,
+ * no rain, no front, no severity — because nothing has looked at it: no vision-capable process is
+ * in this pipeline, `docs/satellite-source.md` records that, and the observation carries its own
+ * sentence saying so, which is rendered here rather than remembered.
+ *
+ * The image is loaded by the reader's browser from the provider's own URL. It is never sent to a
+ * language model, which is what makes "Weathra did not interpret it" structural rather than a
+ * promise — see the backend's synthesis prompt and `lib/analyst/run.ts`.
+ */
+function SatellitePanel({
+  observation,
+}: {
+  readonly observation: SatelliteObservation;
+}): ReactNode {
+  return (
+    <section
+      className={styles.satellite}
+      data-tier="retrieved"
+      data-satellite="true"
+      aria-labelledby={`satellite-${observation.provider}`}
+    >
+      <header className={styles.satelliteHead}>
+        <Badge tone="neutral">Satellite</Badge>
+        <h3 className={styles.satelliteTitle} id={`satellite-${observation.provider}`}>
+          Satellite observation
+        </h3>
+      </header>
+
+      {/*
+        `img` rather than `next/image`: the source is an external WMS endpoint that answers a query
+        string, not a file the optimiser can size, and routing it through the optimiser would put
+        Weathra's servers between a reader and NASA's for no gain. `alt` describes what the picture
+        *is* — a description of what it shows would be the interpretation this panel refuses.
+      */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        className={styles.satelliteImage}
+        src={observation.image_url}
+        alt={`Satellite imagery covering the region around ${placeLabel(observation.location) ?? "this location"}, from ${observation.observed_date}. Not interpreted by Weathra.`}
+        loading="lazy"
+        width={640}
+        height={640}
+      />
+
+      <dl className={styles.satelliteFacts}>
+        <div className={styles.satelliteFact}>
+          <dt>Observed</dt>
+          <dd>{observation.observed_date}</dd>
+        </div>
+        <div className={styles.satelliteFact}>
+          <dt>Product</dt>
+          <dd>{observation.product}</dd>
+        </div>
+        {observation.instrument ? (
+          <div className={styles.satelliteFact}>
+            <dt>Instrument</dt>
+            <dd>{observation.instrument}</dd>
+          </div>
+        ) : null}
+        <div className={styles.satelliteFact}>
+          <dt>Provider</dt>
+          <dd>{providerLabel(observation.provider)}</dd>
+        </div>
+      </dl>
+
+      <p className={styles.note}>{observation.coverage_note}</p>
+      <p className={styles.note}>{observation.freshness_note}</p>
+      {/*
+        The boundary sentence, from the observation rather than written here — the backend is where
+        it is defined and where a change to it would have to be argued for.
+      */}
+      <p className={styles.satelliteBoundary}>{observation.interpretation_note}</p>
+      <p className={styles.satelliteAttribution}>{observation.attribution}</p>
+    </section>
+  );
+}
+
 /**
  * How many figures a panel leads with before the rest go behind a press.
  *

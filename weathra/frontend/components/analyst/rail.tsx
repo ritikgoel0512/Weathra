@@ -159,7 +159,7 @@ const SOURCE_ROLES: Readonly<Record<string, string>> = {
    * that anything read it — `docs/satellite-source.md` records that no vision model is in this
    * pipeline, and the observation carries its own boundary sentence for any surface that shows it.
    */
-  satellite_observation: "Satellite imagery",
+  satellite_observation: "Observed imagery",
 };
 
 /**
@@ -179,6 +179,14 @@ interface SourceRow {
   readonly key: string;
   readonly name: string;
   readonly role: string;
+  /**
+   * What served it, where the source and the server are different things.
+   *
+   * A weather row's name *is* its provider, so there is nothing more to say. A satellite row names
+   * the kind of evidence — "Satellite Observation" — and the provider and instrument behind it are
+   * a second line, read off the observation the run actually retrieved rather than written here.
+   */
+  readonly served?: string;
   /** The class whose colour marks the row. Never decoration: it says what kind of figure it fed. */
   readonly dataClass: DataClassName;
 }
@@ -214,9 +222,33 @@ function sourcesFrom(answer: AnswerEnvelope | null): readonly SourceRow[] {
     // reading "computed_statistic" under a provider's name is the raw field it was meant to replace.
     if (role === undefined || dataClass === null) continue;
     const key = `${entry.provider}|${entry.data_class}`;
-    if (!rows.has(key)) {
-      rows.set(key, { key, name: providerLabel(entry.provider), role, dataClass });
+    if (rows.has(key)) continue;
+
+    /*
+      **The satellite row names the evidence, and says underneath what produced it.**
+
+      Every other row's name is a provider because a provider is what a figure came from. Imagery is
+      not a figure, and "NASA GIBS" on its own says who answered without saying what for — so the
+      row leads with what was retrieved and carries the provider and the instrument beneath it, read
+      off the observation this run holds rather than assumed from the provider id.
+    */
+    if (entry.data_class === "satellite_observation") {
+      const observation = (answer.satellite ?? []).find(
+        (candidate) => candidate.provider === entry.provider,
+      );
+      rows.set(key, {
+        key,
+        name: "Satellite Observation",
+        served: [providerLabel(entry.provider), observation?.instrument]
+          .filter(Boolean)
+          .join(" · "),
+        role,
+        dataClass,
+      });
+      continue;
     }
+
+    rows.set(key, { key, name: providerLabel(entry.provider), role, dataClass });
   }
 
   const sources = [...rows.values()];
@@ -415,6 +447,9 @@ export function AnalystRail({
                   />
                   <span className={styles.railSourceText}>
                     <span className={styles.railSourceName}>{source.name}</span>
+                    {source.served ? (
+                      <span className={styles.railSourceServed}>{source.served}</span>
+                    ) : null}
                     <span className={styles.railSourceRole}>{source.role}</span>
                   </span>
                 </li>

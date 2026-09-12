@@ -1783,6 +1783,12 @@ function asksAboutNow(body) {
   return /\b(right now|now|currently|current|at the moment|outside)\b/i.test(question);
 }
 
+/** Whether this question asked to *see* something — the stub's model of the satellite router. */
+function asksAboutSatellite(body) {
+  const question = typeof body?.question === "string" ? body.question : "";
+  return /\b(satellite|imagery|observational)\b/i.test(question);
+}
+
 function hasAPlace(body) {
   if (typeof body?.location === "string" && body.location.trim() !== "") return true;
   const question = typeof body?.question === "string" ? body.question : "";
@@ -1997,6 +2003,123 @@ function nowAndAheadEnvelope(requestId, question) {
       citations: [],
       attributions: [CURRENT_ATTRIBUTION, { ...ATTRIBUTION, period: PERIOD }],
       data_classes: ["current", "forecast", "ai_interpretation"],
+    },
+  };
+}
+
+/**
+ * One retrieved satellite observation, in the shape `weather_satellite` returns.
+ *
+ * **The image is a data URI here, and in production it is the provider's own URL.** The capture
+ * harness answers every request itself so a photograph of a screen does not depend on a third
+ * party being up — pointing this at NASA would put a live fetch inside a deterministic capture.
+ * Everything else is the real shape: the provider, the product, the instrument, the UTC day, the
+ * box, the acknowledgement NASA asks for, and the sentence saying nothing interpreted it.
+ */
+const SATELLITE_IMAGE =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640">
+       <rect width="640" height="640" fill="#0f1a24"/>
+       <g fill="#dfe8f0" opacity="0.82">
+         <ellipse cx="180" cy="150" rx="120" ry="60"/><ellipse cx="300" cy="120" rx="90" ry="44"/>
+         <ellipse cx="470" cy="230" rx="140" ry="70"/><ellipse cx="250" cy="400" rx="110" ry="55"/>
+         <ellipse cx="430" cy="470" rx="150" ry="72"/><ellipse cx="120" cy="520" rx="95" ry="48"/>
+       </g>
+       <g fill="#31502f" opacity="0.9">
+         <rect x="0" y="300" width="120" height="80" rx="24"/>
+         <rect x="520" y="60" width="120" height="90" rx="28"/>
+       </g>
+     </svg>`,
+  );
+
+const SATELLITE_ATTRIBUTION =
+  "We acknowledge the use of imagery provided by services from NASA's Global Imagery Browse " +
+  "Services (GIBS), part of NASA's Earth Observing System Data and Information System (EOSDIS).";
+
+const SATELLITE_ATTRIBUTION_BLOCK = {
+  ...ATTRIBUTION,
+  // The satellite source, not the weather one. `weather_satellite` builds its attribution from the
+  // observation it retrieved, so the two agree by construction in production; a stub that spread the
+  // weather provider's id over it made the rail unable to match the row to its observation, which is
+  // exactly the defect a capture is for.
+  provider: "nasa-gibs",
+  data_class: "satellite_observation",
+  period: null,
+  timestamp_utc: "2026-09-12T07:59:23Z",
+};
+
+const SATELLITE_OBSERVATION = {
+  data_class: "satellite_observation",
+  location: BERLIN,
+  coverage: { south: 50.52, west: 11.405, north: 54.52, east: 15.405 },
+  provider: "nasa-gibs",
+  product: "Corrected Reflectance (True Colour)",
+  instrument: "VIIRS on NOAA-20",
+  observed_date: "2026-09-11",
+  retrieved_at: "2026-09-12T07:59:23Z",
+  image_url: SATELLITE_IMAGE,
+  image_media_type: "image/svg+xml",
+  image_bytes: 91533,
+  attribution: SATELLITE_ATTRIBUTION,
+  source_url: "https://nasa-gibs.github.io/gibs-api-docs/",
+  coverage_note:
+    "Covers roughly 4° of latitude around Berlin, Germany — the region, not the place.",
+  freshness_note:
+    "A daily composite for 2026-09-11 (UTC). It is not a live view, and a true-colour composite shows nothing on the night side.",
+  interpretation_note:
+    "Weathra retrieves and displays this imagery. It does not interpret it: no image analysis was performed, and nothing in this answer is derived from the picture.",
+};
+
+/** The briefing a run that read imagery and the window ahead writes, in streamed pieces. */
+const SATELLITE_ANSWER_PIECES = [
+  "The latest satellite imagery available for Berlin is NASA's daily composite for ",
+  "11 September, retrieved alongside this week's forecast. ",
+  "The forecast itself puts daily highs at 24.5 °C and lows at 11.2 °C, ",
+  "with 6.4 mm of rain across the window. ",
+  "The imagery is observational context and has not been interpreted.",
+];
+
+const SATELLITE_ANSWER_PROSE = SATELLITE_ANSWER_PIECES.join("");
+
+/**
+ * The envelope a run that asked to see imagery returns: the observation, plus the window ahead.
+ *
+ * Built from the forecast answer for the same reason `nowAndAheadEnvelope` is — the resolution, the
+ * uncertainty and the run record are shared and must not drift between them.
+ */
+function satelliteEnvelope(requestId, question) {
+  const base = answerEnvelope(requestId, question);
+  const forecastFindings = (base.findings ?? []).filter(
+    (finding) => finding.data_class === "forecast",
+  );
+
+  return {
+    ...base,
+    answer_prose: SATELLITE_ANSWER_PROSE,
+    findings: forecastFindings,
+    satellite: [SATELLITE_OBSERVATION],
+    attribution: [SATELLITE_ATTRIBUTION_BLOCK, { ...ATTRIBUTION, period: PERIOD }],
+    resolved: {
+      ...base.resolved,
+      statement: "Berlin, Germany, for this week, from your saved default location.",
+    },
+    grounding: { ...base.grounding, figures_checked: 4 },
+    evidence: {
+      ...base.evidence,
+      agents: [
+        { sequence: 1, agent: "supervisor", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 110, reason: "Planned imagery beside the window ahead." },
+        { sequence: 2, agent: "satellite", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 640, reason: "Retrieved the latest available imagery." },
+        { sequence: 3, agent: "forecast", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 840, reason: "Retrieved the window." },
+        { sequence: 4, agent: "synthesis", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 900 },
+      ],
+      tool_calls: [
+        { sequence: 1, tool: "weather_satellite", agent: "satellite", arguments: { latitude: 52.52, longitude: 13.405 }, started_at: RETRIEVED_AT, duration_ms: 640 },
+        { sequence: 2, tool: "weather_forecast", agent: "forecast", arguments: { latitude: 52.52, longitude: 13.405, days: 7 }, started_at: RETRIEVED_AT, duration_ms: 840 },
+      ],
+      citations: [],
+      attributions: [SATELLITE_ATTRIBUTION_BLOCK, { ...ATTRIBUTION, period: PERIOD }],
+      data_classes: ["satellite_observation", "forecast", "ai_interpretation"],
     },
   };
 }
@@ -2328,24 +2451,32 @@ const server = createServer((request, response) => {
        * Streaming one fixed plan for both would photograph a product that retrieves the present
        * unconditionally, which is the behaviour the capability was explicitly not to have.
        */
-      const wantsNow = asksAboutNow(body);
-      const plan = wantsNow
+      const wantsImagery = asksAboutSatellite(body);
+      const wantsNow = !wantsImagery && asksAboutNow(body);
+      const plan = wantsImagery
         ? [
-            ["current", "weather_current"],
+            ["satellite", "weather_satellite"],
             ["forecast", "weather_forecast"],
           ]
-        : [
-            ["forecast", "weather_forecast"],
-            ["historical", "weather_history"],
-            ["analytics", "weather_baseline_comparison"],
-          ];
+        : wantsNow
+          ? [
+              ["current", "weather_current"],
+              ["forecast", "weather_forecast"],
+            ]
+          : [
+              ["forecast", "weather_forecast"],
+              ["historical", "weather_history"],
+              ["analytics", "weather_baseline_comparison"],
+            ];
 
       frame("routing", {
         capabilities: plan.map(([agent]) => agent),
         source: "model",
-        reason: wantsNow
-          ? "The question asks what it is like now and what is coming."
-          : "The question asks for this week against the record.",
+        reason: wantsImagery
+          ? "The question asks to see observational imagery alongside the window ahead."
+          : wantsNow
+            ? "The question asks what it is like now and what is coming."
+            : "The question asks for this week against the record.",
       });
       await pause();
 
@@ -2369,7 +2500,12 @@ const server = createServer((request, response) => {
         }
 
         frame("agent_start", { agent: "synthesis", reason: null });
-        for (const piece of wantsNow ? NOW_ANSWER_PIECES : ANSWER_PIECES) {
+        const pieces = wantsImagery
+          ? SATELLITE_ANSWER_PIECES
+          : wantsNow
+            ? NOW_ANSWER_PIECES
+            : ANSWER_PIECES;
+        for (const piece of pieces) {
           frame("answer_delta", { text: piece });
           await pause();
         }
@@ -2383,9 +2519,11 @@ const server = createServer((request, response) => {
       frame("final", {
         answer: (
           hasAPlace(body)
-            ? wantsNow
-              ? nowAndAheadEnvelope
-              : answerEnvelope
+            ? wantsImagery
+              ? satelliteEnvelope
+              : wantsNow
+                ? nowAndAheadEnvelope
+                : answerEnvelope
             : clarificationEnvelope
         )(requestId, typeof body.question === "string" ? body.question : ""),
         evidence_id: STREAM_EVIDENCE_ID,
