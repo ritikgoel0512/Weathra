@@ -735,6 +735,21 @@ export function Analyst(): ReactNode {
             told nothing about memory here rather than being told a guess, and it omits the line.
           */
           memory={null}
+          /*
+            **The durable half of `specs/memory`, read from the one place that stores it.**
+
+            The rail's "Preferences in use" card lists what this account actually saved, and this is
+            the same `PreferenceView` the composer's FOCUS and units already read — one request, one
+            answer, no second opinion about what somebody's default location is. The card shows only
+            the fields the response stamps `chosen`; the assumption/choice distinction is the
+            backend's and is not re-decided here.
+          */
+          preferences={preferred ?? null}
+          /*
+            Whether earlier turns are available to the next run — the *thread*, which is not memory
+            and is not labelled as memory. The backend opened it or it did not.
+          */
+          threadOpen={threadId !== null}
         />
       </div>
     </section>

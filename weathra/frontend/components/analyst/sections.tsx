@@ -47,7 +47,9 @@ import {
   confidenceOf,
   type FindingGroup,
   findingGroups,
+  groundingLine,
   GROUP_TITLES,
+  headlineFindings,
   findingValue,
   horizonHoursOf,
   type RunStep,
@@ -349,6 +351,13 @@ export function AnswerView({
             density="compact"
             prominence="lead"
             placement="detail"
+            /*
+              The artifact's short grounding line beside the badge. Its own reads "Grounding
+              analysis via Weathra MCP…", which names an implementation; this names the subject —
+              the place and the window the figures below apply to, as the run resolved them. Absent
+              on a run that resolved neither, rather than shown empty.
+            */
+            eyebrow={groundingLine(resolved) ?? undefined}
             footer={
               grounding.verified ? null : (
                 <p className={styles.note}>
@@ -411,8 +420,13 @@ export function AnswerView({
               attribution={attributionOf(group.attribution)}
               headingLevel={3}
             >
+              {/*
+                Ranked, so the statistic the answer turns on leads the panel rather than whichever
+                one the analytics tool happened to report first. Nothing is dropped: a computed
+                group is short by construction, and every figure it holds is here.
+              */}
               <ul className={styles.findings}>
-                {group.findings.map((finding, index) => (
+                {headlineFindings(group.findings).map((finding, index) => (
                   <FindingRow key={`${finding.label}-${index}`} finding={finding} />
                 ))}
               </ul>
@@ -516,6 +530,16 @@ export function AnswerView({
  * settled — a method note per row turned this region into the log the customer-level review of
  * 2026-09-11 objected to, and the methods are still one press away on that rule.
  */
+/**
+ * How many figures a panel leads with before the rest go behind a press.
+ *
+ * Four, because a real forecast retrieval produces around fifteen findings and the customer-level
+ * review of 2026-09-12 asked for "2–4 real high-value values" with strong figure hierarchy. Nothing
+ * is hidden: the remainder are in the same panel, under a summary that counts them, and every one
+ * carries the same attribution as the four above it.
+ */
+const HEADLINE_FIGURES = 4;
+
 function FigurePanel({
   title,
   groups,
@@ -526,6 +550,18 @@ function FigurePanel({
   const first = groups[0];
   if (first === undefined) return null;
 
+  /*
+   * One ordered list across the panel's groups, not one list per group.
+   *
+   * A panel holds one data class; it holds more than one group only when the same class arrived
+   * from two sources, and a reader looking for the temperature does not care which of the two
+   * carried it. `headlineFindings` ranks by what the measure is — see its note — and the
+   * attribution each figure rests on is the panel's own footer.
+   */
+  const ordered = headlineFindings(groups.flatMap((group) => [...group.findings]));
+  const lead = ordered.slice(0, HEADLINE_FIGURES);
+  const rest = ordered.slice(HEADLINE_FIGURES);
+
   return (
     <ProvenanceSection
       dataClass={first.dataClass}
@@ -533,19 +569,43 @@ function FigurePanel({
       attribution={attributionOf(first.attribution)}
       headingLevel={3}
     >
-      <dl className={styles.facts}>
-        {groups.flatMap((group) =>
-          group.findings.map((finding, index) => (
-            <div className={styles.factRow} key={`${group.key}-${finding.label}-${index}`}>
-              <dt className={styles.factTerm}>{finding.label}</dt>
-              <dd className={styles.factValue} data-reported={findingValue(finding) ? "true" : "false"}>
-                {findingValue(finding) ?? "Not reported"}
-              </dd>
-            </div>
-          )),
-        )}
-      </dl>
+      <FigureList findings={lead} />
+      {rest.length > 0 ? (
+        <details className={styles.moreFigures}>
+          <summary className={styles.moreFiguresSummary}>
+            {rest.length} more {rest.length === 1 ? "figure" : "figures"}
+          </summary>
+          <FigureList findings={rest} />
+        </details>
+      ) : null}
     </ProvenanceSection>
+  );
+}
+
+/**
+ * A run's figures as figures: the label small above, the value large beneath it.
+ *
+ * The panels were a label-left/value-right list at meta size, which reads as a settings table. The
+ * artifact sets its OBSERVED DATA and FORECAST VECTOR blocks the other way round — a quiet label
+ * over a prominent number — and that is the hierarchy somebody scanning an answer actually uses.
+ * An unreported finding keeps its row and says so in body type, because the gap is a fact about
+ * the run and setting it in the figure face would make an absence look like a reading.
+ */
+function FigureList({ findings }: { readonly findings: readonly Finding[] }): ReactNode {
+  return (
+    <dl className={styles.facts}>
+      {findings.map((finding, index) => {
+        const value = findingValue(finding);
+        return (
+          <div className={styles.factRow} key={`${finding.label}-${index}`}>
+            <dt className={styles.factTerm}>{finding.label}</dt>
+            <dd className={styles.factValue} data-reported={value ? "true" : "false"}>
+              {value ?? "Not reported"}
+            </dd>
+          </div>
+        );
+      })}
+    </dl>
   );
 }
 

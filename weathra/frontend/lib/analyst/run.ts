@@ -236,7 +236,15 @@ export const GROUP_TITLES: Readonly<Record<DataClassName, string>> = {
   observed: "Observed figures",
   forecast: "Forecast figures",
   historical: "Historical figures",
-  analytics: "Computed figures",
+  /*
+   * The artifact's highlighted box is headed AGENT INTERPRETATION and holds a causal reading of an
+   * atmosphere Weathra does not model. What sits in that position here is the arithmetic — the
+   * statistics the answer actually turns on — so it is headed for what it is: the analyst's own
+   * reading of the figures above it, computed rather than written. The ANALYTICS badge beside the
+   * heading still says which class produced it, so the heading names the role and the badge names
+   * the provenance, which is the division every other region on this screen uses.
+   */
+  analytics: "Analyst interpretation",
   interpretation: "AI interpretation",
 };
 
@@ -304,4 +312,194 @@ export function confidenceOf(uncertainty: UncertaintyStatement | null | undefine
 /** How far into the horizon the band applies, when the backend measured it. */
 export function horizonHoursOf(uncertainty: UncertaintyStatement | null | undefined): number | null {
   return numberField(uncertainty?.horizon?.[0]?.hours_ahead);
+}
+
+/* ------------------------------------------------------- the answer, composed */
+
+/**
+ * The order the answer's figure panels put their findings in.
+ *
+ * A real forecast retrieval carries fifteen or so findings — the extremes and mean of the daily
+ * maxima and minima, the window's precipitation total and its per-day series, the wet-day count,
+ * the probability, wind speed, gust and sector, humidity and pressure. All of them are true and
+ * all of them are the run's, and a panel that prints all fifteen is a table rather than a briefing:
+ * the customer-level review of 2026-09-12 asked for two to four high-value figures with the rest
+ * one press away.
+ *
+ * So this is a *reading order*, not a filter. Nothing is dropped — `headlineFindings` returns the
+ * whole list, ranked — and the panel decides how many it leads with. The rank is by what the
+ * measure is, because that is the only thing about a finding that is stable across runs: a
+ * temperature is the figure somebody asked a weather question to learn, and a pressure reading is
+ * not, whatever order the provider happened to list them in.
+ */
+const MEASURE_RANK: readonly (readonly [RegExp, number])[] = [
+  [/\btemperature\b/i, 0],
+  [/\b(precipitation|rain|snow)\b/i, 1],
+  [/\bwind|gust\b/i, 2],
+  [/\bhumidity\b/i, 3],
+  [/\bcondition|cloud|uv\b/i, 4],
+  [/\bpressure\b/i, 5],
+];
+
+function measureRank(label: string): number {
+  for (const [pattern, rank] of MEASURE_RANK) if (pattern.test(label)) return rank;
+  return MEASURE_RANK.length;
+}
+
+/**
+ * A group's findings, most useful first, with the ones carrying no value last.
+ *
+ * "Unavailable" is a fact the answer must keep — `specs/safety-grounding` requires a gap to be
+ * stated rather than dropped — and it is not what a panel leads with. Sorting is stable within a
+ * rank, so findings the backend listed together stay together.
+ */
+export function headlineFindings(findings: readonly Finding[]): readonly Finding[] {
+  return [...findings]
+    .map((finding, index) => ({ finding, index }))
+    .sort((left, right) => {
+      const reported =
+        Number(findingValue(right.finding) !== null) - Number(findingValue(left.finding) !== null);
+      if (reported !== 0) return reported;
+      const rank = measureRank(left.finding.label) - measureRank(right.finding.label);
+      return rank !== 0 ? rank : left.index - right.index;
+    })
+    .map((entry) => entry.finding);
+}
+
+/**
+ * Where the place this answer is about came from, in the backend's own five values.
+ *
+ * Phrased rather than printed: the rail's Analyst context said "(from the preferences)" and, on a
+ * run that resolved nowhere, "(from the none)" — the internal name of a rung of the resolution
+ * ladder, offered to a customer as provenance.
+ */
+export const LOCATION_SOURCE_PHRASES: Readonly<Record<string, string>> = {
+  request: "named in your question",
+  focus: "this conversation's focus",
+  thread: "established earlier in this conversation",
+  preferences: "your saved default",
+};
+
+/**
+ * The one line under the AI INTERPRETATION badge: what this answer is about.
+ *
+ * `02-ai-weather-analyst.png` sets a short grounding line beside that badge — its own reads
+ * "Grounding analysis via Weathra MCP…", which names an implementation rather than a subject. What
+ * a reader needs there is the place the figures apply to and how Weathra came to use it, both of
+ * which are the run's own resolution.
+ *
+ * **Deliberately carries no figure.** It sits inside the interpretation region, and the rule that
+ * region exists to enforce is that nothing measured is stated there without its class and its
+ * source. The window, the units and the retrieval time are the panels' attributions and the rail's
+ * Analyst context, which is where they carry all four fields. Null when the run resolved no place,
+ * because a grounding line that grounds nothing is worse than none.
+ */
+export function groundingLine(resolved: AnswerEnvelope["resolved"]): string | null {
+  const place = resolved?.locations?.[0]?.display_name?.trim() || null;
+  if (place === null) return null;
+  const from = LOCATION_SOURCE_PHRASES[resolved?.location_source ?? ""] ?? null;
+  return from === null ? place : `${place} · ${from}`;
+}
+
+/**
+ * How much of what the run reported actually carries a figure.
+ *
+ * The artifact prints "SYNTHESIS CONFIDENCE 98.2%", which no endpoint produces. This is the one
+ * proportion on this screen that is arithmetic rather than invention: findings with a value, over
+ * findings reported. A run that retrieved nothing has nothing to measure and says so by returning
+ * a total of zero rather than a full bar.
+ */
+export function dataCoverageOf(envelope: AnswerEnvelope | null): {
+  readonly reported: number;
+  readonly total: number;
+} {
+  const findings = envelope?.findings ?? [];
+  return {
+    reported: findings.filter((finding) => findingValue(finding) !== null).length,
+    total: findings.length,
+  };
+}
+
+/* ------------------------------------------------------------------ the sources */
+
+/**
+ * What a provider is called in front of a customer.
+ *
+ * A provider id is a configuration value — `open-meteo`, `open_meteo_archive` — and the rail was
+ * printing it twice over. These are the same providers named the way their own documentation names
+ * them. An id with no entry is shown as it is rather than prettified into something that might not
+ * be the provider's name: guessing at a company's capitalisation is a small fabrication, and this
+ * screen has a rule against those.
+ */
+export const PROVIDER_LABELS: Readonly<Record<string, string>> = {
+  "open-meteo": "Open-Meteo",
+  open_meteo: "Open-Meteo",
+  "open-meteo-archive": "Open-Meteo Archive",
+  open_meteo_archive: "Open-Meteo Archive",
+};
+
+/** A provider's customer-facing name, or its own id when this build does not know one. */
+export function providerLabel(provider: string): string {
+  return PROVIDER_LABELS[provider] ?? provider;
+}
+
+/* ------------------------------------------------------------ the agents, again */
+
+/** One agent the run actually used, with how its turn ended. */
+export interface RunAgent {
+  readonly name: string;
+  readonly label: string;
+  /** The backend's own step status, or null while the run is still in flight. */
+  readonly status: "succeeded" | "failed" | "skipped" | null;
+}
+
+/** What each outcome is called in the rail. Never a tick over a status nobody sent. */
+export const AGENT_OUTCOME_LABELS: Readonly<Record<string, string>> = {
+  succeeded: "Used",
+  failed: "Failed",
+  skipped: "Skipped",
+};
+
+function outcomeOf(value: unknown): RunAgent["status"] {
+  return value === "succeeded" || value === "failed" || value === "skipped" ? value : null;
+}
+
+/**
+ * The agents this run used, and how each one ended.
+ *
+ * The artifact's Agent Status panel lists "Neural Agent v4.8" against a compute load, which is
+ * fiction twice over. What Weathra genuinely records is an `AgentStep` per node — the agent, its
+ * status and how long it took — so the rail can say *Forecast agent · Used* and *Historical agent ·
+ * Skipped* without inventing a thing.
+ *
+ * The completed record is preferred over the stream because only the record carries the outcome; a
+ * run still in flight has named agents and no statuses yet, and those are listed with no outcome
+ * rather than with an assumed one. An agent the plan never routed to appears in neither, and is
+ * therefore absent rather than reported as "not needed" — the run has no record of declining it.
+ */
+export function runAgentsFrom(
+  events: readonly AgentEvent[],
+  envelope: AnswerEnvelope | null,
+): readonly RunAgent[] {
+  const recorded = envelope?.evidence?.agents ?? [];
+  if (recorded.length > 0) {
+    const byAgent = new Map<string, RunAgent>();
+    for (const step of recorded) {
+      const name = textField(step.agent);
+      if (name === null) continue;
+      byAgent.set(name, {
+        name,
+        label: agentLabel(name),
+        status: outcomeOf(step.status),
+      });
+    }
+    return [...byAgent.values()];
+  }
+
+  const seen = new Set<string>();
+  for (const event of events) {
+    const agent = (event as { data?: { agent?: unknown } }).data?.agent;
+    if (typeof agent === "string" && agent !== "") seen.add(agent);
+  }
+  return [...seen].map((name) => ({ name, label: agentLabel(name), status: null }));
 }

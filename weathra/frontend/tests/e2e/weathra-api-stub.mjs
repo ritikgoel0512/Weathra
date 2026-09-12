@@ -380,7 +380,16 @@ const EVIDENCE_RECORD = {
     { sequence: 2, agent: "forecast", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 840, reason: "Retrieved the window." },
     { sequence: 3, agent: "historical", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 620, reason: "Loaded the same calendar week from the archive." },
     { sequence: 4, agent: "analytics", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 310, reason: "Computed the mean and the difference from the baseline." },
-    { sequence: 5, agent: "rag", status: "skipped", started_at: RETRIEVED_AT, duration_ms: 40, reason: "The question needed no explanatory context beyond the retrieved figures." },
+    /*
+     * Succeeded, because this record carries a citation.
+     *
+     * It was `skipped` with a reason saying no context was needed, beside a `citations` list
+     * holding the passage the knowledge agent retrieved — a record contradicting itself. The
+     * Analyst's rail reads both (the agent's outcome in Agent status, the passage in Active data
+     * sources), so the contradiction was photographable: a source listed as used beside the agent
+     * that uses it marked as never run.
+     */
+    { sequence: 5, agent: "rag", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 140, reason: "Retrieved the passage on how forecast confidence falls with horizon distance." },
     { sequence: 6, agent: "synthesis", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 900 },
   ],
   tool_calls: [
@@ -1693,9 +1702,12 @@ const STREAM_EVIDENCE_ID = "run-e2e-1";
  * that each happened to be a whole sentence would not show whether the accumulation is right.
  */
 const ANSWER_PIECES = [
-  "This week's mean of 17.9 °C ",
+  "Berlin is running warmer than usual this week: the mean of 17.9 °C ",
   "sits above the four-year baseline for the same week, ",
-  "by the margin the archive comparison reports.",
+  "by 1.5 °C. Daily highs reach 24.5 °C and lows hold at 11.2 °C, ",
+  "so the warmth is steady rather than a single spike. ",
+  "6.4 mm of rain is forecast across the window, and confidence is high ",
+  "through the next 6 hours and lower further out.",
 ];
 
 const STREAM_ANSWER_PROSE = ANSWER_PIECES.join("");
@@ -1771,26 +1783,62 @@ function answerEnvelope(requestId, question) {
     answer_prose: STREAM_ANSWER_PROSE,
     prose_data_class: "ai_interpretation",
     /*
-     * The figures the answer opens out into.
+     * The figures the answer opens out into, in the shape a real run of this question produces.
      *
-     * It was an empty list, so the Analyst's answer rendered its prose over three panels reading
-     * "Not reported" and "This run retrieved no observation" — the shape of the screen with none of
-     * its content, which is what `02-ai-weather-analyst.png` fills with an OBSERVED DATA and a
-     * FORECAST VECTOR block. One retrieved observation, one retrieved forecast figure and one
-     * computed statistic, so the answer carries all three tiers the screen separates.
+     * It was three findings — one "current" reading, one forecast figure and one computed mean —
+     * and the first of those was the harness modelling a capability the graph does not have:
+     * `agents/plan.py` closes the capability set at forecast, historical, analytics and rag, and
+     * none of them calls `weather_current`. A stub that answers with an observation the backend
+     * cannot retrieve makes every capture of the Observed panel a picture of something production
+     * never shows, which is the fabrication this whole pass exists to keep out.
+     *
+     * What a run of this question genuinely produces: the forecast tool's own analysis of the
+     * window — `weather/forecast_service.py` computes the extremes, the precipitation total, the
+     * wind and the hourly humidity and pressure, each as a `StatisticResult` with its method — and
+     * the analytics node's comparison against the archive baseline. Six forecast figures and three
+     * computed ones, which is also what makes the panels' four-figure headline and their "2 more
+     * figures" disclosure worth photographing.
      */
     findings: [
       {
-        label: "Relative humidity now",
-        value: 68,
-        unit: "%",
-        data_class: "current",
-        attribution: { ...ATTRIBUTION, data_class: "current", period: PERIOD },
-      },
-      {
-        label: "Highest temperature this week",
+        label: "Highest daily high temperature",
         value: 24.5,
         unit: "°C",
+        data_class: "forecast",
+        attribution: { ...ATTRIBUTION, period: PERIOD },
+      },
+      {
+        label: "Lowest daily low temperature",
+        value: 11.2,
+        unit: "°C",
+        data_class: "forecast",
+        attribution: { ...ATTRIBUTION, period: PERIOD },
+      },
+      {
+        label: "Total precipitation",
+        value: 6.4,
+        unit: "mm",
+        data_class: "forecast",
+        attribution: { ...ATTRIBUTION, period: PERIOD },
+      },
+      {
+        label: "Highest peak wind gust",
+        value: 38,
+        unit: "km/h",
+        data_class: "forecast",
+        attribution: { ...ATTRIBUTION, period: PERIOD },
+      },
+      {
+        label: "Average relative humidity",
+        value: 71,
+        unit: "%",
+        data_class: "forecast",
+        attribution: { ...ATTRIBUTION, period: PERIOD },
+      },
+      {
+        label: "Average pressure",
+        value: 1014,
+        unit: "hPa",
         data_class: "forecast",
         attribution: { ...ATTRIBUTION, period: PERIOD },
       },
@@ -1804,10 +1852,33 @@ function answerEnvelope(requestId, question) {
         supporting: statistic("mean", "temperature", 17.9, "°C", "arithmetic mean of usable points"),
         attribution: { ...ATTRIBUTION, data_class: "computed_statistic", period: PERIOD },
       },
+      {
+        label: "Four-year mean for the same week",
+        value: 16.4,
+        unit: "°C",
+        data_class: "computed_statistic",
+        method: "arithmetic mean of the same calendar week across four archive years",
+        points_used: 28,
+        attribution: { ...ATTRIBUTION, data_class: "computed_statistic", period: PERIOD },
+      },
+      {
+        label: "Difference from the baseline",
+        value: 1.5,
+        unit: "°C",
+        data_class: "computed_statistic",
+        method: "the value being compared minus the baseline",
+        points_used: 76,
+        attribution: { ...ATTRIBUTION, data_class: "computed_statistic", period: PERIOD },
+      },
     ],
+    /*
+     * What the answer cites, by role. The archive row is here because the historical agent read it;
+     * the computed figures rest on both and are credited to Weathra's analytics in the rail rather
+     * than to a provider that did not do the arithmetic.
+     */
     attribution: [
-      { ...ATTRIBUTION, data_class: "current", period: PERIOD },
       { ...ATTRIBUTION, period: PERIOD },
+      { ...ATTRIBUTION, data_class: "historical_observation", period: PERIOD },
     ],
     resolved: {
       locations: [BERLIN],
@@ -1820,7 +1891,8 @@ function answerEnvelope(requestId, question) {
     grounding: {
       verified: true,
       method: "figures extracted from the prose and matched within 0.05",
-      figures_checked: 1,
+      // The six figures the prose states: 17.9, 1.5, 24.5, 11.2, 6.4 and the 6-hour horizon.
+      figures_checked: 6,
       ungrounded_figures: [],
       prose_discarded: false,
     },

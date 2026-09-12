@@ -10,7 +10,17 @@ import { describe, expect, it } from "vitest";
 import type { AgentEvent } from "@/hooks/use-agent-stream";
 import type { AnswerEnvelope, EvidenceAttribution, Finding } from "@/lib/api/schema";
 
-import { agentLabel, findingGroups, findingValue, runStepsFrom } from "./run";
+import {
+  agentLabel,
+  dataCoverageOf,
+  findingGroups,
+  findingValue,
+  groundingLine,
+  headlineFindings,
+  providerLabel,
+  runAgentsFrom,
+  runStepsFrom,
+} from "./run";
 
 let sequence = 0;
 function event(type: AgentEvent["type"], data: Record<string, unknown>): AgentEvent {
@@ -206,5 +216,142 @@ describe("the answer's findings", () => {
     expect(findingValue(finding({ value: 20, unit: "°C" }))).toBe("20 °C");
     expect(findingValue(finding({ value: null, unavailable_reason: "not supplied" }))).toBeNull();
     expect(findingValue(finding({ value: null, text_value: "north-west" }))).toBe("north-west");
+  });
+});
+
+/* -------------------------------------------- task 34.34: the answer, composed */
+
+describe("the order a figure panel reads in", () => {
+  it("leads with the measures a weather question is asked to learn", () => {
+    const ranked = headlineFindings([
+      finding({ label: "Average pressure", value: 1014, unit: "hPa" }),
+      finding({ label: "Average relative humidity", value: 71, unit: "%" }),
+      finding({ label: "Highest peak wind gust", value: 38, unit: "km/h" }),
+      finding({ label: "Total precipitation", value: 6.4, unit: "mm" }),
+      finding({ label: "Highest daily high temperature", value: 24.5 }),
+    ]);
+
+    expect(ranked.map((entry) => entry.label)).toEqual([
+      "Highest daily high temperature",
+      "Total precipitation",
+      "Highest peak wind gust",
+      "Average relative humidity",
+      "Average pressure",
+    ]);
+  });
+
+  it("drops nothing: an unreported figure is last, not absent", () => {
+    const ranked = headlineFindings([
+      finding({ label: "Peak UV index", value: null, unavailable_reason: "not supplied" }),
+      finding({ label: "Total precipitation", value: 6.4, unit: "mm" }),
+    ]);
+
+    expect(ranked.map((entry) => entry.label)).toEqual(["Total precipitation", "Peak UV index"]);
+  });
+
+  it("keeps the backend's order between figures of equal rank", () => {
+    const ranked = headlineFindings([
+      finding({ label: "Highest daily high temperature", value: 24.5 }),
+      finding({ label: "Lowest daily low temperature", value: 11.2 }),
+    ]);
+
+    expect(ranked.map((entry) => entry.label)).toEqual([
+      "Highest daily high temperature",
+      "Lowest daily low temperature",
+    ]);
+  });
+});
+
+describe("the grounding line under the interpretation badge", () => {
+  it("names the place and how the run came to use it", () => {
+    expect(
+      groundingLine({
+        locations: [{ display_name: "Berlin, Germany" }],
+        location_source: "preferences",
+      } as AnswerEnvelope["resolved"]),
+    ).toBe("Berlin, Germany · your saved default");
+  });
+
+  it("carries no figure: the window and the units belong to the panels' attribution", () => {
+    const line = groundingLine({
+      locations: [{ display_name: "Berlin, Germany" }],
+      location_source: "request",
+      period: { start_local: "2026-09-04T00:00:00+02:00", end_local: "2026-09-07T00:00:00+02:00" },
+    } as AnswerEnvelope["resolved"]);
+
+    expect(line).toBe("Berlin, Germany · named in your question");
+    expect(line).not.toMatch(/\d/);
+  });
+
+  it("says nothing at all when the run resolved no place", () => {
+    expect(groundingLine({ locations: [], location_source: "none" } as AnswerEnvelope["resolved"])).toBeNull();
+    expect(groundingLine(null)).toBeNull();
+  });
+});
+
+describe("how much of the run carries a figure", () => {
+  it("counts the findings that reported a value, over the findings reported", () => {
+    expect(
+      dataCoverageOf(
+        envelope([finding(), finding({ label: "Peak UV index", value: null, unavailable_reason: "x" })]),
+      ),
+    ).toEqual({ reported: 1, total: 2 });
+  });
+
+  it("measures nothing on a run that reported nothing, rather than scoring it zero", () => {
+    expect(dataCoverageOf(envelope([]))).toEqual({ reported: 0, total: 0 });
+    expect(dataCoverageOf(null)).toEqual({ reported: 0, total: 0 });
+  });
+});
+
+describe("a provider's name in front of a customer", () => {
+  it("uses the provider's own name where this build knows it", () => {
+    expect(providerLabel("open-meteo")).toBe("Open-Meteo");
+    expect(providerLabel("open-meteo-archive")).toBe("Open-Meteo Archive");
+  });
+
+  it("shows an unknown id as it is rather than prettifying it into a name nobody uses", () => {
+    expect(providerLabel("stub-provider")).toBe("stub-provider");
+  });
+});
+
+describe("the agents a run used", () => {
+  it("reads each one's outcome from the stored record", () => {
+    const agents = runAgentsFrom(
+      [],
+      {
+        evidence: {
+          agents: [
+            { agent: "forecast", status: "succeeded" },
+            { agent: "historical", status: "skipped" },
+          ],
+        },
+      } as unknown as AnswerEnvelope,
+    );
+
+    expect(agents).toEqual([
+      { name: "forecast", label: "Forecast agent", status: "succeeded" },
+      { name: "historical", label: "Historical agent", status: "skipped" },
+    ]);
+  });
+
+  it("names the agents a run in flight has reached, with no outcome it has not reported", () => {
+    const agents = runAgentsFrom(run(), null);
+
+    expect(agents.map((agent) => agent.label)).toEqual([
+      "Forecast agent",
+      "Analytics agent",
+      "Synthesis",
+    ]);
+    expect(agents.every((agent) => agent.status === null)).toBe(true);
+  });
+
+  it("invents no row for an agent the run never routed to", () => {
+    const agents = runAgentsFrom(
+      [],
+      { evidence: { agents: [{ agent: "forecast", status: "succeeded" }] } } as unknown as AnswerEnvelope,
+    );
+
+    expect(agents.map((agent) => agent.name)).toEqual(["forecast"]);
   });
 });

@@ -268,26 +268,41 @@
   min-width: 0;
 }
 
+/*
+ * The highlighted panel's figures, set the same way the two panels above it are set: a quiet
+ * uppercase label over a prominent reading. Two to a row, because the arithmetic an answer turns on
+ * is a handful of statistics rather than a list.
+ */
 .findings {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  display: grid;
+  /*
+   * Wider cells than the two panels above, because each computed figure carries its own method
+   * disclosure under it. At the narrower step "Computed by Weathra · View analysis" wrapped its
+   * marker onto a line of its own, leaving a stray triangle under every figure.
+   */
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--space-3);
   list-style: none;
   margin: 0;
   padding: 0;
+  min-width: 0;
 }
 
 .finding {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 2px;
   min-width: 0;
 }
 
 .findingLabel {
-  font-size: var(--type-meta-size);
-  line-height: var(--type-meta-line);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
   color: var(--color-text-muted);
+  overflow-wrap: anywhere;
 }
 
 .findingValue {
@@ -955,42 +970,84 @@
   color: var(--color-text-secondary);
 }
 
+/*
+ * **The figure panels, as figures.**
+ *
+ * These were a label-left / value-right list — the geometry of a settings table, which is what the
+ * customer-level review of 2026-09-12 objected to: "use strong figure hierarchy, label small,
+ * number prominent". `02-ai-weather-analyst.png` sets its OBSERVED DATA and FORECAST VECTOR blocks
+ * as a quiet uppercase label over a prominent reading, and that is the order somebody scanning an
+ * answer uses. Two per row so four figures occupy two lines, folding to one column where the
+ * column is too narrow for a number and its unit.
+ */
 .facts {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: var(--space-3);
   margin: 0;
+  min-width: 0;
 }
 
 .factRow {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-3);
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
 }
 
 .factTerm {
-  font-size: var(--type-meta-size);
-  line-height: var(--type-meta-line);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
   color: var(--color-text-muted);
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .factValue {
+  margin: 0;
   font-family: var(--family-display);
-  font-size: var(--type-card-size);
-  line-height: var(--type-card-line);
-  font-weight: var(--type-card-weight);
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
   color: var(--color-text-primary);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .factValue[data-reported="false"] {
   font-family: var(--family-body);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
   font-weight: var(--type-body-weight);
   color: var(--color-text-muted);
+}
+
+/*
+ * The rest of the run's figures, one press away and in the same panel.
+ *
+ * A forecast retrieval reports around fifteen findings. Four lead; the remainder are here, under a
+ * summary that counts them, so nothing the run produced leaves the answer — see `HEADLINE_FIGURES`.
+ */
+.moreFigures {
+  margin-block-start: var(--space-3);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.moreFiguresSummary {
+  cursor: pointer;
+  color: var(--color-accent);
+}
+
+.moreFiguresSummary:hover {
+  color: var(--color-accent-strong);
+}
+
+.moreFigures > :not(summary) {
+  margin-block-start: var(--space-3);
 }
 
 /*
@@ -1005,9 +1062,17 @@
  * ground, which is the emphasis its own AGENT INTERPRETATION box carries. The accent is the
  * analytics class rather than the weather one, because that is what is in it.
  */
+/*
+ * The accent bar is the weather accent and the outline is the analytics one, and that pairing is
+ * deliberate. The artifact draws this box in cyan because cyan is its emphasis colour; the class of
+ * what is *in* the box here is analytics, and `design-system.md` §9 makes that colour a claim about
+ * provenance rather than a decoration. So the emphasis reads in the accent, the provenance reads in
+ * the class, and neither has to lie for the other.
+ */
 .answerCard > section[data-tier="computed"] {
   border-color: var(--color-class-analytics);
   background: color-mix(in srgb, var(--color-class-analytics-surface) 60%, var(--color-surface-inset));
+  box-shadow: inset 3px 0 0 var(--color-accent);
 }
 
 /* The two figure panels sit on the inset ground, as the artifact insets them inside its card. */
@@ -1090,6 +1155,56 @@
 
 /* ------------------------------------------------------------------- the rail */
 
+/*
+ * **The agent's identity row** — the artifact's Agent Status card without its fiction.
+ *
+ * Its own sets a generated neural-net portrait beside "Neural Agent v4.8" and "Process: Active
+ * Inference". This is Weathra's own intelligence mark beside Weathra's own name and the run's real
+ * state, which is the same composition carrying only things that exist.
+ */
+.railIdentity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  margin-block-end: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: radial-gradient(
+    120% 140% at 0% 0%,
+    color-mix(in srgb, var(--color-accent) 12%, transparent) 0%,
+    transparent 70%
+  ), var(--color-surface-inset);
+  min-width: 0;
+}
+
+.railIdentityMark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.railIdentityText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.railIdentityName {
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-primary);
+}
+
+.railIdentityState {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
 /* The agents the stream named, each with a status mark rather than a bare word in a box. */
 .railAgents,
 .railSources {
@@ -1122,8 +1237,36 @@
   font-size: var(--type-ui-size);
   line-height: var(--type-ui-line);
   color: var(--color-text-primary);
-  text-transform: capitalize;
   min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * The outcome the backend stamped on that node, on the far end of its row — the artifact's
+ * "Forecast Agent … Used" geometry, with the word read from the record rather than chosen here.
+ * The mark's colour follows it, and the word is always there, so colour is never the only carrier.
+ */
+.railAgentOutcome {
+  margin-inline-start: auto;
+  flex: none;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.railAgent[data-status="failed"] .railAgentMark {
+  background: var(--color-status-error);
+}
+
+.railAgent[data-status="skipped"] .railAgentMark {
+  background: var(--color-text-muted);
+}
+
+.railAgent[data-status="running"] .railAgentMark {
+  background: var(--color-accent);
 }
 
 .railSourceText {
@@ -1144,6 +1287,40 @@
   font-size: var(--type-label-size);
   line-height: var(--type-label-line);
   color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+/*
+ * A source's mark carries the colour of the class it fed.
+ *
+ * The artifact puts icons on its source rows — a satellite, a radar — for feeds that do not exist.
+ * The one thing genuinely distinguishing these rows is what kind of figure each supplied, and
+ * `design-system.md` §9 already has a colour for that, used the same way on every other screen. The
+ * role underneath says it in words, so the colour adds a second carrier rather than being one.
+ */
+.railSourceMark[data-class="observed"] {
+  background: var(--color-class-observed);
+}
+
+.railSourceMark[data-class="forecast"] {
+  background: var(--color-class-forecast);
+}
+
+.railSourceMark[data-class="historical"] {
+  background: var(--color-class-historical);
+}
+
+.railSourceMark[data-class="analytics"] {
+  background: var(--color-class-analytics);
+}
+
+.railSourceMark[data-class="interpretation"] {
+  background: var(--color-class-interpretation);
+}
+
+/* The one bar this rail draws, over the one proportion on it that is arithmetic. */
+.railMeter {
+  margin-block: var(--space-3);
 }
 
 .railMethod {

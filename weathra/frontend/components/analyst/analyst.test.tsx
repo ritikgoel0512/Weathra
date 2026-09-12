@@ -513,7 +513,15 @@ describe("a streamed answer", () => {
 
     const computed = container.querySelector('[data-tier="computed"]') as HTMLElement;
     expect(within(computed).getByText("ANALYTICS")).toBeInTheDocument();
-    expect(within(computed).getByRole("heading", { name: "Computed figures" })).toBeInTheDocument();
+    /*
+      The artifact's highlighted box is headed AGENT INTERPRETATION over a causal reading of an
+      atmosphere Weathra does not model. What sits in that position here is the arithmetic, so the
+      heading names the role — the analyst's own reading — and the badge beside it still names the
+      class that produced it.
+    */
+    expect(
+      within(computed).getByRole("heading", { name: "Analyst interpretation" }),
+    ).toBeInTheDocument();
     expect(within(computed).getByText("17.9 °C")).toBeInTheDocument();
     // The claim on the face of the provenance line; the full deterministic sentence and the point
     // count are inside its disclosure, so this matches the summary exactly.
@@ -586,8 +594,24 @@ describe("a streamed answer", () => {
     expect(screen.getByText(/48 h ahead/)).toBeInTheDocument();
     expect(screen.getAllByText(/Confidence decreases with horizon distance/)[0]!).toBeInTheDocument();
     expect(screen.getByText(/supplies no forecast spread/i)).toBeInTheDocument();
-    // No percentage anywhere: Weathra reads one provider and has none to state.
-    expect(document.body.textContent).not.toMatch(/\d+(\.\d+)?%/);
+
+    /*
+      **No percentage on a confidence, here or in the rail.**
+
+      The artifact prints "94%" beside its forecast and "SYNTHESIS CONFIDENCE 98.2%" in its rail,
+      and neither is a figure any endpoint produces. The assertion used to be that no percentage
+      appeared anywhere in the document, which was the right guard while nothing on this screen
+      could honestly be a proportion. One thing now can — the rail's data-coverage bar counts the
+      run's own findings — so the guard says what it always meant: a *confidence* is a band, and
+      nowhere on this screen is one expressed as a percentage.
+    */
+    const indicator = document.querySelector('[data-uncertainty="true"]') as HTMLElement;
+    expect(indicator.textContent).not.toMatch(/\d+(\.\d+)?%/);
+    const railConfidence = screen.getByRole("region", { name: "Confidence and grounding" });
+    expect(within(railConfidence).getByText(/moderate at 48 h/)).toBeInTheDocument();
+    expect(
+      within(railConfidence).getByText(/moderate at 48 h/).textContent,
+    ).not.toMatch(/\d+(\.\d+)?%/);
   });
 
   it("states what the answer resolved to, and where the default came from", async () => {
@@ -1713,5 +1737,296 @@ describe("a successful answer", () => {
     const rail = screen.getByRole("complementary", { name: "Run detail" });
     expect(within(rail).getByText("Complete")).toBeInTheDocument();
     expect(within(rail).queryByText("Needs location")).toBeNull();
+  });
+});
+
+/* ------------------------------------- task 34.34: the product-polish pass */
+
+/**
+ * The successful answer and the rail beside it, against `02-ai-weather-analyst.png` §2–§14.
+ *
+ * Every case below is about one of two things: that a region the artifact draws is *populated* —
+ * it was the emptiness of these panels that the customer-level review of 2026-09-12 objected to —
+ * and that what populates it is the run's own record rather than the artifact's telemetry.
+ */
+describe("the answer, composed as a briefing", () => {
+  it("opens on the badge, a grounding line, and then the answer itself", async () => {
+    fetchMock = respondingWith();
+    renderAnalyst();
+    await ask("What should I expect over the next few days in Berlin?");
+
+    const panel = await screen.findByRole("region", { name: "AI interpretation" });
+    expect(within(panel).getByText("AI INTERPRETATION")).toBeInTheDocument();
+
+    // The place and how the run came to use it — the artifact's short grounding line, which its own
+    // fills with "Grounding analysis via Weathra MCP…".
+    const grounding = within(panel).getByText("Berlin, Germany · your saved default");
+    const prose = within(panel).getByText(/stay close to the seasonal baseline/);
+    expect(
+      grounding.compareDocumentPosition(prose) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    // And it states no figure: the window, the units and the retrieval time are the panels' own.
+    expect(grounding.textContent).not.toMatch(/\d/);
+  });
+
+  it("leads each figure panel with its highest-value readings and keeps the rest in the panel", async () => {
+    const many = {
+      ...ANSWER,
+      findings: [
+        { label: "Average pressure", value: 1014, unit: "hPa", data_class: "forecast", attribution: FORECAST_SOURCE },
+        { label: "Average relative humidity", value: 71, unit: "%", data_class: "forecast", attribution: FORECAST_SOURCE },
+        { label: "Highest peak wind gust", value: 38, unit: "km/h", data_class: "forecast", attribution: FORECAST_SOURCE },
+        { label: "Total precipitation", value: 6.4, unit: "mm", data_class: "forecast", attribution: FORECAST_SOURCE },
+        { label: "Lowest daily low temperature", value: 11.2, unit: "°C", data_class: "forecast", attribution: FORECAST_SOURCE },
+        { label: "Highest daily high temperature", value: 24.5, unit: "°C", data_class: "forecast", attribution: FORECAST_SOURCE },
+      ],
+    };
+    fetchMock = respondingWith(() => streaming(runFrames(many)));
+    const { container } = renderAnalyst();
+    await ask("What should I expect over the next few days in Berlin?");
+
+    const forecast = (await screen.findByRole("region", { name: "Forecast" })) as HTMLElement;
+    // Four figures on the face of it, temperature first, pressure and humidity not among them.
+    expect(within(forecast).getByText("24.5 °C")).toBeInTheDocument();
+    expect(within(forecast).getByText("11.2 °C")).toBeInTheDocument();
+    expect(within(forecast).getByText("6.4 mm")).toBeInTheDocument();
+    expect(within(forecast).getByText("38 km/h")).toBeInTheDocument();
+
+    // The other two are in the same panel, one press away, counted rather than dropped.
+    const more = within(forecast).getByText("2 more figures");
+    expect(more).toBeInTheDocument();
+    await userEvent.click(more);
+    expect(within(forecast).getByText("71 %")).toBeInTheDocument();
+    expect(within(forecast).getByText("1014 hPa")).toBeInTheDocument();
+
+    // And the panel is still one attributed provenance region, not six loose numbers.
+    expect(container.querySelectorAll('[data-tier="retrieved"]')).toHaveLength(1);
+  });
+
+  it("draws an observed panel only where the run reported an observation", async () => {
+    const observed = {
+      ...ANSWER,
+      findings: [
+        {
+          label: "Temperature now",
+          value: 15.3,
+          unit: "°C",
+          data_class: "current",
+          attribution: { ...FORECAST_SOURCE, data_class: "current" },
+        },
+        ...ANSWER.findings,
+      ],
+    };
+    fetchMock = respondingWith(() => streaming(runFrames(observed)));
+    renderAnalyst();
+    await ask("What is it doing in Berlin now?");
+
+    const panel = (await screen.findByRole("region", { name: "Observed data" })) as HTMLElement;
+    expect(within(panel).getByText("OBSERVED")).toBeInTheDocument();
+    expect(within(panel).getByText("15.3 °C")).toBeInTheDocument();
+  });
+
+  it("draws no observed panel at all where the run reported no observation", async () => {
+    fetchMock = respondingWith();
+    renderAnalyst();
+    await ask("What should I expect over the next few days in Berlin?");
+    await screen.findByRole("region", { name: "AI interpretation" });
+
+    // Not an empty card saying it retrieved nothing: no card.
+    expect(screen.queryByRole("region", { name: "Observed data" })).toBeNull();
+  });
+
+  it("gives the computed reading the artifact's highlighted treatment, with its class intact", async () => {
+    fetchMock = respondingWith();
+    const { container } = renderAnalyst();
+    await ask("What should I expect over the next few days in Berlin?");
+    await screen.findByRole("region", { name: "AI interpretation" });
+
+    const highlighted = container.querySelector('[data-tier="computed"]') as HTMLElement;
+    expect(
+      within(highlighted).getByRole("heading", { name: "Analyst interpretation" }),
+    ).toBeInTheDocument();
+    // Headed for its role, badged for its provenance, and carrying the figure it is about.
+    expect(within(highlighted).getByText("ANALYTICS")).toBeInTheDocument();
+    expect(within(highlighted).getByText("17.9 °C")).toBeInTheDocument();
+    // And not the artifact's causal reading of an atmosphere Weathra does not model.
+    expect(highlighted.textContent).not.toMatch(/convection|jet stream|pressure system/i);
+  });
+});
+
+describe("the rail beside a successful answer", () => {
+  async function railAfterAnswer(): Promise<HTMLElement> {
+    fetchMock = respondingWith();
+    renderAnalyst();
+    await ask("What should I expect over the next few days in Berlin?");
+    await screen.findByRole("region", { name: "AI interpretation" });
+    return screen.getByRole("complementary", { name: "Run detail" });
+  }
+
+  it("names Weathra's own analyst and the run's real state, and no agent version", async () => {
+    const rail = await railAfterAnswer();
+    const status = within(rail).getByRole("region", { name: "Agent status" });
+
+    expect(within(status).getByText("Weathra Analyst")).toBeInTheDocument();
+    expect(within(status).getByText("Complete")).toBeInTheDocument();
+    expect(status.textContent).not.toMatch(/v4\.8|compute load|inference/i);
+  });
+
+  it("lists the agents the record names, each with the outcome the backend stamped on it", async () => {
+    const rail = await railAfterAnswer();
+    const status = within(rail).getByRole("region", { name: "Agent status" });
+
+    expect(within(status).getByText("Forecast agent")).toBeInTheDocument();
+    expect(within(status).getByText("Synthesis")).toBeInTheDocument();
+    expect(within(status).getAllByText("Used")).toHaveLength(2);
+    // The record names two; no row is invented for the four capabilities that did not run.
+    expect(within(status).queryByText("Historical agent")).toBeNull();
+    expect(within(status).queryByText("Knowledge agent")).toBeNull();
+  });
+
+  it("names each source the way its own documentation does, with what it supplied", async () => {
+    const rail = await railAfterAnswer();
+    const sources = within(rail).getByRole("region", { name: "Active data sources" });
+
+    expect(within(sources).getByText("Open-Meteo")).toBeInTheDocument();
+    expect(within(sources).getByText("Forecast data")).toBeInTheDocument();
+    // Weathra's own arithmetic is a source of this answer and is credited as itself, rather than
+    // to the provider whose series it was computed over.
+    expect(within(sources).getByText("Weathra Analytics")).toBeInTheDocument();
+    expect(within(sources).getByText("Deterministic calculations")).toBeInTheDocument();
+    // The run cited a passage, so the corpus it came from is listed too.
+    expect(within(sources).getByText("Weather Knowledge")).toBeInTheDocument();
+
+    // And none of the artifact's feeds, none of which Weathra reads.
+    for (const invented of ["GLOBAL_SAT", "L_RADAR", "ECMWF", "Berlin-Mitte"]) {
+      expect(sources.textContent, invented).not.toContain(invented);
+    }
+  });
+
+  it("lists one row per source and role, not one per attribution entry", async () => {
+    const twice = {
+      ...ANSWER,
+      attribution: [FORECAST_SOURCE, { ...FORECAST_SOURCE, retrieved_at: "2026-09-04T06:20:00Z" }],
+    };
+    fetchMock = respondingWith(() => streaming(runFrames(twice)));
+    renderAnalyst();
+    await ask("What should I expect over the next few days in Berlin?");
+    await screen.findByRole("region", { name: "AI interpretation" });
+
+    const sources = screen.getByRole("region", { name: "Active data sources" });
+    expect(within(sources).getAllByText("Open-Meteo")).toHaveLength(1);
+  });
+
+  it("states the context the run resolved to, and where each part came from", async () => {
+    const rail = await railAfterAnswer();
+    const context = within(rail).getByRole("region", { name: "Analyst context" });
+
+    expect(within(context).getByText(/Berlin, Germany — your saved default/)).toBeInTheDocument();
+    expect(within(context).getByText(/metric — your saved default/)).toBeInTheDocument();
+    expect(within(context).getByText(/2026-09-04 00:00 to 2026-09-07 00:00/)).toBeInTheDocument();
+    // The internal name of a rung of the resolution ladder is never printed as provenance.
+    expect(context.textContent).not.toMatch(/from the preferences|from the none/);
+  });
+
+  it("calls this conversation's turns a conversation, and never long-term memory", async () => {
+    const rail = await railAfterAnswer();
+    const context = within(rail).getByRole("region", { name: "Analyst context" });
+
+    expect(within(context).getByText("Conversation")).toBeInTheDocument();
+    expect(
+      within(context).getByText(/Open — this conversation's turns resolve the next question/),
+    ).toBeInTheDocument();
+    expect(rail.textContent).not.toMatch(/long-term memory/i);
+  });
+
+  it("shows only the preferences this account actually chose", async () => {
+    const rail = await railAfterAnswer();
+    const memory = within(rail).getByRole("region", { name: "Preferences in use" });
+
+    // Chosen, per the preferences endpoint's own per-field sources.
+    expect(within(memory).getByText("Default location")).toBeInTheDocument();
+    expect(within(memory).getByText(/^Berlin/)).toBeInTheDocument();
+    expect(within(memory).getByText("Temperature units")).toBeInTheDocument();
+    // Assumed, so not remembered, so not listed as though it had been.
+    expect(within(memory).queryByText("Forecast horizon")).toBeNull();
+  });
+
+  it("says plainly when nothing has been saved, rather than standing empty or filling itself", async () => {
+    const none = {
+      unit_system: "metric",
+      forecast_horizon_days: 7,
+      default_location: null,
+      sources: { unit_system: "default", default_location: "default", forecast_horizon_days: "default" },
+    };
+    fetchMock = vi.fn(async (input: unknown) => {
+      const path = new URL(String(input)).pathname;
+      if (path === "/api/v1/me/preferences") return json(none);
+      if (path === "/api/v1/weather/current") return json(CURRENT);
+      return streaming(runFrames());
+    }) as unknown as Mock;
+
+    renderAnalyst();
+    await ask("What should I expect over the next few days in Berlin?");
+    await screen.findByRole("region", { name: "AI interpretation" });
+
+    const memory = screen.getByRole("region", { name: "Preferences in use" });
+    expect(within(memory).getByText(/No saved analyst preferences yet/)).toBeInTheDocument();
+    expect(within(memory).getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
+    expect(within(memory).queryByText("Temperature units")).toBeNull();
+  });
+
+  it("measures the one proportion it can, and states the confidence as a band", async () => {
+    const rail = await railAfterAnswer();
+    const confidence = within(rail).getByRole("region", { name: "Confidence and grounding" });
+
+    // Both findings carry a value, so coverage is two of two — counted, not scored.
+    expect(within(confidence).getByText("Data coverage")).toBeInTheDocument();
+    expect(within(confidence).getByText("100%")).toBeInTheDocument();
+    expect(
+      within(confidence).getByText("2 of 2 reported figures carry a value"),
+    ).toBeInTheDocument();
+
+    // The confidence itself stays a band with a horizon, and the grounding a count.
+    expect(within(confidence).getByText(/moderate at 48 h/)).toBeInTheDocument();
+    expect(within(confidence).getByText(/2 checked · verified/)).toBeInTheDocument();
+    expect(confidence.textContent).not.toContain("98.2%");
+  });
+
+  it("keeps the evidence action, and keeps the technical record out of the rail", async () => {
+    const rail = await railAfterAnswer();
+
+    expect(
+      within(rail).getByRole("link", { name: "View full agent evidence" }),
+    ).toHaveAttribute("href", "/evidence/evidence-7");
+    // What served the answer is on the answer's own disclosure, not beside it.
+    expect(rail.textContent).not.toMatch(/a-configured-model|openrouter|Policy:/);
+  });
+
+  it("degrades to what is true when the run is waiting for a place", async () => {
+    fetchMock = respondingWith(() =>
+      streaming(
+        runFrames({
+          ...ANSWER,
+          answer_prose: "",
+          findings: [],
+          attribution: [],
+          resolved: { locations: [], period: null, unit_system: "metric", location_source: "none", units_source: "preferences", statement: null },
+          uncertainty: null,
+          grounding: { verified: false, method: "figure extraction with a 0.05 tolerance", figures_checked: 0 },
+          clarification_question: "Which place should Weathra look at?",
+        }),
+      ),
+    );
+    renderAnalyst();
+    await ask("What should I expect over the next few days?");
+
+    const rail = await screen.findByRole("complementary", { name: "Run detail" });
+    expect(within(rail).getByText("Needs location")).toBeInTheDocument();
+    expect(within(rail).getByText("Not queried yet.")).toBeInTheDocument();
+    expect(within(rail).getAllByText("Nothing retrieved yet").length).toBeGreaterThan(0);
+    // No completed data of any kind: no agent rows, no coverage bar reading zero as a measurement.
+    expect(within(rail).queryByText("Used")).toBeNull();
+    expect(within(rail).queryByText("100%")).toBeNull();
   });
 });
