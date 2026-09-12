@@ -60,6 +60,7 @@ import { friendlyName } from "@/lib/locations/place";
 import { useApiQuery } from "@/lib/query/hooks";
 import { PREFERENCES_KEY } from "@/lib/query/keys";
 import type { ViewFailure } from "@/lib/query/state";
+import { ForecastTrendChart, type TrendPoint } from "@/components/explorer/trend-chart";
 import { conditionFor } from "@/lib/weather/condition";
 
 import styles from "./travel.module.css";
@@ -250,6 +251,12 @@ function TripEditor({
 
 /* ============================================================ the dashboard */
 
+/** A measure key as a person reads it: `temperature_mean` becomes `Temperature mean`. */
+function measureName(measure: string): string {
+  const spaced = measure.replace(/_/g, " ");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
 function metricReading(metric: TravelMetric): string {
   if (metric.value === null || metric.value === undefined) return NOT_REPORTED;
   const unit = metric.unit ?? "";
@@ -327,19 +334,19 @@ function ViabilityCard({ result }: { readonly result: TravelIntelligenceResult }
               <span className={styles.ringState}>{viability.state}</span>
             </div>
 
+            {/*
+              One row per weighted component, as the artifact draws them: the measure, its bar, and
+              the figure behind it. The bar carries its own label, so naming the measure beside it
+              printed everything twice and pushed each row onto three lines.
+            */}
             <ul className={styles.components}>
               {viability.contributions.map((part) => (
                 <li className={styles.component} key={part.measure}>
-                  <span className={styles.componentName}>
-                    {part.measure.replace(/_/g, " ")}
-                  </span>
                   <Meter
-                    label={`${part.measure.replace(/_/g, " ")} contribution`}
+                    label={measureName(part.measure)}
                     value={part.weight === 0 ? null : part.contribution / part.weight}
+                    valueLabel={`${part.value} ${part.unit ?? ""}`.trim()}
                   />
-                  <span className={styles.componentValue}>
-                    {part.value} {part.unit ?? ""}
-                  </span>
                 </li>
               ))}
             </ul>
@@ -417,12 +424,47 @@ function OutlookCard({ day }: { readonly day: DailyOutlookEntry }): ReactNode {
       {day.rank === 1 ? <Badge tone="ok">Best day</Badge> : null}
 
       {day.viability !== null && day.viability !== undefined ? (
-        <Meter
-          label={`Viability for ${day.weekday} ${spokenDate(day.local_date)}`}
-          value={day.viability / 100}
-        />
+        <Meter label="Viability" value={day.viability / 100} />
       ) : null}
     </li>
+  );
+}
+
+/**
+ * The trip's shape over its days — the artifact's trend band, from the outlook already on screen.
+ *
+ * No new request and no new component: the points are the same `daily_outlook` entries the cards
+ * above draw, and the chart is Forecast Explorer's, imported unmodified. It reads the day's high
+ * against its rain, which is what a traveller comparing days is actually looking at.
+ */
+function TripTrend({
+  days,
+}: {
+  readonly days: readonly DailyOutlookEntry[];
+}): ReactNode {
+  const points: TrendPoint[] = days.map((day) => ({
+    at: day.local_date,
+    label: `${day.weekday} ${spokenDate(day.local_date)}`,
+    temperature:
+      typeof day.temperature_max === "number" ? day.temperature_max : null,
+    precipitation:
+      typeof day.precipitation_sum === "number" ? day.precipitation_sum : null,
+  }));
+
+  const drawable = points.some((point) => point.temperature !== null);
+  if (!drawable) return null;
+
+  const units = days[0]?.units ?? {};
+  return (
+    <div className={styles.trend}>
+      <ForecastTrendChart
+        points={points}
+        temperatureUnit={units.temperature_max ?? null}
+        precipitationUnit={units.precipitation_sum ?? null}
+        hasPrecipitation={points.some((point) => point.precipitation !== null)}
+        missing={points.filter((point) => point.temperature === null).length}
+      />
+    </div>
   );
 }
 
@@ -521,15 +563,11 @@ function TemporalComparison({
                     {window.viability === null || window.viability === undefined ? (
                       <span className={styles.quiet}>{window.unavailable_reason ?? NOT_REPORTED}</span>
                     ) : (
-                      <>
-                        <Meter
-                          label={`Viability for ${window.label}`}
-                          value={window.viability / 100}
-                        />
-                        <span className={styles.windowScore}>
-                          {window.viability} · {window.state}
-                        </span>
-                      </>
+                      <Meter
+                        label={window.state ?? "Viability"}
+                        value={window.viability / 100}
+                        valueLabel={String(window.viability)}
+                      />
                     )}
                   </td>
                   <td>
@@ -934,6 +972,7 @@ function TripWorkspace({ initial }: { readonly initial: Location | null }): Reac
                     <OutlookCard key={day.local_date} day={day} />
                   ))}
                 </ul>
+                <TripTrend days={result.daily_outlook ?? []} />
               </CardBody>
             </Card>
 
