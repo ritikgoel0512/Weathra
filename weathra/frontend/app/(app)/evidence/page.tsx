@@ -1,42 +1,37 @@
 /**
  * `/evidence` — the Agent Evidence destination in the navigation, task 21.5.
  *
- * Evidence is *per run*: there is one stored record for each question somebody asked, and it is
- * reached at `/evidence/{id}` from the answer that produced it. This page is what the navigation
- * entry resolves to, and it says so.
+ * Evidence is *per run*: there is one stored record for each question somebody asked, reached at
+ * `/evidence/{id}` from the answer that produced it. This page is what the navigation entry
+ * resolves to, and it lists the runs the person actually has.
  *
- * Deliberately static, and deliberately not a list. `specs/http-api` exposes one evidence endpoint
- * — a record by its identifier — and no endpoint enumerating a person's runs. A screen listing
- * them would have to invent the listing, which is the one thing an evidence surface must not do.
+ * It used to be deliberately static, for a reason that was true at the time: `specs/http-api`
+ * exposed a record only by its identifier, and a screen listing runs would have had to invent the
+ * listing. `GET /evidence` answers the question instead, owner-scoped, so the listing is the
+ * backend's and this page shows it.
  */
 
-import Link from "next/link";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
-import { EvidenceWorkspaceSkeleton } from "@/components/evidence/sections";
+import { EvidenceLog } from "@/components/evidence/evidence-log";
 import { FixtureEvidence } from "@/components/evidence/fixture-evidence";
 import { usingVisilyFixtures } from "@/lib/fixtures/visily";
-
-import styles from "@/components/evidence/evidence.module.css";
 
 export const metadata: Metadata = { title: "Agent Evidence" };
 
 /**
- * With no run selected, the screen keeps the workspace it would show with one.
+ * With no run selected, the screen shows the runs there are.
  *
- * It used to collapse to a paragraph, which meant `/evidence` and `/evidence/{id}` were two
- * differently shaped pages — `05-agent-evidence.png` is a workspace, and a person arriving from the
- * navigation should see the shape of what they will get rather than an explanation of it. Every
- * region the populated screen has is drawn here, empty and labelled.
+ * It collapsed to a paragraph once, then to an empty labelled workspace — two attempts at the same
+ * impossible job, describing an evidence log to somebody who could not be shown one. Both left a
+ * person with a dozen stored runs looking at what a person with none saw.
  *
- * **The privacy line stays.** Replacing the old empty state dropped its second paragraph, which
- * told the reader that a run record belongs to the person who produced it. That is a fact about
- * who can read their data, not decoration, and the artifact having no room for it is not a reason
- * for the product to stop saying it — so it is back, as one muted line rather than a paragraph of
- * prose. It claims exactly what the architecture provides: the route is behind sign-in, and the
- * row is readable only by the account that created it. Nothing about encryption, nothing about
- * who operates the database.
+ * **The privacy line stays.** A run record belongs to the person who produced it. That is a fact
+ * about who can read their data, not decoration, so it is stated on the list as one muted line. It
+ * claims exactly what the architecture provides: the route is behind sign-in, and the row is
+ * readable only by the account that created it. Nothing about encryption, nothing about who
+ * operates the database.
  */
 export default function Page(): ReactNode {
   /*
@@ -48,18 +43,5 @@ export default function Page(): ReactNode {
    */
   if (usingVisilyFixtures()) return <FixtureEvidence />;
 
-  return (
-    <section aria-label="Agent Evidence">
-      <h1>Agent evidence log</h1>
-      <p>
-        A record per run. Open one from the answer that produced it —{" "}
-        <Link href="/analyst">ask the AI Weather Analyst</Link>.
-      </p>
-      <p className={styles.note}>
-        Run records are private to the person whose question produced them: this page is behind
-        sign-in, and a run is readable only by the account that created it.
-      </p>
-      <EvidenceWorkspaceSkeleton />
-    </section>
-  );
+  return <EvidenceLog />;
 }

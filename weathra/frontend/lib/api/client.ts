@@ -38,6 +38,7 @@ import type {
   TravelIntelligenceRequest,
   CurrentResponse,
   DeletionResponse,
+  EvidenceListResponse,
   EvidenceResponse,
   ForecastResponse,
   HealthResponse,
@@ -267,6 +268,14 @@ export interface ApiClient {
    */
   openAgentStream(request: AskRequest, signal?: AbortSignal): Promise<Response>;
   evidence(evidenceId: string): Promise<EvidenceResponse>;
+  /**
+   * The caller's own stored runs, newest first.
+   *
+   * Agent Evidence was reachable only by identifier, so its navigation entry led to a page that
+   * could describe the evidence log without ever showing one. This is the read that answers
+   * "which runs do I have" — owner-scoped by the backend, like the record it lists.
+   */
+  evidenceRecords(query?: { readonly limit?: number }): Promise<EvidenceListResponse>;
 
   me(): Promise<MeResponse>;
 
@@ -558,6 +567,8 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
 
     ask: (request) => call<AskResponse>("POST", "/api/v1/agent/ask", {}, request, true),
     openAgentStream: (request, signal) => openStream(request, signal),
+    evidenceRecords: (query = {}) =>
+      get<EvidenceListResponse>("/api/v1/evidence", { ...query }),
     evidence: (evidenceId) =>
       get<EvidenceResponse>(`/api/v1/evidence/${encodeURIComponent(evidenceId)}`),
 

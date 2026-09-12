@@ -271,6 +271,19 @@ Every MVP product screen SHALL be reachable from a persistent navigation surface
 - **WHEN** a person opens Agent Evidence for a completed question
 - **THEN** it shows the agents that ran, each tool call and result, the analytics methods, the cited knowledge, and the timings
 
+#### Scenario: Evidence is reachable without an identifier
+
+- **WHEN** a person opens Agent Evidence from the navigation with no run selected
+- **THEN** their own recent runs are listed, newest first, each naming its question, when it ran, and the places it resolved
+- **AND** each row opens that run's full record
+- **AND** with no runs stored, the screen says so and offers where to produce one
+
+#### Scenario: One person's evidence is not another's
+
+- **WHEN** a person opens Agent Evidence
+- **THEN** only records belonging to that person are listed
+- **AND** the screen states that a run is readable only by the account that produced it
+
 #### Scenario: Historical analytics rendered
 
 - **WHEN** a person requests a period comparison on Historical Analytics

@@ -117,6 +117,7 @@ PROTECTED_REQUESTS: tuple[tuple[str, str, dict[str, Any]], ...] = (
     ("GET", "/threads", {}),
     ("GET", "/threads/{thread_id}", {}),
     ("DELETE", "/threads/{thread_id}", {}),
+    ("GET", "/evidence", {}),
     ("GET", "/evidence/{evidence_id}", {}),
     ("POST", "/agent/ask", {"json": {"question": "Berlin?"}}),
     ("POST", "/agent/stream", {"json": {"question": "Berlin?"}}),

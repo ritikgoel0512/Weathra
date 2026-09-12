@@ -1806,6 +1806,46 @@ const FIXTURES = {
     ],
   },
 
+  /*
+   * The evidence log: the runs this account has, as `GET /evidence` returns them.
+   *
+   * Two records rather than one, because a list of one photographs as a card and says nothing
+   * about how rows sit together — and one of them partial, because that badge is a real state the
+   * capture should carry. Both ids resolve to records this stub also serves.
+   */
+  "/api/v1/evidence": {
+    limit: 20,
+    returned: 2,
+    records: [
+      {
+        id: "run-e2e-1",
+        created_at: "2026-09-04T06:15:05Z",
+        question: "What should I expect over the next few days?",
+        answer_preview:
+          "Berlin is running warmer than usual this week: the mean of 17.9 °C sits above the four-year baseline for the same week, by 1.5 °C.",
+        duration_ms: 4210,
+        partial: false,
+        weather_provider: "stub-provider",
+        llm_model: "stub-model",
+        steps: 6,
+        locations: ["Berlin, Germany"],
+      },
+      {
+        id: "run-stub",
+        created_at: "2026-09-03T18:42:11Z",
+        question: "How does this week compare with the same week last year?",
+        answer_preview:
+          "The provider's forecast puts this week's mean at 17.9 °C, which the archive comparison places above the four-year baseline.",
+        duration_ms: 3180,
+        partial: true,
+        weather_provider: "stub-provider",
+        llm_model: "stub-model",
+        steps: 4,
+        locations: ["Berlin, Germany", "Munich, Germany"],
+      },
+    ],
+  },
+
   "/api/v1/evidence/run-stub": {
     id: "run-stub",
     request_id: "req-stub",

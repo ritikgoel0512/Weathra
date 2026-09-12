@@ -17,7 +17,7 @@ import logging
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Path, Request, status
+from fastapi import APIRouter, Path, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
@@ -94,6 +94,125 @@ def _summary(record: ThreadRecord) -> ThreadSummary:
         expires_at=record.expires_at,
         locations=tuple(location.qualified_name for location in record.entities.locations),
     )
+
+
+class EvidenceSummary(BaseModel):
+    """One stored run, as a list row: enough to recognise it and open it, and nothing more."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    id: str
+    created_at: datetime
+    question: str
+    answer_preview: str | None = Field(
+        default=None, description="The opening of the answer, for recognising a run in a list."
+    )
+    duration_ms: float
+    partial: bool
+    weather_provider: str | None = None
+    llm_model: str | None = None
+    steps: int = Field(ge=0, description="How many agents the run recorded.")
+    locations: tuple[str, ...] = Field(
+        default=(),
+        description="The places the run resolved, by display name. Never coordinates.",
+    )
+
+
+class EvidenceListResponse(BaseModel):
+    """The caller's own recent runs, newest first."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    records: tuple[EvidenceSummary, ...]
+    returned: int = Field(ge=0)
+    limit: int = Field(ge=1)
+
+
+# How many rows one page of the list returns unless asked otherwise. A person opening the evidence
+# log wants their recent work, not their archive; the record endpoint is how an older one is opened.
+DEFAULT_EVIDENCE_LIMIT = 20
+MAXIMUM_EVIDENCE_LIMIT = 100
+
+
+def _summarize(row: AgentRun) -> EvidenceSummary:
+    """A list row built from the stored record, reading nothing the record does not hold.
+
+    The location names come from the envelope's own resolution — the display names the run itself
+    resolved — so a list entry names places the way every other Weathra screen does. A coordinate
+    pair is internal metadata and is never the label a person reads.
+    """
+    resolved = row.envelope.get("resolved") if isinstance(row.envelope, dict) else None
+    places: list[str] = []
+    if isinstance(resolved, dict):
+        for entry in resolved.get("locations") or ():
+            if isinstance(entry, dict):
+                name = entry.get("display_name")
+                if isinstance(name, str) and name and name not in places:
+                    places.append(name)
+
+    agents = row.evidence.get("agents") if isinstance(row.evidence, dict) else None
+    steps = len(agents) if isinstance(agents, list) else 0
+
+    preview = (row.answer_prose or "").strip()
+    if len(preview) > 160:
+        preview = preview[:157].rstrip() + "…"
+
+    return EvidenceSummary(
+        id=row.id,
+        created_at=row.created_at,
+        question=row.question,
+        answer_preview=preview or None,
+        duration_ms=row.duration_ms,
+        partial=row.partial,
+        weather_provider=row.weather_provider,
+        llm_model=row.llm_model,
+        steps=steps,
+        locations=tuple(places),
+    )
+
+
+@router.get("/evidence", response_model=EvidenceListResponse, summary="Your evidence records")
+async def evidence_records(
+    request: Request,
+    principal: RequiredPrincipal,
+    session: CurrentSession,
+    limit: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=MAXIMUM_EVIDENCE_LIMIT,
+            description="How many of the most recent records to return.",
+        ),
+    ] = DEFAULT_EVIDENCE_LIMIT,
+) -> EvidenceListResponse:
+    """*Your* stored runs, newest first.
+
+    **Why this exists.** Evidence was reachable only by identifier, so the navigation entry led to
+    a page that could describe the evidence log without ever showing one — a person with a dozen
+    stored runs saw the same empty workspace as a person with none. Answering "which runs do I
+    have" is not inventing a listing; refusing to answer it was what forced the screen to.
+
+    The ownership predicate is explicit and Row Level Security sits behind it, the same pair the
+    record endpoint uses. A caller sees their own rows or no rows; there is no third answer, and
+    nothing here reveals that anybody else's exist.
+    """
+    annotate(request, acting_user_id=principal.user_id)
+
+    rows = (
+        (
+            await session.execute(
+                select(AgentRun)
+                .where(AgentRun.user_id == principal.user_id)
+                .order_by(AgentRun.created_at.desc())
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    records = tuple(_summarize(row) for row in rows)
+    return EvidenceListResponse(records=records, returned=len(records), limit=limit)
 
 
 @router.get(

@@ -542,6 +542,13 @@ export interface EvidenceAttribution {
   readonly timestamp_utc?: string | null;
 }
 
+/** The caller's own recent runs, newest first. */
+export interface EvidenceListResponse {
+  readonly limit: number;
+  readonly records: EvidenceSummary[];
+  readonly returned: number;
+}
+
 /** Everything the run did, sufficient to check every figure without re-running it. */
 export interface EvidenceRecord {
   readonly agents?: AgentStep[];
@@ -590,6 +597,23 @@ export interface EvidenceResponse {
   readonly question: string;
   readonly request_id: string;
   readonly thread_id?: string | null;
+  readonly weather_provider?: string | null;
+}
+
+/** One stored run, as a list row: enough to recognise it and open it, and nothing more. */
+export interface EvidenceSummary {
+  /** The opening of the answer, for recognising a run in a list. */
+  readonly answer_preview?: string | null;
+  readonly created_at: string;
+  readonly duration_ms: number;
+  readonly id: string;
+  readonly llm_model?: string | null;
+  /** The places the run resolved, by display name. Never coordinates. */
+  readonly locations?: string[];
+  readonly partial: boolean;
+  readonly question: string;
+  /** How many agents the run recorded. */
+  readonly steps: number;
   readonly weather_provider?: string | null;
 }
 
@@ -2006,6 +2030,19 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     successStatus: 200,
     response: null,
     parameters: [],
+  },
+  {
+    operationId: "evidence_records_api_v1_evidence_get",
+    method: "GET",
+    path: "/api/v1/evidence",
+    requiresToken: false,
+    administrative: false,
+    request: null,
+    successStatus: 200,
+    response: "EvidenceListResponse",
+    parameters: [
+      { name: "limit", in: "query", required: false },
+    ],
   },
   {
     operationId: "evidence_api_v1_evidence__evidence_id__get",

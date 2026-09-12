@@ -480,6 +480,26 @@ The API SHALL report a health endpoint stating that the service is running, and 
 - **AND** the service still reports itself healthy
 - **AND** no credential value appears in the response
 
+### Requirement: Evidence records are discoverable by their owner
+
+The HTTP API SHALL expose an endpoint returning the acting person's own stored evidence records, newest first, so a person can find a run without already knowing its identifier.
+
+Each row SHALL carry enough to recognise a run and open it — its identifier, when it was created, the question asked, how long it took, whether it was partial, and the places it resolved by display name — and SHALL NOT carry coordinates as a place's label.
+
+The listing SHALL be owner-scoped by an explicit predicate in the query and by Row Level Security behind it. A caller SHALL see their own records or none, and the response SHALL disclose nothing about whether any other person's records exist.
+
+#### Scenario: A person finds their own runs
+
+- **WHEN** a signed-in person asks for their evidence records
+- **THEN** their own stored runs are returned, newest first
+- **AND** each row carries its identifier, its question, and the places it resolved by name
+
+#### Scenario: One person's runs are not another's
+
+- **WHEN** a person asks for their evidence records
+- **THEN** no record belonging to anybody else appears
+- **AND** the response says nothing about whether such records exist
+
 ### Requirement: Travel intelligence endpoint
 
 The HTTP API SHALL expose an endpoint that analyses one trip — a destination, a departure date and a return date, with an optional origin — and returns the whole analysis in a single typed response: the trip and its resolved locations, a hero summary, a travel viability index, analytical metrics, the destination's daily outlook, a packing strategy, a comparison against other travel windows, any forecast change, a synthesis, the historical baseline, a grounding evidence bundle, and the sections that could not be produced.

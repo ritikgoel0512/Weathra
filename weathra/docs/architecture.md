@@ -281,7 +281,7 @@ code that does not exist. So each names the group 26-34 task that owes it, and t
 that task to being open. Close one of those tasks and the first assertion starts demanding its
 tests. Both directions stay honest without anyone maintaining a list of which spec is which.
 
-Of **228** requirements across twenty-one specs, **227** are implemented and tested, **1** is
+Of **229** requirements across twenty-one specs, **228** are implemented and tested, **1** is
 manual-pending, and **0** are open. Exactly **0** requirements have no test. The one that remains
 manual-pending is `web-ui`'s accessibility and responsive layout, which is automatically tested as
 far as automation reaches and still owes a human pass (task 21.8).
@@ -303,7 +303,7 @@ model access or an allowance** and **the Visily design gate** are closed outrigh
 | `evaluation` | 15 | 15 | 0 | 0 | 22, 28 |
 | `forecast-analysis` | 10 | 10 | 0 | 0 | 8 |
 | `historical-weather` | 5 | 5 | 0 | 0 | 8 |
-| `http-api` | 25 | 25 | 0 | 0 | 15, 16, 34 |
+| `http-api` | 26 | 26 | 0 | 0 | 15, 16, 34 |
 | `location-comparison` | 6 | 6 | 0 | 0 | 9 |
 | `location-resolution` | 7 | 7 | 0 | 0 | 6 |
 | `mcp-weather-server` | 7 | 7 | 0 | 0 | 10 |
@@ -318,7 +318,7 @@ model access or an allowance** and **the Visily design gate** are closed outrigh
 | `llm-telemetry` | 7 | 7 | 0 | 0 | 29 |
 | `usage-limits` | 9 | 9 | 0 | 0 | 30 |
 | `model-lab` | 6 | 6 | 0 | 0 | 32 |
-| **Total** | **228** | **227** | **1** | **0** | |
+| **Total** | **229** | **228** | **1** | **0** | |
 
 ### `agent-orchestration`
 
@@ -450,6 +450,7 @@ model access or an allowance** and **the Visily design gate** are closed outrigh
 | Request validation | 15.2 | api/errors.py, mcp/schemas.py | integration/test_api.py | IMPLEMENTED |
 | Consistent error model | 15.2 | api/errors.py, domain/errors.py | unit/test_domain_errors.py, test_frontend_error_codes.py, frontend/lib/api/client.test.ts | IMPLEMENTED |
 | Health and readiness | 15.15 | api/routers/health.py | integration/test_api.py | IMPLEMENTED |
+| Evidence records are discoverable by their owner | 34.43 | api/routers/evidence.py | integration/test_auth_boundary.py | IMPLEMENTED |
 | Travel intelligence endpoint | 34.42 | api/routers/travel.py, weather/travel_service.py | unit/test_geocoding.py | IMPLEMENTED |
 | Request correlation and observability | 15.3 | api/middleware.py | integration/test_api.py | IMPLEMENTED |
 | Cross-origin access for the frontend | 15.1, 16.4 | api/app.py | integration/test_api.py | IMPLEMENTED |

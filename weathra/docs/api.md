@@ -108,6 +108,7 @@ or the credential.
 | `GET` | `/api/v1/weather/history/comparison` | public | 200 | `PeriodComparison` |
 | `POST` | `/api/v1/agent/ask` | **protected** | 200 | `AskResponse` |
 | `POST` | `/api/v1/agent/stream` | **protected** | 200 | `stream` |
+| `GET` | `/api/v1/evidence` | **protected** | 200 | `EvidenceListResponse` |
 | `GET` | `/api/v1/evidence/{evidence_id}` | **protected** | 200 | `EvidenceResponse` |
 | `GET` | `/api/v1/me` | **protected** | 200 | `MeResponse` |
 | `DELETE` | `/api/v1/me/data` | **protected** | 200 | `DeletionResponse` |
@@ -195,6 +196,7 @@ or the credential.
 | `/admin/principals/{subject_id}/role` | **protected**, administrative | Grants and revokes the administrative role. |
 | `/admin/usage` | **protected**, administrative | Aggregate language model usage by model, policy, plan, call role, status and period, with internal usage separated. Measures only — never a row, and never one person's. |
 | `/admin/usage/series` | **protected**, administrative | The same usage measures as a time series over the period, bucketed by hour or day, with internal usage separated. Measures only — never a row, and never one person's. |
+| `/evidence` | **protected** | The acting user's own stored runs, newest first. Owner-scoped in the query and by Row Level Security behind it. |
 | `/evidence/{evidence_id}` | **protected** | One of the acting user's stored evidence records. |
 | `/me` | **protected** | The acting user's own profile and effective preferences. |
 | `/me/data` | **protected** | Deletes the acting user's Weathra application data. |

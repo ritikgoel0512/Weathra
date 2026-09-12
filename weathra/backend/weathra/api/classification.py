@@ -344,6 +344,12 @@ _CLASSIFICATIONS: tuple[EndpointClassification, ...] = (
         administrative=True,
     ),
     EndpointClassification(
+        "/evidence",
+        Access.PROTECTED,
+        "The acting user's own stored evidence records, newest first. Owner-scoped in the query "
+        "and by Row Level Security behind it; a caller sees their rows or none.",
+    ),
+    EndpointClassification(
         "/evidence/{evidence_id}",
         Access.PROTECTED,
         "One of the acting user's stored evidence records.",

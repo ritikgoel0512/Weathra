@@ -2624,6 +2624,36 @@
         "title": "Direction",
         "type": "string"
       },
+      "EvidenceListResponse": {
+        "additionalProperties": false,
+        "description": "The caller's own recent runs, newest first.",
+        "properties": {
+          "limit": {
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceSummary"
+            },
+            "title": "Records",
+            "type": "array"
+          },
+          "returned": {
+            "minimum": 0.0,
+            "title": "Returned",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "records",
+          "returned",
+          "limit"
+        ],
+        "title": "EvidenceListResponse",
+        "type": "object"
+      },
       "EvidenceRecord": {
         "additionalProperties": false,
         "description": "Everything the run did, sufficient to check every figure without re-running it.",
@@ -2932,6 +2962,92 @@
           "created_at"
         ],
         "title": "EvidenceResponse",
+        "type": "object"
+      },
+      "EvidenceSummary": {
+        "additionalProperties": false,
+        "description": "One stored run, as a list row: enough to recognise it and open it, and nothing more.",
+        "properties": {
+          "answer_preview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The opening of the answer, for recognising a run in a list.",
+            "title": "Answer Preview"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "duration_ms": {
+            "title": "Duration Ms",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "llm_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Model"
+          },
+          "locations": {
+            "default": [],
+            "description": "The places the run resolved, by display name. Never coordinates.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Locations",
+            "type": "array"
+          },
+          "partial": {
+            "title": "Partial",
+            "type": "boolean"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "steps": {
+            "description": "How many agents the run recorded.",
+            "minimum": 0.0,
+            "title": "Steps",
+            "type": "integer"
+          },
+          "weather_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weather Provider"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "question",
+          "duration_ms",
+          "partial",
+          "steps"
+        ],
+        "title": "EvidenceSummary",
         "type": "object"
       },
       "ExcludedCandidate": {
@@ -9320,6 +9436,54 @@
         "summary": "Ask a weather question, streamed",
         "tags": [
           "agent"
+        ]
+      }
+    },
+    "/api/v1/evidence": {
+      "get": {
+        "description": "*Your* stored runs, newest first.\n\n**Why this exists.** Evidence was reachable only by identifier, so the navigation entry led to\na page that could describe the evidence log without ever showing one \u2014 a person with a dozen\nstored runs saw the same empty workspace as a person with none. Answering \"which runs do I\nhave\" is not inventing a listing; refusing to answer it was what forced the screen to.\n\nThe ownership predicate is explicit and Row Level Security sits behind it, the same pair the\nrecord endpoint uses. A caller sees their own rows or no rows; there is no third answer, and\nnothing here reveals that anybody else's exist.",
+        "operationId": "evidence_records_api_v1_evidence_get",
+        "parameters": [
+          {
+            "description": "How many of the most recent records to return.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "How many of the most recent records to return.",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Your evidence records",
+        "tags": [
+          "evidence"
         ]
       }
     },
