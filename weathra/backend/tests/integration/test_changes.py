@@ -15,7 +15,7 @@ provider.
 from __future__ import annotations
 
 from contextlib import AbstractAsyncContextManager
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -58,10 +58,14 @@ async def earlier_forecast(*, daily_values: list[float]) -> Forecast:
     Built by asking a second stub for the same location, horizon, and units, so the location,
     window, provider, and unit system match exactly — which is what ``previous_snapshot`` keys on.
     Only the figures and the retrieval time differ, which is what makes a comparison possible.
+
+    ``forecast_start`` has to match the harness's too, and is passed rather than left to default:
+    the harness starts its forecast today, so a second stub on the default fixed date describes a
+    different window and ``previous_snapshot`` correctly finds nothing to compare against.
     """
-    retrieved = await stub_provider(daily_values=daily_values).forecast(
-        BERLIN, days=7, unit_system=UnitSystem.METRIC
-    )
+    retrieved = await stub_provider(
+        daily_values=daily_values, forecast_start=date.today()
+    ).forecast(BERLIN, days=7, unit_system=UnitSystem.METRIC)
     return retrieved.model_copy(update={"retrieved_at": YESTERDAY})
 
 

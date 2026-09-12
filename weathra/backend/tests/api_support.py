@@ -23,7 +23,7 @@ import logging
 from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import AbstractAsyncContextManager, asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 import httpx
@@ -181,7 +181,14 @@ async def harness(
     settings = api_settings(factory, database_url, **overrides)
     app = build_app(settings)
 
-    stub_weather = provider or stub_provider()
+    # The app harness's forecast begins today.
+    #
+    # `StubProvider` otherwise starts its series on a fixed date, which the unit suites assert
+    # against by literal and must keep. A *route* test cannot: anything that refuses a window
+    # already past — Travel Intelligence refuses a trip in the past — has no date that is both
+    # inside a fixed 2026-03 window and not behind the real clock. A forecast that starts now is
+    # what a forecast provider actually does, and it leaves every literal-asserting unit test alone.
+    stub_weather = provider or stub_provider(forecast_start=date.today())
     stub_places = geocoder or StubGeocoder()
 
     async with (

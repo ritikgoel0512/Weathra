@@ -93,6 +93,7 @@ class StubProvider:
         daily_values: Sequence[float | None] = (1.0, 2.0, 3.0),
         failure: Exception | None = None,
         today: date | None = None,
+        forecast_start: date | None = None,
     ) -> None:
         self._capabilities = capabilities or stub_capabilities()
         # The archive's "now", for the reporting-lag clamp. Injected rather than read from a clock
@@ -101,6 +102,11 @@ class StubProvider:
         self._current_values = current_values or {Measure.TEMPERATURE: 7.5}
         self._daily_values = list(daily_values)
         self._failure = failure
+        # Where the forecast series begins. Fixed by default, because most of this suite asserts
+        # against literal dates and a moving window would make those assertions untestable. A
+        # caller that needs a forecast covering *now* — anything exercising a route that refuses a
+        # window already in the past — passes today's date instead of rewriting those literals.
+        self._forecast_start = forecast_start
         self.current_calls = 0
         self.forecast_calls = 0
         self.history_calls = 0
@@ -133,7 +139,7 @@ class StubProvider:
         self.forecast_calls += 1
         if self._failure:
             raise self._failure
-        start = date(2026, 3, 2)
+        start = self._forecast_start or date(2026, 3, 2)
         daily = _daily_series(location, start, self._daily_values[:days] or [1.0], unit_system)
         return Forecast(
             location=location,

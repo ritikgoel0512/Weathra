@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import uuid
 from contextlib import AbstractAsyncContextManager
+from datetime import date, timedelta
 from typing import Any
 
 import pytest
@@ -69,6 +70,20 @@ BERLIN_PLAN = _plan(PlanStep(capability=Capability.FORECAST, reason="r", locatio
 # coverage test rather than quietly going untested.
 PROTECTED_REQUESTS: tuple[tuple[str, str, dict[str, Any]], ...] = (
     ("GET", "/weather/changes", {"params": {"location": "Berlin"}}),
+    # Protected for the same reason as the line above: analysing a trip records the retrieval it
+    # analysed in the shared snapshot history. Dates are relative so the trip stays inside the
+    # provider's horizon as this suite ages, rather than turning into a refusal in some future week.
+    (
+        "POST",
+        "/travel/intelligence",
+        {
+            "json": {
+                "destination": "Berlin",
+                "start": (date.today() + timedelta(days=1)).isoformat(),
+                "end": (date.today() + timedelta(days=3)).isoformat(),
+            }
+        },
+    ),
     ("GET", "/me", {}),
     ("GET", "/me/preferences", {}),
     ("PUT", "/me/preferences", {"json": {"unit_system": "imperial"}}),
