@@ -425,6 +425,21 @@ afterEach(() => {
 
 /* ----------------------------------------------------------------------- tests */
 
+/**
+ * The tool calls themselves, which are behind a disclosure.
+ *
+ * The panel summarises by default — what was used and how much — because six full cards ran the
+ * left rail to twice the height of the evidence beside it. The complete trace is still the record,
+ * and these tests still assert against it; they open it first, as an auditor would.
+ */
+function toolCalls(): HTMLElement[] {
+  const panel = screen.getByRole("region", { name: "MCP evidence" });
+  const trace = panel.querySelector("details");
+  if (trace && !trace.open) trace.open = true;
+  const list = panel.querySelector('[data-tool-calls="true"]');
+  return list ? Array.from(list.querySelectorAll(":scope > li")) : [];
+}
+
 describe("a populated evidence record", () => {
   it("asks the documented evidence endpoint for exactly the identifier it was given", async () => {
     renderScreen();
@@ -510,9 +525,9 @@ describe("the tool calls and their results", () => {
   it("lists each call with the agent that made it, its arguments and what came back", async () => {
     const person = userEvent.setup();
     renderScreen();
-    const tools = await screen.findByRole("region", { name: "MCP evidence" });
+    await screen.findByRole("region", { name: "MCP evidence" });
 
-    const calls = within(tools).getAllByRole("listitem");
+    const calls = toolCalls();
     expect(calls).toHaveLength(3);
 
     const forecast = at(calls, 0);
@@ -542,9 +557,9 @@ describe("the tool calls and their results", () => {
 
   it("reports a failed tool call as a failure, with the backend's code and message", async () => {
     renderScreen();
-    const tools = await screen.findByRole("region", { name: "MCP evidence" });
+    await screen.findByRole("region", { name: "MCP evidence" });
 
-    const failed = at(within(tools).getAllByRole("listitem"), 1);
+    const failed = at(toolCalls(), 1);
     expect(failed).toHaveAttribute("data-tool", "weather_history");
     const outcome = failed.querySelector('[data-tool-result="failed"]');
     expect(outcome).toHaveTextContent("provider_timeout");
@@ -656,11 +671,10 @@ describe("the timings", () => {
   it("reports each agent's and each tool call's own duration", async () => {
     renderScreen();
     const flow = await screen.findByRole("region", { name: "Execution flow" });
-    const tools = screen.getByRole("region", { name: "MCP evidence" });
 
     expect(at(within(flow).getAllByRole("listitem"), 0)).toHaveTextContent("120 ms");
     expect(at(within(flow).getAllByRole("listitem"), 5)).toHaveTextContent("1.2 s");
-    expect(at(within(tools).getAllByRole("listitem"), 2)).toHaveTextContent("610 ms");
+    expect(at(toolCalls(), 2)).toHaveTextContent("610 ms");
   });
 });
 
@@ -878,7 +892,7 @@ describe("nothing on the screen came from anywhere but the record", () => {
 
     expect(within(flow).getAllByRole("listitem")).toHaveLength(STORED_EVIDENCE.agents.length);
     expect(
-      within(screen.getByRole("region", { name: "MCP evidence" })).getAllByRole("listitem"),
+      toolCalls(),
     ).toHaveLength(STORED_EVIDENCE.tool_calls.length);
     expect(
       within(screen.getByRole("region", { name: "Grounded data sources" })).getAllByRole("row"),

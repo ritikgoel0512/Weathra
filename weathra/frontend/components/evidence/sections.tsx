@@ -367,6 +367,76 @@ function ToolEntry({ activity }: { readonly activity: ToolActivity }): ReactNode
  * figure are mockup filler; what replaces them is the calls themselves, which is the thing that
  * makes a figure in the answer traceable to a retrieval.
  */
+/**
+ * What the run called, summarised — with the calls themselves one press away.
+ *
+ * A run that asked the archive twice and the analytics kernel four times drew six full cards, each
+ * with its own arguments and results disclosures, and the left rail ran to twice the height of the
+ * evidence beside it. The artifact's own MCP block is a *small supporting card*: what was used, how
+ * much, and how it went.
+ *
+ * Nothing is hidden from the record — the complete trace is still here, and a person auditing a run
+ * opens it. What changes is that the default screen answers "which tools did this use" instead of
+ * making a reader assemble that answer from six cards.
+ */
+function ToolSummary({ tools }: { readonly tools: readonly ToolActivity[] }): ReactNode {
+  const byTool = new Map<string, { calls: number; failed: number; totalMs: number }>();
+  for (const activity of tools) {
+    const seen = byTool.get(activity.tool) ?? { calls: 0, failed: 0, totalMs: 0 };
+    seen.calls += 1;
+    if (activity.result?.ok === false) seen.failed += 1;
+    if (typeof activity.durationMs === "number") seen.totalMs += activity.durationMs;
+    byTool.set(activity.tool, seen);
+  }
+
+  const failures = tools.filter((activity) => activity.result?.ok === false).length;
+  const total = tools.reduce(
+    (sum, activity) => sum + (typeof activity.durationMs === "number" ? activity.durationMs : 0),
+    0,
+  );
+
+  return (
+    <>
+      <p className={styles.toolTotals}>
+        <span>
+          {tools.length} {tools.length === 1 ? "call" : "calls"}
+        </span>
+        <span>
+          {byTool.size} {byTool.size === 1 ? "tool" : "tools"}
+        </span>
+        {total > 0 ? <span>{formatDurationMs(total)}</span> : null}
+        {failures > 0 ? (
+          <span className={styles.toolFailed}>
+            {failures} failed
+          </span>
+        ) : null}
+      </p>
+
+      <ul className={styles.toolTally}>
+        {[...byTool.entries()].map(([tool, seen]) => (
+          <li className={styles.toolTallyRow} key={tool}>
+            <span className={styles.toolTallyName}>{tool}</span>
+            <span className={styles.toolTallyCount}>
+              {seen.calls} {seen.calls === 1 ? "call" : "calls"}
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      <details className={styles.toolDetail}>
+        <summary>
+          View all {tools.length} {tools.length === 1 ? "call" : "calls"}
+        </summary>
+        <ol className={styles.tools} data-tool-calls="true">
+          {tools.map((activity) => (
+            <ToolEntry key={activity.key} activity={activity} />
+          ))}
+        </ol>
+      </details>
+    </>
+  );
+}
+
 export function ToolActivityPanel({ record }: { readonly record: RunRecord }): ReactNode {
   return (
     <section
@@ -387,21 +457,10 @@ export function ToolActivityPanel({ record }: { readonly record: RunRecord }): R
         <h2 className={styles.panelTitle}>MCP evidence</h2>
       </header>
 
-      {record.tools.length === 0 ? null : (
-        <p className={styles.note}>
-          Every retrieval went through the approved tool interface. Nothing here was called by the
-          browser.
-        </p>
-      )}
-
       {record.tools.length === 0 ? (
         <p className={styles.emptyNote}>No tool calls — this run retrieved nothing through a tool.</p>
       ) : (
-        <ol className={styles.tools} data-tool-calls="true">
-          {record.tools.map((activity) => (
-            <ToolEntry key={activity.key} activity={activity} />
-          ))}
-        </ol>
+        <ToolSummary tools={record.tools} />
       )}
     </section>
   );

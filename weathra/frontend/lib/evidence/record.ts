@@ -91,7 +91,25 @@ export function describeStoredValue(value: unknown): string {
     const fields = Object.keys(value).length;
     return fields === 1 ? "1 field" : `${fields} fields`;
   }
+  if (typeof value === "number") return roundedFigure(value);
   return String(value);
+}
+
+/**
+ * A stored number without its binary-representation tail.
+ *
+ * `String(21.457142857142856)` prints every digit the double holds, and a mean of seven readings
+ * almost always has a tail like that — so tool arguments and results came out reading as machine
+ * noise rather than as figures. Two decimals is the widest any evidence value here needs and is
+ * kept deliberately *wider* than the one decimal a temperature is shown at elsewhere: this is a
+ * stored value being echoed back, not a reading being presented, and the record should round it as
+ * little as legibility requires. Trailing zeros are trimmed, and an integer stays an integer.
+ */
+function roundedFigure(value: number): string {
+  if (!Number.isFinite(value)) return String(value);
+  if (Number.isInteger(value)) return String(value);
+  const rounded = Math.round(value * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : String(rounded);
 }
 
 /** A stored dictionary as named lines, in the order it was stored. */

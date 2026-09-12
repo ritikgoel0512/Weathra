@@ -998,8 +998,16 @@
 }
 
 @media (min-width: 1024px) {
+  /*
+   * Both tracks are bounded.
+   *
+   * `minmax(0, 1fr)` beside an `auto` track let the status strip — whose agent list runs long —
+   * claim the whole row and squeeze the identity column to a single character, so the title set
+   * one letter per line. The left track keeps a real minimum and the right one a real maximum, so
+   * neither can starve the other whatever the run recorded.
+   */
   .headerGrid {
-    grid-template-columns: minmax(0, 1fr) minmax(22rem, auto);
+    grid-template-columns: minmax(20rem, 1fr) minmax(18rem, 26rem);
   }
 }
 
@@ -1184,6 +1192,11 @@
   /* The agent list is the one reading that runs long, so it wraps to its own line. */
   .headerGrid .summaryItem:last-child {
     flex-basis: 100%;
+    min-width: 0;
+  }
+
+  .headerGrid .summaryItem:last-child .summaryValue {
+    overflow-wrap: anywhere;
   }
 }
 
@@ -1206,8 +1219,16 @@
   top: var(--space-3);
 }
 
-.step[data-status="succeeded"] {
-  border-color: color-mix(in srgb, var(--color-status-ok) 35%, var(--color-border-subtle));
+/*
+ * Success is the node, not the frame.
+ *
+ * Outlining every completed stage in green made a run where everything worked look like a run
+ * demanding attention — six green boxes down a rail, competing with the evidence beside them. The
+ * artifact keeps its cards neutral and puts the state on the marker. A *failed* stage still takes
+ * its border, because that is the one a reader must not miss.
+ */
+.step[data-status="failed"] {
+  border-color: color-mix(in srgb, var(--color-status-error) 45%, var(--color-border-subtle));
 }
 
 .steps {
@@ -1246,4 +1267,94 @@
   background: var(--color-surface-raised);
   border-color: var(--color-border-subtle);
   border-left: 2px solid var(--color-class-interpretation, var(--color-accent));
+}
+
+/* ------------------------------------------- tool evidence, summarised by default */
+
+.toolTotals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.toolFailed {
+  color: var(--color-status-error);
+}
+
+.toolTally {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.toolTallyRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+  min-width: 0;
+}
+
+.toolTallyRow:last-child {
+  border-bottom: none;
+}
+
+.toolTallyName {
+  font-family: var(--family-mono, monospace);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.toolTallyCount {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.toolDetail summary {
+  cursor: pointer;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.toolDetail[open] .tools {
+  margin-top: var(--space-3);
+}
+
+/* ------------------------------------------------ identifiers that do not shout */
+
+/*
+ * A UUID is a handle, not a headline. Monospace at metadata size keeps it copyable and legible
+ * without letting thirty-six characters dominate the card that closes the page.
+ */
+.auditMono {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-secondary);
+}
+
+/* The source table sits tighter, and its date cells stop wrapping mid-range. */
+.table th,
+.table td {
+  padding: var(--space-1) var(--space-3);
 }
