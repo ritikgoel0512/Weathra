@@ -1492,3 +1492,75 @@
   line-height: var(--type-label-line);
   color: var(--color-accent);
 }
+
+/* ------------------------------------------------- evidence integrity, from real checks */
+
+.integrityState {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-status-ok);
+}
+
+.integrityState[data-state="partial"],
+.integrityState[data-state="complete"] {
+  color: var(--color-status-warning);
+}
+
+.integrityState[data-state="degraded"] {
+  color: var(--color-status-error);
+}
+
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+}
+
+.check {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.checkMark {
+  color: var(--color-status-ok);
+}
+
+.check[data-passed="false"] .checkMark {
+  color: var(--color-status-error);
+}
+
+/* The provenance timeline: the run's own timestamps, in order. */
+.provenance {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-secondary);
+}
+
+.provenanceEvent {
+  display: flex;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.provenanceAt {
+  flex: 0 0 auto;
+  font-family: var(--family-mono, monospace);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}

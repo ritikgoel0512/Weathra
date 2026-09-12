@@ -30,7 +30,7 @@
  * dump of whatever the stored dictionary happens to contain.
  */
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import {
   AttributionFooter,
@@ -44,6 +44,7 @@ import {
   UncertaintyIndicator,
   formatInstant,
   formatLocalStamp,
+  Meter,
 } from "@/components/ui";
 import type {
   AnomalyReport,
@@ -53,6 +54,7 @@ import type {
   TrendReport,
 } from "@/lib/api/schema";
 import { agentLabel, confidenceOf, horizonHoursOf, ROUTING_SOURCE_LABELS } from "@/lib/analyst/run";
+import { auditOf, provenanceOf, recordHash } from "@/lib/evidence/audit";
 import { measureLabel } from "@/lib/dashboard/briefing";
 import { dataClassFor } from "@/lib/design/data-class";
 import {
@@ -117,6 +119,18 @@ function figurePeriodLabel(result: StatisticResult): string | null {
   const [, toMonth, toYear] = to.split(" ");
   return fromMonth === toMonth && fromYear === toYear ? `${fromDay} – ${to}` : `${from} – ${to}`;
 }
+
+/**
+ * The shape of record this version of the screen knows how to read.
+ *
+ * The artifact prints an agent version — `v4.8.2-STABLE` — which describes a build nobody here
+ * ships. What is real and worth a reader's attention is which *evidence schema* a record was read
+ * as, because that is what decides whether a field is absent or merely unread.
+ */
+const EVIDENCE_SCHEMA_VERSION = "evidence/v1";
+
+/** How many passages lead the knowledge block. The artifact shows two. */
+const PRIMARY_CITATIONS = 2;
 
 const SHORT_MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
@@ -815,6 +829,12 @@ export function KnowledgeEvidence({
 }: {
   readonly citations: readonly KnowledgeCitation[];
 }): ReactNode {
+  /** Strongest first, so "the top two" is by relevance rather than by retrieval order. */
+  const ranked = [...citations].sort(
+    (left, right) => (right.score ?? 0) - (left.score ?? 0),
+  );
+  const leadingCitations = ranked.slice(0, PRIMARY_CITATIONS);
+  const remainingCitations = ranked.slice(PRIMARY_CITATIONS);
   return (
     <section
       className={styles.panel}
@@ -837,7 +857,12 @@ export function KnowledgeEvidence({
         </p>
       ) : (
         <ul className={styles.citations} data-citations="true">
-          {citations.map((citation, index) => (
+          {/*
+            The two strongest lead. The artifact shows two and an "explore all" beside them, and a
+            reader scanning for why a conclusion holds needs the passages that most supported it —
+            not every passage the retriever returned.
+          */}
+          {leadingCitations.map((citation, index) => (
             <li
               className={styles.citation}
               key={`${citation.document_id}-${citation.chunk_position}-${index}`}
@@ -880,6 +905,37 @@ export function KnowledgeEvidence({
           ))}
         </ul>
       )}
+
+      {remainingCitations.length > 0 ? (
+        <details className={styles.moreFigures}>
+          <summary>Explore all knowledge fragments ({citations.length})</summary>
+          <ul className={styles.citations}>
+            {remainingCitations.map((citation, index) => (
+              <li
+                className={styles.citation}
+                key={`rest-${citation.document_id}-${citation.chunk_position}-${index}`}
+                data-document={citation.document_id}
+              >
+                <span className={styles.citationHead}>
+                  <span className={styles.citationRef}>
+                    {citation.document_id}
+                    {citation.chunk_position === null || citation.chunk_position === undefined
+                      ? ""
+                      : ` · ${citation.chunk_position}`}
+                  </span>
+                  <span className={styles.citationTitle}>{citation.title}</span>
+                  {typeof citation.score === "number" ? (
+                    <span className={styles.citationScore}>
+                      relevance {Math.round(citation.score * 100) / 100}
+                    </span>
+                  ) : null}
+                </span>
+                <blockquote className={styles.citationFull}>{citation.text}</blockquote>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </section>
   );
 }
@@ -1135,41 +1191,91 @@ export function RecordProvenance({ record }: { readonly record: RunRecord }): Re
  * what a person tracing this run would actually need: the three identifiers, when it was stored,
  * what answered it, and whether the record is complete.
  */
-export function RecordAudit({ record }: { readonly record: RunRecord }): ReactNode {
+export function RecordAudit({
+  record,
+  response,
+}: {
+  readonly record: RunRecord;
+  /** The record as served, which is what the hash is taken over. */
+  readonly response: unknown;
+}): ReactNode {
   const status = runStatusOf(record);
-  const model = record.llmModel ?? null;
-  const provider = record.llmProvider ?? null;
+  const audit = auditOf(record);
+  const events = provenanceOf(record);
+  const [hash, setHash] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void recordHash(response).then((digest) => {
+      if (live) setHash(digest);
+    });
+    return () => {
+      live = false;
+    };
+  }, [response]);
 
   return (
     <section
       className={styles.panel}
-      aria-label="Record and traceability"
+      aria-label="Evidence integrity"
       data-evidence-section="audit"
     >
       <header className={styles.panelHeader}>
-        <h2 className={styles.panelTitle}>Record and traceability</h2>
+        <h2 className={styles.panelTitle}>Evidence integrity</h2>
+        <span className={styles.integrityState} data-state={audit.state.toLowerCase()}>
+          {audit.state}
+        </span>
       </header>
+
+      {/*
+        The artifact's stability bar, filled by something a reader can check: the share of the
+        completeness checks below that passed. Not a model's confidence in its own answer — which is
+        what a percentage on an evidence screen usually is, and what nothing here can honestly be.
+      */}
+      <Meter
+        label="Evidence completeness"
+        value={audit.completeness / 100}
+        valueLabel={`${audit.passed} of ${audit.total}`}
+      />
+
+      <ul className={styles.checks}>
+        {audit.checks.map((check) => (
+          <li className={styles.check} key={check.id} data-passed={check.passed ? "true" : "false"}>
+            <span className={styles.checkMark} aria-hidden="true">
+              {check.passed ? "✓" : "✕"}
+            </span>
+            <span>
+              {check.label}
+              {check.note ? <span className={styles.quiet}> — {check.note}</span> : null}
+            </span>
+          </li>
+        ))}
+      </ul>
 
       <dl className={styles.auditFacts}>
         <div className={styles.auditFact}>
           <dt>Evidence</dt>
-          <dd className={styles.auditMono}>{record.id}</dd>
+          <dd className={styles.auditMono} title={record.id}>
+            {record.id}
+          </dd>
         </div>
         <div className={styles.auditFact}>
           <dt>Request</dt>
-          <dd className={styles.auditMono}>{record.requestId}</dd>
+          <dd className={styles.auditMono} title={record.requestId}>
+            {record.requestId}
+          </dd>
         </div>
         {record.threadId ? (
           <div className={styles.auditFact}>
             <dt>Conversation</dt>
-            <dd className={styles.auditMono}>{record.threadId}</dd>
+            <dd className={styles.auditMono} title={record.threadId}>
+              {record.threadId}
+            </dd>
           </div>
         ) : null}
         <div className={styles.auditFact}>
           <dt>Stored</dt>
-          <dd>
-            {record.timing.storedAt ? formatInstant(record.timing.storedAt) : NOT_REPORTED}
-          </dd>
+          <dd>{record.timing.storedAt ? formatInstant(record.timing.storedAt) : NOT_REPORTED}</dd>
         </div>
         <div className={styles.auditFact}>
           <dt>Record</dt>
@@ -1178,13 +1284,46 @@ export function RecordAudit({ record }: { readonly record: RunRecord }): ReactNo
         <div className={styles.auditFact}>
           <dt>Answered by</dt>
           <dd>
-            {model ? `${provider ? `${provider} · ` : ""}${model}` : "No model recorded"}
+            {record.llmModel
+              ? `${record.llmProvider ? `${record.llmProvider} · ` : ""}${record.llmModel}`
+              : "No model recorded"}
           </dd>
+        </div>
+        {/*
+          A hash, and called one. It shows two readings of this record are byte-identical; nothing
+          signs it with a key, so "signature" would claim an assurance Weathra does not provide.
+        */}
+        <div className={styles.auditFact}>
+          <dt>Record hash</dt>
+          <dd className={styles.auditMono} title={hash ?? undefined}>
+            {hash === null ? NOT_REPORTED : `${hash.slice(0, 8)}…${hash.slice(-6)}`}
+          </dd>
+        </div>
+        <div className={styles.auditFact}>
+          <dt>Evidence schema</dt>
+          <dd>{EVIDENCE_SCHEMA_VERSION}</dd>
         </div>
       </dl>
 
+      {events.length > 0 ? (
+        <details className={styles.moreFigures}>
+          <summary>View provenance ({events.length} events)</summary>
+          <ol className={styles.provenance}>
+            {events.map((event, index) => (
+              <li className={styles.provenanceEvent} key={`${event.at}-${index}`}>
+                <span className={styles.provenanceAt}>{formatInstant(event.at)}</span>
+                <span>
+                  {event.label}
+                  {event.detail ? <span className={styles.quiet}> — {event.detail}</span> : null}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </details>
+      ) : null}
+
       <p className={styles.emptyNote}>
-        Kept for observability. Weathra does not sign or seal a run record, and does not claim to.
+        Computed from this record. Weathra does not sign or certify a run, and claims no compliance.
       </p>
     </section>
   );

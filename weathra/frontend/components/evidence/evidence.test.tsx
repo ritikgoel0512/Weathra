@@ -466,7 +466,7 @@ describe("a populated evidence record", () => {
      */
     expect(screen.getByText("Evidence run-1")).toBeInTheDocument();
 
-    const audit = screen.getByRole("region", { name: "Record and traceability" });
+    const audit = screen.getByRole("region", { name: "Evidence integrity" });
     expect(within(audit).getByText("req-77")).toBeInTheDocument();
     expect(within(audit).getByText("thread-3")).toBeInTheDocument();
   });

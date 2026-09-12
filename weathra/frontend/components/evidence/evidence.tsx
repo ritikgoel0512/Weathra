@@ -134,7 +134,7 @@ function RecordView({ response }: { readonly response: EvidenceResponse }): Reac
       {/* The artifact closes on two panels side by side: what the run was about, and how to trace it. */}
       <div className={styles.footGrid}>
         <ResolvedContextPanel record={record} />
-        <RecordAudit record={record} />
+        <RecordAudit record={record} response={response} />
       </div>
 
       <RecordProvenance record={record} />

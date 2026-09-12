@@ -547,12 +547,25 @@ export interface AgentStage {
  * is the worst of them: a stage with one failed retrieval did not succeed, and rolling it up as
  * success because the other worked would hide the failure this screen exists to show.
  */
+/**
+ * Agents that share a logical stage on screen.
+ *
+ * A reading of conditions now and a projection of the days ahead are different claims under
+ * different data classes, which is why the domain keeps `current` and `forecast` as separate
+ * agents — and the *sources* table keeps them separate for exactly that reason. But a reader
+ * looking at the execution column is asking which parts of the pipeline ran, and "retrieved the
+ * conditions, then retrieved the window" is one part doing two things. Grouping is presentation;
+ * no evidence is merged, and both data classes still appear in their own right.
+ */
+const STAGE_ALIASES: Readonly<Record<string, string>> = { current: "forecast" };
+
 export function agentStages(record: RunRecord): AgentStage[] {
   const order: string[] = [];
   const byAgent = new Map<string, AgentStep[]>();
 
   for (const step of record.agents) {
-    const agent = String(step.agent);
+    const named = String(step.agent);
+    const agent = STAGE_ALIASES[named] ?? named;
     if (!byAgent.has(agent)) {
       byAgent.set(agent, []);
       order.push(agent);
