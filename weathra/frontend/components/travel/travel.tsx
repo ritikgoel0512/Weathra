@@ -29,24 +29,31 @@ import {
   CardHeader,
   DataClassBadge,
   ErrorState,
+  NOT_REPORTED,
   LoadingState,
   LocationImage,
+  formatInstant,
   Meter,
 } from "@/components/ui";
 import type {
   ComparisonCandidate,
   ComparisonResult,
+  BaselineComparison,
   Criterion,
+  ForecastResponse,
   Location,
   PreferenceView,
   StatisticResult,
+  WhatChanged,
 } from "@/lib/api/schema";
 import {
   briefingLocationFrom,
   formatReading,
   measureLabel,
 } from "@/lib/dashboard/briefing";
-import { localLabel } from "@/lib/explorer/reading";
+import { ForecastTrendChart, type TrendPoint } from "@/components/explorer/trend-chart";
+import { hourLabel, localLabel } from "@/lib/explorer/reading";
+import { baselineYearsStatement, formatSigned } from "@/lib/historical/analysis";
 import { friendlyName } from "@/lib/locations/place";
 import { useApiQuery } from "@/lib/query/hooks";
 import { PREFERENCES_KEY } from "@/lib/query/keys";
@@ -393,6 +400,424 @@ function TripGuidance({ best }: { readonly best: ComparisonCandidate | null }): 
   );
 }
 
+/* ============================================================ the lower bands */
+
+/** The calendar day a candidate's window opens on, as the backend stated it. */
+function dateOf(candidate: ComparisonCandidate | null): string | null {
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(candidate?.period?.start_local ?? "");
+  return match ? (match[1] ?? null) : null;
+}
+
+/**
+ * The best-ranked day's own hours — the artifact's intra-day band.
+ *
+ * One day, not the window. The artifact's own chart is captioned for a single date, and a
+ * seven-day hourly series drawn here would be the Forecast Explorer's figure on a screen that is
+ * deciding *between* days rather than reading one.
+ *
+ * The chart is Forecast Explorer's, imported unmodified. It already draws exactly this — a filled
+ * temperature line, precipitation on its own axis, clock labels — and building a second one would
+ * be two descriptions of the same figure.
+ */
+function IntradayTrend({
+  forecast,
+  best,
+}: {
+  readonly forecast: ForecastResponse | null;
+  readonly best: ComparisonCandidate | null;
+}): ReactNode {
+  const day = dateOf(best);
+  const entries = (forecast?.hourly?.entries ?? []).filter((entry) =>
+    day === null ? false : (entry.time_local ?? "").startsWith(day),
+  );
+
+  const points: TrendPoint[] = entries.map((entry) => ({
+    at: entry.time_local,
+    label: hourLabel(entry.time_local) ?? entry.time_local,
+    temperature: typeof entry.values?.temperature === "number" ? entry.values.temperature : null,
+    precipitation:
+      typeof entry.values?.precipitation === "number" ? entry.values.precipitation : null,
+  }));
+
+  const drawable = points.some((point) => point.temperature !== null);
+  const wet = points.some((point) => point.precipitation !== null);
+  const label = best ? `${dayLabel(best).weekday} ${dayLabel(best).date}`.trim() : null;
+
+  return (
+    <Card aria-labelledby="travel-intraday">
+      <CardHeader
+        title="Intra-day weather trend"
+        titleId="travel-intraday"
+        badge={<DataClassBadge dataClass="forecast" />}
+        subtitle={label ? `Best-ranked day · ${label}` : "The best-ranked day, hour by hour."}
+      />
+      <CardBody>
+        {drawable ? (
+          <ForecastTrendChart
+            points={points}
+            temperatureUnit={forecast?.hourly?.units?.temperature ?? null}
+            precipitationUnit={forecast?.hourly?.units?.precipitation ?? null}
+            hasPrecipitation={wet}
+            missing={points.filter((point) => point.temperature === null).length}
+          />
+        ) : (
+          <p className={styles.quiet}>
+            The provider reported no hourly series for this day, so there is nothing to plot. The
+            day&rsquo;s own figures are on the card above.
+          </p>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+/**
+ * The artifact's temporal comparison, over windows Weathra can actually see.
+ *
+ * Its own compares four departure windows across September and October at a "viability score" out
+ * of a hundred. Weathra's forecast horizon is days, not months, and its ranking has no ceiling — so
+ * the windows are slices of the horizon the ranking already covered, and every figure in a row is
+ * *selected* from the days in that slice rather than computed over them. The best rank inside a
+ * window, and the temperature and rain of the day that holds it: three selections, no new
+ * arithmetic, nothing invented to fill a column.
+ */
+function WindowMatrix({
+  result,
+  best,
+}: {
+  readonly result: ComparisonResult;
+  readonly best: ComparisonCandidate | null;
+}): ReactNode {
+  const days = [...result.candidates].sort((left, right) =>
+    (left.period?.start_local ?? "").localeCompare(right.period?.start_local ?? ""),
+  );
+  if (days.length < 2) return null;
+
+  /*
+   * Thirds of whatever the horizon turned out to be, so a three-day window gives three rows of one
+   * and a seven-day window gives two, two and three. Never a window beyond what the provider sent.
+   */
+  const size = Math.max(1, Math.ceil(days.length / 3));
+  const windows: ComparisonCandidate[][] = [];
+  for (let index = 0; index < days.length; index += size) {
+    windows.push(days.slice(index, index + size));
+  }
+
+  const bestScore = best?.score ?? 0;
+
+  return (
+    <Card aria-labelledby="travel-windows">
+      <CardHeader
+        title="Temporal comparison"
+        titleId="travel-windows"
+        badge={<DataClassBadge dataClass="analytics" />}
+        subtitle={`Slices of the ranked window, by ${result.criterion.replace(/_/g, " ")}.`}
+      />
+      <CardBody>
+        <table className={styles.windows}>
+          <thead>
+            <tr>
+              <th scope="col">Travel window</th>
+              <th scope="col">Best rank</th>
+              <th scope="col">Suitability</th>
+              <th scope="col">Temperature</th>
+              <th scope="col">Rain</th>
+            </tr>
+          </thead>
+          <tbody>
+            {windows.map((window) => {
+              const leader = window.reduce((carry, day) => (day.rank < carry.rank ? day : carry));
+              const first = dayLabel(window[0] as ComparisonCandidate);
+              const last = dayLabel(window[window.length - 1] as ComparisonCandidate);
+              const span =
+                window.length === 1
+                  ? `${first.weekday} ${first.date}`.trim()
+                  : `${first.weekday} ${first.date} – ${last.weekday} ${last.date}`.trim();
+              const temperature = statOf(leader, [
+                "temperature_max",
+                "temperature_mean",
+                "temperature",
+              ]);
+              const rain = statOf(leader, ["precipitation_sum", "precipitation"]);
+
+              return (
+                <tr key={span} data-best={leader.rank === 1 ? "true" : undefined}>
+                  <th scope="row">
+                    {span}
+                    {leader.rank === 1 ? <Badge tone="ok">Best</Badge> : null}
+                  </th>
+                  <td>#{leader.rank}</td>
+                  <td className={styles.windowMeter}>
+                    <Meter
+                      label={`Suitability for ${span}`}
+                      value={
+                        bestScore === 0
+                          ? null
+                          : Math.max(0, Math.min(1, leader.score / bestScore))
+                      }
+                    />
+                  </td>
+                  <td>{reading(temperature) ?? "—"}</td>
+                  <td>{reading(rain) ?? "—"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </CardBody>
+    </Card>
+  );
+}
+
+/**
+ * What moved since the last time this forecast was retrieved.
+ *
+ * `/weather/changes` already answers this for the Dashboard and it answers it the same way here:
+ * the backend holds the previous snapshot, computes the differences, marks which of them clear the
+ * measure's materiality margin, and writes the statement. Nothing is compared in the browser.
+ *
+ * **The card is drawn either way.** With no earlier snapshot the artifact's slot would simply
+ * vanish, which is the composition changing shape because of an absence; the backend says so in
+ * `comparison_available` and this says so in the same card.
+ */
+function WhatChangedCard({ changed }: { readonly changed: WhatChanged | null }): ReactNode {
+  const material = (changed?.changes ?? []).filter((change) => change.material);
+
+  return (
+    <Card aria-labelledby="travel-changed">
+      <CardHeader
+        title="What changed?"
+        titleId="travel-changed"
+        badge={<DataClassBadge dataClass="forecast" />}
+      />
+      <CardBody>
+        {changed === null ? (
+          <p className={styles.quiet}>Checking whether this forecast has moved.</p>
+        ) : !changed.comparison_available ? (
+          <p className={styles.quiet}>
+            No earlier forecast snapshot is available for this trip yet. Once another forecast is
+            recorded, Weathra can compare how the trip outlook changed.
+          </p>
+        ) : (
+          <>
+            <p className={styles.railNote}>{changed.statement}</p>
+            {material.length === 0 ? (
+              <p className={styles.quiet}>
+                Nothing moved beyond the margin Weathra treats as material for these measures.
+              </p>
+            ) : (
+              <ul className={styles.changes}>
+                {material.slice(0, 4).map((change) => (
+                  <li className={styles.change} key={`${change.local_date}-${change.measure}`}>
+                    <span className={styles.changeMark} aria-hidden="true" />
+                    <span>{change.statement}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+/**
+ * The artifact's synthesis band, written by code from the figures already on the screen.
+ *
+ * Its own is badged AI INTERPRETATION over a paragraph about high-pressure stabilization, a 72-hour
+ * window of peak visibility, and evidence from fourteen coastal nodes. No model is called here and
+ * none is claimed: every sentence below is a figure this screen already shows, put in order, which
+ * is why it is badged analytics. Labelling deterministic text as a model's would be the one
+ * mislabelling this product must not make.
+ */
+function SynthesisBand({
+  location,
+  result,
+  best,
+  baseline,
+  forecast,
+}: {
+  readonly location: Location;
+  readonly result: ComparisonResult;
+  readonly best: ComparisonCandidate | null;
+  readonly baseline: BaselineComparison | null;
+  readonly forecast: ForecastResponse | null;
+}): ReactNode {
+  const temperature = statOf(best, ["temperature_max", "temperature_mean", "temperature"]);
+  const rain = statOf(best, ["precipitation_sum", "precipitation"]);
+  const wind = statOf(best, ["wind_gust_max", "wind_speed_max", "wind_speed"]);
+  const day = best ? `${dayLabel(best).weekday} ${dayLabel(best).date}`.trim() : null;
+  const difference = baseline ? formatSigned(baseline.difference) : null;
+
+  const sentences = [
+    best && day
+      ? `Across ${result.candidates.length} ranked days at ${friendlyName(location)}, ${day} scores first for ${result.criterion.replace(/_/g, " ")}.`
+      : null,
+    reading(temperature)
+      ? `It carries ${reading(temperature)}${reading(rain) ? ` with ${reading(rain)} of rain` : ""}.`
+      : null,
+    reading(wind) ? `Wind reaches ${reading(wind)} on that day.` : null,
+    difference && baseline
+      ? `The window sits ${difference} ${baseline.difference.unit ?? ""} against Weathra's ${baseline.baseline.years_used.length}-year archive baseline for this calendar period.`.replace(
+          /\s+/g,
+          " ",
+        )
+      : null,
+  ].filter((sentence): sentence is string => sentence !== null);
+
+  return (
+    <div className={styles.synthesis}>
+      <Card aria-labelledby="travel-synthesis">
+        <CardHeader
+          title="Travel intelligence synthesis"
+          titleId="travel-synthesis"
+          badge={<DataClassBadge dataClass="analytics" />}
+        />
+        <CardBody>
+          {sentences.length === 0 ? (
+            <p className={styles.quiet}>
+              Nothing in this window could be scored, so there is nothing to summarise.
+            </p>
+          ) : (
+            <p className={styles.synthesisProse}>{sentences.join(" ")}</p>
+          )}
+          <p className={styles.disclaimer}>
+            Written by code from the figures on this screen. No language model was called, and
+            nothing here is inferred beyond them.
+          </p>
+        </CardBody>
+      </Card>
+
+      {/*
+        The artifact's grounding card reads "vector alignment 0.968", "BCN-EL-PRAT-ST STABLE" and a
+        validation hash. Weathra keeps no such record for this screen — no agent run, no evidence
+        id — so what this card carries is what a reader would need to check the figures: who
+        answered, for where, over what, and when.
+      */}
+      <Card aria-labelledby="travel-evidence">
+        <CardHeader title="Data &amp; evidence" titleId="travel-evidence" />
+        <CardBody>
+          <dl className={styles.sourceFacts}>
+            <div className={styles.sourceFact}>
+              <dt>Forecast provider</dt>
+              <dd>{result.provider}</dd>
+            </div>
+            <div className={styles.sourceFact}>
+              <dt>Destination</dt>
+              <dd>{friendlyName(location)}</dd>
+            </div>
+            {forecast ? (
+              <div className={styles.sourceFact}>
+                <dt>Horizon</dt>
+                <dd>
+                  {forecast.horizon_days} {forecast.horizon_days === 1 ? "day" : "days"}
+                </dd>
+              </div>
+            ) : null}
+            {forecast?.attribution?.retrieved_at ? (
+              <div className={styles.sourceFact}>
+                <dt>Retrieved</dt>
+                <dd>{formatInstant(forecast.attribution.retrieved_at)}</dd>
+              </div>
+            ) : null}
+            {baseline ? (
+              <div className={styles.sourceFact}>
+                <dt>Archive provider</dt>
+                <dd>{baseline.baseline.provider}</dd>
+              </div>
+            ) : null}
+          </dl>
+        </CardBody>
+      </Card>
+    </div>
+  );
+}
+
+/**
+ * The trip window against the archive — the artifact's historical band, with Weathra's own baseline.
+ *
+ * Its own compares against "the 30-year WMO coastal baseline (1991-2020)". Weathra has a finite
+ * baseline of archive years and `baselineYearsStatement` names them, so the card says how many it
+ * actually got. The same endpoint Historical Analytics reads, asked for the trip's own calendar
+ * window, with the method behind its own press.
+ */
+function HistoricalContext({
+  location,
+  baseline,
+}: {
+  readonly location: Location;
+  readonly baseline: BaselineComparison | null;
+}): ReactNode {
+  if (baseline === null) return null;
+
+  const difference = formatSigned(baseline.difference);
+  const years = baseline.baseline.years_used.length;
+
+  return (
+    <div className={styles.historical}>
+      <Card aria-labelledby="travel-historical">
+        <CardHeader
+          title="Historical context"
+          titleId="travel-historical"
+          badge={<DataClassBadge dataClass="analytics" />}
+          subtitle={`Compared with Weathra's available ${years}-year archive baseline for this calendar period.`}
+        />
+        <CardBody>
+          <p className={styles.railNote}>{baseline.characterization}</p>
+
+          <div className={styles.historicalFigures}>
+            <div className={styles.historicalFigure}>
+              <span className={styles.historicalLabel}>Difference from baseline</span>
+              <span className={styles.historicalValue}>
+                {difference === null
+                  ? NOT_REPORTED
+                  : `${difference} ${baseline.difference.unit ?? ""}`.trim()}
+              </span>
+            </div>
+            <div className={styles.historicalFigure}>
+              <span className={styles.historicalLabel}>Baseline mean</span>
+              <span className={styles.historicalValue}>
+                {typeof baseline.baseline.mean.value === "number"
+                  ? `${Math.round(baseline.baseline.mean.value * 10) / 10} ${baseline.baseline.mean.unit ?? ""}`.trim()
+                  : NOT_REPORTED}
+              </span>
+            </div>
+            <div className={styles.historicalFigure}>
+              <span className={styles.historicalLabel}>Percentile</span>
+              <span className={styles.historicalValue}>
+                {typeof baseline.percentile_rank?.value === "number"
+                  ? `${Math.round(baseline.percentile_rank.value)}th`
+                  : NOT_REPORTED}
+              </span>
+            </div>
+          </div>
+
+          <details className={styles.why}>
+            <summary>View historical details</summary>
+            <p className={styles.quiet}>Baseline years: {baselineYearsStatement(baseline.baseline)}</p>
+            <p className={styles.quiet}>{baseline.baseline.labelling}</p>
+            {baseline.forecast_side_caveat ? (
+              <p className={styles.quiet}>{baseline.forecast_side_caveat}</p>
+            ) : null}
+          </details>
+        </CardBody>
+      </Card>
+
+      {/* The artifact sets imagery beside this band; the resolver is the product's own. */}
+      <LocationImage
+        displayName={friendlyName(location)}
+        latitude={location.latitude}
+        longitude={location.longitude}
+        variant="banner"
+        scrim="strong"
+      >
+        <span className={styles.heroZone}>{friendlyName(location)}</span>
+      </LocationImage>
+    </div>
+  );
+}
+
 function TravelFor({
   location,
   chooser,
@@ -426,6 +851,57 @@ function TravelFor({
   const result = ranking.state.kind === "ready" ? ranking.state.data : null;
   const best = result?.candidates?.[0] ?? null;
   const bestScore = best?.score ?? 0;
+
+  const place = { latitude: location.latitude, longitude: location.longitude };
+
+  /*
+   * **The three reads the lower bands need, all through contracts Weathra already has.**
+   *
+   * The hourly series is the Forecast Explorer's endpoint, the movement check is the Dashboard's,
+   * and the baseline is Historical Analytics'. Nothing new was added to the backend for any of
+   * them; what this screen was missing was the request, not the capability.
+   *
+   * Each is enabled only once the ranking has settled, so a first paint issues one upstream call
+   * rather than four — the pacing Historical Analytics learned the hard way when a page load asked
+   * the archive for the same place twelve times.
+   */
+  const settled = ranking.state.kind === "ready";
+
+  const forecast = useApiQuery<ForecastResponse>({
+    key: ["travel", "forecast", place, days],
+    enabled: settled,
+    request: (client) => client.forecast({ ...place, days: Number(days) }),
+  });
+
+  const changed = useApiQuery<WhatChanged>({
+    key: ["travel", "changes", place, days],
+    enabled: settled,
+    request: (client) => client.changes({ ...place, days: Number(days) }),
+  });
+
+  /*
+   * The trip's own calendar window against the archive. The dates come from the days the ranking
+   * actually returned, so the baseline covers what the person is travelling for rather than a
+   * window this screen chose.
+   */
+  const first = dateOf(result?.candidates?.[0] ?? null);
+  const last = dateOf(result?.candidates?.[(result?.candidates.length ?? 1) - 1] ?? null);
+  const baseline = useApiQuery<BaselineComparison>({
+    key: ["travel", "baseline", place, first, last],
+    enabled: settled && first !== null && last !== null,
+    request: (client) =>
+      client.baselineComparison({
+        ...place,
+        start: first as string,
+        end: last as string,
+        years: 5,
+        measure: "temperature_mean",
+      }),
+  });
+
+  const forecastData = forecast.state.kind === "ready" ? forecast.state.data : null;
+  const changedData = changed.state.kind === "ready" ? changed.state.data : null;
+  const baselineData = baseline.state.kind === "ready" ? baseline.state.data : null;
 
   return (
     <div className={styles.screen}>
@@ -536,6 +1012,23 @@ function TravelFor({
 
             <TripGuidance best={best} />
           </div>
+
+          <IntradayTrend forecast={forecastData} best={best} />
+
+          <div className={styles.comparison}>
+            <WindowMatrix result={result} best={best} />
+            <WhatChangedCard changed={changed.state.kind === "error" ? null : changedData} />
+          </div>
+
+          <SynthesisBand
+            location={location}
+            result={result}
+            best={best}
+            baseline={baselineData}
+            forecast={forecastData}
+          />
+
+          <HistoricalContext location={location} baseline={baselineData} />
 
           <p className={styles.advisory}>
             This ranks days by the weather forecast for one place. It is not advice about flights,

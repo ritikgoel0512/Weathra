@@ -499,8 +499,8 @@ rank. Three metric cards from the best day's supporting statistics. A daily outl
 beside weather-aware guidance, each note naming the figure that raised it. The advisory in the
 footer rule. The screen answers its default question on arrival.
 
-**Verdict: ACCEPTABLE DIVERGENCE** — the first two-thirds of the artifact's bands are reconstructed
-and recognisable; three of its lower bands are not built.
+**Verdict: PASS** (upper bands 34.40, lower bands 34.41) — all nine of the artifact's bands are
+represented, each from data Weathra actually holds.
 
 **Truthful divergences.**
 
@@ -510,9 +510,11 @@ and recognisable; three of its lower bands are not built.
 * **No flight stability, airline operations, sensor nodes, model convergence or vector alignment.**
 * **No AI packing strategy.** Weathra runs no packing model, so the rail carries only the
   considerations the figures on the screen justify, each naming its figure.
-* **Not built in this pass:** the intra-day chart, the temporal comparison matrix, "what changed",
-  the synthesis band and the historical baseline region. Each needs data this screen does not
-  currently request — hourly series, sub-window comparisons, forecast snapshots and an archive
-  baseline — and adding four retrievals was beyond what the pass could verify.
+* **The four lower bands were completed in task 34.41**, from contracts other screens already use:
+  the Explorer's hourly forecast for the intra-day chart, the Dashboard's `/weather/changes` for
+  what moved, and Historical Analytics' baseline comparison for the historical band. Nothing was
+  added to the backend; what this screen had been missing was the request, not the capability. The
+  temporal comparison is slices of the ranked window, every figure in a row *selected* from the days
+  in that slice rather than computed over them.
 * **The capture's provider reads `stub-provider`** because the harness is a stub; production reads
   Open-Meteo.

@@ -560,3 +560,195 @@
   line-height: var(--type-meta-line);
   color: var(--color-text-muted);
 }
+
+/* ================================ task 34.41: the artifact's lower bands ================ */
+
+/* The comparison matrix beside the movement card, as the artifact pairs them. */
+.comparison,
+.synthesis,
+.historical {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .comparison {
+    grid-template-columns: minmax(0, 2.2fr) minmax(17rem, 1fr);
+  }
+
+  .synthesis {
+    grid-template-columns: minmax(0, 2.4fr) minmax(17rem, 1fr);
+  }
+
+  .historical {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  }
+}
+
+.comparison > *,
+.synthesis > *,
+.historical > * {
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------- the window matrix */
+
+.windows {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.windows th,
+.windows td {
+  padding: var(--space-2) var(--space-2);
+  text-align: left;
+  border-block-end: 1px solid var(--color-border-subtle);
+  vertical-align: middle;
+}
+
+.windows thead th {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.windows tbody th {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-primary);
+}
+
+.windows tbody td {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The leading window, marked by ground and by badge — never by colour alone. */
+.windows tbody tr[data-best="true"] {
+  background: color-mix(in srgb, var(--color-accent) 7%, transparent);
+}
+
+.windowMeter {
+  min-width: 8rem;
+}
+
+/* ------------------------------------------------------------- what changed */
+
+.changes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.change {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+  min-width: 0;
+}
+
+.changeMark {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-block-start: 0.45em;
+  border-radius: var(--radius-pill);
+  background: var(--color-class-forecast);
+}
+
+.railNote {
+  margin: 0;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+}
+
+/* ------------------------------------------------------------- the synthesis */
+
+/* The band the artifact gives the most reading width on the page. */
+.synthesisProse {
+  margin: 0;
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-primary);
+  max-width: 70ch;
+}
+
+.sourceFacts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.sourceFact {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sourceFact dt {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.sourceFact dd {
+  margin: 0;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------- the historical band */
+
+.historicalFigures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-3);
+  margin-block: var(--space-3);
+  min-width: 0;
+}
+
+.historicalFigure {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.historicalLabel {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.historicalValue {
+  font-family: var(--family-display);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
