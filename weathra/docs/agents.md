@@ -1,6 +1,6 @@
 # Agents and orchestration
 
-Weathra answers a question by running a small graph over four specialized agents. The shape of that
+Weathra answers a question by running a small graph over five specialized agents. The shape of that
 graph follows from one decision, and everything else in this document is a consequence of it.
 
 ## The decision: the graph executes tools; the model proposes and explains
@@ -66,22 +66,33 @@ as one function, and would make the concurrent execution of an independent group
 easier. LangGraph is used for what it is good at here: the checkpointer that persists
 conversational state across turns.
 
-## The four capabilities
+## The five capabilities
 
-The catalogue is a closed enum — `forecast`, `historical`, `analytics`, `rag` — and that enum *is*
-the guard: a routing plan naming anything else fails schema validation, the model is told the four
-valid names, and nothing executes. A capability cannot be requested into existence by a
+The catalogue is a closed enum — `current`, `forecast`, `historical`, `analytics`, `rag` — and that
+enum *is* the guard: a routing plan naming anything else fails schema validation, the model is told
+the five valid names, and nothing executes. A capability cannot be requested into existence by a
 persuasively-worded plan.
 
 | Agent | What it does | How it gets data |
 |---|---|---|
-| **forecast** | Current conditions and forecast windows | `weather_current`, `weather_forecast` |
+| **current** | What the weather is doing right now at a place | `weather_current` |
+| **forecast** | Forecast windows, with the deterministic analysis of the window | `weather_forecast` |
 | **historical** | Archive retrieval, period comparison, baseline comparison | `weather_history`, then `weather_statistics` for the headline figures |
 | **analytics** | Descriptive statistics, distribution, trend, anomaly, thresholds | `weather_statistics`, `weather_anomaly`, over a series a prior step retrieved |
 | **rag** | Weather concepts and terminology from the knowledge corpus | pgvector retrieval, threshold-gated |
 
 Two agents frame the run and are not capabilities: **supervisor** routes, **synthesis** writes.
-All six appear in the evidence record with their status and timing.
+All seven appear in the evidence record with their status and timing.
+
+**`current` is its own capability, and was not always.** This table used to give `weather_current`
+to the forecast agent, and the routing prompt described that capability as "current conditions and
+forecasts". Neither was true of the code: `run_forecast` called `weather_forecast` and nothing else,
+so "what is it doing right now?" was answered from the first hours of a model's projection and no
+answer could carry a figure of data class `current` at all. They are separated now because they are
+separate claims — a provider's reading of the present and its projection of the days ahead — and
+`specs/safety-grounding` requires an answer carrying both to attribute each one. The supervisor is
+told when a reading of the present helps and when it does not; a plan that does not ask for it makes
+no call.
 
 **Analytics cannot retrieve.** The statistics and anomaly tools take a series as an argument and
 have no provider and no way to fetch one, so analytics runs over points a retrieval step already

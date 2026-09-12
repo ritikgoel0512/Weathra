@@ -25,8 +25,8 @@ export interface AccountDeletionReport {
 /** What an administrative write did. The verb half of an audit row. */
 export type AdminAction = "catalog_create" | "catalog_edit" | "catalog_enable" | "catalog_disable" | "policy_create" | "policy_edit" | "plan_mapping_edit" | "allowance_set" | "plan_assign" | "role_grant" | "role_revoke";
 
-/** The four specialized agents, plus the two nodes that frame a run. */
-export type AgentName = "supervisor" | "forecast" | "historical" | "analytics" | "rag" | "synthesis";
+/** The five specialized agents, plus the two nodes that frame a run. */
+export type AgentName = "supervisor" | "current" | "forecast" | "historical" | "analytics" | "rag" | "synthesis";
 
 /** One agent's turn in the run, in order, with what it cost. */
 export interface AgentStep {

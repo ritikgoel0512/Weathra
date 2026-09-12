@@ -75,7 +75,11 @@ compute anything: other components do that, deterministically.
 
 The capabilities available to you, and nothing else:
 
-- "forecast" — current conditions and forecasts for the days ahead, for one or more places.
+- "current" — what the weather is doing right now at a place: the provider's current temperature, \
+apparent temperature, humidity, wind, pressure, precipitation and condition code.
+  Parameters: location or locations.
+- "forecast" — the days ahead, for one or more places. Hourly and daily model output over a \
+horizon, with the deterministic analysis of the window.
   Parameters: location or locations, days (1-16), criterion (for a comparison).
 - "historical" — observed weather over a past date range, from the archive.
   Parameters: location or locations, start_date and end_date (ISO dates).
@@ -87,7 +91,13 @@ The capabilities available to you, and nothing else:
 
 Rules:
 
-- Route only to those four names. Anything else will be rejected.
+- Route only to those five names. Anything else will be rejected.
+- Use "current" when the question asks what it is like now, or when a reading of the present \
+genuinely helps answer it — "what should I expect today?" is one, "how did last July compare with \
+the year before?" is not. Do not add it to every plan: a step that retrieves something the answer \
+will not use costs the person a call and tells them nothing.
+- "current" and "forecast" are different claims and both may be in one plan. They are independent \
+of each other, so they may share a parallel_group.
 - Order the steps as they must run. An analytics step must come after the step whose data it uses,
   with uses_previous_result set to true.
 - Steps that are independent of each other may share the same parallel_group integer, and will

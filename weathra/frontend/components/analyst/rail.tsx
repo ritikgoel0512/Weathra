@@ -144,7 +144,14 @@ export interface AnalystRailProps {
  * answer's own rule.
  */
 const SOURCE_ROLES: Readonly<Record<string, string>> = {
-  current: "Observed conditions",
+  /*
+   * "Current conditions", not "Observed conditions": the provider's current block is its analysis
+   * for right now rather than a reading taken at the place, and the row names the role a source
+   * played rather than upgrading what it supplied. Two rows for one provider are right here —
+   * `specs/safety-grounding` wants the present and the days ahead credited separately — and they
+   * are two rows only because the roles genuinely differ.
+   */
+  current: "Current conditions",
   forecast: "Forecast data",
   historical_observation: "Archive observations",
 };

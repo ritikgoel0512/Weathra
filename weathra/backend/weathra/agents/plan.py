@@ -49,12 +49,20 @@ logger = logging.getLogger("weathra.agents.plan")
 
 
 class Capability(StrEnum):
-    """The four capabilities the supervisor may route to, and nothing else.
+    """The five capabilities the supervisor may route to, and nothing else.
 
     A closed enum on purpose: this *is* the catalog as far as the model is concerned, so a proposed
     capability outside it fails validation rather than reaching an executor.
+
+    ``CURRENT`` reaches ``weather_current``, the tool that has always been in the MCP catalog and
+    that nothing in this graph could ask for. Until it was here the routing prompt described the
+    forecast capability as covering "current conditions and forecasts", which the forecast node did
+    not do: it called ``weather_forecast`` and nothing else, so "what is it doing right now?" was
+    answered from the first hours of a model's projection and no Analyst answer could carry a figure
+    of data class ``current``.
     """
 
+    CURRENT = "current"
     FORECAST = "forecast"
     HISTORICAL = "historical"
     ANALYTICS = "analytics"
@@ -244,9 +252,22 @@ _FORECAST_WORDS = frozenset(
         "expected",
         "going",
         "weekend",
+    }
+)
+
+# The present tense, which used to be filed under the future.
+#
+# "now", "currently" and "current" were forecast words, and had to be while the forecast node was
+# the only thing that retrieved: "how humid is it in Berlin now?" routed to a seven-day projection
+# and was answered from its first hours. They mean the present, ``Capability.CURRENT`` retrieves the
+# present, and this is the set that sends them there.
+_CURRENT_WORDS = frozenset(
+    {
         "now",
         "currently",
         "current",
+        "moment",
+        "outside",
     }
 )
 
@@ -479,6 +500,7 @@ def fallback_plan(question: str, *, now: datetime | None = None) -> RoutingPlan:
     conceptual = _looks_conceptual(question)
     historical = bool(words & _HISTORICAL_WORDS)
     forecast = bool(words & _FORECAST_WORDS)
+    present = bool(words & _CURRENT_WORDS)
     analytics_words = words & _ANALYTICS_WORDS
     if conceptual:
         analytics_words -= _AMBIGUOUS_ANALYTICS_WORDS
@@ -498,8 +520,20 @@ def fallback_plan(question: str, *, now: datetime | None = None) -> RoutingPlan:
     # A question with no tense marker is about now, which is a forecast-window question. Defaulting
     # to the archive instead would answer a "what is it like?" with last week. A purely conceptual
     # question retrieves nothing: "what does dew point mean?" is answered from the knowledge base.
-    wants_data = not conceptual or historical or forecast or analytics
+    wants_data = not conceptual or historical or forecast or present or analytics
     if wants_data:
+        # The present, where the question asked for it. Independent of the two below rather than
+        # instead of them: "what is it like now, and what about the weekend?" is both, and "how does
+        # this week compare with last year?" is neither.
+        if present:
+            steps.append(
+                PlanStep(
+                    capability=Capability.CURRENT,
+                    location=place,
+                    reason="The deterministic router matched present-tense vocabulary.",
+                )
+            )
+
         if historical and not forecast:
             end = (moment.date() if moment else date.today()) - timedelta(days=1)
             steps.append(
@@ -511,7 +545,9 @@ def fallback_plan(question: str, *, now: datetime | None = None) -> RoutingPlan:
                     end_date=end,
                 )
             )
-        else:
+        elif forecast or not present:
+            # No forecast step beside a present-tense question that asked for nothing else: the
+            # default below exists for a question with *no* tense marker, and "right now" is one.
             steps.append(
                 PlanStep(
                     capability=Capability.FORECAST,

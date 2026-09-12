@@ -32,6 +32,7 @@ from weathra.agents.nodes.support import (
     attribution_from,
     call_tool,
     finding_from_statistic,
+    findings_from_current,
     headline_measure,
     points_for,
     record_step,
@@ -45,12 +46,13 @@ from weathra.domain.location import Location
 from weathra.domain.weather import DataClass
 from weathra.mcp.client import McpToolClient
 
-__all__ = ["run_forecast", "run_historical"]
+__all__ = ["run_current", "run_forecast", "run_historical"]
 
 logger = logging.getLogger("weathra.agents.nodes.retrieval")
 
 # Which tool and which agent each capability is. Named here so a capability cannot silently reach
 # for a tool outside the two it is meant to use.
+_CURRENT_TOOL = "weather_current"
 _FORECAST_TOOL = "weather_forecast"
 _HISTORY_TOOL = "weather_history"
 _STATISTICS_TOOL = "weather_statistics"
@@ -58,6 +60,70 @@ _STATISTICS_TOOL = "weather_statistics"
 # What "how warm was it?" means. The same default set the analytics node uses, so a historical
 # answer with no explicit statistic reads the same as a forecast one.
 HEADLINE_STATISTICS: tuple[str, ...] = ("minimum", "maximum", "mean", "range")
+
+
+async def run_current(state: GraphState, step: PlanStep, *, client: McpToolClient) -> GraphState:
+    """Retrieve current conditions for each location the step names.
+
+    The third capability that retrieves, and the reason it is its own node rather than a branch of
+    ``run_forecast``: what a provider reports for *now* and what it projects for the days ahead are
+    two data classes, they are recorded under two agents, and an answer carrying both has to be able
+    to say which figure is which. Folding them together would produce exactly the blended credit
+    line `specs/safety-grounding` forbids.
+
+    No statistics step follows this one. A current reading is a single value per measure — there is
+    no series to summarize, and asking the analytics tool for the mean of one number would be
+    arithmetic performed for the sake of having performed some.
+    """
+    started = datetime.now(UTC)
+    locations = _locations_for(state, step)
+
+    if not locations:
+        return record_step(
+            state,
+            agent=AgentName.CURRENT,
+            started_at=started,
+            status=StepStatus.SKIPPED,
+            reason="No location was resolved, so there was nowhere to read conditions for.",
+        )
+
+    working = state
+    succeeded = 0
+
+    for location in locations:
+        working, outcome = await call_tool(
+            working,
+            client,
+            agent=AgentName.CURRENT,
+            tool=_CURRENT_TOOL,
+            arguments={
+                "latitude": location.latitude,
+                "longitude": location.longitude,
+                "units": working.unit_system.value,
+            },
+        )
+
+        if outcome.failed:
+            working = working.with_failure(
+                f"The current conditions for {location.qualified_name} could not be retrieved "
+                f"({outcome.error_code})."
+            )
+            continue
+
+        working = _record_retrieval(
+            working, outcome.data, capability=Capability.CURRENT, step=step, location=location
+        )
+        succeeded += 1
+
+    status = StepStatus.SUCCEEDED if succeeded else StepStatus.FAILED
+    reason = (
+        step.reason
+        if succeeded
+        else "Current conditions could not be retrieved for any location in this step."
+    )
+    return record_step(
+        working, agent=AgentName.CURRENT, started_at=started, status=status, reason=reason
+    )
 
 
 async def run_forecast(state: GraphState, step: PlanStep, *, client: McpToolClient) -> GraphState:
@@ -321,7 +387,18 @@ def _record_retrieval(
 
 
 def _findings_from(payload: dict[str, Any], attribution: Attribution) -> tuple[Finding, ...]:
-    """The tool's own computed statistics, as evidence-record findings."""
+    """The tool's own reported figures, as evidence-record findings.
+
+    Two shapes, because the two retrieval tools report differently and neither one is summarized
+    here. ``weather_forecast`` returns its own computed statistics, each with the method that
+    produced it. ``weather_current`` returns a value and a unit per measure, because a current
+    reading is already the figure — see ``findings_from_current`` for why that is transcription
+    rather than the node computing. The archive returns neither, and the historical node asks
+    ``weather_statistics`` over the series it retrieved.
+    """
+    if attribution.data_class is DataClass.CURRENT:
+        return findings_from_current(payload, attribution)
+
     return tuple(
         finding_from_statistic(reported, attribution)
         for reported in payload.get("findings") or ()

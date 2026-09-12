@@ -37,6 +37,7 @@ import {
   ModelAttribution,
   ProvenanceSection,
   UncertaintyIndicator,
+  WeatherIcon,
   formatInstant,
   formatLocalStamp,
 } from "@/components/ui";
@@ -58,6 +59,7 @@ import { inferenceMetadataFrom } from "@/lib/inference/served";
 import { evidencePath } from "@/lib/routes";
 import { placeLabel } from "@/lib/locations/place";
 import { runIntentOf } from "@/lib/analyst/intent";
+import { conditionForReported } from "@/lib/weather/condition";
 
 import styles from "./analyst.module.css";
 
@@ -396,8 +398,16 @@ export function AnswerView({
           */}
           {observedGroups.length > 0 || forecastGroups.length > 0 ? (
             <div className={styles.subcards}>
+              {/*
+                **Current conditions, where the run retrieved them — task 34.33.**
+
+                This panel was unreachable in production until the graph had a capability that could
+                ask for them: the Analyst's catalog was forecast, historical, analytics and rag, and
+                none of those returns a figure of data class `current`. It is still conditional, and
+                on a question that did not need the present it is still absent rather than empty.
+              */}
               {observedGroups.length > 0 ? (
-                <FigurePanel title="Observed data" groups={observedGroups} />
+                <FigurePanel title={GROUP_TITLES.observed} groups={observedGroups} />
               ) : null}
               {forecastGroups.length > 0 ? (
                 <FigurePanel title="Forecast" groups={forecastGroups} />
@@ -558,7 +568,10 @@ function FigurePanel({
    * carried it. `headlineFindings` ranks by what the measure is — see its note — and the
    * attribution each figure rests on is the panel's own footer.
    */
-  const ordered = headlineFindings(groups.flatMap((group) => [...group.findings]));
+  const ordered = headlineFindings(
+    groups.flatMap((group) => [...group.findings]),
+    first.dataClass,
+  );
   const lead = ordered.slice(0, HEADLINE_FIGURES);
   const rest = ordered.slice(HEADLINE_FIGURES);
 
@@ -595,13 +608,30 @@ function FigureList({ findings }: { readonly findings: readonly Finding[] }): Re
   return (
     <dl className={styles.facts}>
       {findings.map((finding, index) => {
+        /*
+          A condition code is a figure the way a postcode is a number.
+          `conditionForReported` recognises it by the unit the domain gives it and translates it
+          through the product's one condition vocabulary — the same `conditionFor` the Dashboard
+          hero, the hourly strip and Compare use, so WMO 3 cannot be "Overcast" here and something
+          else there. Where it is not a code this is null and the figure renders as itself.
+        */
+        const condition = conditionForReported(finding.value, finding.unit);
         const value = findingValue(finding);
         return (
           <div className={styles.factRow} key={`${finding.label}-${index}`}>
             <dt className={styles.factTerm}>{finding.label}</dt>
-            <dd className={styles.factValue} data-reported={value ? "true" : "false"}>
-              {value ?? "Not reported"}
-            </dd>
+            {condition ? (
+              <dd className={styles.factValue} data-reported="true">
+                <span className={styles.factCondition}>
+                  <WeatherIcon condition={condition} size={22} />
+                  {condition.label}
+                </span>
+              </dd>
+            ) : (
+              <dd className={styles.factValue} data-reported={value ? "true" : "false"}>
+                {value ?? "Not reported"}
+              </dd>
+            )}
           </div>
         );
       })}

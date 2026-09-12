@@ -1769,12 +1769,60 @@ function clarificationEnvelope(requestId, question) {
  * A focus on the request, a place named in the question, or a saved default. None of the three is
  * the clarification case; any of them answers.
  */
+/**
+ * Whether this question asks what it is like *now* — the stub's model of the router's judgement.
+ *
+ * `Capability.CURRENT` joined the catalog in task 34.33, and with it the planner's decision about
+ * when a reading of the present helps. A stub that returned current conditions for every question
+ * would photograph a product that retrieves them unconditionally, which is precisely what the
+ * capability was asked *not* to do; one that never returned them would photograph the gap it was
+ * added to close. So it reads the question the way `plan.py`'s deterministic router reads it.
+ */
+function asksAboutNow(body) {
+  const question = typeof body?.question === "string" ? body.question : "";
+  return /\b(right now|now|currently|current|at the moment|outside)\b/i.test(question);
+}
+
 function hasAPlace(body) {
   if (typeof body?.location === "string" && body.location.trim() !== "") return true;
   const question = typeof body?.question === "string" ? body.question : "";
   if (/berlin|munich|münchen|london|tokyo|new york|paris/i.test(question)) return true;
   return preferences?.default_location != null;
 }
+
+/**
+ * The current-conditions block, as `findings_from_current` transcribes one.
+ *
+ * A value and a unit per measure the provider reported, each labelled and each of data class
+ * `current`. The condition arrives as the provider's own WMO code with the unit the domain gives a
+ * code, because the vocabulary that turns 3 into "Overcast" lives in `lib/weather/condition.ts` and
+ * the backend deliberately has no second copy of it.
+ */
+const CURRENT_ATTRIBUTION = {
+  ...ATTRIBUTION,
+  data_class: "current",
+  timestamp_utc: "2026-09-04T06:00:00Z",
+};
+
+const CURRENT_FINDINGS = [
+  { label: "Temperature", value: 15.3, unit: "°C", data_class: "current", attribution: CURRENT_ATTRIBUTION },
+  { label: "Condition", value: 3, unit: "WMO code", data_class: "current", attribution: CURRENT_ATTRIBUTION },
+  { label: "Humidity", value: 68, unit: "%", data_class: "current", attribution: CURRENT_ATTRIBUTION },
+  { label: "Wind speed", value: 12.4, unit: "km/h", data_class: "current", attribution: CURRENT_ATTRIBUTION },
+  { label: "Feels like", value: 14.1, unit: "°C", data_class: "current", attribution: CURRENT_ATTRIBUTION },
+  { label: "Precipitation", value: 0, unit: "mm", data_class: "current", attribution: CURRENT_ATTRIBUTION },
+];
+
+/** The briefing a run that read the present and the days ahead writes, in streamed pieces. */
+const NOW_ANSWER_PIECES = [
+  "Berlin is 15.3 °C right now, ",
+  "with 68 % humidity and a 12.4 km/h wind. ",
+  "The days ahead stay in that range: highs reach 24.5 °C and lows hold at 11.2 °C, ",
+  "with 6.4 mm of rain forecast across the window. ",
+  "Confidence is high through the next 6 hours and lower further out.",
+];
+
+const NOW_ANSWER_PROSE = NOW_ANSWER_PIECES.join("");
 
 function answerEnvelope(requestId, question) {
   return {
@@ -1902,6 +1950,54 @@ function answerEnvelope(requestId, question) {
     llm_provider: "stub-gateway",
     llm_model: "stub-model",
     evidence: { ...EVIDENCE_RECORD, request_id: requestId, question },
+  };
+}
+
+/**
+ * The envelope a run that asked about now returns: the present, the days ahead, and no archive.
+ *
+ * Built from the forecast answer rather than beside it, so the two cannot drift in the parts they
+ * share — the resolution, the uncertainty and the run record. What differs is what such a run
+ * genuinely retrieves: `weather_current` for the readings, `weather_forecast` for the window, and
+ * no historical step at all, because nothing in the question asked about the past.
+ */
+function nowAndAheadEnvelope(requestId, question) {
+  const base = answerEnvelope(requestId, question);
+  const forecastFindings = (base.findings ?? []).filter(
+    (finding) => finding.data_class === "forecast",
+  );
+
+  return {
+    ...base,
+    answer_prose: NOW_ANSWER_PROSE,
+    findings: [...CURRENT_FINDINGS, ...forecastFindings],
+    attribution: [CURRENT_ATTRIBUTION, { ...ATTRIBUTION, period: PERIOD }],
+    resolved: {
+      ...base.resolved,
+      statement: "Berlin, Germany, now and for this week, from your saved default location.",
+    },
+    grounding: {
+      ...base.grounding,
+      // 15.3, 68, 12.4, 24.5, 11.2, 6.4 and the 6-hour horizon.
+      figures_checked: 7,
+    },
+    evidence: {
+      ...base.evidence,
+      agents: [
+        { sequence: 1, agent: "supervisor", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 110, reason: "Planned a reading of now and the window ahead." },
+        { sequence: 2, agent: "current", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 240, reason: "Read the current conditions." },
+        { sequence: 3, agent: "forecast", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 840, reason: "Retrieved the window." },
+        { sequence: 4, agent: "synthesis", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 900 },
+      ],
+      tool_calls: [
+        { sequence: 1, tool: "weather_current", agent: "current", arguments: { latitude: 52.52, longitude: 13.405, units: "metric" }, started_at: RETRIEVED_AT, duration_ms: 240 },
+        { sequence: 2, tool: "weather_forecast", agent: "forecast", arguments: { latitude: 52.52, longitude: 13.405, days: 7 }, started_at: RETRIEVED_AT, duration_ms: 840 },
+      ],
+      // No archive step ran, so nothing credits one.
+      citations: [],
+      attributions: [CURRENT_ATTRIBUTION, { ...ATTRIBUTION, period: PERIOD }],
+      data_classes: ["current", "forecast", "ai_interpretation"],
+    },
   };
 }
 
@@ -2224,10 +2320,32 @@ const server = createServer((request, response) => {
 
       const pause = () => new Promise((resolve) => setTimeout(resolve, 40));
 
+      /*
+       * Two plans, because the router has two answers — task 34.33.
+       *
+       * A question about now routes to `current` and `forecast`; one comparing this week with the
+       * archive routes to `forecast`, `historical` and `analytics` and to no current step at all.
+       * Streaming one fixed plan for both would photograph a product that retrieves the present
+       * unconditionally, which is the behaviour the capability was explicitly not to have.
+       */
+      const wantsNow = asksAboutNow(body);
+      const plan = wantsNow
+        ? [
+            ["current", "weather_current"],
+            ["forecast", "weather_forecast"],
+          ]
+        : [
+            ["forecast", "weather_forecast"],
+            ["historical", "weather_history"],
+            ["analytics", "weather_baseline_comparison"],
+          ];
+
       frame("routing", {
-        capabilities: ["forecast", "historical", "analytics"],
+        capabilities: plan.map(([agent]) => agent),
         source: "model",
-        reason: "The question asks for this week against the record.",
+        reason: wantsNow
+          ? "The question asks what it is like now and what is coming."
+          : "The question asks for this week against the record.",
       });
       await pause();
 
@@ -2240,11 +2358,7 @@ const server = createServer((request, response) => {
        * review found, arrived at from the other side.
        */
       if (hasAPlace(body)) {
-        for (const [agent, tool] of [
-          ["forecast", "weather.forecast"],
-          ["historical", "weather.history"],
-          ["analytics", "analytics.baseline_comparison"],
-        ]) {
+        for (const [agent, tool] of plan) {
           frame("agent_start", { agent, reason: null });
           await pause();
           frame("tool_start", { tool, agent });
@@ -2255,7 +2369,7 @@ const server = createServer((request, response) => {
         }
 
         frame("agent_start", { agent: "synthesis", reason: null });
-        for (const piece of ANSWER_PIECES) {
+        for (const piece of wantsNow ? NOW_ANSWER_PIECES : ANSWER_PIECES) {
           frame("answer_delta", { text: piece });
           await pause();
         }
@@ -2267,10 +2381,13 @@ const server = createServer((request, response) => {
       // The Analyst offers its evidence link from this identifier and nothing else, so the flow
       // cannot reach the record except through an id the run itself produced.
       frame("final", {
-        answer: (hasAPlace(body) ? answerEnvelope : clarificationEnvelope)(
-          requestId,
-          typeof body.question === "string" ? body.question : "",
-        ),
+        answer: (
+          hasAPlace(body)
+            ? wantsNow
+              ? nowAndAheadEnvelope
+              : answerEnvelope
+            : clarificationEnvelope
+        )(requestId, typeof body.question === "string" ? body.question : ""),
         evidence_id: STREAM_EVIDENCE_ID,
       });
       response.end();

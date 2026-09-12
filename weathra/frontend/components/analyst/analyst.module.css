@@ -1026,6 +1026,19 @@
 }
 
 /*
+ * A condition reads as a drawing beside its own words, at the same step as the figures either side
+ * of it — the artifact sets the sky state level with the readings rather than under them. The icon
+ * is decorative and hidden from assistive technology; the label carries the meaning.
+ */
+.factCondition {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--color-accent);
+}
+
+/*
  * The rest of the run's figures, one press away and in the same panel.
  *
  * A forecast retrieval reports around fifteen findings. Four lead; the remainder are here, under a

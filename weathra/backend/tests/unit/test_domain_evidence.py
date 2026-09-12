@@ -891,6 +891,10 @@ def test_a_citation_carries_its_document_identity_and_score() -> None:
 def test_every_agent_in_the_execution_record_is_separately_identifiable() -> None:
     assert {agent.value for agent in AgentName} == {
         "supervisor",
+        # Its own name rather than a branch of "forecast": what a provider reports for now and what
+        # it projects for the days ahead are two claims under two data classes, and a record that
+        # credited both to one agent could not say which of them was retrieved (task 34.33).
+        "current",
         "forecast",
         "historical",
         "analytics",

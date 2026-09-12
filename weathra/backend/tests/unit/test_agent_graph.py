@@ -33,7 +33,7 @@ from weathra.agents.state import GraphState
 from weathra.domain.evidence import AgentName, DataClass, StepStatus
 from weathra.domain.identity import Principal
 from weathra.domain.location import Resolution, Resolved
-from weathra.domain.weather import UnitSystem
+from weathra.domain.weather import Measure, UnitSystem
 from weathra.rag.retrieve import NOT_COVERED, RetrievalResult, RetrievedChunk
 
 USER = "11111111-1111-4111-8111-111111111111"
@@ -191,6 +191,214 @@ async def test_the_evidence_record_carries_the_arguments_the_tool_was_called_wit
     assert arguments["latitude"] == BERLIN.latitude
     assert arguments["days"] == 2
     assert arguments["units"] == "metric"
+
+
+# ================================================ task 34.33: the current-conditions node
+
+
+def _conditions() -> dict[Measure, float]:
+    """A provider's current-weather block, as Open-Meteo returns one.
+
+    Seven measures and *not* every measure the enum defines, because that is the shape the node has
+    to get right: the provider reports what it has for a location, and the ones it did not report
+    must leave no trace at all rather than a row saying they are missing.
+    """
+    return {
+        Measure.TEMPERATURE: 15.3,
+        Measure.APPARENT_TEMPERATURE: 14.1,
+        Measure.RELATIVE_HUMIDITY: 68.0,
+        Measure.WIND_SPEED: 12.4,
+        Measure.WIND_DIRECTION: 240.0,
+        Measure.PRECIPITATION: 0.0,
+        Measure.WEATHER_CODE: 3.0,
+    }
+
+
+async def test_a_question_about_now_routes_to_and_executes_the_current_node() -> None:
+    """Probe A. The capability existed in the MCP catalog; nothing in the graph could ask for it."""
+    settings = agent_settings()
+    client = _client(
+        _plan(
+            PlanStep(
+                capability=Capability.CURRENT,
+                reason="the question asks what it is like now",
+                location="Berlin",
+            )
+        )
+    )
+
+    async with connected_tools(
+        settings=settings, provider=stub_provider(current_values=_conditions())
+    ) as tools:
+        result = await run_agent(
+            _state("What is the weather like in Berlin right now?"),
+            RunDependencies(settings=settings, tools=tools, geocoder=StubGeocoder(), llm=client),
+        )
+
+    assert result.state.plan is not None
+    assert result.state.plan.capabilities == (Capability.CURRENT,)
+    assert AgentName.CURRENT in result.envelope.evidence.agents_in_order
+    assert [call.tool for call in result.envelope.evidence.tool_calls] == ["weather_current"]
+    assert DataClass.CURRENT in result.envelope.evidence.data_classes
+
+    # The readings themselves, named rather than left as column keys, each carrying its class.
+    findings = {finding.label: finding for finding in result.envelope.findings}
+    assert findings["Temperature"].value == 15.3
+    assert findings["Temperature"].unit == "°C"
+    assert findings["Humidity"].value == 68.0
+    assert all(finding.data_class is DataClass.CURRENT for finding in result.envelope.findings)
+    assert result.envelope.attribution[0].location.is_same_place(BERLIN)
+
+    # A current reading is a figure, not a statistic: nothing computed it and nothing claims to.
+    assert all(finding.method is None for finding in result.envelope.findings)
+    # And no forecast uncertainty, because no forecast figure is in the answer.
+    assert result.envelope.uncertainty is None
+
+
+async def test_a_measure_the_provider_did_not_report_leaves_no_finding() -> None:
+    """Absence is silence here, not a row saying a field is missing.
+
+    The forecast panel states an unavailable *statistic* as unavailable, because a statistic that
+    was asked for and could not be computed is a fact about the window. A measure a provider simply
+    does not publish for a place is a fact about the provider's field list, and four real readings
+    beside six "not reported" rows describes the latter.
+    """
+    settings = agent_settings()
+    client = _client(_plan(PlanStep(capability=Capability.CURRENT, reason="r", location="Berlin")))
+
+    async with connected_tools(
+        settings=settings,
+        provider=stub_provider(current_values={Measure.TEMPERATURE: 15.3}),
+    ) as tools:
+        result = await run_agent(
+            _state("How warm is it in Berlin now?"),
+            RunDependencies(settings=settings, tools=tools, geocoder=StubGeocoder(), llm=client),
+        )
+
+    assert [finding.label for finding in result.envelope.findings] == ["Temperature"]
+    assert all(finding.unavailable_reason is None for finding in result.envelope.findings)
+
+
+async def test_the_condition_is_carried_as_the_provider_code_and_described_nowhere_here() -> None:
+    """`lib/weather/condition.ts` is the product's one condition vocabulary, and stays the only one.
+
+    Translating WMO 3 into "Overcast" is a translation rather than a claim, but a second table doing
+    it here would let the same code be described two ways on two screens — which is the thing that
+    module exists to prevent. So the backend carries the published code with the unit that says it
+    is a code, and the screen that shows it translates it.
+    """
+    settings = agent_settings()
+    client = _client(_plan(PlanStep(capability=Capability.CURRENT, reason="r", location="Berlin")))
+
+    async with connected_tools(
+        settings=settings, provider=stub_provider(current_values=_conditions())
+    ) as tools:
+        result = await run_agent(
+            _state("What is it doing in Berlin now?"),
+            RunDependencies(settings=settings, tools=tools, geocoder=StubGeocoder(), llm=client),
+        )
+
+    condition = next(f for f in result.envelope.findings if f.label == "Condition")
+    assert condition.value == 3.0
+    assert condition.unit == "WMO code"
+    assert condition.text_value is None
+
+
+async def test_now_and_the_days_ahead_are_two_steps_and_two_classes() -> None:
+    """Probe B's shape: a plan may hold both, and the answer must keep them apart."""
+    settings = agent_settings()
+    client = _client(
+        _plan(
+            PlanStep(
+                capability=Capability.CURRENT, reason="what it is doing now", location="Berlin"
+            ),
+            PlanStep(
+                capability=Capability.FORECAST,
+                reason="the days ahead",
+                location="Berlin",
+                days=3,
+            ),
+        )
+    )
+
+    async with connected_tools(
+        settings=settings, provider=stub_provider(current_values=_conditions())
+    ) as tools:
+        result = await run_agent(
+            _state("What is it like in Berlin now, and what should I expect over the next 3 days?"),
+            RunDependencies(settings=settings, tools=tools, geocoder=StubGeocoder(), llm=client),
+        )
+
+    assert [call.tool for call in result.envelope.evidence.tool_calls] == [
+        "weather_current",
+        "weather_forecast",
+    ]
+    assert {AgentName.CURRENT, AgentName.FORECAST} <= set(result.envelope.evidence.agents_in_order)
+    assert {DataClass.CURRENT, DataClass.FORECAST} <= set(result.envelope.evidence.data_classes)
+
+    classes = {finding.data_class for finding in result.envelope.findings}
+    assert classes == {DataClass.CURRENT, DataClass.FORECAST}
+    # Each class's figures carry that class's own attribution, never one blended credit line.
+    for finding in result.envelope.findings:
+        assert finding.attribution.data_class is finding.data_class
+    # And the forecast half still states its uncertainty.
+    assert result.envelope.uncertainty is not None
+
+
+async def test_a_plan_without_a_current_step_calls_no_current_tool() -> None:
+    """Probe D. The capability is routable; it is not retrieved on every question."""
+    settings = agent_settings()
+    provider = stub_provider(current_values=_conditions())
+    client = _client(
+        _plan(
+            PlanStep(
+                capability=Capability.HISTORICAL,
+                reason="the archive period",
+                location="Berlin",
+                start_date=date(2025, 9, 1),
+                end_date=date(2025, 9, 7),
+            ),
+            PlanStep(
+                capability=Capability.ANALYTICS, reason="the comparison", uses_previous_result=True
+            ),
+        )
+    )
+
+    async with connected_tools(settings=settings, provider=provider) as tools:
+        result = await run_agent(
+            _state("How does Berlin this week compare with the same week last year?"),
+            RunDependencies(settings=settings, tools=tools, geocoder=StubGeocoder(), llm=client),
+        )
+
+    assert "weather_current" not in [call.tool for call in result.envelope.evidence.tool_calls]
+    assert AgentName.CURRENT not in result.envelope.evidence.agents_in_order
+    assert DataClass.CURRENT not in result.envelope.evidence.data_classes
+    # The provider's own counter: nothing reached past the tool layer either.
+    assert provider.current_calls == 0
+
+
+async def test_a_current_question_with_no_place_asks_rather_than_reading_somewhere() -> None:
+    """The resolution ladder is unchanged by the new capability, and still refuses to guess.
+
+    A current-conditions question is the one most likely to tempt a product into reading a device
+    location. `agents/context.py` resolves before anything dispatches, so the run asks which place
+    and the node never runs — no tool call, no finding, no reading of a city nobody named.
+    """
+    settings = agent_settings()
+    client = _client(_plan(PlanStep(capability=Capability.CURRENT, reason="r")))
+    provider = stub_provider(current_values=_conditions())
+
+    async with connected_tools(settings=settings, provider=provider) as tools:
+        result = await run_agent(
+            _state("What is it like right now?"),
+            RunDependencies(settings=settings, tools=tools, geocoder=StubGeocoder(), llm=client),
+        )
+
+    assert result.envelope.clarification_question is not None
+    assert AgentName.CURRENT not in result.envelope.evidence.agents_in_order
+    assert not result.envelope.evidence.tool_calls
+    assert not result.envelope.findings
+    assert provider.current_calls == 0
 
 
 # =========================================================================== 14.4 analytics

@@ -403,11 +403,28 @@ async def test_no_client_at_all_still_routes() -> None:
             (Capability.FORECAST, Capability.ANALYTICS),
         ),
         ("What does dew point mean?", (Capability.RAG,)),
+        # "now" was a forecast word, because the forecast node was the only thing that retrieved.
+        # It means the present, and the present is what `Capability.CURRENT` reads.
         (
             "What does dew point mean and how humid is it in Berlin now?",
-            (Capability.RAG, Capability.FORECAST),
+            (Capability.RAG, Capability.CURRENT),
         ),
         ("Explain the difference between gusts and sustained wind", (Capability.RAG,)),
+        # --- the present tense, routed to the capability that retrieves it (task 34.33)
+        ("What is the weather like in Berlin right now?", (Capability.CURRENT,)),
+        ("How windy is it in Berlin currently?", (Capability.CURRENT,)),
+        # The present *and* the days ahead is two claims and two steps, in that order.
+        (
+            "What is the temperature in Berlin now and what is the forecast for the weekend?",
+            (Capability.CURRENT, Capability.FORECAST),
+        ),
+        # And a question about neither gets neither: no current step is forced onto a comparison.
+        (
+            "Compare how much rain Berlin got last week with the week before",
+            (Capability.HISTORICAL, Capability.ANALYTICS),
+        ),
+        # A question with no tense marker still defaults to the forecast window, unchanged.
+        ("What is the weather in Berlin?", (Capability.FORECAST,)),
     ],
 )
 def test_the_deterministic_router_routes_by_vocabulary(

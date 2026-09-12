@@ -92,8 +92,14 @@ async def test_no_tool_permits_a_write_code_execution_filesystem_or_network_acce
             )
 
 
-def test_the_capability_catalog_offered_to_the_model_is_the_four() -> None:
-    assert catalog_capabilities() == ("forecast", "historical", "analytics", "rag")
+def test_the_capability_catalog_offered_to_the_model_is_the_five() -> None:
+    """The catalog and the prompt name the same set — `current` joined both in task 34.33.
+
+    The pairing is the point rather than the list: a capability the enum accepts and the prompt
+    never mentions is one the model will not route to, and a capability the prompt offers and the
+    enum rejects is a plan that fails validation every time the model takes the offer.
+    """
+    assert catalog_capabilities() == ("current", "forecast", "historical", "analytics", "rag")
     for capability in catalog_capabilities():
         assert f'"{capability}"' in ROUTING_SYSTEM_PROMPT
 

@@ -39,7 +39,7 @@ from weathra.agents.llm.base import LLMClient
 from weathra.agents.models import ModelSource
 from weathra.agents.nodes.analytics import run_analytics
 from weathra.agents.nodes.knowledge import KnowledgeRetriever, run_knowledge
-from weathra.agents.nodes.retrieval import run_forecast, run_historical
+from weathra.agents.nodes.retrieval import run_current, run_forecast, run_historical
 from weathra.agents.nodes.support import record_step
 from weathra.agents.nodes.synthesize import synthesize
 from weathra.agents.observer import RunObserver
@@ -342,6 +342,9 @@ async def _run_step(
 
 async def _dispatch(state: GraphState, step: PlanStep, dependencies: RunDependencies) -> GraphState:
     """The capability node for one step."""
+    if step.capability is Capability.CURRENT:
+        return await run_current(state, step, client=dependencies.tools)
+
     if step.capability is Capability.FORECAST:
         return await run_forecast(state, step, client=dependencies.tools)
 

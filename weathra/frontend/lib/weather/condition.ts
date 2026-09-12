@@ -89,3 +89,28 @@ export function isWet(condition: Condition | null): boolean {
 /** The measure key the provider's code arrives under, instantaneous and daily. */
 export const WEATHER_CODE = "weather_code";
 export const WEATHER_CODE_DOMINANT = "weather_code_dominant";
+
+/**
+ * The "unit" a condition code carries, from `weathra/domain/weather.py`'s own units table.
+ *
+ * A code is not a quantity, so the domain gives it a unit that says what the number *is* rather
+ * than what it measures. That string is how a figure arriving as an anonymous `Finding` — a label,
+ * a value and a unit, with no measure key on it — can be recognised as a code rather than rendered
+ * as one: "3 WMO code" is a true sentence nobody wants to read.
+ */
+export const WEATHER_CODE_UNIT = "WMO code";
+
+/**
+ * The condition a reported figure describes, when that figure is a condition code.
+ *
+ * `null` for everything else, so a caller can ask this of every figure it renders and get an answer
+ * only where there is one. It is the same `conditionFor` the Dashboard, Compare, the Explorer and
+ * Watch use — this only recognises the carrier, so the Analyst's Current conditions panel and the
+ * Dashboard's hero cannot describe code 3 two different ways.
+ */
+export function conditionForReported(
+  value: number | null | undefined,
+  unit: string | null | undefined,
+): Condition | null {
+  return typeof unit === "string" && unit.trim() === WEATHER_CODE_UNIT ? conditionFor(value) : null;
+}

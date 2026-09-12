@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 
 import type { AgentEvent } from "@/hooks/use-agent-stream";
 import type { AnswerEnvelope, EvidenceAttribution, Finding } from "@/lib/api/schema";
+import { conditionForReported } from "@/lib/weather/condition";
 
 import {
   agentLabel,
@@ -353,5 +354,56 @@ describe("the agents a run used", () => {
     );
 
     expect(agents.map((agent) => agent.name)).toEqual(["forecast"]);
+  });
+});
+
+/* ------------------------------- task 34.33: a reading of now reads differently */
+
+describe("the order a current-conditions panel reads in", () => {
+  it("leads with what somebody glancing at 'right now' actually wants", () => {
+    const ranked = headlineFindings(
+      [
+        finding({ label: "Pressure", value: 1014, unit: "hPa", data_class: "current" }),
+        finding({ label: "Precipitation", value: 0, unit: "mm", data_class: "current" }),
+        finding({ label: "Wind speed", value: 12.4, unit: "km/h", data_class: "current" }),
+        finding({ label: "Feels like", value: 14.1, data_class: "current" }),
+        finding({ label: "Humidity", value: 68, unit: "%", data_class: "current" }),
+        finding({ label: "Condition", value: 3, unit: "WMO code", data_class: "current" }),
+        finding({ label: "Temperature", value: 15.3, data_class: "current" }),
+      ],
+      "observed",
+    );
+
+    expect(ranked.slice(0, 4).map((entry) => entry.label)).toEqual([
+      "Temperature",
+      "Condition",
+      "Humidity",
+      "Wind speed",
+    ]);
+  });
+
+  it("still reads a window the window's way: a total is worth more there than a sky state", () => {
+    const ranked = headlineFindings(
+      [
+        finding({ label: "Condition", value: 3, unit: "WMO code" }),
+        finding({ label: "Total precipitation", value: 6.4, unit: "mm" }),
+      ],
+      "forecast",
+    );
+
+    expect(ranked.map((entry) => entry.label)).toEqual(["Total precipitation", "Condition"]);
+  });
+});
+
+describe("a condition code, recognised by the unit the domain gives it", () => {
+  it("translates it through the one vocabulary the rest of the product uses", () => {
+    expect(conditionForReported(3, "WMO code")?.label).toBe("Overcast");
+    expect(conditionForReported(3, "WMO code")?.kind).toBe("overcast");
+  });
+
+  it("leaves an ordinary figure alone, whatever its value happens to be", () => {
+    expect(conditionForReported(3, "°C")).toBeNull();
+    expect(conditionForReported(3, null)).toBeNull();
+    expect(conditionForReported(null, "WMO code")).toBeNull();
   });
 });

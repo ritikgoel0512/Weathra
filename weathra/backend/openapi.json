@@ -83,9 +83,10 @@
         "type": "string"
       },
       "AgentName": {
-        "description": "The four specialized agents, plus the two nodes that frame a run.\n\nKept as an enum because ``specs/agent-orchestration`` requires each agent's responsibility to\nstay separately identifiable in the execution record, not merged into a free-text label.",
+        "description": "The five specialized agents, plus the two nodes that frame a run.\n\nKept as an enum because ``specs/agent-orchestration`` requires each agent's responsibility to\nstay separately identifiable in the execution record, not merged into a free-text label.\n\n``CURRENT`` is separate from ``FORECAST`` rather than folded into it, and the reason is the one\nthis enum exists for: a reading of what it is doing *now* and a model's projection of the days\nahead are two different claims, they come back under two different data classes, and an\nexecution record that credited both to \"forecast\" could not tell a reader which of them was\nretrieved.",
         "enum": [
           "supervisor",
+          "current",
           "forecast",
           "historical",
           "analytics",

@@ -45,13 +45,20 @@ __all__ = [
 
 
 class AgentName(StrEnum):
-    """The four specialized agents, plus the two nodes that frame a run.
+    """The five specialized agents, plus the two nodes that frame a run.
 
     Kept as an enum because ``specs/agent-orchestration`` requires each agent's responsibility to
     stay separately identifiable in the execution record, not merged into a free-text label.
+
+    ``CURRENT`` is separate from ``FORECAST`` rather than folded into it, and the reason is the one
+    this enum exists for: a reading of what it is doing *now* and a model's projection of the days
+    ahead are two different claims, they come back under two different data classes, and an
+    execution record that credited both to "forecast" could not tell a reader which of them was
+    retrieved.
     """
 
     SUPERVISOR = "supervisor"
+    CURRENT = "current"
     FORECAST = "forecast"
     HISTORICAL = "historical"
     ANALYTICS = "analytics"

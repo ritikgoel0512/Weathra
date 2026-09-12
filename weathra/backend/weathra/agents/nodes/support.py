@@ -42,8 +42,10 @@ from weathra.mcp.schemas import location_from_payload, period_from_payload
 __all__ = [
     "attribution_from",
     "call_tool",
+    "current_label",
     "finding_from_statistic",
     "finding_label",
+    "findings_from_current",
     "headline_measure",
     "location_from",
     "measures_in",
@@ -230,6 +232,88 @@ def finding_from_statistic(
             or "The tool reported this statistic as unavailable without stating a reason."
         ),
     )
+
+
+# =========================================================================== current conditions
+
+# How each instantaneous measure reads as a reading rather than as a column name. Only the ones
+# whose own name is not already what a person would write are here; anything else falls through to
+# its name with the underscores taken out.
+#
+# Deliberately *not* "Temperature now" or "Observed temperature". `weather_current` returns the
+# provider's own current-weather values, which for Open-Meteo are analysis output rather than a
+# reading off an instrument at the location — see the note on ``findings_from_current``. The label
+# names the measure; the panel it renders in and the attribution beneath it say what kind of value
+# it is and who supplied it.
+_CURRENT_LABELS: dict[str, str] = {
+    "temperature": "Temperature",
+    "apparent_temperature": "Feels like",
+    "relative_humidity": "Humidity",
+    "wind_speed": "Wind speed",
+    "wind_gust": "Wind gust",
+    "wind_direction": "Wind direction",
+    "precipitation": "Precipitation",
+    "precipitation_probability": "Chance of precipitation",
+    "surface_pressure": "Pressure",
+    "cloud_cover": "Cloud cover",
+    "dew_point": "Dew point",
+    "uv_index": "UV index",
+    "weather_code": "Condition",
+}
+
+
+def current_label(measure: str) -> str:
+    """What one current-conditions measure is called on screen."""
+    known = _CURRENT_LABELS.get(measure)
+    if known is not None:
+        return known
+    words = measure.replace("_", " ").strip()
+    return words[:1].upper() + words[1:] if words else "Value"
+
+
+def findings_from_current(payload: dict[str, Any], attribution: Attribution) -> tuple[Finding, ...]:
+    """The current-conditions tool's reported values, as evidence-record findings.
+
+    **This transcribes; it does not compute, and it does not fill in.** ``weather_current`` returns
+    two maps — a value per measure and a unit per measure — because a current reading *is* the
+    figure, so unlike the forecast tool it has no statistic to hand back and unlike the archive it
+    has no series for the analytics layer to summarize. Pairing each value with its declared unit
+    and its name is the whole of the work, and it is the same recording the other nodes do; no
+    figure here was derived from another.
+
+    **A measure the provider did not supply becomes no finding at all.** The forecast panel states
+    an unavailable statistic *as* unavailable, because a statistic that was asked for and could not
+    be computed is a fact about the window. Current conditions are different: the provider returns
+    the measures it has for that location, and a row reading "Cloud cover — not reported" beside
+    four real readings describes the provider's field list rather than the weather. Null is absence,
+    never zero, and absence here is silence.
+
+    **The condition is carried as the provider's code, not as a description.** Open-Meteo publishes
+    WMO 4677; turning 3 into "Overcast" is a translation, and `lib/weather/condition.ts` is where
+    that translation lives for the whole product. Inventing a second vocabulary here would let the
+    same code be described two ways on two screens, which is the thing that file exists to prevent.
+    """
+    values = payload.get("values")
+    units = payload.get("units")
+    if not isinstance(values, dict):
+        return ()
+    declared = units if isinstance(units, dict) else {}
+
+    findings: list[Finding] = []
+    for measure, value in values.items():
+        if not isinstance(measure, str) or not isinstance(value, int | float):
+            continue
+        unit = declared.get(measure)
+        findings.append(
+            Finding(
+                label=current_label(measure),
+                value=float(value),
+                unit=unit if isinstance(unit, str) and unit else None,
+                data_class=DataClass.CURRENT,
+                attribution=attribution,
+            )
+        )
+    return tuple(findings)
 
 
 def _render_series(points: Any) -> str | None:

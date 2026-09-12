@@ -57,10 +57,18 @@ const ALL_SCREENS = [
    * The empty state is not lost with it: it is the state every width was photographed in until
    * now, `analyst.test.tsx` holds it, and the composition either way is the point of the rebuild.
    */
+  /*
+   * The question is one that uses two retrieval capabilities, and that is the point of it.
+   *
+   * It was the archive comparison, which is a real successful answer and could not populate the
+   * Current conditions panel — until task 34.33 nothing in the graph could, because the catalog was
+   * forecast, historical, analytics and rag. This asks what it is like now *and* what is coming, so
+   * the capture shows the two retrieval panels side by side with a run behind each of them.
+   */
   {
     name: "02-analyst",
     path: "/analyst",
-    ask: "How does this week compare with the same week last year?",
+    ask: "What's it like in Berlin right now, and what should I expect over the next few days?",
   },
   /*
    * The Analyst with no place to work from — task 34.33.

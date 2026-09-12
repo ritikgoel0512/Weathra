@@ -1749,6 +1749,39 @@ describe("a successful answer", () => {
  * it was the emptiness of these panels that the customer-level review of 2026-09-12 objected to —
  * and that what populates it is the run's own record rather than the artifact's telemetry.
  */
+/**
+ * A run that retrieved the present as well as the days ahead — task 34.33.
+ *
+ * The findings are what `weather_current` reports through `findings_from_current`: a value and a
+ * unit per measure the provider supplied, labelled, all of data class `current`. The condition
+ * arrives as the provider's published code with the unit the domain gives a code, because the
+ * vocabulary that turns 3 into "Overcast" lives in `lib/weather/condition` and only there.
+ */
+const CURRENT_SOURCE = { ...FORECAST_SOURCE, data_class: "current", period: null };
+
+function withCurrent() {
+  return {
+    ...ANSWER,
+    findings: [
+      { label: "Temperature", value: 15.3, unit: "°C", data_class: "current", attribution: CURRENT_SOURCE },
+      { label: "Feels like", value: 14.1, unit: "°C", data_class: "current", attribution: CURRENT_SOURCE },
+      { label: "Humidity", value: 68, unit: "%", data_class: "current", attribution: CURRENT_SOURCE },
+      { label: "Wind speed", value: 12.4, unit: "km/h", data_class: "current", attribution: CURRENT_SOURCE },
+      { label: "Precipitation", value: 0, unit: "mm", data_class: "current", attribution: CURRENT_SOURCE },
+      { label: "Condition", value: 3, unit: "WMO code", data_class: "current", attribution: CURRENT_SOURCE },
+      ...ANSWER.findings,
+    ],
+    attribution: [CURRENT_SOURCE, FORECAST_SOURCE],
+    evidence: {
+      ...EVIDENCE,
+      agents: [
+        { sequence: 1, agent: "current", status: "succeeded", started_at: "2026-09-04T06:15:00Z", duration_ms: 210 },
+        ...EVIDENCE.agents,
+      ],
+    },
+  };
+}
+
 describe("the answer, composed as a briefing", () => {
   it("opens on the badge, a grounding line, and then the answer itself", async () => {
     fetchMock = respondingWith();
@@ -1804,37 +1837,45 @@ describe("the answer, composed as a briefing", () => {
     expect(container.querySelectorAll('[data-tier="retrieved"]')).toHaveLength(1);
   });
 
-  it("draws an observed panel only where the run reported an observation", async () => {
-    const observed = {
-      ...ANSWER,
-      findings: [
-        {
-          label: "Temperature now",
-          value: 15.3,
-          unit: "°C",
-          data_class: "current",
-          attribution: { ...FORECAST_SOURCE, data_class: "current" },
-        },
-        ...ANSWER.findings,
-      ],
-    };
-    fetchMock = respondingWith(() => streaming(runFrames(observed)));
+  it("draws the current-conditions panel from the run's own readings", async () => {
+    fetchMock = respondingWith(() => streaming(runFrames(withCurrent())));
     renderAnalyst();
-    await ask("What is it doing in Berlin now?");
+    await ask("What is it doing in Berlin right now?");
 
-    const panel = (await screen.findByRole("region", { name: "Observed data" })) as HTMLElement;
+    const panel = (await screen.findByRole("region", { name: "Current conditions" })) as HTMLElement;
+    // The design system's class name, which is what the badge says; the heading says what the
+    // provider's contract supports, which is not that a measurement was taken at the place.
     expect(within(panel).getByText("OBSERVED")).toBeInTheDocument();
+
+    // The four a person glancing at "right now" wants, in that order.
+    const labels = [...panel.querySelectorAll("dt")].map((term) => term.textContent);
+    expect(labels.slice(0, 4)).toEqual(["Temperature", "Condition", "Humidity", "Wind speed"]);
     expect(within(panel).getByText("15.3 °C")).toBeInTheDocument();
+    expect(within(panel).getByText("68 %")).toBeInTheDocument();
   });
 
-  it("draws no observed panel at all where the run reported no observation", async () => {
+  it("renders a condition code as the condition, through the product's one vocabulary", async () => {
+    fetchMock = respondingWith(() => streaming(runFrames(withCurrent())));
+    const { container } = renderAnalyst();
+    await ask("What is it doing in Berlin right now?");
+
+    const panel = (await screen.findByRole("region", { name: "Current conditions" })) as HTMLElement;
+    // WMO 3, as `lib/weather/condition` translates it for every other screen.
+    expect(within(panel).getByText("Overcast")).toBeInTheDocument();
+    // And never as the raw figure it arrives as.
+    expect(panel.textContent).not.toContain("WMO code");
+    expect(panel.textContent).not.toMatch(/\b3 code\b/);
+    expect(container.querySelector('[data-condition="overcast"]')).toBeInTheDocument();
+  });
+
+  it("draws no current-conditions panel at all where the run retrieved none", async () => {
     fetchMock = respondingWith();
     renderAnalyst();
     await ask("What should I expect over the next few days in Berlin?");
     await screen.findByRole("region", { name: "AI interpretation" });
 
     // Not an empty card saying it retrieved nothing: no card.
-    expect(screen.queryByRole("region", { name: "Observed data" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Current conditions" })).toBeNull();
   });
 
   it("gives the computed reading the artifact's highlighted treatment, with its class intact", async () => {
@@ -1902,6 +1943,31 @@ describe("the rail beside a successful answer", () => {
     for (const invented of ["GLOBAL_SAT", "L_RADAR", "ECMWF", "Berlin-Mitte"]) {
       expect(sources.textContent, invented).not.toContain(invented);
     }
+  });
+
+  it("credits one provider twice when it genuinely played two roles", async () => {
+    fetchMock = respondingWith(() => streaming(runFrames(withCurrent())));
+    renderAnalyst();
+    await ask("What is it doing in Berlin now, and what should I expect?");
+    await screen.findByRole("region", { name: "AI interpretation" });
+
+    const sources = screen.getByRole("region", { name: "Active data sources" });
+    // Two rows, same provider, because the present and the days ahead are two claims — and the
+    // roles are what make the second row worth having.
+    expect(within(sources).getAllByText("Open-Meteo")).toHaveLength(2);
+    expect(within(sources).getByText("Current conditions")).toBeInTheDocument();
+    expect(within(sources).getByText("Forecast data")).toBeInTheDocument();
+  });
+
+  it("names the current-conditions agent from the record, with the outcome it was stamped with", async () => {
+    fetchMock = respondingWith(() => streaming(runFrames(withCurrent())));
+    renderAnalyst();
+    await ask("What is it doing in Berlin now, and what should I expect?");
+    await screen.findByRole("region", { name: "AI interpretation" });
+
+    const status = screen.getByRole("region", { name: "Agent status" });
+    expect(within(status).getByText("Current conditions")).toBeInTheDocument();
+    expect(within(status).getAllByText("Used")).toHaveLength(3);
   });
 
   it("lists one row per source and role, not one per attribution entry", async () => {

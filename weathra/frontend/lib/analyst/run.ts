@@ -60,6 +60,7 @@ function stringList(value: unknown): string[] {
  */
 export const AGENT_LABELS: Readonly<Record<string, string>> = {
   supervisor: "Supervisor",
+  current: "Current conditions",
   forecast: "Forecast agent",
   historical: "Historical agent",
   analytics: "Analytics agent",
@@ -233,7 +234,15 @@ export interface FindingGroup {
  * and a heading repeating it word for word tells a reader nothing the badge beside it did not.
  */
 export const GROUP_TITLES: Readonly<Record<DataClassName, string>> = {
-  observed: "Observed figures",
+  /*
+   * "Current conditions", not "Observed data" — the artifact's own heading for this region.
+   *
+   * Open-Meteo's current block is its analysis for right now, not a reading taken off an instrument
+   * at the place. Both are `DataClass.CURRENT` and both are badged OBSERVED, which is the design
+   * system's name for the class; the heading a customer reads should not go further than the
+   * provider's contract supports, and "observed data" claims a measurement was made.
+   */
+  observed: "Current conditions",
   forecast: "Forecast figures",
   historical: "Historical figures",
   /*
@@ -341,9 +350,30 @@ const MEASURE_RANK: readonly (readonly [RegExp, number])[] = [
   [/\bpressure\b/i, 5],
 ];
 
-function measureRank(label: string): number {
-  for (const [pattern, rank] of MEASURE_RANK) if (pattern.test(label)) return rank;
-  return MEASURE_RANK.length;
+/**
+ * The same question asked of a reading of *now*, where the answer is different.
+ *
+ * Over a window, the precipitation total is one of the two figures somebody came for. Right now,
+ * "0 mm of rain" is the least informative true thing on the panel and what the sky is doing is the
+ * most: a person glancing at current conditions wants the temperature, the sky, how humid it is and
+ * how hard the wind is blowing, in that order. Same mechanism, one table per kind of reading.
+ */
+const CURRENT_RANK: readonly (readonly [RegExp, number])[] = [
+  [/\btemperature\b/i, 0],
+  [/\bcondition\b/i, 1],
+  [/\bhumidity\b/i, 2],
+  [/\bwind\b/i, 3],
+  // The apparent temperature is a real reading and not one of the four somebody glances for; it
+  // sits with the rest, one press away, rather than taking the temperature's place beside it.
+  [/\bfeels like|apparent\b/i, 4],
+  [/\b(precipitation|rain|snow)\b/i, 5],
+  [/\bpressure|cloud|uv|dew\b/i, 6],
+];
+
+function measureRank(label: string, dataClass: DataClassName | null): number {
+  const table = dataClass === "observed" ? CURRENT_RANK : MEASURE_RANK;
+  for (const [pattern, rank] of table) if (pattern.test(label)) return rank;
+  return table.length;
 }
 
 /**
@@ -353,14 +383,18 @@ function measureRank(label: string): number {
  * stated rather than dropped — and it is not what a panel leads with. Sorting is stable within a
  * rank, so findings the backend listed together stay together.
  */
-export function headlineFindings(findings: readonly Finding[]): readonly Finding[] {
+export function headlineFindings(
+  findings: readonly Finding[],
+  dataClass: DataClassName | null = null,
+): readonly Finding[] {
   return [...findings]
     .map((finding, index) => ({ finding, index }))
     .sort((left, right) => {
       const reported =
         Number(findingValue(right.finding) !== null) - Number(findingValue(left.finding) !== null);
       if (reported !== 0) return reported;
-      const rank = measureRank(left.finding.label) - measureRank(right.finding.label);
+      const rank =
+        measureRank(left.finding.label, dataClass) - measureRank(right.finding.label, dataClass);
       return rank !== 0 ? rank : left.index - right.index;
     })
     .map((entry) => entry.finding);
