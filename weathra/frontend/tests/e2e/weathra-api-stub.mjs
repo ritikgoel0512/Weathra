@@ -1960,54 +1960,6 @@ function answerEnvelope(requestId, question) {
 }
 
 /**
- * The envelope a run that asked about now returns: the present, the days ahead, and no archive.
- *
- * Built from the forecast answer rather than beside it, so the two cannot drift in the parts they
- * share — the resolution, the uncertainty and the run record. What differs is what such a run
- * genuinely retrieves: `weather_current` for the readings, `weather_forecast` for the window, and
- * no historical step at all, because nothing in the question asked about the past.
- */
-function nowAndAheadEnvelope(requestId, question) {
-  const base = answerEnvelope(requestId, question);
-  const forecastFindings = (base.findings ?? []).filter(
-    (finding) => finding.data_class === "forecast",
-  );
-
-  return {
-    ...base,
-    answer_prose: NOW_ANSWER_PROSE,
-    findings: [...CURRENT_FINDINGS, ...forecastFindings],
-    attribution: [CURRENT_ATTRIBUTION, { ...ATTRIBUTION, period: PERIOD }],
-    resolved: {
-      ...base.resolved,
-      statement: "Berlin, Germany, now and for this week, from your saved default location.",
-    },
-    grounding: {
-      ...base.grounding,
-      // 15.3, 68, 12.4, 24.5, 11.2, 6.4 and the 6-hour horizon.
-      figures_checked: 7,
-    },
-    evidence: {
-      ...base.evidence,
-      agents: [
-        { sequence: 1, agent: "supervisor", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 110, reason: "Planned a reading of now and the window ahead." },
-        { sequence: 2, agent: "current", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 240, reason: "Read the current conditions." },
-        { sequence: 3, agent: "forecast", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 840, reason: "Retrieved the window." },
-        { sequence: 4, agent: "synthesis", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 900 },
-      ],
-      tool_calls: [
-        { sequence: 1, tool: "weather_current", agent: "current", arguments: { latitude: 52.52, longitude: 13.405, units: "metric" }, started_at: RETRIEVED_AT, duration_ms: 240 },
-        { sequence: 2, tool: "weather_forecast", agent: "forecast", arguments: { latitude: 52.52, longitude: 13.405, days: 7 }, started_at: RETRIEVED_AT, duration_ms: 840 },
-      ],
-      // No archive step ran, so nothing credits one.
-      citations: [],
-      attributions: [CURRENT_ATTRIBUTION, { ...ATTRIBUTION, period: PERIOD }],
-      data_classes: ["current", "forecast", "ai_interpretation"],
-    },
-  };
-}
-
-/**
  * One retrieved satellite observation, in the shape `weather_satellite` returns.
  *
  * **The image is a data URI here, and in production it is the provider's own URL.** The capture
@@ -2083,43 +2035,101 @@ const SATELLITE_ANSWER_PIECES = [
 const SATELLITE_ANSWER_PROSE = SATELLITE_ANSWER_PIECES.join("");
 
 /**
- * The envelope a run that asked to see imagery returns: the observation, plus the window ahead.
+ * The briefing a run that read the present, the window ahead *and* imagery writes.
  *
- * Built from the forecast answer for the same reason `nowAndAheadEnvelope` is — the resolution, the
- * uncertainty and the run record are shared and must not drift between them.
+ * One question can ask for all three, and the router can truthfully plan all three — so the harness
+ * has to be able to model that rather than picking one. Three exclusive envelopes could not
+ * photograph the state the final composition is judged on.
  */
-function satelliteEnvelope(requestId, question) {
+const ALL_THREE_PIECES = [
+  "Berlin is 15.3 °C right now, with 68 % humidity and a 12.4 km/h wind. ",
+  "The days ahead stay in that range: highs reach 24.5 °C and lows hold at 11.2 °C, ",
+  "with 6.4 mm of rain forecast across the window. ",
+  "The latest satellite imagery available for the region is NASA's daily composite for 11 September; ",
+  "it is observational context and has not been interpreted.",
+];
+
+/**
+ * The envelope for whatever combination of capabilities the question asked for.
+ *
+ * Composed from the forecast answer rather than written beside it, so the parts every run shares —
+ * the resolution, the uncertainty, the window — cannot drift between the combinations.
+ */
+function composedEnvelope(requestId, question, { wantsNow, wantsImagery }) {
   const base = answerEnvelope(requestId, question);
   const forecastFindings = (base.findings ?? []).filter(
     (finding) => finding.data_class === "forecast",
   );
 
+  const findings = [...(wantsNow ? CURRENT_FINDINGS : []), ...forecastFindings];
+  const attribution = [
+    ...(wantsNow ? [CURRENT_ATTRIBUTION] : []),
+    { ...ATTRIBUTION, period: PERIOD },
+    ...(wantsImagery ? [SATELLITE_ATTRIBUTION_BLOCK] : []),
+  ];
+
+  let sequence = 0;
+  const step = (agent, duration, reason) => ({
+    sequence: (sequence += 1),
+    agent,
+    status: "succeeded",
+    started_at: RETRIEVED_AT,
+    duration_ms: duration,
+    reason,
+  });
+
+  let toolSequence = 0;
+  const call = (tool, agent, args, duration) => ({
+    sequence: (toolSequence += 1),
+    tool,
+    agent,
+    arguments: args,
+    started_at: RETRIEVED_AT,
+    duration_ms: duration,
+  });
+
+  const place = { latitude: 52.52, longitude: 13.405 };
+
   return {
     ...base,
-    answer_prose: SATELLITE_ANSWER_PROSE,
-    findings: forecastFindings,
-    satellite: [SATELLITE_OBSERVATION],
-    attribution: [SATELLITE_ATTRIBUTION_BLOCK, { ...ATTRIBUTION, period: PERIOD }],
+    answer_prose:
+      wantsNow && wantsImagery
+        ? ALL_THREE_PIECES.join("")
+        : wantsImagery
+          ? SATELLITE_ANSWER_PROSE
+          : NOW_ANSWER_PROSE,
+    findings,
+    satellite: wantsImagery ? [SATELLITE_OBSERVATION] : [],
+    attribution,
     resolved: {
       ...base.resolved,
       statement: "Berlin, Germany, for this week, from your saved default location.",
     },
-    grounding: { ...base.grounding, figures_checked: 4 },
+    grounding: { ...base.grounding, figures_checked: wantsNow ? 7 : 4 },
     evidence: {
       ...base.evidence,
       agents: [
-        { sequence: 1, agent: "supervisor", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 110, reason: "Planned imagery beside the window ahead." },
-        { sequence: 2, agent: "satellite", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 640, reason: "Retrieved the latest available imagery." },
-        { sequence: 3, agent: "forecast", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 840, reason: "Retrieved the window." },
-        { sequence: 4, agent: "synthesis", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 900 },
+        step("supervisor", 110, "Planned what the question asked for."),
+        ...(wantsNow ? [step("current", 240, "Read the current conditions.")] : []),
+        step("forecast", 840, "Retrieved the window."),
+        ...(wantsImagery
+          ? [step("satellite", 640, "Retrieved the latest available imagery.")]
+          : []),
+        step("synthesis", 900),
       ],
       tool_calls: [
-        { sequence: 1, tool: "weather_satellite", agent: "satellite", arguments: { latitude: 52.52, longitude: 13.405 }, started_at: RETRIEVED_AT, duration_ms: 640 },
-        { sequence: 2, tool: "weather_forecast", agent: "forecast", arguments: { latitude: 52.52, longitude: 13.405, days: 7 }, started_at: RETRIEVED_AT, duration_ms: 840 },
+        ...(wantsNow ? [call("weather_current", "current", { ...place, units: "metric" }, 240)] : []),
+        call("weather_forecast", "forecast", { ...place, days: 7 }, 840),
+        ...(wantsImagery ? [call("weather_satellite", "satellite", place, 640)] : []),
       ],
       citations: [],
-      attributions: [SATELLITE_ATTRIBUTION_BLOCK, { ...ATTRIBUTION, period: PERIOD }],
-      data_classes: ["satellite_observation", "forecast", "ai_interpretation"],
+      attributions: attribution,
+      data_classes: [
+        ...(wantsNow ? ["current"] : []),
+        "forecast",
+        ...(wantsImagery ? ["satellite_observation"] : []),
+        "ai_interpretation",
+      ],
     },
   };
 }
@@ -2452,22 +2462,19 @@ const server = createServer((request, response) => {
        * unconditionally, which is the behaviour the capability was explicitly not to have.
        */
       const wantsImagery = asksAboutSatellite(body);
-      const wantsNow = !wantsImagery && asksAboutNow(body);
-      const plan = wantsImagery
+      const wantsNow = asksAboutNow(body);
+      const composed = wantsImagery || wantsNow;
+      const plan = composed
         ? [
-            ["satellite", "weather_satellite"],
+            ...(wantsNow ? [["current", "weather_current"]] : []),
             ["forecast", "weather_forecast"],
+            ...(wantsImagery ? [["satellite", "weather_satellite"]] : []),
           ]
-        : wantsNow
-          ? [
-              ["current", "weather_current"],
-              ["forecast", "weather_forecast"],
-            ]
-          : [
-              ["forecast", "weather_forecast"],
-              ["historical", "weather_history"],
-              ["analytics", "weather_baseline_comparison"],
-            ];
+        : [
+            ["forecast", "weather_forecast"],
+            ["historical", "weather_history"],
+            ["analytics", "weather_baseline_comparison"],
+          ];
 
       frame("routing", {
         capabilities: plan.map(([agent]) => agent),
@@ -2500,11 +2507,14 @@ const server = createServer((request, response) => {
         }
 
         frame("agent_start", { agent: "synthesis", reason: null });
-        const pieces = wantsImagery
-          ? SATELLITE_ANSWER_PIECES
-          : wantsNow
-            ? NOW_ANSWER_PIECES
-            : ANSWER_PIECES;
+        const pieces =
+          wantsNow && wantsImagery
+            ? ALL_THREE_PIECES
+            : wantsImagery
+              ? SATELLITE_ANSWER_PIECES
+              : wantsNow
+                ? NOW_ANSWER_PIECES
+                : ANSWER_PIECES;
         for (const piece of pieces) {
           frame("answer_delta", { text: piece });
           await pause();
@@ -2517,15 +2527,15 @@ const server = createServer((request, response) => {
       // The Analyst offers its evidence link from this identifier and nothing else, so the flow
       // cannot reach the record except through an id the run itself produced.
       frame("final", {
-        answer: (
-          hasAPlace(body)
-            ? wantsImagery
-              ? satelliteEnvelope
-              : wantsNow
-                ? nowAndAheadEnvelope
-                : answerEnvelope
-            : clarificationEnvelope
-        )(requestId, typeof body.question === "string" ? body.question : ""),
+        answer: !hasAPlace(body)
+          ? clarificationEnvelope(requestId, typeof body.question === "string" ? body.question : "")
+          : composed
+            ? composedEnvelope(
+                requestId,
+                typeof body.question === "string" ? body.question : "",
+                { wantsNow, wantsImagery },
+              )
+            : answerEnvelope(requestId, typeof body.question === "string" ? body.question : ""),
         evidence_id: STREAM_EVIDENCE_ID,
       });
       response.end();

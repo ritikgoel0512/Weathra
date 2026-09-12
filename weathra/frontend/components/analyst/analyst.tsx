@@ -72,9 +72,12 @@ const STARTERS: readonly string[] = [
   "What should I expect over the next few days?",
   "How does this week compare with the same week last year?",
   "Why is the forecast uncertain further out?",
-  // The fourth is the artifact's 2×2 grid rather than a short row, and it names a capability
-  // Weathra genuinely has: `/weather/changes` is what a run answering it would read.
-  "Has the forecast for this week moved since it was last retrieved?",
+  /*
+   * The fourth names the capability the graph grew in task 34.34. It is a valid request whatever
+   * the current context is — the planner decides whether imagery helps, and a chip that offered it
+   * only where it would succeed would be this screen guessing at the plan.
+   */
+  "Show me the latest satellite observation for this location",
 ];
 
 /** One exchange: what was asked, and the run that answered it. */
@@ -716,7 +719,7 @@ export function Analyst(): ReactNode {
               name="question"
               rows={3}
               value={question}
-              placeholder="Ask about conditions, the days ahead, historical context, or how a forecast has moved."
+              placeholder="Ask about current conditions, the days ahead, historical trends, comparisons, satellite observations, or weather concepts…"
               onChange={(event) => setQuestion(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key !== "Enter" || event.shiftKey) return;
@@ -733,9 +736,39 @@ export function Analyst(): ReactNode {
           unframed text area, which read as a form's submit rather than as a chat's send.
         */}
         <div className={styles.composerActions}>
-          <Button type="submit" variant="primary" busy={busy} disabled={empty}>
-            {busy ? "Working…" : "Ask Weathra"}
-          </Button>
+          <button
+            type="submit"
+            className={styles.send}
+            disabled={empty || busy}
+            /* What the shared Button announces while a run is in flight, kept: a control that is
+               working and a control that is merely disabled are two different things to hear. */
+            aria-busy={busy || undefined}
+          >
+            {/*
+              The label stays in the document at every width — visually hidden on a phone, never
+              removed — so the button's accessible name is the same words a sighted reader sees and
+              there is no second copy of it to drift.
+            */}
+            <span className={styles.sendLabel}>{busy ? "Working…" : "Ask Weathra"}</span>
+            {/*
+              The artifact's send glyph, drawn here rather than fetched: a paper plane is four
+              points, and a weather product should not load an icon font for it. Decorative — the
+              label beside it carries the meaning.
+            */}
+            <svg
+              className={styles.sendGlyph}
+              viewBox="0 0 24 24"
+              width="18"
+              height="18"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path
+                d="M3.4 20.4 21 12 3.4 3.6l.1 6.5L15 12 3.5 13.9z"
+                fill="currentColor"
+              />
+            </svg>
+          </button>
         </div>
       </form>
         </div>

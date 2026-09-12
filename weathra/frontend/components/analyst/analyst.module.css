@@ -549,6 +549,60 @@
   justify-content: flex-end;
 }
 
+/*
+ * **The send control** — the artifact's solid accent button at the composer's lower right.
+ *
+ * It was the shared primary `Button`, which is the right weight and the wrong shape here: this is a
+ * chat's send, so it carries the glyph the artifact draws and keeps its label beside it, and the
+ * label is what goes at phone width rather than the affordance.
+ */
+.send {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-family: var(--family-body);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  cursor: pointer;
+}
+
+.send:hover:not(:disabled) {
+  background: var(--color-accent-strong);
+}
+
+.send:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.sendGlyph {
+  flex: none;
+}
+
+@media (max-width: 480px) {
+  /* The glyph alone, with the accessible name the button already carries. */
+  .sendLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .send {
+    padding: var(--space-2) var(--space-3);
+  }
+}
+
 @media (max-width: 640px) {
   .question {
     align-self: stretch;
@@ -1159,7 +1213,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  margin-block-end: var(--space-1);
 }
 
 .satelliteTitle {
@@ -1170,52 +1223,113 @@
   color: var(--color-text-primary);
 }
 
-/*
- * Loaded from the provider's own endpoint by the reader's browser. Square because the request asks
- * for a square box, and capped so a wide card does not blow one composite up past its resolution.
- */
-.satelliteImage {
-  display: block;
-  width: 100%;
-  max-width: 22rem;
-  height: auto;
-  aspect-ratio: 1 / 1;
-  object-fit: cover;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border-subtle);
-  background: var(--color-surface-base);
-}
-
-.satelliteFacts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-  gap: var(--space-2) var(--space-3);
-  margin: var(--space-2) 0 0;
-  min-width: 0;
-}
-
-.satelliteFact {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.satelliteFact dt {
+/* The UTC day, on the head rather than only in the caption: it is what dates the picture. */
+.satelliteWhen {
+  margin-inline-start: auto;
   font-size: var(--type-label-size);
   line-height: var(--type-label-line);
   font-weight: var(--type-label-weight);
   letter-spacing: var(--type-label-tracking);
-  text-transform: uppercase;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * **The frame the imagery sits in, which is drawn before the imagery arrives.**
+ *
+ * It holds its own aspect ratio so the panel does not jump when a remote image lands, and it keeps
+ * a ground and a border so the three states — loading, shown, failed — are the same shape. A frame
+ * that appeared only once an image loaded would reflow the answer under the reader.
+ */
+.satelliteFrame {
+  position: relative;
+  width: 100%;
+  max-width: 20rem;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-base);
+  overflow: hidden;
+}
+
+/* A quiet sweep while the provider answers. Not a progress claim: nothing here is measured. */
+.satellite[data-image="loading"] .satelliteFrame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    color-mix(in srgb, var(--color-accent) 9%, transparent) 50%,
+    transparent 80%
+  );
+  animation: satelliteSweep 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .satellite[data-image="loading"] .satelliteFrame::after {
+    animation: none;
+  }
+}
+
+@keyframes satelliteSweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.satelliteImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Nothing to show is nothing to show: the frame stops holding a picture that will not arrive. */
+.satellite[data-image="unavailable"] .satelliteImage {
+  display: none;
+}
+
+.satelliteFallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3);
+  text-align: center;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
   color: var(--color-text-muted);
 }
 
-.satelliteFact dd {
-  margin: 0;
+/*
+ * The caption under the imagery: provider, instrument, product, in that order and separated by
+ * rules rather than by punctuation nobody reads.
+ */
+.satelliteCaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  margin-block-start: var(--space-1);
   font-size: var(--type-meta-size);
   line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+  min-width: 0;
+}
+
+.satelliteProvider {
+  font-weight: var(--type-ui-weight);
   color: var(--color-text-primary);
-  overflow-wrap: anywhere;
+}
+
+.satelliteInstrument::before,
+.satelliteProduct::before {
+  content: "· ";
 }
 
 /*
@@ -1232,10 +1346,22 @@
   color: var(--color-text-secondary);
 }
 
-.satelliteAttribution {
+.satelliteDetails {
   font-size: var(--type-label-size);
   line-height: var(--type-label-line);
-  color: var(--color-text-muted);
+}
+
+.satelliteDetailsSummary {
+  cursor: pointer;
+  color: var(--color-accent);
+}
+
+.satelliteDetailsSummary:hover {
+  color: var(--color-accent-strong);
+}
+
+.satelliteDetails > :not(summary) {
+  margin-block-start: var(--space-1);
 }
 
 /* The two figure panels lift off the card, as the artifact insets them inside its own. */
@@ -1388,11 +1514,8 @@
 }
 
 /*
- * A source's mark belongs beside its *name*, not beside the middle of its row.
- *
- * Two-line rows centred fine; the satellite row is three — the evidence, what served it, and what
- * it is — and the dot landed against the second line, reading as though it marked the provider
- * rather than the source. Aligned to the top and nudged to the name's optical centre instead.
+ * A source's mark belongs beside its *name*, not beside the middle of its row — which is the same
+ * place whether the name wraps or not.
  */
 .railSource {
   align-items: flex-start;
@@ -1458,14 +1581,6 @@
   line-height: var(--type-ui-line);
   font-weight: var(--type-ui-weight);
   color: var(--color-text-primary);
-  overflow-wrap: anywhere;
-}
-
-/* What served a row, where the source and the server are two different things. */
-.railSourceServed {
-  font-size: var(--type-label-size);
-  line-height: var(--type-label-line);
-  color: var(--color-text-secondary);
   overflow-wrap: anywhere;
 }
 

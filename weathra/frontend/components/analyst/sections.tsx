@@ -26,7 +26,7 @@
  */
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import {
   AttributionFooter,
@@ -599,11 +599,20 @@ function SatellitePanel({
 }: {
   readonly observation: SatelliteObservation;
 }): ReactNode {
+  /*
+   * Three states, because a remote image has three outcomes and a panel that models one of them
+   * shows a blank rectangle for the other two. The imagery is fetched by the reader's browser from
+   * the provider's own endpoint — a public NASA service with no credential — so it can be slow and
+   * it can fail, and neither is Weathra's to hide.
+   */
+  const [state, setState] = useState<"loading" | "shown" | "unavailable">("loading");
+
   return (
     <section
       className={styles.satellite}
       data-tier="retrieved"
       data-satellite="true"
+      data-image={state}
       aria-labelledby={`satellite-${observation.provider}`}
     >
       <header className={styles.satelliteHead}>
@@ -611,53 +620,67 @@ function SatellitePanel({
         <h3 className={styles.satelliteTitle} id={`satellite-${observation.provider}`}>
           Satellite observation
         </h3>
+        <span className={styles.satelliteWhen}>{observation.observed_date}</span>
       </header>
 
-      {/*
-        `img` rather than `next/image`: the source is an external WMS endpoint that answers a query
-        string, not a file the optimiser can size, and routing it through the optimiser would put
-        Weathra's servers between a reader and NASA's for no gain. `alt` describes what the picture
-        *is* — a description of what it shows would be the interpretation this panel refuses.
-      */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        className={styles.satelliteImage}
-        src={observation.image_url}
-        alt={`Satellite imagery covering the region around ${placeLabel(observation.location) ?? "this location"}, from ${observation.observed_date}. Not interpreted by Weathra.`}
-        loading="lazy"
-        width={640}
-        height={640}
-      />
-
-      <dl className={styles.satelliteFacts}>
-        <div className={styles.satelliteFact}>
-          <dt>Observed</dt>
-          <dd>{observation.observed_date}</dd>
-        </div>
-        <div className={styles.satelliteFact}>
-          <dt>Product</dt>
-          <dd>{observation.product}</dd>
-        </div>
-        {observation.instrument ? (
-          <div className={styles.satelliteFact}>
-            <dt>Instrument</dt>
-            <dd>{observation.instrument}</dd>
-          </div>
+      <div className={styles.satelliteFrame}>
+        {state === "unavailable" ? (
+          /*
+            Compact and truthful. The observation was retrieved — the run has its provider, product
+            and date — and the picture did not load here, which is a different failure from the
+            capability being unavailable and is said as the smaller thing it is.
+          */
+          <p className={styles.satelliteFallback} role="status">
+            Satellite imagery unavailable
+          </p>
         ) : null}
-        <div className={styles.satelliteFact}>
-          <dt>Provider</dt>
-          <dd>{providerLabel(observation.provider)}</dd>
-        </div>
-      </dl>
+
+        {/*
+          `img` rather than `next/image`: the source is an external WMS endpoint answering a query
+          string, not a file the optimiser can size, and routing it through the optimiser would put
+          Weathra's servers between a reader and NASA's for no gain. `alt` describes what the
+          picture *is* — a description of what it shows would be the interpretation this panel
+          refuses, and no vision-capable process is in this pipeline.
+        */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          className={styles.satelliteImage}
+          src={observation.image_url}
+          alt={`Satellite imagery covering the region around ${placeLabel(observation.location) ?? "this location"}, from ${observation.observed_date}. Not interpreted by Weathra.`}
+          loading="lazy"
+          width={640}
+          height={640}
+          onLoad={() => setState("shown")}
+          onError={() => setState("unavailable")}
+        />
+      </div>
+
+      {/*
+        The caption the artifact sets under its own source imagery, carrying what this actually is
+        rather than a feed name. Every value is the observation's; nothing is written here.
+      */}
+      <p className={styles.satelliteCaption}>
+        <span className={styles.satelliteProvider}>{providerLabel(observation.provider)}</span>
+        {observation.instrument ? (
+          <span className={styles.satelliteInstrument}>{observation.instrument}</span>
+        ) : null}
+        <span className={styles.satelliteProduct}>{observation.product}</span>
+      </p>
 
       <p className={styles.note}>{observation.coverage_note}</p>
       <p className={styles.note}>{observation.freshness_note}</p>
+
       {/*
         The boundary sentence, from the observation rather than written here — the backend is where
-        it is defined and where a change to it would have to be argued for.
+        it is defined and where a change to it would have to be argued for. On the face of the
+        panel rather than behind a press: a reader who misses it is the reader this panel is a risk
+        to.
       */}
       <p className={styles.satelliteBoundary}>{observation.interpretation_note}</p>
-      <p className={styles.satelliteAttribution}>{observation.attribution}</p>
+      <details className={styles.satelliteDetails}>
+        <summary className={styles.satelliteDetailsSummary}>Imagery attribution</summary>
+        <p className={styles.note}>{observation.attribution}</p>
+      </details>
     </section>
   );
 }

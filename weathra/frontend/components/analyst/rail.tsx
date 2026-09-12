@@ -152,14 +152,14 @@ const SOURCE_ROLES: Readonly<Record<string, string>> = {
    * are two rows only because the roles genuinely differ.
    */
   current: "Current conditions",
-  forecast: "Forecast data",
-  historical_observation: "Archive observations",
+  forecast: "Forecast",
+  historical_observation: "Historical archive",
   /*
    * Imagery, and the role says so. A satellite row is a claim that a picture was retrieved, never
    * that anything read it — `docs/satellite-source.md` records that no vision model is in this
    * pipeline, and the observation carries its own boundary sentence for any surface that shows it.
    */
-  satellite_observation: "Observed imagery",
+  satellite_observation: "Satellite observation",
 };
 
 /**
@@ -179,14 +179,6 @@ interface SourceRow {
   readonly key: string;
   readonly name: string;
   readonly role: string;
-  /**
-   * What served it, where the source and the server are different things.
-   *
-   * A weather row's name *is* its provider, so there is nothing more to say. A satellite row names
-   * the kind of evidence — "Satellite Observation" — and the provider and instrument behind it are
-   * a second line, read off the observation the run actually retrieved rather than written here.
-   */
-  readonly served?: string;
   /** The class whose colour marks the row. Never decoration: it says what kind of figure it fed. */
   readonly dataClass: DataClassName;
 }
@@ -225,12 +217,12 @@ function sourcesFrom(answer: AnswerEnvelope | null): readonly SourceRow[] {
     if (rows.has(key)) continue;
 
     /*
-      **The satellite row names the evidence, and says underneath what produced it.**
+      **The satellite row names its instrument, because that is what identifies the imagery.**
 
-      Every other row's name is a provider because a provider is what a figure came from. Imagery is
-      not a figure, and "NASA GIBS" on its own says who answered without saying what for — so the
-      row leads with what was retrieved and carries the provider and the instrument beneath it, read
-      off the observation this run holds rather than assumed from the provider id.
+      Every row here is a source and a role. For a weather provider the source *is* the provider;
+      for imagery, "NASA GIBS" alone says who served it without saying what was flown, and the
+      instrument is what identifies the product. Both are read off the observation this run holds
+      rather than assumed from the provider id.
     */
     if (entry.data_class === "satellite_observation") {
       const observation = (answer.satellite ?? []).find(
@@ -238,10 +230,7 @@ function sourcesFrom(answer: AnswerEnvelope | null): readonly SourceRow[] {
       );
       rows.set(key, {
         key,
-        name: "Satellite Observation",
-        served: [providerLabel(entry.provider), observation?.instrument]
-          .filter(Boolean)
-          .join(" · "),
+        name: [providerLabel(entry.provider), observation?.instrument].filter(Boolean).join(" · "),
         role,
         dataClass,
       });
@@ -447,9 +436,6 @@ export function AnalystRail({
                   />
                   <span className={styles.railSourceText}>
                     <span className={styles.railSourceName}>{source.name}</span>
-                    {source.served ? (
-                      <span className={styles.railSourceServed}>{source.served}</span>
-                    ) : null}
                     <span className={styles.railSourceRole}>{source.role}</span>
                   </span>
                 </li>

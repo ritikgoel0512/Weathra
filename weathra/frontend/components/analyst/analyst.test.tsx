@@ -1931,7 +1931,7 @@ describe("the rail beside a successful answer", () => {
     const sources = within(rail).getByRole("region", { name: "Active data sources" });
 
     expect(within(sources).getByText("Open-Meteo")).toBeInTheDocument();
-    expect(within(sources).getByText("Forecast data")).toBeInTheDocument();
+    expect(within(sources).getByText("Forecast")).toBeInTheDocument();
     // Weathra's own arithmetic is a source of this answer and is credited as itself, rather than
     // to the provider whose series it was computed over.
     expect(within(sources).getByText("Weathra Analytics")).toBeInTheDocument();
@@ -1956,7 +1956,7 @@ describe("the rail beside a successful answer", () => {
     // roles are what make the second row worth having.
     expect(within(sources).getAllByText("Open-Meteo")).toHaveLength(2);
     expect(within(sources).getByText("Current conditions")).toBeInTheDocument();
-    expect(within(sources).getByText("Forecast data")).toBeInTheDocument();
+    expect(within(sources).getByText("Forecast")).toBeInTheDocument();
   });
 
   it("names the current-conditions agent from the record, with the outcome it was stamped with", async () => {
@@ -2153,17 +2153,17 @@ describe("a run that retrieved satellite imagery", () => {
     };
   }
 
-  it("names the evidence, says what served it, and says what it is", async () => {
+  it("names the provider and instrument that produced the imagery, and its role", async () => {
     fetchMock = respondingWith(() => streaming(runFrames(withSatellite())));
     renderAnalyst();
     await ask("Show me the latest satellite observation for Berlin.");
     await screen.findByRole("region", { name: "AI interpretation" });
 
     const sources = screen.getByRole("region", { name: "Active data sources" });
-    expect(within(sources).getByText("Satellite Observation")).toBeInTheDocument();
-    // The provider and the instrument, read off the observation the run holds.
+    // The provider and the instrument, read off the observation the run holds — "NASA GIBS" alone
+    // says who served it without saying what was flown.
     expect(within(sources).getByText("NASA GIBS · VIIRS on NOAA-20")).toBeInTheDocument();
-    expect(within(sources).getByText("Observed imagery")).toBeInTheDocument();
+    expect(within(sources).getByText("Satellite observation")).toBeInTheDocument();
     // Beside the weather provider, not instead of it: two sources, two roles.
     expect(within(sources).getByText("Open-Meteo")).toBeInTheDocument();
   });
@@ -2242,8 +2242,7 @@ describe("a run that retrieved satellite imagery", () => {
     await screen.findByRole("region", { name: "AI interpretation" });
 
     const sources = screen.getByRole("region", { name: "Active data sources" });
-    expect(within(sources).queryByText("Satellite Observation")).toBeNull();
-    expect(within(sources).queryByText("Observed imagery")).toBeNull();
+    expect(within(sources).queryByText("Satellite observation")).toBeNull();
     expect(sources.textContent).not.toContain("NASA");
   });
 });
