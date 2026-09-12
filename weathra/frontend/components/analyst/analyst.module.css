@@ -35,7 +35,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
-  padding-block-end: var(--space-3);
+  padding: var(--space-4);
   border-block-end: 1px solid var(--color-border-subtle);
   min-width: 0;
 }
@@ -104,6 +104,7 @@
  */
 .contextPill {
   align-self: center;
+  margin-block-start: var(--space-4);
   padding: var(--space-1) var(--space-4);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-pill);
@@ -121,6 +122,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
+  padding: var(--space-5) var(--space-4);
   min-width: 0;
 }
 
@@ -133,21 +135,21 @@
 
 /* The person's own question, set apart above the response as the artifact sets it apart. */
 .question {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
   align-self: flex-end;
-  max-width: 60ch;
+  max-width: 58ch;
   padding: var(--space-3) var(--space-4);
-  background: var(--color-surface-raised);
+  /* Set *into* the canvas rather than raised off it: the canvas is the raised surface now. */
+  background: var(--color-surface-inset);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-lg);
 }
 
 .questionRole {
-  font-size: var(--type-meta-size);
-  line-height: var(--type-meta-line);
-  letter-spacing: 0.06em;
+  padding-inline-end: var(--space-1);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
   text-transform: uppercase;
   color: var(--color-text-muted);
 }
@@ -172,6 +174,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  margin-inline-start: calc(30px + var(--space-3));
   padding: var(--space-3) var(--space-4);
   background: var(--color-surface-inset);
   border: 1px solid var(--color-border-subtle);
@@ -347,12 +350,13 @@
    */
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  background: var(--color-surface-raised);
+  background: var(--color-surface-inset);
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-md);
   font-size: var(--type-body-size);
   line-height: var(--type-body-line);
   color: var(--color-text-primary);
+  margin-inline-start: calc(30px + var(--space-3));
 }
 
 .clarificationTitle,
@@ -499,35 +503,41 @@
 
 /* ------------------------------------------------------------------ composer */
 
+/*
+ * The two bands under the exchange, each ruled off from what is above it rather than floating
+ * beside it — the canvas is the frame now, so neither carries one of its own.
+ */
 .starters {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-block-start: 1px solid var(--color-border-subtle);
 }
 
 .composer {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-surface-raised);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-lg);
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-block-start: 1px solid var(--color-border-subtle);
+  /* Set into the canvas, which is what makes it read as the screen's one interaction surface. */
+  background: var(--color-surface-inset);
   min-width: 0;
 }
 
 .composerInput {
   font-family: var(--family-body);
-  font-size: var(--type-ui-size);
-  line-height: var(--type-ui-line);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
   color: var(--color-text-primary);
-  background: var(--color-surface-inset);
+  background: var(--color-surface-base);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3);
   width: 100%;
   resize: vertical;
-  min-height: 88px;
+  min-height: 76px;
 }
 
 .composerInput::placeholder {
@@ -561,11 +571,26 @@
   align-items: start;
 }
 
+/*
+ * **The conversation canvas** — the artifact's own silhouette, reproduced.
+ *
+ * `02-ai-weather-analyst.png` draws one bordered surface running from the workspace head to the
+ * send button, with rules separating the head, the exchange and the composer. Production put the
+ * head above the page and let the transcript, the chips and the composer float on the page ground
+ * — every region inside them matched the artifact and the two screens still did not read as the
+ * same composition, because the composition is the card.
+ *
+ * The children keep their own spacing; what this adds is the frame and the rhythm between the
+ * bands, which is why the padding is on the bands rather than here.
+ */
 .main {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
   min-width: 0;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  overflow: hidden;
 }
 
 .rail {
@@ -634,9 +659,15 @@
 }
 
 /* The question, as a bubble on the right — `02-ai-weather-analyst.png` places it there. */
+/*
+ * The person's turn: the label above the bubble and outside it, both pushed to the end of the row,
+ * as `02-ai-weather-analyst.png` sets them. The label inside read as a field caption on a form.
+ */
 .questionRow {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
 }
 
 .questionRow .question {
@@ -670,12 +701,19 @@
 }
 
 .agentMark {
-  width: 22px;
-  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex: none;
+  width: 30px;
+  height: 30px;
   border-radius: var(--radius-pill);
-  background: var(--color-accent-muted);
-  border: 2px solid var(--color-accent);
+  border: 1px solid var(--color-border-subtle);
+  background: radial-gradient(
+    70% 70% at 50% 40%,
+    color-mix(in srgb, var(--color-accent) 20%, transparent) 0%,
+    transparent 74%
+  ), var(--color-surface-inset);
 }
 
 .agentName {
@@ -764,11 +802,18 @@
 }
 
 /* The agent response as one surface: the sections inside it are not standalone cards. */
+/*
+ * **The agent's turn is not a card; the answer inside it is.**
+ *
+ * This was a bordered raised surface holding another bordered raised surface — a box in a box, so
+ * the reply carried two frames and the artifact's one. `02-ai-weather-analyst.png` sets the
+ * identity line unframed above a single answer card indented under the mark, and that is what this
+ * now is: the turn lays out, the card frames.
+ */
 .answer {
-  padding: var(--space-4);
-  background: var(--color-surface-raised);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-lg);
+  padding: 0;
+  background: none;
+  border: 0;
 }
 
 .agentHead {
@@ -947,10 +992,12 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  /* Indented under the agent's mark, as the artifact indents it: 30px mark + its gap. */
+  margin-inline-start: calc(30px + var(--space-3));
   padding: var(--space-4);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-lg);
-  background: var(--color-surface-raised);
+  background: var(--color-surface-inset);
   min-width: 0;
 }
 
@@ -1103,7 +1150,7 @@
   padding: var(--space-4);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-md);
-  background: var(--color-surface-inset);
+  background: var(--color-surface-raised);
   min-width: 0;
 }
 
@@ -1191,9 +1238,9 @@
   color: var(--color-text-muted);
 }
 
-/* The two figure panels sit on the inset ground, as the artifact insets them inside its card. */
+/* The two figure panels lift off the card, as the artifact insets them inside its own. */
 .answerCard > .subcards > section {
-  background: var(--color-surface-inset);
+  background: var(--color-surface-raised);
 }
 
 .answerDetails {
@@ -1508,10 +1555,10 @@
  * a primary action, which made the four suggestions louder than the composer beneath them.
  */
 .starter {
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-1) var(--space-3);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-pill);
-  background: var(--color-surface-raised);
+  background: var(--color-surface-inset);
   color: var(--color-text-secondary);
   font-family: var(--family-body);
   font-size: var(--type-meta-size);

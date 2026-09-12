@@ -535,6 +535,18 @@ export function Analyst(): ReactNode {
         The artifact's "History" control is not here: the threads endpoint exists, no screen lists
         them, and a control with nowhere to go is worse than none — `docs/design/screens.md` §8.
       */}
+      <div className={styles.workspace}>
+        <div className={styles.main}>
+      {/*
+        **One surface from the header to the send button** — the artifact's own silhouette.
+
+        `02-ai-weather-analyst.png` draws the conversation as a single bordered canvas: the
+        workspace head, a rule, the exchange, a rule, the suggestions, the composer. Production had
+        the head above the page and the transcript, the chips and the composer floating separately
+        on the page ground, which is why the two screens did not read as the same composition even
+        where every region inside them matched. The rail sits beside this card and starts level with
+        its head, as it does in the artifact.
+      */}
       <header className={styles.heading}>
         <span className={styles.headingMark} aria-hidden="true">
           <IntelligenceMark size={30} />
@@ -562,8 +574,6 @@ export function Analyst(): ReactNode {
         </div>
       </header>
 
-      <div className={styles.workspace}>
-        <div className={styles.main}>
       {/*
         The artifact's small centred context pill. It states only what is true: a conversation is
         open, or a saved default will be used, or neither — and it names no memory key and no
@@ -717,6 +727,11 @@ export function Analyst(): ReactNode {
           )}
         </Field>
 
+        {/*
+          The artifact's send control: inside the composer's own box, on the same row as nothing
+          else, at the weight of the screen's one primary action. It was a button sitting under an
+          unframed text area, which read as a form's submit rather than as a chat's send.
+        */}
         <div className={styles.composerActions}>
           <Button type="submit" variant="primary" busy={busy} disabled={empty}>
             {busy ? "Working…" : "Ask Weathra"}

@@ -36,6 +36,7 @@ import {
   MethodNote,
   ModelAttribution,
   ProvenanceSection,
+  IntelligenceMark,
   UncertaintyIndicator,
   WeatherIcon,
   formatInstant,
@@ -291,8 +292,16 @@ export function AnswerView({
       reading Weathra computed, and closes on one rule of provenance.
     */
     <article className={styles.answer}>
+      {/*
+        The artifact sets a circular mark at the left of the agent's reply, which is what makes the
+        exchange read as a conversation rather than as a report with a caption. It is Weathra's own
+        intelligence mark — the one the workspace head and the rail use — rather than the artifact's
+        generated portrait of a neural net.
+      */}
       <header className={styles.agentHead}>
-        <span className={styles.agentMark} aria-hidden="true" />
+        <span className={styles.agentMark} aria-hidden="true">
+          <IntelligenceMark size={22} />
+        </span>
         <span className={styles.agentName}>Weathra Intelligence Agent</span>
       </header>
 
@@ -307,9 +316,20 @@ export function AnswerView({
           clarification, and pressing one runs the question that was already asked.
         */
         <div className={styles.clarification} role="note">
-          <p className={styles.clarificationTitle}>{intent.question}</p>
+          {/*
+            **The question first, the reason under it.**
+
+            The backend's clarification names every rung of the resolution ladder in one sentence —
+            the question does not name a place, the conversation established none, no default is
+            saved — and all of it is true and none of it is what somebody wants to read first.
+            `02-ai-weather-analyst.png` is a conversation, and a conversation asks before it
+            explains. So the headline is the ask, and the backend's own sentence is the reason
+            beneath it, unedited: nothing it said is dropped, and it stops being the headline.
+          */}
           {intent.kind === "needs-location" ? (
             <>
+              <p className={styles.clarificationTitle}>Which place should I look at?</p>
+              <p className={styles.note}>{intent.question}</p>
               <p className={styles.note}>
                 Weathra does not guess a place, and does not read one from your device or your
                 account. Choose one and the question you just asked runs for it.
@@ -322,9 +342,12 @@ export function AnswerView({
               </p>
             </>
           ) : (
-            <p className={styles.note}>
-              Answer in the box below and Weathra will carry on from here.
-            </p>
+            <>
+              <p className={styles.clarificationTitle}>{intent.question}</p>
+              <p className={styles.note}>
+                Answer in the box below and Weathra will carry on from here.
+              </p>
+            </>
           )}
         </div>
       ) : (
@@ -979,9 +1002,14 @@ export function AnswerSkeleton(): ReactNode {
 export function QuestionTurn({ question }: { readonly question: string }): ReactNode {
   return (
     /* The artifact's right-aligned question bubble, above the agent's reply. */
+    /*
+      The artifact puts the speaker's label *above* the bubble and outside it, right-aligned, and
+      the bubble holds nothing but what was said. Inside the bubble it read as a field label on a
+      form submission rather than as the name of whoever spoke.
+    */
     <div className={styles.questionRow} data-turn="question">
+      <p className={styles.questionRole}>You</p>
       <div className={styles.question}>
-        <p className={styles.questionRole}>You</p>
         <p className={styles.questionText}>{question}</p>
       </div>
     </div>

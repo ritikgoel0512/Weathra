@@ -1149,13 +1149,22 @@ input.controlBare[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 
 /* On the title's own line, pushed to the end of it, at the smallest step the system has. */
+/*
+ * **Quiet, and still there.** `specs/web-ui` requires the sentence that says a model produced no
+ * measurement, and `02-ai-weather-analyst.png` sets the line beside its own badge as one short
+ * italic aside. Two lines of grey at body-adjacent weight, which is what this was, reads as a
+ * disclaimer standing between a customer and their answer. Same words, same region, same
+ * guarantee — a third of the emphasis.
+ */
 .interpretation[data-density="compact"] .interpretationBoundary {
   margin-inline-start: auto;
-  max-width: 46ch;
+  max-width: 52ch;
   text-align: end;
   font-size: var(--type-label-size);
   line-height: var(--type-label-line);
+  font-style: italic;
   color: var(--color-text-muted);
+  opacity: 0.78;
 }
 
 /* "CURRENT INTERPRETATION" — the artifact's own label over the prose. */
