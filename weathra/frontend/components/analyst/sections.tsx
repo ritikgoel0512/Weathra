@@ -31,7 +31,6 @@ import type { ReactNode } from "react";
 import {
   AttributionFooter,
   Badge,
-  DataClassBadge,
   InterpretationPanel,
   Skeleton,
   MethodNote,
@@ -56,6 +55,8 @@ import {
 import { inferenceMetadataFrom } from "@/lib/inference/served";
 import { evidencePath } from "@/lib/routes";
 import { placeLabel } from "@/lib/locations/place";
+import { runIntentOf } from "@/lib/analyst/intent";
+
 import styles from "./analyst.module.css";
 
 /* --------------------------------------------------------------------- progress */
@@ -205,6 +206,12 @@ export interface AnswerViewProps {
   readonly answer: AnswerEnvelope;
   /** The stored evidence record's identifier, when the backend stored one. */
   readonly evidenceId?: string | null;
+  /**
+   * Rendered inside a clarification that is waiting for a place — the saved places to press and
+   * the resolver to type into. Supplied by the screen rather than built here, because the same
+   * control is the composer's FOCUS and there must be exactly one of it.
+   */
+  readonly locationOptions?: ReactNode;
 }
 
 /**
@@ -214,7 +221,11 @@ export interface AnswerViewProps {
  * figures, Weathra's arithmetic and a language model's sentences is structural rather than a
  * matter of layout.
  */
-export function AnswerView({ answer, evidenceId = null }: AnswerViewProps): ReactNode {
+export function AnswerView({
+  answer,
+  evidenceId = null,
+  locationOptions = null,
+}: AnswerViewProps): ReactNode {
   const groups = findingGroups(answer);
   const confidence = confidenceOf(answer.uncertainty);
   const resolved = answer.resolved;
@@ -252,9 +263,16 @@ export function AnswerView({ answer, evidenceId = null }: AnswerViewProps): Reac
    * anyway: an empty observed card, an empty forecast card, a grounding note reading "0 figure(s)
    * checked", the model and policy identifiers, and a run-progress strip. The clarification is the
    * answer in that case, so it is the only thing shown.
+   *
+   * The test for it lives in `lib/analyst/intent.ts` now, and not for tidiness: this condition also
+   * decides what the rail says and what the composer does with the next thing typed, and the three
+   * had drifted apart. The previous version of it lived here and required `!answer.answer_prose`,
+   * so a run that asked which place *and* wrote a sentence fell through to the report layout — an
+   * interpretation card with nothing in it over two empty panels, which is the state the
+   * 2026-09-12 review rejected.
    */
-  const clarifying =
-    Boolean(answer.clarification_question) && groups.length === 0 && !answer.answer_prose;
+  const intent = runIntentOf(answer);
+  const clarifying = intent.kind !== "answered";
 
   return (
     /*
@@ -269,20 +287,35 @@ export function AnswerView({ answer, evidenceId = null }: AnswerViewProps): Reac
       </header>
 
       {clarifying ? (
+        /*
+          **The clarification, answered here.**
+
+          It used to end in two links off the screen — *Your saved places* and *Set a default
+          location* — which asked somebody who wanted a forecast to go and configure a durable
+          preference on a different screen and then come back and retype their question. The
+          2026-09-12 review named that as the defect. The places are now offered *in* the
+          clarification, and pressing one runs the question that was already asked.
+        */
         <div className={styles.clarification} role="note">
-          <p className={styles.clarificationTitle}>{answer.clarification_question}</p>
-          <p className={styles.note}>
-            Weathra does not guess a location. Name a place in your question, or set a default in
-            Settings and every question will use it.
-          </p>
-          <div className={styles.clarificationActions}>
-            <Link className={styles.clarificationAction} href="/locations">
-              Your saved places
-            </Link>
-            <Link className={styles.clarificationAction} href="/settings">
-              Set a default location
-            </Link>
-          </div>
+          <p className={styles.clarificationTitle}>{intent.question}</p>
+          {intent.kind === "needs-location" ? (
+            <>
+              <p className={styles.note}>
+                Weathra does not guess a place, and does not read one from your device or your
+                account. Choose one and the question you just asked runs for it.
+              </p>
+              {locationOptions}
+              <p className={styles.clarificationFootnote}>
+                Choosing here points this conversation at that place. It does not change your saved
+                default — <Link href="/settings">Settings</Link> does that, and{" "}
+                <Link href="/locations">Saved Locations</Link> keeps the list.
+              </p>
+            </>
+          ) : (
+            <p className={styles.note}>
+              Answer in the box below and Weathra will carry on from here.
+            </p>
+          )}
         </div>
       ) : (
         <div className={styles.answerCard}>
@@ -292,6 +325,18 @@ export function AnswerView({ answer, evidenceId = null }: AnswerViewProps): Reac
             the reply; both are still on this screen — the sentence inside the panel below, the
             identifiers in the answer's details — and neither is the first thing a customer meets.
           */}
+          {/*
+            **Only where a model actually wrote something.**
+
+            This region used to render unconditionally, so a run whose prose was withheld — or never
+            written — showed the AI INTERPRETATION badge over the sentence "No interpretation was
+            written for this answer." A labelled card whose content is a note saying the card is
+            empty is worse than no card: it gives the most prominent treatment on the screen to the
+            absence of the thing it is for. The figures are unaffected either way, and where the
+            interpretation was *withheld* rather than absent the grounding footer below still says
+            so, because that is a fact about the answer rather than about a card.
+          */}
+          {answer.answer_prose ? (
           <InterpretationPanel
             /*
               The region keeps the name it has always had: it *is* the AI interpretation, and that
@@ -316,14 +361,14 @@ export function AnswerView({ answer, evidenceId = null }: AnswerViewProps): Reac
               )
             }
           >
-            {answer.answer_prose ? (
-              <p>{answer.answer_prose}</p>
-            ) : (
-              <p>
-                No interpretation was written for this answer. The figures below are unaffected.
-              </p>
-            )}
+            <p>{answer.answer_prose}</p>
           </InterpretationPanel>
+          ) : grounding.prose_discarded ? (
+            <p className={styles.withheld} role="note">
+              The interpretation was withheld because it could not be grounded in the figures below.
+              They are what the run retrieved and computed, and they are unaffected.
+            </p>
+          ) : null}
 
           {/* Asked rather than assumed, where the run also produced figures. */}
           {answer.clarification_question && !clarifying ? (
@@ -750,168 +795,5 @@ export function QuestionTurn({ question }: { readonly question: string }): React
         <p className={styles.questionText}>{question}</p>
       </div>
     </div>
-  );
-}
-
-/* ------------------------------------------------ observed data / forecast vector */
-
-/** One row of a subcard: a term, and either its value or why there isn't one. */
-function Fact({
-  term,
-  value,
-}: {
-  readonly term: string;
-  readonly value: string | null;
-}): ReactNode {
-  return (
-    <div className={styles.factRow}>
-      <dt className={styles.factTerm}>{term}</dt>
-      <dd className={styles.factValue} data-reported={value ? "true" : "false"}>
-        {value ?? "Not reported"}
-      </dd>
-    </div>
-  );
-}
-
-export interface RunFactsProps {
-  readonly answer: AnswerEnvelope;
-}
-
-/**
- * The OBSERVED DATA / FORECAST VECTOR pair `02-ai-weather-analyst.png` puts under the synthesis.
- *
- * The artifact fills them with a pressure drop, a humidity reading, a precipitation window and a
- * 94% confidence. Weathra does not have those figures for every run — and inventing them is the one
- * thing this product must not do — so the pair is built from what the *envelope* actually carries:
- * the attribution entries the run recorded, the context it resolved to, and the backend's own
- * uncertainty statement.
- *
- * **Both cards render on every answer.** The geometry is the artifact's and does not depend on the
- * data; a field the run did not report says so. That is the whole distinction this screen is built
- * on — missing data changes the content, never the layout.
- *
- * **A card with nothing in it says so once.** The runtime audit of 2026-09-08 photographed the
- * observed card as three rows of "Not reported" followed by a sentence explaining that the run
- * retrieved no observation. The sentence is the honest form; the three empty rows underneath a
- * heading are a table of nulls, and repeating "not reported" per field says nothing the one
- * sentence has not. So the rows appear when at least one of them has a value — where the contrast
- * between a reported field and an unreported one is the information — and give way to the sentence
- * when none does.
- *
- * Attribution is split by the data class the backend stamped on it, so an observed reading lands in
- * the observed card and a forecast in the forecast one. Nothing is re-classified here.
- */
-export function RunFacts({ answer }: RunFactsProps): ReactNode {
-  const attribution = answer.attribution ?? [];
-  // `current` is the backend's own class for an observation; there is no separate "observed".
-  const observed = attribution.find((entry) => entry.data_class === "current");
-  const forecast = attribution.find((entry) => entry.data_class === "forecast");
-  const resolved = answer.resolved ?? null;
-  const uncertainty = answer.uncertainty ?? null;
-  const horizon = uncertainty?.horizon?.[0] ?? null;
-
-  const observedFacts: readonly (readonly [string, string | null])[] = [
-    [
-      "Location",
-      placeLabel(observed?.location) ?? placeLabel(resolved?.locations?.[0]),
-    ],
-    ["Provider", observed?.provider ?? null],
-    ["Retrieved", observed?.retrieved_at ?? null],
-  ];
-
-  const forecastFacts: readonly (readonly [string, string | null])[] = [
-    [
-      "Window",
-      resolved?.period
-        ? `${formatLocalStamp(resolved.period.start_local)} to ${formatLocalStamp(resolved.period.end_local)}`
-        : null,
-    ],
-    ["Provider", forecast?.provider ?? null],
-    ["Confidence", horizon?.confidence ? `${horizon.confidence} at ${horizon.hours_ahead} h` : null],
-    [
-      "Spread",
-      uncertainty ? (uncertainty.spread_available ? "Supplied by the provider" : "Not supplied") : null,
-    ],
-  ];
-
-  const anyReported = (facts: readonly (readonly [string, string | null])[]) =>
-    facts.some(([, value]) => value !== null);
-
-  return (
-    <div className={styles.subcards}>
-      <section className={styles.subcard} aria-label="Observed data">
-        <header className={styles.subcardHead}>
-          <DataClassBadge dataClass="observed" />
-          <h3 className={styles.subcardTitle}>Observed data</h3>
-        </header>
-        {anyReported(observedFacts) ? (
-          <dl className={styles.facts}>
-            {observedFacts.map(([term, value]) => (
-              <Fact key={term} term={term} value={value} />
-            ))}
-          </dl>
-        ) : null}
-        {observed ? null : (
-          <p className={styles.subcardNote}>This run retrieved no observation.</p>
-        )}
-      </section>
-
-      <section className={styles.subcard} aria-label="Forecast vector">
-        <header className={styles.subcardHead}>
-          <DataClassBadge dataClass="forecast" />
-          <h3 className={styles.subcardTitle}>Forecast vector</h3>
-        </header>
-        {anyReported(forecastFacts) ? (
-          <dl className={styles.facts}>
-            {forecastFacts.map(([term, value]) => (
-              <Fact key={term} term={term} value={value} />
-            ))}
-          </dl>
-        ) : (
-          <p className={styles.subcardNote}>This run retrieved no forecast.</p>
-        )}
-      </section>
-    </div>
-  );
-}
-
-
-/* -------------------------------------------------------- the compact run status */
-
-/**
- * The run, in one line.
- *
- * `02-ai-weather-analyst.png` shows a status chip beside the agent's name, not a step-by-step
- * timeline: the full trace is a whole screen of its own at `/evidence/{id}`, and reproducing it
- * above every answer made the Analyst read as a trace viewer. This states what ran and offers the
- * way to the detail; nothing is lost, and the answer leads.
- */
-export function RunSummaryLine({
-  answer,
-  evidenceId,
-}: {
-  readonly answer: AnswerEnvelope;
-  readonly evidenceId: string | null;
-}): ReactNode {
-  const record = answer.evidence;
-  const agents = record?.agents?.length ?? 0;
-  const tools = record?.tool_calls?.length ?? 0;
-
-  return (
-    <span className={styles.runSummary}>
-      <span className={styles.runSummaryItem}>
-        {agents > 0 ? `${agents} agents` : "No agent reported"}
-      </span>
-      <span className={styles.runSummaryItem}>
-        {tools > 0 ? `${tools} tools` : "No tool call"}
-      </span>
-      {evidenceId ? (
-        <Link className={styles.runSummaryLink} href={evidencePath(evidenceId)}>
-          View agent evidence
-        </Link>
-      ) : (
-        <span className={styles.runSummaryItem}>No evidence record</span>
-      )}
-    </span>
   );
 }

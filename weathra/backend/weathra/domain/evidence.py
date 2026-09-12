@@ -396,7 +396,7 @@ class ResolvedContext(BaseModel):
     period: Period | None = None
     unit_system: str | None = None
     criterion: str | None = None
-    location_source: Literal["request", "thread", "preferences", "none"] = "request"
+    location_source: Literal["request", "focus", "thread", "preferences", "none"] = "request"
     units_source: Literal["request", "thread", "preferences", "default"] = "default"
     statement: str | None = Field(
         default=None, description="The plain sentence shown to the reader."

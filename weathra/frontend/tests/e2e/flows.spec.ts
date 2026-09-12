@@ -156,9 +156,9 @@ test.describe("flow 2 — ask a question then open its evidence", () => {
      * with an individual answer opens on request — so this asserts the affordance is there and that
      * opening it shows what the run resolved to, which is the behaviour the flow cares about.
      */
-    const resolved = page.locator('details[aria-label="What this answer resolved to"]');
+    const resolved = page.locator('details[aria-label="Answer details"]');
     await expect(resolved).toBeVisible();
-    await resolved.getByText("What this answer resolved to").click();
+    await resolved.getByText("Answer details").click();
     await expect(resolved.getByText(/from your saved default/)).toBeVisible();
     await expect(page.getByText(/could not be matched to the evidence/i)).toHaveCount(0);
 

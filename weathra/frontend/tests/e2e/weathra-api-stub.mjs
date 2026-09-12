@@ -1707,6 +1707,63 @@ const STREAM_ANSWER_PROSE = ANSWER_PIECES.join("");
  * Grounded and verified, because the flow asserts that the provenance boundary is still legible on
  * the answer: prose badged as interpretation, figures attributed, and the grounding verdict stated.
  */
+/**
+ * The clarification the real backend produces when its resolution ladder reaches the bottom.
+ *
+ * `weathra/agents/context.py` asks — never guesses — when the question names no place, the caller
+ * sent no focus, the thread has established nothing and no default is saved. Modelling that here
+ * rather than always answering is what lets the harness photograph the state the 2026-09-12 review
+ * rejected the screen for, and it is the same rule rather than a special case: clear the default
+ * through the real `PUT /me/preferences`, ask a question that names nowhere, and this is what comes
+ * back — nothing retrieved, nothing computed, no prose.
+ */
+function clarificationEnvelope(requestId, question) {
+  return {
+    request_id: requestId,
+    thread_id: "thread-e2e",
+    answer_prose: "",
+    prose_data_class: "ai_interpretation",
+    findings: [],
+    attribution: [],
+    citations: [],
+    resolved: {
+      locations: [],
+      period: null,
+      unit_system: "metric",
+      location_source: "none",
+      units_source: "preferences",
+      statement: null,
+    },
+    grounding: {
+      verified: false,
+      method: "figures extracted from the prose and matched within 0.05",
+      figures_checked: 0,
+      ungrounded_figures: [],
+      prose_discarded: false,
+    },
+    uncertainty: null,
+    unanswered_parts: [],
+    clarification_question:
+      "Which place should Weathra look at? The question does not name one, there is no location established in this conversation, and no default location is saved.",
+    llm_provider: "stub-gateway",
+    llm_model: "stub-model",
+    evidence: { ...EVIDENCE_RECORD, request_id: requestId, question, agents: [], tool_calls: [] },
+  };
+}
+
+/**
+ * Whether this run has any place at all to work with, in the backend's own order.
+ *
+ * A focus on the request, a place named in the question, or a saved default. None of the three is
+ * the clarification case; any of them answers.
+ */
+function hasAPlace(body) {
+  if (typeof body?.location === "string" && body.location.trim() !== "") return true;
+  const question = typeof body?.question === "string" ? body.question : "";
+  if (/berlin|munich|münchen|london|tokyo|new york|paris/i.test(question)) return true;
+  return preferences?.default_location != null;
+}
+
 function answerEnvelope(requestId, question) {
   return {
     request_id: requestId,
@@ -2102,33 +2159,46 @@ const server = createServer((request, response) => {
       });
       await pause();
 
-      for (const [agent, tool] of [
-        ["forecast", "weather.forecast"],
-        ["historical", "weather.history"],
-        ["analytics", "analytics.baseline_comparison"],
-      ]) {
-        frame("agent_start", { agent, reason: null });
-        await pause();
-        frame("tool_start", { tool, agent });
-        await pause();
-        frame("tool_end", { tool, ok: true, duration_ms: 120 });
-        frame("agent_end", { agent, status: "ok", duration_ms: 180 });
-        await pause();
-      }
+      /*
+       * No capability node runs when the ladder found no place, so none is announced.
+       *
+       * The backend refuses in resolution, *before* dispatch: a clarification run genuinely names
+       * no agent and calls no tool. A stub that streamed them anyway would have the rail listing
+       * four agents beside a reply that retrieved nothing — which is close to the defect the
+       * review found, arrived at from the other side.
+       */
+      if (hasAPlace(body)) {
+        for (const [agent, tool] of [
+          ["forecast", "weather.forecast"],
+          ["historical", "weather.history"],
+          ["analytics", "analytics.baseline_comparison"],
+        ]) {
+          frame("agent_start", { agent, reason: null });
+          await pause();
+          frame("tool_start", { tool, agent });
+          await pause();
+          frame("tool_end", { tool, ok: true, duration_ms: 120 });
+          frame("agent_end", { agent, status: "ok", duration_ms: 180 });
+          await pause();
+        }
 
-      frame("agent_start", { agent: "synthesis", reason: null });
-      for (const piece of ANSWER_PIECES) {
-        frame("answer_delta", { text: piece });
+        frame("agent_start", { agent: "synthesis", reason: null });
+        for (const piece of ANSWER_PIECES) {
+          frame("answer_delta", { text: piece });
+          await pause();
+        }
+        frame("agent_end", { agent: "synthesis", status: "ok", duration_ms: 210 });
         await pause();
       }
-      frame("agent_end", { agent: "synthesis", status: "ok", duration_ms: 210 });
-      await pause();
 
       // The terminal event, carrying the envelope and the identifier the record is stored under.
       // The Analyst offers its evidence link from this identifier and nothing else, so the flow
       // cannot reach the record except through an id the run itself produced.
       frame("final", {
-        answer: answerEnvelope(requestId, typeof body.question === "string" ? body.question : ""),
+        answer: (hasAPlace(body) ? answerEnvelope : clarificationEnvelope)(
+          requestId,
+          typeof body.question === "string" ? body.question : "",
+        ),
         evidence_id: STREAM_EVIDENCE_ID,
       });
       response.end();

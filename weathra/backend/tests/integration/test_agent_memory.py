@@ -30,6 +30,7 @@ from weathra.config import Settings
 from weathra.db.engine import Engines
 from weathra.domain.errors import ThreadNotFound
 from weathra.domain.identity import Principal
+from weathra.domain.location import Location
 from weathra.domain.weather import UnitSystem
 from weathra.memory.preferences import PreferenceStore
 from weathra.memory.threads import ThreadStore, WindowMemory
@@ -261,6 +262,7 @@ async def _run(
     thread_id: str | None = None,
     prose: str = "A scripted explanation.",
     requested_unit_system: UnitSystem | None = None,
+    focus: Location | None = None,
 ) -> AgentRunResult:
     """One agent run, with the acting user's own memory stores attached."""
     async with session_as(engines, user) as session, connected_tools(settings=settings) as tools:
@@ -272,6 +274,7 @@ async def _run(
                 principal=principal,
                 thread_id=thread_id,
                 requested_unit_system=requested_unit_system,
+                focus=focus,
                 started_at=NOW,
             ),
             RunDependencies(
@@ -644,3 +647,135 @@ async def test_a_thread_context_location_beats_the_saved_default(
     assert resolved is not None
     assert resolved.locations[0].is_same_place(MUNICH)
     assert resolved.location_source == "thread"
+
+
+# ============================================================ the conversation's focus
+
+
+async def test_a_conversation_focus_answers_a_question_that_names_no_place(
+    engines: Engines, db_settings: Settings, clean_database: None
+) -> None:
+    """The Analyst's FOCUS control, doing the one thing it exists to do.
+
+    Nothing else in this run points anywhere: no place in the question, no thread, no saved
+    default. Before the focus existed this was the clarification case, and a person whose account
+    had no default had no way at all to get an answer without retyping the place into every
+    question.
+    """
+    settings = _settings(db_settings)
+    user = new_user_id()
+
+    async with session_as(engines, user) as session:
+        await insert_profile(session, user)
+
+    result = await _run(
+        engines,
+        settings,
+        user,
+        "Will it rain tomorrow?",
+        _plan(PlanStep(capability=Capability.FORECAST, reason="r", days=1)),
+        focus=BERLIN,
+    )
+
+    resolved = result.envelope.resolved
+    assert resolved is not None
+    assert resolved.locations[0].is_same_place(BERLIN)
+    assert resolved.location_source == "focus"
+    assert resolved.statement is not None
+    assert "focus you set" in resolved.statement
+    assert result.envelope.clarification_question is None
+    assert result.envelope.findings
+
+
+async def test_a_place_named_in_the_question_beats_the_focus(
+    engines: Engines, db_settings: Settings, clean_database: None
+) -> None:
+    """"How about Munich?" with the focus on Berlin means Munich.
+
+    The focus is what the conversation is pointed at; naming a place is a more recent choice than
+    setting one, so it overrides without the person having to move the control first.
+    """
+    settings = _settings(db_settings)
+    user = new_user_id()
+
+    async with session_as(engines, user) as session:
+        await insert_profile(session, user)
+
+    result = await _run(
+        engines,
+        settings,
+        user,
+        "How about Munich?",
+        _plan(PlanStep(capability=Capability.FORECAST, reason="r", location="Munich", days=1)),
+        focus=BERLIN,
+    )
+
+    resolved = result.envelope.resolved
+    assert resolved is not None
+    assert resolved.locations[0].is_same_place(MUNICH)
+    assert resolved.location_source == "request"
+
+
+async def test_the_focus_beats_the_thread_and_the_saved_default(
+    engines: Engines, db_settings: Settings, clean_database: None
+) -> None:
+    """Both of the weaker sources are present and both are overridden.
+
+    A person who moves the focus to Munich mid-conversation has said something about *this*
+    question that neither the earlier turn nor a preference set months ago can contradict.
+    """
+    settings = _settings(db_settings)
+    user = new_user_id()
+
+    async with session_as(engines, user) as session:
+        await insert_profile(session, user)
+        principal = _principal(user)
+        await PreferenceStore(session, principal, settings).update(default_location=BERLIN)
+        thread = await ThreadStore(session, principal, settings).create()
+        await ThreadStore(session, principal, settings).record(thread.id, locations=[BERLIN])
+
+    result = await _run(
+        engines,
+        settings,
+        user,
+        "Will it rain tomorrow?",
+        _plan(PlanStep(capability=Capability.FORECAST, reason="r", days=1)),
+        thread_id=thread.id,
+        focus=MUNICH,
+    )
+
+    resolved = result.envelope.resolved
+    assert resolved is not None
+    assert resolved.locations[0].is_same_place(MUNICH)
+    assert resolved.location_source == "focus"
+
+
+async def test_no_focus_leaves_every_weaker_source_exactly_as_it_was(
+    engines: Engines, db_settings: Settings, clean_database: None
+) -> None:
+    """The regression guard for adding a tier: absent, it must change nothing.
+
+    The saved default still resolves and still discloses itself, which is the whole of what this
+    run did before the focus was introduced.
+    """
+    settings = _settings(db_settings)
+    user = new_user_id()
+
+    async with session_as(engines, user) as session:
+        await insert_profile(session, user)
+        await PreferenceStore(session, _principal(user), settings).update(default_location=BERLIN)
+
+    result = await _run(
+        engines,
+        settings,
+        user,
+        "Will it rain tomorrow?",
+        _plan(PlanStep(capability=Capability.FORECAST, reason="r", days=1)),
+        focus=None,
+    )
+
+    resolved = result.envelope.resolved
+    assert resolved is not None
+    assert resolved.location_source == "preferences"
+    assert resolved.statement is not None
+    assert "saved default" in resolved.statement

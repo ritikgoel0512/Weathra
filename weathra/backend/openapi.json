@@ -628,6 +628,44 @@
             "title": "Create Thread",
             "type": "boolean"
           },
+          "latitude": {
+            "anyOf": [
+              {
+                "maximum": 90.0,
+                "minimum": -90.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The place this conversation is pointed at \u2014 the Analyst's FOCUS. A place name, resolved server-side. It applies when the question names no place of its own, and takes precedence over the thread's context and your saved default. Send the coordinates you already resolved alongside it to pin which candidate you meant.",
+            "title": "Location"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "maximum": 180.0,
+                "minimum": -180.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
+          },
           "question": {
             "maxLength": 2000,
             "minLength": 1,
@@ -4650,6 +4688,7 @@
             "default": "request",
             "enum": [
               "request",
+              "focus",
               "thread",
               "preferences",
               "none"

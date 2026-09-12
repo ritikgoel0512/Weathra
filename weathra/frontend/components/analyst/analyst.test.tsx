@@ -336,11 +336,16 @@ describe("asking a question", () => {
      * a language model.
      */
     expect(
-      await screen.findByText("Using your saved location and units."),
+      await screen.findByText("Using Berlin, Germany, your saved default."),
     ).toBeInTheDocument();
 
+    /*
+     * And the composer's FOCUS says the same thing, as the control rather than as a caption — the
+     * saved default is offered as what will apply, labelled as the default it is. Pressing it is
+     * how a person points the conversation somewhere else, which the cases below exercise.
+     */
     const composer = screen.getByRole("form", { name: "Ask Weathra a weather question" });
-    expect(within(composer).getByText("Berlin, Germany")).toBeInTheDocument();
+    expect(within(composer).getByRole("button", { name: /Berlin, Germany/ })).toBeInTheDocument();
     expect(within(composer).getByText("metric")).toBeInTheDocument();
 
     // And opening the screen has still asked nothing of a language model.
@@ -363,9 +368,18 @@ describe("asking a question", () => {
      * no saved default has to be told that in a sentence rather than by an answer that refuses.
      */
     expect(
-      await screen.findByText("Name a place in your question — Weathra never guesses one."),
+      await screen.findByText(
+        "Name a place in your question, or choose one below — Weathra never guesses.",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Your weather question")).toBeEnabled();
+
+    /*
+     * "Or choose one below" has to be true. Before task 34.33 this sentence was the whole of what
+     * an account with no default was offered, and the only place to act on it was Settings.
+     */
+    const composer = screen.getByRole("form", { name: "Ask Weathra a weather question" });
+    expect(within(composer).getByRole("button", { name: "Choose a place" })).toBeEnabled();
   });
 
 
@@ -944,7 +958,9 @@ describe("an ambiguous place named in a question", () => {
       identifiers and a run-progress strip. Task 34.32 shows the agent's own question, why Weathra
       will not guess a place, and the two ways to answer it.
     */
-    expect(screen.getByText(/Weathra does not guess a location/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Weathra does not guess a place, and does not read one from your device/),
+    ).toBeInTheDocument();
     expect(screen.getByText(/Springfield, Illinois, US or Springfield, Missouri, US/)).toBeInTheDocument();
 
     // No figure, no forecast, no attribution: nothing was answered for an unchosen place.
@@ -1333,5 +1349,369 @@ describe("what actually served the answer", () => {
         expect(body, forbidden).not.toHaveProperty(forbidden);
       }
     }
+  });
+});
+
+/* -------------------------------------- task 34.33: focus, and a resumable clarification */
+
+/**
+ * The customer-level defects the 2026-09-12 review reopened this screen for.
+ *
+ * All of them were one gap wearing several faces: the Analyst could refuse to guess a place, and
+ * could not be told one. An account with no saved default asked "what should I expect over the next
+ * few days?", got a correct refusal to invent a city, and had nowhere to go but Settings on another
+ * screen — after which the question had to be retyped. The rail called that run COMPLETE.
+ *
+ * So these cases are about the *conversation*, not the layout: that a place can be chosen here,
+ * that choosing one finishes the question that was already asked, that the choice travels with
+ * every following question, that naming a place still overrides it, and that a run which retrieved
+ * nothing is never dressed as one that finished.
+ */
+
+/**
+ * The frames a clarification run emits: routing, and then the answer.
+ *
+ * No `agent_start`, no `tool_start`, no retrieval — which is the point. Resolution refuses before
+ * any capability node runs, so a run that asked for a place names no agents and queried no
+ * provider, and the rail has to be able to say that without inventing an explanation for it.
+ */
+function clarifyingFrames(answer: unknown): string[] {
+  return [
+    frame("routing", {
+      sequence: 1,
+      request_id: "req-1",
+      capabilities: ["forecast"],
+      source: "model",
+      reason: "The question asks about the days ahead.",
+    }),
+    frame("final", { sequence: 2, request_id: "req-1", answer, evidence_id: "evidence-8" }),
+  ];
+}
+
+/** A clarification run: the agent asked for a place, and nothing at all was retrieved. */
+const NEEDS_LOCATION = {
+  ...ANSWER,
+  answer_prose: "",
+  findings: [],
+  attribution: [],
+  uncertainty: null,
+  resolved: {
+    locations: [],
+    period: null,
+    unit_system: "metric",
+    location_source: "none",
+    units_source: "preferences",
+    statement: null,
+  },
+  clarification_question:
+    "Which place should Weathra look at? The question does not name one, there is no location established in this conversation, and no default location is saved.",
+  grounding: {
+    verified: false,
+    method: "figure extraction with a 0.05 tolerance",
+    figures_checked: 0,
+    note: "Weathra asked for a clarification instead of answering.",
+  },
+};
+
+const MUNICH = {
+  display_name: "Munich, Germany",
+  latitude: 48.1374,
+  longitude: 11.5755,
+  timezone: "Europe/Berlin",
+  country: "Germany",
+};
+
+const SAVED = {
+  count: 2,
+  limit: 10,
+  locations: [
+    { id: "saved-1", label: null, location: BERLIN },
+    { id: "saved-2", label: null, location: MUNICH },
+  ],
+};
+
+/**
+ * A fetch with no saved default, the saved places present, and the streams named in order.
+ *
+ * "No default" is the state every case here starts in, because it is the state the review was
+ * written against and the one the old screen had no answer for.
+ */
+function withoutADefault(...handlers: readonly (() => Response)[]): Mock {
+  let asked = 0;
+  return vi.fn(async (input: unknown) => {
+    const url = new URL(String(input));
+    if (url.pathname === "/api/v1/me/preferences") {
+      return json({ ...PREFERENCES, default_location: null });
+    }
+    if (url.pathname === "/api/v1/me/locations") return json(SAVED);
+    if (url.pathname === "/api/v1/weather/current") return json(CURRENT);
+    if (url.pathname === "/api/v1/locations/resolve") {
+      const query = (url.searchParams.get("query") ?? "").toLowerCase();
+      if (query.includes("munich")) return json({ kind: "resolved", location: MUNICH });
+      if (query.includes("berlin")) return json({ kind: "resolved", location: BERLIN });
+      return new Response(
+        JSON.stringify({
+          error: { code: "location_not_found", message: `No location matched ${query}`, request_id: "req-1" },
+        }),
+        { status: 404, headers: { "content-type": "application/json" } },
+      );
+    }
+    const handler = handlers[Math.min(asked, handlers.length - 1)];
+    asked += 1;
+    return handler?.() ?? streaming(runFrames());
+  }) as unknown as Mock;
+}
+
+/** Open the composer's FOCUS chooser and press a saved place. */
+async function chooseFocus(name: string | RegExp): Promise<void> {
+  const composer = screen.getByRole("form", { name: "Ask Weathra a weather question" });
+  await userEvent.click(within(composer).getByRole("button", { name: /Choose a place|Berlin|Munich/ }));
+  await userEvent.click(await screen.findByRole("button", { name }));
+}
+
+describe("the conversation's focus", () => {
+  it("sends the chosen place with the question, pinned by the coordinates it resolved to", async () => {
+    fetchMock = withoutADefault();
+    renderAnalyst();
+
+    await chooseFocus("Munich, Germany");
+    await ask("What should I expect over the next few days?");
+
+    await waitFor(() => expect(streamCalls()).toHaveLength(1));
+    /*
+      The name *and* the coordinates. The pair is what makes a client-chosen place safe for the
+      backend to accept — the name carries the identity and the coordinates choose among the
+      geocoder's candidates for it — and it is the same mechanism a saved default is pinned by.
+      Sending the name alone would make "Springfield" ambiguous again at the far end.
+    */
+    expect(askedBodies()[0]).toMatchObject({
+      question: "What should I expect over the next few days?",
+      location: "Munich, Germany",
+      latitude: MUNICH.latitude,
+      longitude: MUNICH.longitude,
+    });
+  });
+
+  it("carries the focus into every following question, so a follow-up stays on the same place", async () => {
+    fetchMock = withoutADefault();
+    renderAnalyst();
+
+    await chooseFocus("Berlin, Germany");
+    await ask("What should I expect over the next few days?");
+    await waitFor(() => expect(streamCalls()).toHaveLength(1));
+
+    await ask("How does that compare with the same week last year?");
+    await waitFor(() => expect(streamCalls()).toHaveLength(2));
+
+    // The thread carries the conversation; the focus is sent again because the backend evaluates
+    // precedence per run — a question naming Munich has to be able to beat it.
+    expect(askedBodies()[1]).toMatchObject({
+      question: "How does that compare with the same week last year?",
+      thread_id: "thread-42",
+      location: "Berlin, Germany",
+    });
+  });
+
+  it("still lets a place named in the question override the focus", async () => {
+    fetchMock = withoutADefault();
+    renderAnalyst();
+
+    await chooseFocus("Berlin, Germany");
+    await ask("How about Munich?");
+    await waitFor(() => expect(streamCalls()).toHaveLength(1));
+
+    /*
+      Both facts travel, and the *backend* decides between them — `agents/context.py` puts a place
+      named in the question above the focus. The screen deciding locally would be a second copy of
+      that precedence, free to disagree with the one that matters.
+    */
+    const body = askedBodies()[0]!;
+    expect(body.question).toBe("How about Munich?");
+    expect(body.location).toBe("Berlin, Germany");
+  });
+
+  it("drops the focus when a new analysis starts, and leaves the saved default alone", async () => {
+    // This account *has* a saved default of Berlin, and the conversation is pointed at Munich.
+    fetchMock = vi.fn(async (input: unknown) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/api/v1/me/locations") return json(SAVED);
+      return defaultFetch(input);
+    }) as unknown as Mock;
+    renderAnalyst();
+
+    await chooseFocus("Munich, Germany");
+    expect(
+      await screen.findByText(/Focused on Munich, Germany/),
+    ).toBeInTheDocument();
+
+    await ask("What should I expect over the next few days?");
+    await waitFor(() => expect(streamCalls()).toHaveLength(1));
+
+    await userEvent.click(screen.getByRole("button", { name: "New analysis" }));
+
+    /*
+      Two lifetimes, kept apart. The focus is this conversation's and goes with it; the saved
+      default is a durable preference this screen never writes, so it is still what the composer
+      offers afterwards. Clearing somebody's configured default because they pressed "New analysis"
+      would be this screen editing a Settings value nobody asked it to touch.
+    */
+    expect(
+      await screen.findByText("Using Berlin, Germany, your saved default."),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("a clarification that is waiting for a place", () => {
+  it("offers the saved places, and pressing one runs the question that was already asked", async () => {
+    fetchMock = withoutADefault(
+      () => streaming(clarifyingFrames(NEEDS_LOCATION)),
+      () => streaming(runFrames()),
+    );
+    renderAnalyst();
+
+    await ask("What should I expect over the next few days?");
+    expect(await screen.findByText(/Which place should Weathra look at\?/)).toBeInTheDocument();
+
+    // The saved places are offered *here*, not as a link to another screen.
+    await userEvent.click(await screen.findByRole("button", { name: "Munich, Germany" }));
+
+    /*
+      **The required behaviour.** The second call is the *original* question, for Munich — not
+      "Munich" asked as a question, and not a question the person had to retype. Somebody who has
+      said what they want does not say it again because the system needed an argument.
+    */
+    await waitFor(() => expect(streamCalls()).toHaveLength(2));
+    expect(askedBodies()[1]).toMatchObject({
+      question: "What should I expect over the next few days?",
+      location: "Munich, Germany",
+    });
+  });
+
+  it("resumes the pending question when a place is typed as the reply", async () => {
+    fetchMock = withoutADefault(
+      () => streaming(clarifyingFrames(NEEDS_LOCATION)),
+      () => streaming(runFrames()),
+    );
+    renderAnalyst();
+
+    await ask("What should I expect over the next few days?");
+    expect(await screen.findByText(/Which place should Weathra look at\?/)).toBeInTheDocument();
+
+    // Typed into the composer, the way a person answers a question in a conversation.
+    await ask("Berlin");
+
+    await waitFor(() => expect(streamCalls()).toHaveLength(2));
+    expect(askedBodies()[1]).toMatchObject({
+      question: "What should I expect over the next few days?",
+      location: "Berlin, Germany",
+    });
+  });
+
+  it("treats a real question as a question, even while it is waiting for a place", async () => {
+    fetchMock = withoutADefault(
+      () => streaming(clarifyingFrames(NEEDS_LOCATION)),
+      () => streaming(runFrames()),
+    );
+    renderAnalyst();
+
+    await ask("What should I expect over the next few days?");
+    expect(await screen.findByText(/Which place should Weathra look at\?/)).toBeInTheDocument();
+
+    // A question mark, and more than a short phrase: never sent to the location resolver.
+    await ask("Why is the forecast uncertain further out?");
+
+    await waitFor(() => expect(streamCalls()).toHaveLength(2));
+    const body = askedBodies()[1]!;
+    expect(body.question).toBe("Why is the forecast uncertain further out?");
+    expect(body.location).toBeUndefined();
+  });
+
+  it("renders the conversation and none of the report apparatus", async () => {
+    fetchMock = withoutADefault(() => streaming(clarifyingFrames(NEEDS_LOCATION)));
+    renderAnalyst();
+
+    await ask("What should I expect over the next few days?");
+    expect(await screen.findByText(/Which place should Weathra look at\?/)).toBeInTheDocument();
+
+    /*
+      Every one of these was on the screen the review photographed, under a question that had
+      retrieved nothing: an AI INTERPRETATION card containing the words "no interpretation", two
+      empty figure panels, and the model and policy identifiers a customer never asked for.
+    */
+    expect(screen.queryByText("AI interpretation")).toBeNull();
+    expect(screen.queryByText(/No interpretation was written/)).toBeNull();
+    expect(screen.queryByRole("region", { name: "Observed data" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Forecast" })).toBeNull();
+    expect(screen.queryByText(/^Model:/)).toBeNull();
+    expect(screen.queryByText(/^Policy:/)).toBeNull();
+    expect(screen.queryByRole("region", { name: "Run progress" })).toBeNull();
+  });
+
+  it("does not call the run complete, and says what it is actually waiting for", async () => {
+    fetchMock = withoutADefault(() => streaming(clarifyingFrames(NEEDS_LOCATION)));
+    renderAnalyst();
+
+    await ask("What should I expect over the next few days?");
+    expect(await screen.findByText(/Which place should Weathra look at\?/)).toBeInTheDocument();
+
+    const rail = screen.getByRole("complementary", { name: "Run detail" });
+    /*
+      The review's sharpest finding: AGENT STATUS read COMPLETE over a run that had retrieved
+      nothing and analysed nothing. A run waiting for context is not a finished one.
+    */
+    expect(within(rail).getByText("Needs location")).toBeInTheDocument();
+    expect(within(rail).queryByText("Complete")).toBeNull();
+    // And the debug line under it is gone: orchestration not running is a fact about the context.
+    expect(within(rail).queryByText(/This run named no agents/)).toBeNull();
+    expect(within(rail).getByText(/Waiting for a place/)).toBeInTheDocument();
+    expect(within(rail).getByText("Not queried yet.")).toBeInTheDocument();
+  });
+});
+
+describe("a successful answer", () => {
+  it("leads with the interpretation and keeps the model and policy behind the disclosure", async () => {
+    fetchMock = respondingWith();
+    renderAnalyst();
+
+    await ask("What should I expect over the next few days in Berlin?");
+
+    // The answer itself, first.
+    expect(
+      await screen.findByText(
+        "The days ahead stay close to the seasonal baseline, with one warmer day midweek.",
+      ),
+    ).toBeInTheDocument();
+
+    /*
+      And the technical record present but not on the face of the reply. `specs/web-ui` requires
+      what served an answer to be reportable; the review requires a customer not to meet
+      "Policy: free_default" before the weather. A disclosure satisfies both.
+    */
+    const details = screen.getByRole("group", { name: "Answer details" });
+    expect(details).toBeInTheDocument();
+    expect(within(details).getByText(/Model: openrouter/)).toBeInTheDocument();
+
+    // And not on the face of the reply, which is where a customer meets the weather.
+    const card = screen.getByRole("article", {
+      name: "Question: What should I expect over the next few days in Berlin?",
+    });
+    const lead = within(card).getByText(
+      "The days ahead stay close to the seasonal baseline, with one warmer day midweek.",
+    );
+    expect(lead.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("says Complete only when an analysis actually completed", async () => {
+    fetchMock = respondingWith();
+    renderAnalyst();
+
+    await ask("What should I expect over the next few days in Berlin?");
+    await screen.findByText(
+      "The days ahead stay close to the seasonal baseline, with one warmer day midweek.",
+    );
+
+    const rail = screen.getByRole("complementary", { name: "Run detail" });
+    expect(within(rail).getByText("Complete")).toBeInTheDocument();
+    expect(within(rail).queryByText("Needs location")).toBeNull();
   });
 });

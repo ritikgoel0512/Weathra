@@ -133,23 +133,29 @@ compact cards. Baseline band gains the yearly-means chart it already has data fo
 
 ---
 
-### 02 AI Weather Analyst — **NOT CLOSE** — P1
+### 02 AI Weather Analyst — **CLOSE** — P1
+
+Re-graded 2026-09-12 from `capture/02-analyst-1440.png` and `capture/02-analyst-clarify-1440.png`
+beside the artifact, after tasks 34.32 (composition) and 34.33 (the conversation itself).
 
 | Region | Visily | Production | Status |
 |---|---|---|---|
 | Layout | 72/28 two-column | ~70/30 ✓ | MATCH |
-| Header | Title + session chip inline; History / New Analysis top-right | Title + subtitle stacked; New analysis top-right | SLIGHTLY OFF |
-| Conversation | User bubble right-aligned with avatar; agent reply left with avatar | Both left-aligned, no avatars | MATERIAL |
-| Answer body | Prose, then **two** compact metric cards, then one highlighted interpretation box, then a one-line source footer | Prose, then **five** stacked cards (observed data, forecast vector, observed figures, forecast figures, computed figures), then confidence band, then "what this resolved to", then produced-by | **MATERIAL** |
-| Hero image | Right rail, under "Active data sources" | **Top of the conversation column, full width** | MATERIAL — wrong place |
-| Run progress | — | "RUN PROGRESS 8 steps" band | EXTRA |
+| Header | Title + session chip inline; History / New Analysis top-right | Mark + title + session line inline; New analysis top-right | MATCH — History recorded as an accepted divergence (§8) |
+| Conversation | User bubble right-aligned with avatar; agent reply left with avatar | Right-aligned `YOU` bubble; agent reply with the intelligence mark | SLIGHTLY OFF — no portrait avatars |
+| Answer body | Prose, then **two** compact metric cards, then one highlighted interpretation box, then a one-line source footer | Prose, then Observed / Forecast where the run produced each, then the computed figures as the highlighted box, then one provenance rule | MATCH |
+| Hero image | Right rail, under "Active data sources" | Not drawn | SLIGHTLY OFF — the artifact's is generated source imagery (§5) |
+| Run progress | — | While streaming, and under a failure that produced nothing | MATCH |
 | Follow-ups | 2×2 chips directly above composer | 2×2 chips ✓ | MATCH |
-| Rail | Agent status, data sources, analyst context, confidence meter, evidence CTA | same four ✓ | MATCH |
+| Composer FOCUS | `FOCUS: BERLIN, DE` on the composer row | The same row, as a control: saved places, a resolver, and the saved default named | MATCH |
+| Rail | Agent status, data sources, analyst context, confidence meter, evidence CTA | same five ✓ | MATCH — confidence is a band and a count, not a percentage (§5) |
+| Clarification | — | A conversation: the question, the saved places to press, a resolver, and the pending question resumed on choosing | EXTRA — the artifact draws no such state |
 
-**Step-2 target.** Collapse the five answer cards to two (observed / forecast) plus the computed
-figure inline in the prose region; move the location image into the rail's data-sources card; give
-the two speakers avatars and align the question right; keep run progress but inside the evidence
-disclosure.
+**Remaining divergences, all recorded.** No portrait avatars on the two speakers; no History
+control (the threads endpoint exists, no screen lists them — §8); no generated source imagery in
+the rail; the confidence slot is the backend's uncertainty band rather than the artifact's
+"98.2%"; and the source names are whatever the deployment actually retrieved from. Each is either
+a fabrication `screens.md` §5 refuses or a capability no endpoint supplies.
 
 ---
 
@@ -416,12 +422,12 @@ convergence and any second-provider comparison.
 |---|---|---|
 | 01 Dashboard | NOT CLOSE | P0 |
 | 10 Plan & Usage | NOT CLOSE | P0 |
-| 02 Analyst | NOT CLOSE | P1 |
 | 04 Compare | NOT CLOSE | P1 |
 | 11 Explorer | NOT CLOSE | P1 |
 | 15 Travel | NOT CLOSE | P1 |
 | 03 Historical | ACCEPTABLE DIVERGENCE | P1 |
 | 06 Saved Locations | ACCEPTABLE DIVERGENCE | P2 |
+| 02 Analyst | CLOSE | P1 |
 | 08 Authentication | CLOSE | P2 |
 | 05, 07, 09, 12, 13, 14 | UNASSESSED (production not photographed in this pass) | P2 |
 

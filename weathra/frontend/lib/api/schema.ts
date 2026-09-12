@@ -146,6 +146,10 @@ export interface AnswerEnvelope {
 export interface AskRequest {
   /** Start a new thread for this question and return its id in the response. */
   readonly create_thread?: boolean;
+  readonly latitude?: number | null;
+  /** The place this conversation is pointed at — the Analyst's FOCUS. A place name, resolved server-side. It applies when the question names no place of its own, and takes precedence over the thread's context and your saved default. Send the coordinates you already resolved alongside it to pin which candidate you meant. */
+  readonly location?: string | null;
+  readonly longitude?: number | null;
   readonly question: string;
   /** One of *your* threads, to resolve a follow-up against. A thread you do not own is refused as not found. */
   readonly thread_id?: string | null;
@@ -996,7 +1000,7 @@ export interface RecentUsage {
 /** What the run decided the question was actually about. */
 export interface ResolvedContext {
   readonly criterion?: string | null;
-  readonly location_source?: "request" | "thread" | "preferences" | "none";
+  readonly location_source?: "request" | "focus" | "thread" | "preferences" | "none";
   readonly locations?: Location[];
   readonly period?: Period | null;
   /** The plain sentence shown to the reader. */

@@ -324,7 +324,13 @@
 .clarification {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  /*
+   * Wider than the `--space-1` this had while it was three lines of prose. It is a conversation
+   * with controls in it now — a question, why the question is being asked, chips, a field and a
+   * footnote — and at one step of separation those five read as one paragraph somebody has to
+   * untangle before they can press anything.
+   */
+  gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   background: var(--color-surface-raised);
   border: 1px solid var(--color-border-strong);
@@ -340,8 +346,7 @@
  *
  * A summary rather than a heading: the same three facts stand plainly in the rail beside this
  * column, so the copy that travels with an individual answer opens on request.
- */
-.resolvedTitle {
+ */{
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
@@ -352,21 +357,6 @@
   line-height: var(--type-ui-line);
   font-weight: var(--type-ui-weight);
   color: var(--color-text-secondary);
-}
-
-.resolvedTitle::-webkit-details-marker {
-  display: none;
-}
-
-.resolvedTitle::after {
-  content: "▸";
-  font-size: 0.85em;
-  color: var(--color-text-muted);
-  transition: transform 120ms ease;
-}
-
-.resolved[open] > .resolvedTitle::after {
-  transform: rotate(90deg);
 }
 
 .unavailableTitle {
@@ -381,20 +371,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-}
-
-/* What the run decided the question was about, and where each default came from. */
-.resolved {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-surface-inset);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
-  font-size: var(--type-body-size);
-  line-height: var(--type-body-line);
-  color: var(--color-text-primary);
 }
 
 .resolvedList {
@@ -597,15 +573,6 @@
   }
 }
 
-/* The header row: what the screen is, and the one action it has. */
-.headingRow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
 .headingText {
   display: flex;
   flex-direction: column;
@@ -618,42 +585,6 @@
   align-items: center;
   gap: var(--space-2);
   flex: none;
-}
-
-/* ---------------------------------------------------------------- rail contents */
-
-.railList {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.railRow {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: var(--space-2) var(--space-3);
-  background: var(--color-surface-inset);
-  border-radius: var(--radius-md);
-  min-width: 0;
-}
-
-.railName {
-  font-size: var(--type-ui-size);
-  line-height: var(--type-ui-line);
-  font-weight: var(--type-ui-weight);
-  color: var(--color-text-primary);
-  overflow-wrap: anywhere;
-}
-
-.railMeta {
-  font-size: var(--type-meta-size);
-  line-height: var(--type-meta-line);
-  color: var(--color-text-muted);
-  overflow-wrap: anywhere;
 }
 
 .railFacts {
@@ -685,23 +616,6 @@
   line-height: var(--type-meta-line);
   color: var(--color-text-primary);
   overflow-wrap: anywhere;
-}
-
-.railAction {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-accent);
-  border-radius: var(--radius-md);
-  color: var(--color-accent);
-  font-size: var(--type-ui-size);
-  font-weight: var(--type-ui-weight);
-  text-decoration: none;
-}
-
-.railAction:hover {
-  background: var(--color-surface-inset);
 }
 
 /* The question, as a bubble on the right — `02-ai-weather-analyst.png` places it there. */
@@ -799,39 +713,6 @@
   overflow-wrap: anywhere;
 }
 
-/* The OBSERVED DATA / FORECAST VECTOR pair, inside the response rather than beside it. */
-.subcard {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  background: var(--color-surface-inset);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
-  min-width: 0;
-}
-
-.subcardHead {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.subcardTitle {
-  font-size: var(--type-label-size);
-  line-height: var(--type-label-line);
-  font-weight: var(--type-label-weight);
-  letter-spacing: var(--type-label-tracking);
-  text-transform: uppercase;
-  color: var(--color-text-secondary);
-}
-
-.subcardNote {
-  font-size: var(--type-meta-size);
-  line-height: var(--type-meta-line);
-  color: var(--color-text-muted);
-}
-
 .facts {
   display: flex;
   flex-direction: column;
@@ -867,33 +748,6 @@
   color: var(--color-text-muted);
 }
 
-/* The run, in one line beside the agent's name — the trace lives on Agent Evidence. */
-.runSummary {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-1) var(--space-3);
-  margin-left: auto;
-  font-size: var(--type-meta-size);
-  line-height: var(--type-meta-line);
-  color: var(--color-text-muted);
-}
-
-.runSummaryItem {
-  white-space: nowrap;
-}
-
-.runSummaryLink {
-  color: var(--color-accent);
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.runSummaryLink:hover {
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
 /* The agent response as one surface: the sections inside it are not standalone cards. */
 .answer {
   padding: var(--space-4);
@@ -906,128 +760,6 @@
   padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--color-border-subtle);
   margin-bottom: var(--space-3);
-}
-
-/* ------------------------------------------------------------- the focus band
- *
- * `02-ai-weather-analyst.png` anchors its workspace on the place under discussion. This is that
- * anchor: the location banner, the three context facts the composer's own row restates, and the
- * readings the provider reported. See `components/analyst/focus.tsx` for why it is here at all.
- *
- * Every grid below is `auto-fit` + `minmax`, so a place reporting two measures fills the band as
- * honestly as one reporting six — `design-system.md` §13's thin-data rule.
- */
-
-.focus {
-  display: flex;
-  flex-direction: column;
-  background: var(--color-surface-raised);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  box-shadow: var(--shadow-raised);
-  min-width: 0;
-}
-
-.focusOverlay {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.focusPlace {
-  margin: 0;
-  color: var(--color-text-primary);
-  font-size: var(--type-section-size);
-  line-height: var(--type-section-line);
-  font-weight: var(--type-section-weight);
-}
-
-.focusReadout {
-  margin: 0;
-  color: var(--color-text-primary);
-  font-size: var(--type-display-size);
-  line-height: var(--type-display-line);
-  font-weight: var(--type-display-weight);
-  font-variant-numeric: tabular-nums;
-}
-
-.focusBody {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  min-width: 0;
-}
-
-.focusFacts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
-  gap: var(--space-3);
-  margin: 0;
-  min-width: 0;
-}
-
-.focusFact {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.focusFact dt {
-  color: var(--color-text-muted);
-  font-size: var(--type-label-size);
-  letter-spacing: var(--type-label-tracking);
-  text-transform: uppercase;
-  font-weight: var(--type-label-weight);
-}
-
-.focusFact dd {
-  margin: 0;
-  color: var(--color-text-primary);
-  font-size: var(--type-ui-size);
-  line-height: var(--type-ui-line);
-  overflow-wrap: anywhere;
-}
-
-.focusReadings {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-  padding-block-start: var(--space-3);
-  border-block-start: 1px solid var(--color-border-subtle);
-  min-width: 0;
-}
-
-.focusReading {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.focusReadingLabel {
-  color: var(--color-text-muted);
-  font-size: var(--type-label-size);
-  letter-spacing: var(--type-label-tracking);
-  text-transform: uppercase;
-}
-
-.focusReadingValue {
-  color: var(--color-text-primary);
-  font-size: var(--type-card-size);
-  font-weight: var(--type-card-weight);
-  font-variant-numeric: tabular-nums;
-}
-
-.focusProvider {
-  color: var(--color-text-muted);
-  font-size: var(--type-meta-size);
-  margin-inline-start: auto;
 }
 
 /* ---------------------------------------------------------- the empty transcript
@@ -1223,40 +955,6 @@
   color: var(--color-text-secondary);
 }
 
-/* The two figure panels, side by side as the artifact sets them. */
-.subcard {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-inset);
-  min-width: 0;
-}
-
-.subcardHead {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.subcardTitle {
-  font-size: var(--type-label-size);
-  line-height: var(--type-label-line);
-  font-weight: var(--type-label-weight);
-  letter-spacing: var(--type-label-tracking);
-  text-transform: uppercase;
-  color: var(--color-text-secondary);
-}
-
-.subcardSource {
-  font-size: var(--type-label-size);
-  line-height: var(--type-label-line);
-  color: var(--color-text-muted);
-}
-
 .facts {
   display: flex;
   flex-direction: column;
@@ -1317,62 +1015,16 @@
   background: var(--color-surface-inset);
 }
 
-.highlightTitle {
-  font-size: var(--type-label-size);
-  line-height: var(--type-label-line);
-  font-weight: var(--type-label-weight);
-  letter-spacing: var(--type-label-tracking);
-  text-transform: uppercase;
-  color: var(--color-class-analytics);
-}
-
-.highlightFigures {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-  gap: var(--space-2) var(--space-4);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.highlightFigure {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.highlightFigureLabel {
-  font-size: var(--type-meta-size);
-  line-height: var(--type-meta-line);
-  color: var(--color-text-secondary);
-  min-width: 0;
-}
-
-.highlightFigureValue {
-  font-family: var(--family-display);
-  font-size: var(--type-card-size);
-  line-height: var(--type-card-line);
-  font-weight: var(--type-card-weight);
-  color: var(--color-text-primary);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.highlightMethod,
 .answerDetails {
   font-size: var(--type-meta-size);
   line-height: var(--type-meta-line);
 }
 
-.highlightMethodSummary,
 .answerDetailsSummary {
   cursor: pointer;
   color: var(--color-accent);
 }
 
-.highlightMethodSummary:hover,
 .answerDetailsSummary:hover {
   color: var(--color-accent-strong);
 }
@@ -1428,26 +1080,6 @@
   line-height: var(--type-section-line);
   font-weight: var(--type-section-weight);
   color: var(--color-text-primary);
-}
-
-.clarificationActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-4);
-  margin-block-start: var(--space-2);
-}
-
-.clarificationAction {
-  font-size: var(--type-ui-size);
-  line-height: var(--type-ui-line);
-  font-weight: var(--type-ui-weight);
-  color: var(--color-accent);
-  text-decoration: none;
-}
-
-.clarificationAction:hover {
-  color: var(--color-accent-strong);
-  text-decoration: underline;
 }
 
 .clarificationInline {
@@ -1597,4 +1229,190 @@
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+/* ----------------------------------------------------------- the FOCUS control */
+
+/*
+ * The artifact's `FOCUS  BERLIN, DE` cell, with the value doubling as the control.
+ *
+ * The composer row has to stay one line at the artifact's density, so the chooser opens *over* the
+ * page rather than pushing the composer down it — the same decision the frozen Dashboard made for
+ * "Brief me on another place", and for the same reason: a control that displaces the thing it
+ * belongs to makes the screen jump on every press.
+ */
+.focusCell {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.focusButton {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 2px var(--space-2);
+  margin-inline-start: calc(var(--space-2) * -1);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-primary);
+  font-family: var(--family-body);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+
+.focusButton:hover:not(:disabled),
+.focusButton[aria-expanded="true"] {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-raised);
+}
+
+.focusButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* The place is the value; where it came from is an aside, so it is set as one. */
+.focusButtonNote,
+.focusChipNote {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.focusPopover {
+  position: absolute;
+  z-index: 20;
+  inset-block-end: calc(100% + var(--space-2));
+  inset-inline-start: 0;
+  min-width: min(22rem, 80vw);
+  max-width: min(26rem, 92vw);
+  padding: var(--space-3);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-raised, 0 12px 32px rgb(0 0 0 / 45%));
+}
+
+.focusOptions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.focusGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.focusGroupTitle {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.focusChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/*
+ * A saved place, offered as a choice. Deliberately the same quiet chip as a suggested question:
+ * both are things a person may press on the way to asking something, and neither is an assertion
+ * that Weathra has decided anything.
+ */
+.focusChip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-base);
+  color: var(--color-text-primary);
+  font-family: var(--family-body);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  cursor: pointer;
+  text-align: start;
+}
+
+.focusChip:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+
+.focusChip[data-current="true"] {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.focusChip:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.focusForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: start;
+}
+
+.focusClear {
+  align-self: start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-text-secondary);
+  font-family: var(--family-body);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.focusClear:hover:not(:disabled) {
+  color: var(--color-text-primary);
+}
+
+/*
+ * The line under the chooser that keeps two things apart which look the same from here: pointing
+ * this conversation somewhere, and configuring a durable default. Set quietly, because it is a
+ * clarification about the controls rather than part of the answer.
+ */
+.clarificationFootnote {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+.clarificationFootnote a {
+  color: var(--color-text-secondary);
+}
+
+/*
+ * A withheld interpretation, where the AI INTERPRETATION card is not drawn at all.
+ *
+ * It reads as a note about the answer rather than as a panel of its own: the figures below are the
+ * answer in that case, and giving their absence the card treatment was the defect this replaced.
+ */
+.withheld {
+  padding: var(--space-2) var(--space-3);
+  border-inline-start: 2px solid var(--color-border-strong);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
 }

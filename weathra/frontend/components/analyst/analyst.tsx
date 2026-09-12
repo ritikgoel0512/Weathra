@@ -39,7 +39,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import { Button, ErrorState, Field, IntelligenceMark, QuotaState } from "@/components/ui";
-import type { PreferenceView } from "@/lib/api/schema";
+import type { Location, PreferenceView } from "@/lib/api/schema";
 import { useApiQuery } from "@/lib/query/hooks";
 import { PREFERENCES_KEY } from "@/lib/query/keys";
 import { isAgentUnavailableCode, presentableMessage } from "@/lib/api/errors";
@@ -49,13 +49,17 @@ import { runStepsFrom } from "@/lib/analyst/run";
 import { useSession } from "@/lib/session/provider";
 import { useAgentStream, type AgentStreamState } from "@/hooks/use-agent-stream";
 
+import { runIntentOf } from "@/lib/analyst/intent";
+import { useLocationResolution } from "@/hooks/use-location-resolution";
+
+import { FocusControl } from "./focus-control";
 import { AnalystRail } from "./rail";
 import { AnalystIntroduction, AnswerSkeleton, AnswerView, QuestionTurn, RunProgress } from "./sections";
 import styles from "./analyst.module.css";
 
 import { FixtureAnalyst } from "./fixture-analyst";
 import { usingVisilyFixtures } from "@/lib/fixtures/visily";
-import { friendlyName, placeLabel } from "@/lib/locations/place";
+import { friendlyName, sendableName } from "@/lib/locations/place";
 
 /**
  * Starter questions, as the artifact's chip row.
@@ -183,10 +187,13 @@ function TurnView({
   turn,
   live,
   onRetry,
+  locationOptions = null,
 }: {
   readonly turn: Turn;
   readonly live: AgentStreamState | null;
   readonly onRetry: () => void;
+  /** The place chooser, for a turn whose answer is waiting for one. Null for every other turn. */
+  readonly locationOptions?: ReactNode;
 }): ReactNode {
   const run = turn.run ?? live;
 
@@ -220,7 +227,11 @@ function TurnView({
           ) : null}
 
           {run.terminal?.kind === "final" ? (
-            <AnswerView answer={run.terminal.answer} evidenceId={run.terminal.evidenceId} />
+            <AnswerView
+              answer={run.terminal.answer}
+              evidenceId={run.terminal.evidenceId}
+              locationOptions={locationOptions}
+            />
           ) : null}
 
           <TerminalState run={run} onRetry={onRetry} />
@@ -272,6 +283,19 @@ export function Analyst(): ReactNode {
   const [turns, setTurns] = useState<readonly Turn[]>([]);
   /** The backend's thread, so a follow-up resolves against the earlier turns. Never persisted. */
   const [threadId, setThreadId] = useState<string | null>(null);
+  /**
+   * The place this conversation is pointed at — the FOCUS control's value.
+   *
+   * Transient by design, and this is the whole of its lifetime: it lives for this conversation and
+   * is dropped by `New analysis`. `specs/memory` puts durable location preference in one place —
+   * the saved default, which a person sets in Settings and which this does not touch — and a focus
+   * that outlived the conversation would be a second, invisible default nobody configured.
+   *
+   * It is sent on every question of the conversation rather than recorded once, because the
+   * backend's precedence is evaluated per run: a question that names Munich must beat it, and the
+   * only way that decision can be made correctly is with both facts in the same request.
+   */
+  const [focus, setFocus] = useState<Location | null>(null);
   const nextTurnId = useRef(1);
   const composer = useRef<HTMLTextAreaElement>(null);
 
@@ -293,19 +317,57 @@ export function Analyst(): ReactNode {
     if (typeof opened === "string" && opened !== "") setThreadId(opened);
   }, [state.terminal]);
 
+
   const run = useCallback(
-    (asked: string) => {
-      const request: AskRequest =
-        threadId === null
-          ? { question: asked, create_thread: true }
-          : { question: asked, thread_id: threadId };
-      void ask(request);
+    (asked: string, pointedAt: Location | null) => {
+      const thread: Pick<AskRequest, "create_thread" | "thread_id"> =
+        threadId === null ? { create_thread: true } : { thread_id: threadId };
+      /*
+       * The focus travels as a name *and* the coordinates it already resolved to. The pair is what
+       * makes a client-chosen place safe for the backend to accept: the name carries the identity
+       * and the coordinates choose among the candidates the geocoder returns for it, so nothing
+       * here can name a place something it is not. See `AskRequest.location` and
+       * `resolve_for_saving` — a saved default is pinned by exactly the same mechanism.
+       */
+      const pointing: Pick<AskRequest, "location" | "latitude" | "longitude"> =
+        pointedAt === null
+          ? {}
+          : {
+              // `sendableName`, not `qualifiedName`, and the difference is load-bearing: the
+              // backend resolves this through its geocoder's *search*, which indexes the plain
+              // name, and it returns null for a place whose only name is its own coordinates. This
+              // is the same pair Settings sends for a saved default, through the same helper.
+              ...(sendableName(pointedAt) !== null ? { location: sendableName(pointedAt)! } : {}),
+              latitude: pointedAt.latitude,
+              longitude: pointedAt.longitude,
+            };
+      void ask({ question: asked, ...thread, ...pointing });
     },
     [ask, threadId],
   );
 
+  /**
+   * The question that was asked but could not be answered for want of a place.
+   *
+   * Derived from the transcript rather than kept in state, which is not a style choice: the fact
+   * "the last thing that happened was a request for a place" is already recorded on the last turn,
+   * and a second copy of it could disagree with the first. Asking another question, resuming this
+   * one, or starting over each change the transcript, so each clears this by construction.
+   *
+   * The review's required exchange rests on it. "What should I expect over the next few days?" →
+   * "which place should I analyse?" → *Berlin* must run the original question for Berlin, because a
+   * person who has said what they want does not say it twice because the system needed an argument.
+   */
+  const lastTurn = turns.at(-1);
+  const lastSettled =
+    lastTurn?.run?.terminal?.kind === "final" ? lastTurn.run.terminal.answer : null;
+  const pending =
+    lastSettled !== null && runIntentOf(lastSettled).kind === "needs-location"
+      ? lastTurn!.question
+      : null;
+
   const submit = useCallback(
-    (asked: string) => {
+    (asked: string, pointedAt: Location | null = focus) => {
       const trimmed = asked.trim();
       // An empty question is not a request. Nothing is sent and nothing is added to the transcript.
       if (trimmed === "" || busy) return;
@@ -315,17 +377,87 @@ export function Analyst(): ReactNode {
         { id: nextTurnId.current++, question: trimmed, run: null },
       ]);
       setQuestion("");
-      run(trimmed);
+      run(trimmed, pointedAt);
     },
-    [busy, run],
+    [busy, focus, run],
+  );
+
+  /**
+   * Point the conversation somewhere, and finish what it was in the middle of.
+   *
+   * The two halves are one action deliberately. A person pressing *Berlin* under "which place
+   * should I analyse?" has not set a preference and then separately re-asked a question — they
+   * have answered the question they were asked, and the only useful next thing is the forecast
+   * they wanted in the first place.
+   *
+   * Choosing a place with nothing pending just points the conversation, which is the composer
+   * control's ordinary behaviour: the next question, whatever it turns out to be, uses it.
+   */
+  const point = useCallback(
+    (location: Location | null) => {
+      setFocus(location);
+      if (location === null || pending === null || busy) return;
+      submit(pending, location);
+    },
+    [busy, pending, submit],
+  );
+
+  /*
+   * Resolving what somebody types *while the Analyst is waiting for a place*.
+   *
+   * The same resolver every other screen uses, held here for one job: the review's required
+   * exchange, where "Berlin" typed in reply to "which place should I analyse?" has to become the
+   * forecast that was already asked for. Without this the reply is a new question — and "Berlin"
+   * as a question is answered with another clarification, which is the dead end the review named.
+   */
+  const reply = useLocationResolution(null);
+
+  /**
+   * Whether a typed line is plausibly the *answer* to "which place", rather than a new question.
+   *
+   * Only consulted while something is pending, and only to decide whether to spend a geocoder call
+   * before treating the text as a question. It is deliberately narrow: a question mark, or more
+   * than a short phrase, is a new question and is never sent to the resolver. Getting this wrong in
+   * the cautious direction costs nothing — the text is asked as a question, which is what would
+   * have happened anyway.
+   */
+  const looksLikeAPlace = useCallback((text: string): boolean => {
+    const trimmed = text.trim();
+    if (trimmed === "" || trimmed.includes("?")) return false;
+    if (trimmed.length > 60) return false;
+    return trimmed.split(/\s+/).length <= 6;
+  }, []);
+
+  const sendTyped = useCallback(
+    async () => {
+      const typed = question.trim();
+      if (typed === "" || busy) return;
+
+      if (pending !== null && looksLikeAPlace(typed)) {
+        const settled = await reply.resolve(typed);
+        if (settled.kind === "resolved") {
+          // The place answers the question that was waiting, and points the conversation at it for
+          // everything that follows. One press, one run, and the original intent intact.
+          setQuestion("");
+          point(settled.location);
+          return;
+        }
+        // Anything else — ambiguous, unknown, the resolver itself failing — is not a place this
+        // screen may assume. It falls through and is asked as a question, and the run says what it
+        // could not resolve.
+      }
+
+      submit(typed);
+    },
+    [busy, looksLikeAPlace, pending, point, question, reply, submit],
   );
 
   const onSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
-      submit(question);
+      void sendTyped();
     },
-    [question, submit],
+    [sendTyped],
   );
 
   /** Re-ask the last question in place, for a run that failed or was cut off. */
@@ -334,11 +466,12 @@ export function Analyst(): ReactNode {
     const last = turns.at(-1);
     if (last === undefined) return;
     setTurns((previous) => [...previous.slice(0, -1), { ...last, run: null }]);
-    run(last.question);
-  }, [busy, run, turns]);
+    run(last.question, focus);
+  }, [busy, focus, run, turns]);
 
   const empty = question.trim() === "";
   const live = turns.at(-1)?.run === null ? state : null;
+
 
   /**
    * The run the rail describes: the one in flight, or the last one that finished.
@@ -366,6 +499,17 @@ export function Analyst(): ReactNode {
     setTurns([]);
     setThreadId(null);
     setQuestion("");
+    /*
+     * The focus goes with the conversation, and the saved default does not.
+     *
+     * Those are two different lifetimes and the control has to keep them apart. A focus is what
+     * *this* conversation was pointed at, so a new conversation is pointed nowhere again. The saved
+     * default is a durable preference this screen never writes, so it survives — and with the focus
+     * cleared it is once again what the composer offers and what the backend applies. Clearing a
+     * person's configured default because they pressed "New analysis" would be this screen editing
+     * a Settings value nobody asked it to touch.
+     */
+    setFocus(null);
     composer.current?.focus();
   }, [busy]);
 
@@ -425,15 +569,27 @@ export function Analyst(): ReactNode {
         open, or a saved default will be used, or neither — and it names no memory key and no
         implementation.
       */}
+      {/*
+        The artifact's small centred pill, saying what the *next* question will be answered with —
+        in the backend's own order of precedence, so what it says and what the run does cannot
+        disagree. It names the focus first because the focus wins first.
+      */}
+      {/*
+        Suppressed while the conversation is waiting for a place. A thread *is* open in that state,
+        so "using this conversation's context" was literally true and still read as a contradiction
+        of the message directly beneath it, which was asking for the context it implied it had.
+      */}
+      {pending !== null ? null : (
       <p className={styles.contextPill}>
-        {threadId
-          ? preferred?.default_location
-            ? "Using this conversation and your saved location and units."
-            : "Using this conversation's context."
-          : preferred?.default_location
-            ? "Using your saved location and units."
-            : "Name a place in your question — Weathra never guesses one."}
+        {focus !== null
+          ? `Focused on ${friendlyName(focus)}. Name another place in a question to look there instead.`
+          : threadId
+            ? "Using this conversation's context."
+            : preferred?.default_location
+              ? `Using ${friendlyName(preferred.default_location)}, your saved default.`
+              : "Name a place in your question, or choose one below — Weathra never guesses."}
       </p>
+      )}
 
       <div className={styles.transcript}>
         {turns.length === 0 ? (
@@ -445,6 +601,24 @@ export function Analyst(): ReactNode {
               turn={turn}
               live={index === turns.length - 1 ? live : null}
               onRetry={retry}
+              /*
+                Only the turn that is actually waiting gets the chooser — the last one, and only
+                while it is pending. An earlier clarification that has since been answered is a
+                transcript entry, and putting a live control in it would offer to resume a question
+                the conversation has already moved past.
+              */
+              locationOptions={
+                pending !== null && index === turns.length - 1 ? (
+                  <FocusControl
+                    focus={focus}
+                    fallback={preferred?.default_location ?? null}
+                    onChoose={point}
+                    disabled={busy}
+                    variant="panel"
+                    headingLevel={3}
+                  />
+                ) : null
+              }
             />
           ))
         )}
@@ -455,7 +629,9 @@ export function Analyst(): ReactNode {
         weight of a primary action; the artifact sets them as quiet chips a person scans on the way
         to the composer.
       */}
-      <div className={styles.starters}>
+      <div className={styles.starters} aria-label={
+        focus !== null ? `Suggested questions about ${friendlyName(focus)}` : "Suggested questions"
+      }>
         {STARTERS.map((starter) => (
           <button
             type="button"
@@ -486,20 +662,20 @@ export function Analyst(): ReactNode {
         */}
         <div className={styles.composerContext}>
           {/*
-            **The place by name, before the first question as well as after it.** This read "Your
-            default location" until a run resolved one — which was tolerable while a photographic
-            focus band above it named the place, and is not now that band is gone. The saved default
-            is the answer to "what will this be about", so it is what the row says; a run that
-            resolves somewhere else replaces it, which is the same rule as before.
+            **The artifact's FOCUS, as the control it is drawn as.**
+
+            This was the place *last resolved*, rendered as text — which is a report about the
+            previous run wearing the label of a setting for the next one, and on an account with no
+            saved default it read "Named in your question" and offered nothing to press. The value
+            is now what the conversation is pointed at, and pressing it is how that changes; what a
+            run resolved is reported where reports belong, in the rail's Analyst context.
           */}
-          <span className={styles.composerContextItem}>
-            <span className={styles.composerContextTerm}>Focus</span>
-            <span className={styles.composerContextValue}>
-              {placeLabel(answer?.resolved?.locations?.[0]) ??
-                (preferred?.default_location ? friendlyName(preferred.default_location) : null) ??
-                "Named in your question"}
-            </span>
-          </span>
+          <FocusControl
+            focus={focus}
+            fallback={preferred?.default_location ?? null}
+            onChoose={point}
+            disabled={busy}
+          />
           <span className={styles.composerContextItem}>
             <span className={styles.composerContextTerm}>Units</span>
             <span className={styles.composerContextValue}>
@@ -535,7 +711,7 @@ export function Analyst(): ReactNode {
               onKeyDown={(event) => {
                 if (event.key !== "Enter" || event.shiftKey) return;
                 event.preventDefault();
-                submit(question);
+                void sendTyped();
               }}
             />
           )}

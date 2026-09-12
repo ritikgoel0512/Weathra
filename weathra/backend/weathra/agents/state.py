@@ -104,6 +104,13 @@ class GraphState(BaseModel):
     requested_unit_system: UnitSystem | None = Field(
         default=None, description="What the request asked for. Null means 'apply the default'."
     )
+    focus: Location | None = Field(
+        default=None,
+        description=(
+            "The place this conversation is pointed at, chosen deliberately by the caller and "
+            "already resolved. Null when the caller pointed it nowhere."
+        ),
+    )
     started_at: datetime
 
     # ---------------------------------------------------------------- routing
@@ -127,7 +134,9 @@ class GraphState(BaseModel):
     locations: tuple[Location, ...] = ()
     period: Period | None = None
     unit_system: UnitSystem = UnitSystem.METRIC
-    location_source: str = Field(default="request", pattern="^(request|thread|preferences|none)$")
+    location_source: str = Field(
+        default="request", pattern="^(request|focus|thread|preferences|none)$"
+    )
     units_source: str = Field(default="default", pattern="^(request|thread|preferences|default)$")
     context_statement: str | None = None
     clarification_question: str | None = None
@@ -179,6 +188,7 @@ class GraphState(BaseModel):
         principal: Principal,
         thread_id: str | None = None,
         requested_unit_system: UnitSystem | None = None,
+        focus: Location | None = None,
         started_at: datetime | None = None,
     ) -> Self:
         """Start a run for one authenticated principal.
@@ -194,6 +204,7 @@ class GraphState(BaseModel):
             thread_id=thread_id,
             thread_key=principal.thread_key(thread_id) if thread_id else None,
             requested_unit_system=requested_unit_system,
+            focus=focus,
             started_at=started_at or datetime.now(UTC),
         )
 

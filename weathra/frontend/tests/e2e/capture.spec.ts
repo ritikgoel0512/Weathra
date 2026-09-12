@@ -62,6 +62,21 @@ const ALL_SCREENS = [
     path: "/analyst",
     ask: "How does this week compare with the same week last year?",
   },
+  /*
+   * The Analyst with no place to work from — task 34.33.
+   *
+   * The 2026-09-12 review rejected this screen on the *clarification*, not on the answer: a run
+   * that correctly refused to guess a city was drawn as a completed report with empty panels, and
+   * the screen offered no way to supply the place it was asking for. So the state has its own
+   * picture now, and it is reached the way a customer reaches it — the saved default cleared
+   * through the real preferences endpoint, then a question that names nowhere.
+   */
+  {
+    name: "02-analyst-clarify",
+    path: "/analyst",
+    clearDefault: true,
+    ask: "What should I expect over the next few days?",
+  },
   { name: "03-historical", path: "/historical" },
   { name: "04-compare", path: "/compare", prepare: "Compare" },
   { name: "06-locations", path: "/locations" },
@@ -155,6 +170,25 @@ test.describe("capture", () => {
         // Give the screen's own reads a moment to settle into their populated or empty states.
         await page.waitForLoadState("networkidle").catch(() => {});
 
+        /*
+         * A screen photographed as an account with no saved default location.
+         *
+         * Through `PUT /me/preferences`, which is the endpoint Settings uses — so what is
+         * photographed is a real account state rather than a fixture the harness invented, and the
+         * resolution ladder reaches its bottom step for the ordinary reason.
+         */
+        const clearDefault =
+          "clearDefault" in screen ? (screen as { clearDefault?: boolean }).clearDefault : false;
+        if (clearDefault === true) {
+          await page.request.put(`${API_STUB_URL}/api/v1/me/preferences`, {
+            data: { clear_default_location: true },
+            headers: { "content-type": "application/json" },
+          });
+          await page.reload();
+          await expect(page.getByRole("main")).toBeAttached();
+          await page.waitForLoadState("networkidle").catch(() => {});
+        }
+
         // A screen whose content is behind a control is photographed with the control pressed.
         const prepare = "prepare" in screen ? (screen as { prepare?: string }).prepare : undefined;
         if (prepare !== undefined) {
@@ -179,10 +213,17 @@ test.describe("capture", () => {
           if (await composer.isVisible().catch(() => false)) {
             await composer.fill(question);
             await page.getByRole("button", { name: "Ask Weathra" }).click();
-            await page
-              .getByRole("region", { name: "AI interpretation" })
-              .waitFor({ state: "visible", timeout: 15_000 })
-              .catch(() => {});
+            await Promise.race([
+              page
+                .getByRole("region", { name: "AI interpretation" })
+                .waitFor({ state: "visible", timeout: 15_000 }),
+              // A run that asked for a place renders no interpretation region at all — waiting only
+              // on that one would spend the whole timeout on the state this entry exists to
+              // photograph.
+              page
+                .getByText(/Which place should Weathra look at/)
+                .waitFor({ state: "visible", timeout: 15_000 }),
+            ]).catch(() => {});
             await page.waitForLoadState("networkidle").catch(() => {});
           }
         }

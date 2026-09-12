@@ -9,13 +9,24 @@ alongside the value, not inferred afterwards.
 
 1. **What the question named.** An explicit place always wins. Someone who asks about Lisbon while
    their default is Berlin means Lisbon.
-2. **The thread's context.** A follow-up resolves against the conversation: "which one is warmer?"
-   after "compare Berlin and Munich" means those two. Only ever the acting user's own thread.
-3. **The saved default location.** Used *and disclosed*: the answer says it applied the saved
+2. **The conversation's focus.** The place the caller pointed this conversation at — the Analyst's
+   FOCUS control, sent already resolved on every question of that conversation. It beats the thread
+   and the saved default because it is the most recent thing the person *chose*, and it loses to a
+   place they just named, which is a choice more recent still.
+3. **The thread's context.** A follow-up resolves against the conversation: "which one is warmer?"
+   after "compare Berlin and Munich" means those two. Only ever the acting user's own thread. This
+   sits above the saved default deliberately: a conversation that has established Berlin is a
+   stronger statement about *this* question than a preference set once, months ago.
+4. **The saved default location.** Used *and disclosed*: the answer says it applied the saved
    default, so a person can tell that from Weathra having guessed.
-4. **Nothing.** Which produces a clarifying question, not a guess. This is the load-bearing case:
+5. **Nothing.** Which produces a clarifying question, not a guess. This is the load-bearing case:
    a run that quietly picked a plausible city would give a confident answer to a question that was
    never asked.
+
+**A saved place is not a default.** Nothing in this module reads the caller's saved locations. A
+person who saved Berlin, London and New York has expressed no preference between them, and picking
+the first would be the guess step 5 exists to refuse. The Analyst offers them as *choices* when it
+has to ask — which is a question, not an inference.
 
 Units follow the same shape with the same disclosure, and one extra rule: an explicit request beats
 a stored preference, because a preference is a default rather than an override.
@@ -144,6 +155,23 @@ async def resolve_context(
                 ),
                 memory=memory,
             )
+
+    if state.focus is not None:
+        # Already resolved, and resolved the same way a saved default was: the route pinned the
+        # caller's choice against the geocoder's own candidates before the graph started, so there
+        # is nothing left here to look up and nothing a caller could have asserted. See
+        # `AskRequest.location` and `resolve_for_saving`.
+        logger.info("resolved the location from the conversation's focus")
+        return ResolutionOutcome(
+            state=working.with_updates(
+                locations=(state.focus,),
+                location_source="focus",
+                context_statement=_statement(
+                    (state.focus,), units, "the focus you set for this conversation"
+                ),
+            ),
+            memory=memory,
+        )
 
     if entities is not None and entities.locations:
         logger.info("resolved %d location(s) from thread context", len(entities.locations))

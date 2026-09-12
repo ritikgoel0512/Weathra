@@ -37,21 +37,34 @@ import type { ReactNode } from "react";
 
 import { Badge, Card, CardBody, CardHeader, formatLocalStamp } from "@/components/ui";
 import type { AnswerEnvelope } from "@/lib/api/schema";
+import { needsLocation } from "@/lib/analyst/intent";
 import { placeLabel } from "@/lib/locations/place";
 import type { AgentStreamState } from "@/hooks/use-agent-stream";
 
 import styles from "./analyst.module.css";
 
-/** What the rail says the agent is doing, from the stream's own status. */
-function statusOf(live: AgentStreamState | null, answered: boolean): {
+/**
+ * What the rail says the agent is doing, from the stream's own status.
+ *
+ * "Complete" is reserved for a run that completed an *analysis*. The 2026-09-12 review photographed
+ * this badge reading COMPLETE beside a reply that had asked which place to look at and retrieved
+ * nothing at all — a green tick over a run that never started. A run waiting for context is not a
+ * finished one, and saying so was the panel's own small fabrication.
+ */
+function statusOf(
+  live: AgentStreamState | null,
+  answered: boolean,
+  waiting: boolean,
+): {
   label: string;
-  tone: "ok" | "accent" | "neutral";
+  tone: "ok" | "accent" | "neutral" | "warning";
 } {
   if (live?.status === "streaming") return { label: "Running", tone: "accent" };
   // A run that ended in anything but an answer. The terminal says which, and none of them is
   // "complete" — reporting one as complete would be the panel's own small fabrication.
   const terminal = live?.terminal?.kind;
   if (terminal !== undefined && terminal !== "final") return { label: "Did not finish", tone: "neutral" };
+  if (waiting) return { label: "Needs location", tone: "warning" };
   if (answered) return { label: "Complete", tone: "ok" };
   return { label: "Idle", tone: "neutral" };
 }
@@ -109,7 +122,13 @@ const SOURCE_ROLES: Readonly<Record<string, string>> = {
 };
 
 export function AnalystRail({ live, answer, evidenceId, memory }: AnalystRailProps): ReactNode {
-  const status = statusOf(live, answer !== null);
+  /*
+   * A run that came back asking for a place is the rail's own special case, and every panel below
+   * reads it. `needsLocation` is the same function the answer body and the composer use, so the
+   * three cannot describe one run three ways again.
+   */
+  const waiting = needsLocation(answer);
+  const status = statusOf(live, answer !== null && !waiting, waiting);
   const agents = agentsFrom(live);
   const resolved = answer?.resolved ?? null;
   const uncertainty = answer?.uncertainty ?? null;
@@ -182,6 +201,16 @@ export function AnalystRail({ live, answer, evidenceId, memory }: AnalystRailPro
           badge={<Badge tone={status.tone}>{status.label}</Badge>}
         />
         <CardBody>
+          {/*
+            **What the agents did, or why they did not run.**
+
+            "This run named no agents." was the debug line the 2026-09-12 review objected to: an
+            implementation fact, in implementation words, offered to a customer as the explanation
+            for an empty screen. Orchestration not running is not a property of agents — it is a
+            property of the context the run was given, and that is what this now says. The
+            node-level execution record has not moved: it is the Agent Evidence trace this rail
+            links to at the bottom of the column.
+          */}
           {agents.length > 0 ? (
             <ul className={styles.railAgents}>
               {agents.map((agent) => (
@@ -191,8 +220,12 @@ export function AnalystRail({ live, answer, evidenceId, memory }: AnalystRailPro
                 </li>
               ))}
             </ul>
+          ) : waiting ? (
+            <p className={styles.note}>
+              Waiting for a place. Nothing has been retrieved and nothing has been analysed.
+            </p>
           ) : (
-            <p className={styles.note}>This run named no agents.</p>
+            <p className={styles.note}>No analysis has run yet.</p>
           )}
         </CardBody>
       </Card>
@@ -220,6 +253,8 @@ export function AnalystRail({ live, answer, evidenceId, memory }: AnalystRailPro
                 </li>
               ))}
             </ul>
+          ) : waiting ? (
+            <p className={styles.note}>Not queried yet.</p>
           ) : (
             <p className={styles.note}>This run retrieved from no provider.</p>
           )}
@@ -239,9 +274,17 @@ export function AnalystRail({ live, answer, evidenceId, memory }: AnalystRailPro
             <dl className={styles.railFacts}>
               <div className={styles.railFact}>
                 <dt>Location</dt>
+                {/*
+                  A run that resolved nowhere said "Not resolved (from the none)" — the internal
+                  name of the last step of the resolution ladder, printed as though it were a
+                  source. There is no source to name when nothing was resolved, so none is named.
+                */}
                 <dd>
-                  {placeLabel(resolved.locations?.[0]) ?? "Not resolved"}
-                  {resolved.location_source ? ` (from the ${resolved.location_source})` : ""}
+                  {placeLabel(resolved.locations?.[0]) ??
+                    (waiting ? "Not set — choose one below" : "Not resolved")}
+                  {resolved.locations?.length && resolved.location_source
+                    ? ` (from the ${resolved.location_source})`
+                    : ""}
                 </dd>
               </div>
               <div className={styles.railFact}>
@@ -294,17 +337,21 @@ export function AnalystRail({ live, answer, evidenceId, memory }: AnalystRailPro
               <dd>
                 {uncertainty?.horizon?.[0]?.confidence
                   ? `${uncertainty.horizon[0].confidence} at ${uncertainty.horizon[0].hours_ahead} h`
-                  : "Not stated for this run"}
+                  : waiting
+                    ? "Not assessed yet"
+                    : "Not stated for this run"}
               </dd>
             </div>
             <div className={styles.railFact}>
               <dt>Grounded figures</dt>
               <dd>
-                {grounding
-                  ? grounding.figures_checked > 0
-                    ? `${grounding.figures_checked} checked · ${grounding.verified ? "verified" : "not verified"}`
-                    : "No figure to check"
-                  : "Not reported"}
+                {grounding && grounding.figures_checked > 0
+                  ? `${grounding.figures_checked} checked · ${grounding.verified ? "verified" : "not verified"}`
+                  : waiting
+                    ? "Nothing retrieved yet"
+                    : grounding
+                      ? "No figure to check"
+                      : "Not reported"}
               </dd>
             </div>
           </dl>

@@ -47,6 +47,7 @@ from weathra.api.dependencies import (
     Tools,
 )
 from weathra.api.middleware import annotate, current_request_id
+from weathra.api.routers.support import resolve_for_saving
 from weathra.api.streaming import StreamEmitter, sse_headers
 from weathra.auth.deps import IsAdministrative, RequiredPrincipal
 from weathra.auth.profiles import ensure_profile
@@ -87,6 +88,22 @@ class AskRequest(BaseModel):
     units: UnitSystem | None = Field(
         default=None, description="Overrides your saved preference for this question only."
     )
+    location: str | None = Field(
+        default=None,
+        description=(
+            "The place this conversation is pointed at — the Analyst's FOCUS. A place name, "
+            "resolved server-side. It applies when the question names no place of its own, and "
+            "takes precedence over the thread's context and your saved default. Send the "
+            "coordinates you already resolved alongside it to pin which candidate you meant."
+        ),
+    )
+    # The name/coordinate pair, with exactly the meaning it has on a saved location and a saved
+    # default: the name supplies the identity, the coordinates choose among the candidates the
+    # provider returned for it. A caller cannot name a place something it is not, and cannot
+    # introduce one the geocoder does not know — see `resolve_for_saving`. That is what makes a
+    # client-chosen focus safe to accept where the weather path refuses bare coordinates.
+    latitude: float | None = Field(default=None, ge=-90.0, le=90.0)
+    longitude: float | None = Field(default=None, ge=-180.0, le=180.0)
     create_thread: bool = Field(
         default=False,
         description="Start a new thread for this question and return its id in the response.",
@@ -247,12 +264,28 @@ async def _run(
         administrative=administrative,
     )
 
+    # The conversation's focus, pinned before the graph starts so what enters it is a resolved
+    # place rather than text — exactly the shape a saved default arrives in, and resolved by the
+    # same function for the same reason. A focus that cannot be resolved is the caller's error and
+    # is reported as one; the Analyst only ever sends a place the geocoder already returned.
+    focus = (
+        await resolve_for_saving(
+            geocoder,
+            location=body.location,
+            latitude=body.latitude,
+            longitude=body.longitude,
+        )
+        if body.location is not None or body.latitude is not None or body.longitude is not None
+        else None
+    )
+
     state = GraphState.begin(
         question=body.question,
         request_id=request_id,
         principal=principal,
         thread_id=thread.id if thread else None,
         requested_unit_system=body.units,
+        focus=focus,
         started_at=datetime.now(UTC),
     )
 
