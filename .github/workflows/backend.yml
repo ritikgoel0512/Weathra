@@ -11,16 +11,25 @@ name: backend
 # what `frontend.yml` has to be, so the one file could be edited into violating its own contract
 # with nothing to notice. Triggering on the directory those guards describe closes that, and costs
 # a run only when a workflow or a release script actually changes.
+#
+# `weathra/docs/**` is present for the same reason. `tests/test_documentation.py` asserts that every
+# route appears in `docs/api.md` and that every spec requirement has a row in
+# `docs/architecture.md` — tests that read files this workflow did not watch. So a documentation
+# change that *fixed* a failing backend test started no backend run and left the last red result
+# standing, and one that broke those tests would have been noticed only by the next unrelated
+# backend change. The docs the backend asserts on are part of what the backend has to check.
 on:
   pull_request:
     paths:
       - "weathra/backend/**"
+      - "weathra/docs/**"
       - ".github/workflows/**"
       - ".github/scripts/**"
   push:
     branches: [main]
     paths:
       - "weathra/backend/**"
+      - "weathra/docs/**"
       - ".github/workflows/**"
       - ".github/scripts/**"
   workflow_dispatch:

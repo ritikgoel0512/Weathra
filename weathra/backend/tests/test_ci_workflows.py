@@ -215,6 +215,28 @@ def test_each_workflow_only_runs_for_its_own_application(
     assert not any(path.startswith("weathra/backend/") for path in frontend_triggers)
 
 
+def test_the_documentation_guards_run_when_the_documents_change(
+    backend_workflow: dict[str, Any],
+) -> None:
+    """`test_documentation.py` reads `weathra/docs/`, so `weathra/docs/` has to trigger it.
+
+    The same gap as the one below, found the expensive way. `test_every_route_is_documented_with_its
+    _access` and `test_every_requirement_is_traced` assert that `docs/api.md` and
+    `docs/architecture.md` describe the routes and requirements that exist — and those files sit
+    outside `weathra/backend/`, which was all this workflow watched.
+
+    So a documentation change that *fixed* a failing backend test started no backend run at all and
+    left the previous red result standing as the latest word, with nothing pending to explain it.
+    The reverse is worse: a change that broke those tables would have been caught only by the next
+    unrelated backend change, whose author did not touch them.
+    """
+    for event in ("pull_request", "push"):
+        paths = _triggers(backend_workflow)[event]["paths"]
+        assert any(path.startswith("weathra/docs/") for path in paths), (
+            f"a change to the documents the backend asserts on does not run its guard on {event}"
+        )
+
+
 def test_the_workflow_guards_run_when_the_files_they_guard_change(
     backend_workflow: dict[str, Any],
 ) -> None:
