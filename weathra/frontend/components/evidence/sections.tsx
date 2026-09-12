@@ -380,18 +380,33 @@ function ToolEntry({ activity }: { readonly activity: ToolActivity }): ReactNode
  */
 export function ToolActivityPanel({ record }: { readonly record: RunRecord }): ReactNode {
   return (
-    <section className={styles.panel} aria-label="MCP evidence" data-evidence-section="tools">
+    <section
+      className={styles.panel}
+      aria-label="MCP evidence"
+      data-evidence-section="tools"
+      /*
+       * The space a section takes is the space its data earns.
+       *
+       * A run that called no tools was given the same full panel as one that called six — a heading,
+       * a paragraph about the tool interface, and a sentence saying nothing happened, for three
+       * lines of meaning. On a conceptual knowledge run three such panels stacked up and the page
+       * read as mostly absence. Empty sections now state themselves in one line.
+       */
+      data-empty={record.tools.length === 0 ? "true" : undefined}
+    >
       <header className={styles.panelHeader}>
         <h2 className={styles.panelTitle}>MCP evidence</h2>
       </header>
 
-      <p className={styles.note}>
-        Every retrieval went through the approved tool interface. Nothing
-        here was called by the browser.
-      </p>
+      {record.tools.length === 0 ? null : (
+        <p className={styles.note}>
+          Every retrieval went through the approved tool interface. Nothing here was called by the
+          browser.
+        </p>
+      )}
 
       {record.tools.length === 0 ? (
-        <p className={styles.note}>This run recorded no tool calls.</p>
+        <p className={styles.emptyNote}>No tool calls — this run retrieved nothing through a tool.</p>
       ) : (
         <ol className={styles.tools} data-tool-calls="true">
           {record.tools.map((activity) => (
@@ -423,13 +438,16 @@ export function GroundedSources({
       aria-label="Grounded data sources"
       data-evidence-section="sources"
       data-tier="retrieved"
+      data-empty={sources.length === 0 ? "true" : undefined}
     >
       <header className={styles.panelHeader}>
         <h2 className={styles.panelTitle}>Grounded data sources</h2>
       </header>
 
       {sources.length === 0 ? (
-        <p className={styles.note}>This run recorded no retrieved data sources.</p>
+        <p className={styles.emptyNote}>
+          No provider data — this run answered from knowledge rather than from a weather retrieval.
+        </p>
       ) : (
         <ScrollRegion label="Grounded data sources table" className={styles.tableScroll}>
           <table className={styles.table}>
@@ -554,11 +572,14 @@ export function DeterministicAnalytics({ record }: { readonly record: RunRecord 
         className={styles.panel}
         aria-label="Deterministic analytics"
         data-evidence-section="analytics"
+        data-empty="true"
       >
         <header className={styles.panelHeader}>
           <h2 className={styles.panelTitle}>Deterministic analytics</h2>
         </header>
-        <p className={styles.note}>This run computed no statistics.</p>
+        <p className={styles.emptyNote}>
+          No statistics — this run had no retrieved series to compute over.
+        </p>
       </section>
     );
   }
@@ -621,7 +642,9 @@ export function KnowledgeEvidence({
       </p>
 
       {citations.length === 0 ? (
-        <p className={styles.note}>This run cited no knowledge.</p>
+        <p className={styles.emptyNote}>
+          No knowledge cited — this run answered from retrieved data alone.
+        </p>
       ) : (
         <ul className={styles.citations} data-citations="true">
           {citations.map((citation, index) => (
@@ -630,14 +653,39 @@ export function KnowledgeEvidence({
               key={`${citation.document_id}-${citation.chunk_position}-${index}`}
               data-document={citation.document_id}
             >
+              {/*
+                The artifact's own reference card: an identifier, a title, and the similarity, on
+                one row. The passage below it is *clamped* rather than printed in full — a run that
+                cited three chunks printed three paragraphs and pushed the synthesis off the screen
+                the evidence exists to support. The whole passage is one press away, which is where
+                a quotation belongs on a page that is summarising why it was retrieved.
+              */}
               <span className={styles.citationHead}>
-                <span className={styles.citationTitle}>{citation.title}</span>
-                <span className={styles.fieldName}>
-                  {citation.document_id} · chunk {citation.chunk_position}
-                  {citation.topic ? ` · ${citation.topic}` : null} · relevance {citation.score}
+                <span className={styles.citationRef}>
+                  {citation.document_id}
+                  {citation.chunk_position === null || citation.chunk_position === undefined
+                    ? ""
+                    : ` · ${citation.chunk_position}`}
                 </span>
+                <span className={styles.citationTitle}>{citation.title}</span>
+                {typeof citation.score === "number" ? (
+                  <span className={styles.citationScore}>
+                    relevance {Math.round(citation.score * 100) / 100}
+                  </span>
+                ) : null}
               </span>
-              <blockquote className={styles.citationText}>{citation.text}</blockquote>
+
+              <blockquote className={styles.citationText} data-clamped="true">
+                {citation.text}
+              </blockquote>
+
+              <details className={styles.citationMore}>
+                <summary>View full passage</summary>
+                <blockquote className={styles.citationFull}>{citation.text}</blockquote>
+                {citation.topic ? (
+                  <p className={styles.fieldName}>Topic: {citation.topic}</p>
+                ) : null}
+              </details>
             </li>
           ))}
         </ul>
@@ -666,13 +714,16 @@ export function ResolvedContextPanel({ record }: { readonly record: RunRecord })
       className={styles.panel}
       aria-label="Context this run resolved to"
       data-evidence-section="context"
+      data-empty={resolved === null ? "true" : undefined}
     >
       <header className={styles.panelHeader}>
         <h2 className={styles.panelTitle}>Context this run resolved to</h2>
       </header>
 
       {resolved === null ? (
-        <p className={styles.note}>This run recorded no resolved context.</p>
+        <p className={styles.emptyNote}>
+          No place or window to resolve — this run answered a general question.
+        </p>
       ) : (
         <>
           {resolved.statement ? <p className={styles.stateBody}>{resolved.statement}</p> : null}
@@ -787,13 +838,31 @@ export function FinalSynthesis({ record }: { readonly record: RunRecord }): Reac
         served={inference?.served ?? true}
         footer={
           <>
+            {/*
+              The verdict on one line; the method behind it one press away.
+              
+              "Grounding verified: every figure matched the evidence above. 6 checked by figures
+              extracted from the prose and matched within 0.05" is two facts — one a reader needs at
+              a glance, one they need only when checking the checker. Printing both under every
+              conclusion made the synthesis read as a diagnostic dump. A failure is *not* folded
+              away: an ungrounded figure stays in full, because that is the case a reader must not
+              have to open anything to see.
+            */}
             {grounding === null ? (
               <p className={styles.note}>This run recorded no grounding report.</p>
             ) : grounding.verified ? (
-              <p className={styles.note}>
-                Grounding verified: every figure in this interpretation matched the evidence above.{" "}
-                {grounding.figures_checked} checked by {grounding.method}.
-              </p>
+              <>
+                <p className={styles.note}>
+                  Grounding verified — every figure in this interpretation matched the evidence
+                  above.
+                </p>
+                <details className={styles.groundingDetail}>
+                  <summary>Grounding details</summary>
+                  <p className={styles.note}>
+                    {grounding.figures_checked} figures checked by {grounding.method}.
+                  </p>
+                </details>
+              </>
             ) : (
               <p className={styles.noteStrong}>
                 {grounding.prose_discarded

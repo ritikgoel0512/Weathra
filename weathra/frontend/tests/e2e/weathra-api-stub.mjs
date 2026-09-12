@@ -1818,6 +1818,19 @@ const FIXTURES = {
     returned: 2,
     records: [
       {
+        id: "run-stub",
+        created_at: "2026-09-04T09:02:40Z",
+        question: "Why does forecast confidence fall the further ahead you look?",
+        answer_preview:
+          "Forecast skill declines with lead time because small errors in the initial state grow, so a figure six hours out is firmer than the same figure six days out.",
+        duration_ms: 1980,
+        partial: false,
+        weather_provider: null,
+        llm_model: "stub-model",
+        steps: 3,
+        locations: [],
+      },
+      {
         id: "run-e2e-1",
         created_at: "2026-09-04T06:15:05Z",
         question: "What should I expect over the next few days?",
@@ -1830,60 +1843,89 @@ const FIXTURES = {
         steps: 6,
         locations: ["Berlin, Germany"],
       },
-      {
-        id: "run-stub",
-        created_at: "2026-09-03T18:42:11Z",
-        question: "How does this week compare with the same week last year?",
-        answer_preview:
-          "The provider's forecast puts this week's mean at 17.9 °C, which the archive comparison places above the four-year baseline.",
-        duration_ms: 3180,
-        partial: true,
-        weather_provider: "stub-provider",
-        llm_model: "stub-model",
-        steps: 4,
-        locations: ["Berlin, Germany", "Munich, Germany"],
-      },
     ],
   },
 
+  /*
+   * A *conceptual* run: a question answered from the knowledge corpus, with no weather retrieval.
+   *
+   * The shape production actually produces most often, and the one the layout has to handle well:
+   * three agents, no tool calls, no providers, no statistics, and citations carrying the whole
+   * answer. Photographing only the rich six-agent run hid how much space the empty categories were
+   * taking on this one.
+   */
   "/api/v1/evidence/run-stub": {
     id: "run-stub",
     request_id: "req-stub",
     thread_id: "thread-stub",
-    question: EVIDENCE_RECORD.question,
-    answer_prose: EVIDENCE_PROSE,
+    question: "Why does forecast confidence fall the further ahead you look?",
+    answer_prose:
+      "Forecast skill declines with lead time because small errors in the initial state grow. A figure six hours out is firmer than the same figure six days out, which is why Weathra states a horizon beside a confidence rather than a single number for a whole window.",
     envelope: {
       request_id: "req-stub",
-      answer_prose: EVIDENCE_PROSE,
+      answer_prose:
+        "Forecast skill declines with lead time because small errors in the initial state grow. A figure six hours out is firmer than the same figure six days out, which is why Weathra states a horizon beside a confidence rather than a single number for a whole window.",
       prose_data_class: "ai_interpretation",
       findings: [],
-      attribution: [{ ...ATTRIBUTION, period: PERIOD }],
-      resolved: {
-        locations: [BERLIN],
-        period: PERIOD,
-        unit_system: "metric",
-        location_source: "preferences",
-        units_source: "preferences",
-        statement: "Berlin, Germany, for this week, from your saved default location.",
-      },
+      attribution: [],
+      resolved: null,
       grounding: {
         verified: true,
         method: "figures extracted from the prose and matched within 0.05",
-        figures_checked: 1,
+        figures_checked: 0,
         ungrounded_figures: [],
         prose_discarded: false,
       },
-      uncertainty: UNCERTAINTY,
       unanswered_parts: [],
     },
-    evidence: EVIDENCE_RECORD,
+    evidence: {
+      question: "Why does forecast confidence fall the further ahead you look?",
+      agents: [
+        { sequence: 1, agent: "supervisor", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 90, reason: "Routed to knowledge: the question asks for an explanation, not a retrieval." },
+        { sequence: 2, agent: "rag", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 210, reason: "Retrieved two passages on forecast skill and lead time." },
+        { sequence: 3, agent: "synthesis", status: "succeeded", started_at: RETRIEVED_AT, duration_ms: 1680 },
+      ],
+      tool_calls: [],
+      tool_results: [],
+      analytics_results: [],
+      anomaly_reports: [],
+      trend_reports: [],
+      citations: [
+        {
+          document_id: "forecast-uncertainty.md",
+          title: "Why forecast confidence falls with horizon distance",
+          topic: "uncertainty",
+          chunk_position: 1,
+          score: 0.88,
+          text: "Forecast skill declines with lead time because small errors in the initial state grow. Two runs started from almost the same atmosphere diverge, slowly at first and then quickly, so the spread between plausible outcomes widens the further ahead the model is asked to look. This is a property of the atmosphere rather than a limitation of any one provider, and it is why a forecast for tomorrow afternoon is worth more than the same forecast issued for a fortnight away.",
+        },
+        {
+          document_id: "ensemble-spread.md",
+          title: "What an ensemble spread describes",
+          topic: "uncertainty",
+          chunk_position: 3,
+          score: 0.74,
+          text: "An ensemble runs the same model many times from slightly different starting states. The spread between those members is a measure of how sensitive the outcome is to what was not known precisely at the start. A narrow spread means the members agree; a wide one means small differences at the beginning led somewhere very different, and the single headline number deserves less weight.",
+        },
+      ],
+      attributions: [],
+      data_classes: ["ai_interpretation"],
+      llm_provider: "stub-gateway",
+      llm_model: "stub-model",
+      started_at: RETRIEVED_AT,
+      completed_at: "2026-09-04T09:02:42Z",
+      total_duration_ms: 1980,
+      steps_used: 3,
+      partial: false,
+      partial_reason: null,
+    },
     llm_provider: "stub-gateway",
     llm_model: "stub-model",
-    weather_provider: "stub-provider",
-    duration_ms: 4210,
+    weather_provider: null,
+    duration_ms: 1980,
     partial: false,
-    created_at: "2026-09-04T06:15:05Z",
-  },
+    created_at: "2026-09-04T09:02:40Z",
+  }
 };
 
 /* ---------------------------------------- task 21.10: the streamed run and its record */

@@ -143,7 +143,15 @@
     align-items: stretch;
   }
 
-  .body > .column > :last-child {
+  /*
+   * The last panel takes the slack — unless it has nothing in it.
+   *
+   * Stretching the final panel closes the row level, which is why it is here. On a run whose last
+   * panel is an *empty* one ("no tool calls"), stretching turned a one-line card into a
+   * column-tall black box: a worse version of the void it was added to fix. An empty panel keeps
+   * its own height and the row is allowed to end unevenly, which is the cheaper mistake.
+   */
+  .body > .column > :last-child:not([data-empty="true"]) {
     flex: 1 1 auto;
   }
 }
@@ -840,4 +848,134 @@
   letter-spacing: var(--type-label-tracking);
   text-transform: uppercase;
   color: var(--color-text-muted);
+}
+
+/* ============ data-aware density: a section takes the space its data earns ============ */
+
+/*
+ * An empty section states itself and stops.
+ *
+ * A run that called no tools, retrieved no providers and computed no statistics was given three
+ * full panels to say so — heading, explanatory paragraph, and a sentence about absence. Stacked,
+ * they made a conceptual knowledge run read as mostly nothing. The panel stays (its heading is how
+ * a reader knows the category was considered) and shrinks to the one line it has.
+ */
+.panel[data-empty="true"] {
+  padding: var(--space-3) var(--space-4);
+}
+
+.panel[data-empty="true"] .panelHeader {
+  margin-bottom: var(--space-1);
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.panel[data-empty="true"] .panelTitle {
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line, var(--type-body-line));
+}
+
+.emptyNote {
+  margin: 0;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+}
+
+/* ------------------------------------------- retrieved knowledge as evidence cards */
+
+/*
+ * The artifact's reference card: an identifier, a title, a similarity — one row — over a clamped
+ * excerpt. Printing whole passages pushed the synthesis the evidence supports off the screen.
+ */
+.citationHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
+}
+
+.citationRef {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-inset);
+  font-family: var(--family-mono, monospace);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.citationScore {
+  margin-left: auto;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-accent);
+  white-space: nowrap;
+}
+
+/* Three lines of the passage, which is enough to know why it was retrieved. */
+.citationText[data-clamped="true"] {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.citationMore summary,
+.groundingDetail summary {
+  cursor: pointer;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.citationMore[open] .citationFull {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--color-border-subtle);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-secondary);
+}
+
+.groundingDetail {
+  margin-top: var(--space-1);
+}
+
+/* ---------------------------------------------- the switcher, at one row's height */
+
+/*
+ * The runs fit on one line each, and the rail scrolls rather than growing.
+ *
+ * The switcher sat above the record and took a card's height per run, so the trace — the thing the
+ * page exists to show — started below the fold on an account with a few runs.
+ */
+.chips {
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(16rem, 22rem);
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+}
+
+.chip {
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+}
+
+.chipQuestion {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
 }

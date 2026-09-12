@@ -607,7 +607,9 @@ describe("the retrieved knowledge", () => {
     const first = at(cited, 0);
     expect(first).toHaveAttribute("data-document", "forecast-uncertainty.md");
     expect(first).toHaveTextContent("Why forecast confidence falls with horizon distance");
-    expect(first).toHaveTextContent("chunk 2");
+    // The reference now reads as one identifier chip — document and chunk together, the artifact's
+    // own shape — rather than the words "chunk 2" in a sentence.
+    expect(first).toHaveTextContent("forecast-uncertainty.md · 2");
     expect(first).toHaveTextContent("relevance 0.83");
     expect(first).toHaveTextContent(/Forecast skill declines with lead time/);
   });
@@ -753,7 +755,12 @@ describe("the AI interpretation", () => {
     const synthesis = await screen.findByRole("region", { name: "Final grounded synthesis" });
 
     expect(within(synthesis).getByText(/Grounding verified/)).toBeInTheDocument();
-    expect(within(synthesis).getByText(/2 checked by/)).toBeInTheDocument();
+    /*
+     * The verdict is the sentence; how it was reached is behind "Grounding details". Still in the
+     * record — a reader checking the checker must be able to — but no longer printed under every
+     * conclusion, which is what made the synthesis read as a diagnostic dump.
+     */
+    expect(within(synthesis).getByText(/2 figures checked by/)).toBeInTheDocument();
     expect(within(synthesis).getByText("how last year's same day compared")).toBeInTheDocument();
   });
 });
