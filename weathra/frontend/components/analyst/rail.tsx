@@ -35,7 +35,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { Badge, Card, CardBody, CardHeader } from "@/components/ui";
+import { Badge, Card, CardBody, CardHeader, formatLocalStamp } from "@/components/ui";
 import type { AnswerEnvelope } from "@/lib/api/schema";
 import { placeLabel } from "@/lib/locations/place";
 import type { AgentStreamState } from "@/hooks/use-agent-stream";
@@ -93,49 +93,65 @@ export interface AnalystRailProps {
   readonly memory: { readonly available: boolean; readonly note: string | null } | null;
 }
 
+/**
+ * The data class a provider supplied, said the way a person says it.
+ *
+ * The rail listed two identical `stub-provider` rows with an ISO instant under each, because the
+ * run cited the same provider for its observation and its forecast. Naming what each supplied is
+ * the distinction that makes two rows worth having; the instant is provenance and belongs to the
+ * answer's own rule.
+ */
+const SOURCE_ROLES: Readonly<Record<string, string>> = {
+  current: "Observed conditions",
+  forecast: "Forecast",
+  historical: "Archive",
+  analytics: "Computed figures",
+};
+
 export function AnalystRail({ live, answer, evidenceId, memory }: AnalystRailProps): ReactNode {
   const status = statusOf(live, answer !== null);
   const agents = agentsFrom(live);
-  const sources = answer?.attribution ?? [];
   const resolved = answer?.resolved ?? null;
   const uncertainty = answer?.uncertainty ?? null;
   const grounding = answer?.grounding ?? null;
 
   /*
-   * Whether there is a run to describe at all.
-   *
-   * `live` is a run in flight or the last one that settled, `answer` the last completed one. With
-   * neither, every panel below would be a placeholder, and four placeholders are not a rail.
+   * One row per provider *and role*, not one per attribution entry. A run citing the same provider
+   * for four things listed it four times with four timestamps, which is a log rather than a source
+   * list — and the artifact's own panel names four distinct sources.
    */
+  const sources = [
+    ...new Map(
+      (answer?.attribution ?? []).map((entry) => [
+        `${entry.provider}|${entry.data_class}`,
+        {
+          provider: entry.provider,
+          role: SOURCE_ROLES[entry.data_class ?? ""] ?? entry.data_class ?? null,
+          place: placeLabel(entry.location),
+        },
+      ]),
+    ).values(),
+  ];
+
   const described = live !== null || answer !== null;
 
   if (!described) {
     /*
-     * Before the first question: the status, and the four regions named — not explained.
-     *
-     * The first version of this state gave each of the artifact's four panels a paragraph about
-     * what it would eventually contain, and the runtime audit of 2026-09-08 photographed four
-     * paragraphs of the interface describing itself. The correction went the other way and left one
-     * sentence in an otherwise empty column, which the 2026-09-10 fidelity review photographed
-     * beside an equally empty workspace.
-     *
-     * This is the middle: one status card carrying the artifact's own status geometry, and the
-     * regions as a labelled list — a name and four words each, in the order they will fill. It is
-     * shorter than the paragraph it replaces and it holds the rail's shape, which is what the
-     * artifact fixes about this column.
+     * Before the first question: the status, and the regions named — not explained. See the note at
+     * the top of this file for the two states this sits between.
      */
     return (
       <aside className={styles.rail} aria-label="Run detail">
         <Card aria-labelledby="analyst-rail-waiting">
           <CardHeader
             headingLevel={2}
-            title="Agent status"
+            title="Analyst status"
             titleId="analyst-rail-waiting"
-            badge={<Badge tone="neutral">Idle</Badge>}
+            badge={<Badge tone="neutral">Ready</Badge>}
           />
           <CardBody>
             <p className={styles.note}>
-              No run yet. These fill from the run itself, in this order.
+              Ask a question and this fills from the run itself, in this order.
             </p>
             <ol className={styles.railPlan}>
               {RAIL_REGIONS.map((region) => (
@@ -153,18 +169,25 @@ export function AnalystRail({ live, answer, evidenceId, memory }: AnalystRailPro
 
   return (
     <aside className={styles.rail} aria-label="Run detail">
+      {/*
+        **Analyst status.** The artifact's panel reports "Neural Agent v4.8", "Process: Active
+        Inference" and a 14.2% compute load. Weathra runs no neural agent of its own, names no
+        process and measures no compute; what it has is the run's real state and the agents the
+        stream actually named, which is what this says.
+      */}
       <Card aria-labelledby="analyst-status">
         <CardHeader headingLevel={2}
-          title="Agent status"
+          title="Analyst status"
           titleId="analyst-status"
           badge={<Badge tone={status.tone}>{status.label}</Badge>}
         />
         <CardBody>
           {agents.length > 0 ? (
-            <ul className={styles.railList}>
+            <ul className={styles.railAgents}>
               {agents.map((agent) => (
-                <li className={styles.railRow} key={agent}>
-                  <span className={styles.railName}>{agent}</span>
+                <li className={styles.railAgent} key={agent}>
+                  <span className={styles.railAgentMark} aria-hidden="true" />
+                  <span className={styles.railAgentName}>{agent}</span>
                 </li>
               ))}
             </ul>
@@ -174,16 +197,26 @@ export function AnalystRail({ live, answer, evidenceId, memory }: AnalystRailPro
         </CardBody>
       </Card>
 
+      {/*
+        **Active data sources.** The artifact shows GLOBAL_SAT, L_RADAR, an ECMWF reanalysis and a
+        Berlin-Mitte ground station over a generated visualisation. Weathra reads none of those, and
+        `screens.md` §5 refuses all four. These are the providers this answer cites, each with what
+        it supplied.
+      */}
       <Card aria-labelledby="analyst-sources">
         <CardHeader headingLevel={2} title="Active data sources" titleId="analyst-sources" />
         <CardBody>
           {sources.length > 0 ? (
-            <ul className={styles.railList}>
+            <ul className={styles.railSources}>
               {sources.map((source, index) => (
-                <li className={styles.railRow} key={`${source.provider}-${index}`}>
-                  <span className={styles.railName}>{source.provider}</span>
-                  <span className={styles.railMeta}>{placeLabel(source.location)}</span>
-                  <span className={styles.railMeta}>Retrieved {source.retrieved_at}</span>
+                <li className={styles.railSource} key={`${source.provider}-${index}`}>
+                  <span className={styles.railSourceMark} aria-hidden="true" />
+                  <span className={styles.railSourceText}>
+                    <span className={styles.railSourceName}>{source.provider}</span>
+                    {source.role ? (
+                      <span className={styles.railSourceRole}>{source.role}</span>
+                    ) : null}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -193,6 +226,12 @@ export function AnalystRail({ live, answer, evidenceId, memory }: AnalystRailPro
         </CardBody>
       </Card>
 
+      {/*
+        **Analyst context.** The artifact's version is a remembered business preference — "B2B City
+        Planning", an alert threshold. Weathra remembers what a person explicitly saved and what
+        this conversation established, and that is what this reports: the place, the window and the
+        units the run settled on, and where each came from.
+      */}
       <Card aria-labelledby="analyst-context">
         <CardHeader headingLevel={2} title="Analyst context" titleId="analyst-context" />
         <CardBody>
@@ -216,7 +255,9 @@ export function AnalystRail({ live, answer, evidenceId, memory }: AnalystRailPro
                 <div className={styles.railFact}>
                   <dt>Window</dt>
                   <dd>
-                    {resolved.period.start_local} to {resolved.period.end_local}
+                    {/* The calendar days, not the backend's offset-bearing stamps. */}
+                    {formatLocalStamp(resolved.period.start_local)} to{" "}
+                    {formatLocalStamp(resolved.period.end_local)}
                   </dd>
                 </div>
               ) : null}
@@ -235,40 +276,66 @@ export function AnalystRail({ live, answer, evidenceId, memory }: AnalystRailPro
         </CardBody>
       </Card>
 
+      {/*
+        **Confidence and grounding, and the way to the whole record.**
+
+        The artifact prints "SYNTHESIS CONFIDENCE 98.2%" over its evidence button. No endpoint
+        produces a confidence figure for a *run*: the backend states uncertainty about a forecast
+        *figure*, with its basis, which is a different claim and the only one it has grounds for. So
+        this is a band and a count rather than a percentage — and the three paragraphs of method
+        that used to sit here are one press away, which is the economy the frozen screens settled.
+      */}
       <Card aria-labelledby="analyst-confidence">
         <CardHeader headingLevel={2} title="Confidence and grounding" titleId="analyst-confidence" />
         <CardBody>
-          {/*
-            The artifact's "Synthesis Confidence 98.2%". No endpoint produces a confidence figure
-            for a *run*; the backend states uncertainty about a forecast *figure*, which is a
-            different claim and the only one it has a basis for. So this shows that statement when
-            there is one, and says there is none when there is not.
-          */}
-          {uncertainty ? (
-            <>
-              <p className={styles.note}>{uncertainty.basis}</p>
-              <p className={styles.note}>
-                {uncertainty.spread_available
-                  ? `${uncertainty.provider} supplied a spread.`
-                  : `${uncertainty.provider} supplied no spread, so none is shown.`}
-              </p>
-            </>
-          ) : (
-            <p className={styles.note}>
-              This run stated no uncertainty. Weathra states it about a forecast figure, with its
-              basis, and does not score a run as a whole.
-            </p>
-          )}
+          <dl className={styles.railFacts}>
+            <div className={styles.railFact}>
+              <dt>Forecast confidence</dt>
+              <dd>
+                {uncertainty?.horizon?.[0]?.confidence
+                  ? `${uncertainty.horizon[0].confidence} at ${uncertainty.horizon[0].hours_ahead} h`
+                  : "Not stated for this run"}
+              </dd>
+            </div>
+            <div className={styles.railFact}>
+              <dt>Grounded figures</dt>
+              <dd>
+                {grounding
+                  ? grounding.figures_checked > 0
+                    ? `${grounding.figures_checked} checked · ${grounding.verified ? "verified" : "not verified"}`
+                    : "No figure to check"
+                  : "Not reported"}
+              </dd>
+            </div>
+          </dl>
 
-          {grounding ? (
-            <p className={styles.note}>
-              Grounding: {grounding.verified ? "verified" : "not verified"} —{" "}
-              {grounding.figures_checked} figure(s) checked by {grounding.method}.
-            </p>
-          ) : null}
+          <details className={styles.railMethod}>
+            <summary className={styles.railMethodSummary}>How this is judged</summary>
+            {uncertainty ? (
+              <>
+                <p className={styles.note}>{uncertainty.basis}</p>
+                <p className={styles.note}>
+                  {uncertainty.spread_available
+                    ? `${uncertainty.provider} supplied a spread.`
+                    : `${uncertainty.provider} supplied no spread, so none is shown.`}
+                </p>
+              </>
+            ) : (
+              <p className={styles.note}>
+                This run stated no uncertainty. Weathra states it about a forecast figure, with its
+                basis, and does not score a run as a whole.
+              </p>
+            )}
+            {grounding ? (
+              <p className={styles.note}>
+                Grounding: {grounding.verified ? "verified" : "not verified"} —{" "}
+                {grounding.figures_checked} figure(s) checked by {grounding.method}.
+              </p>
+            ) : null}
+          </details>
 
           {evidenceId ? (
-            <Link className={styles.railAction} href={`/evidence/${evidenceId}`}>
+            <Link className={styles.railEvidence} href={`/evidence/${evidenceId}`}>
               View full agent evidence
             </Link>
           ) : (

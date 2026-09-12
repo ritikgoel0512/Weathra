@@ -596,6 +596,71 @@ export interface InterpretationPanelProps {
    * are this heading's, repeated for the eye.
    */
   readonly titleVisible?: boolean;
+  /**
+   * Where the model attribution is rendered.
+   *
+   * `panel` is the default and every existing caller's behaviour. `detail` renders none of it here
+   * and leaves the screen to place `ModelAttribution` itself — which the Analyst does, inside the
+   * disclosure that carries the rest of the run's technical record. It never *drops* the
+   * attribution: a screen passing `detail` and rendering nothing would be hiding what served an
+   * answer, and `analyst.test.tsx` holds that it does not.
+   */
+  readonly placement?: "panel" | "detail";
+}
+
+/**
+ * What produced an interpretation, in the backend's own terms.
+ *
+ * Extracted from `InterpretationPanel` so that a screen can put these lines somewhere other than
+ * directly under the prose without either copying the strings or losing them. The Analyst does
+ * exactly that: `02-ai-weather-analyst.png` opens its reply with the answer, and a customer reading
+ * one should not meet "Policy: free_default" before the weather — so the Analyst renders this
+ * inside its own answer-details disclosure while the Dashboard keeps it on the panel.
+ *
+ * Nothing about what is reported changed with the move. Every field is the backend's, every one is
+ * omitted where it reported none, and a model that was configured rather than served still says so.
+ */
+export function ModelAttribution({
+  provider,
+  model,
+  policy,
+  resolution,
+  requestedModel,
+  served = true,
+}: {
+  readonly provider?: string | null;
+  readonly model?: string | null;
+  readonly policy?: string | null;
+  readonly resolution?: string | null;
+  readonly requestedModel?: string | null;
+  readonly served?: boolean;
+}): ReactNode {
+  const attributed = [provider?.trim(), model?.trim()].filter(Boolean).join(" · ");
+  const policyId = policy?.trim() || null;
+  const resolutionReason = resolution?.trim() || null;
+  const asked = requestedModel?.trim() || null;
+
+  return (
+    <>
+      {attributed ? (
+        <p className={styles.interpretationModel} data-served={served ? "true" : "false"}>
+          Model: {attributed}
+          {served ? null : " (configured; this run recorded no served attempt)"}
+        </p>
+      ) : null}
+      {asked !== null ? (
+        <p className={styles.interpretationModel}>Requested: {asked}, substituted by the gateway</p>
+      ) : null}
+      {policyId !== null ? (
+        <p className={styles.interpretationModel} data-policy={policyId}>
+          Policy: {policyId}
+        </p>
+      ) : null}
+      {resolutionReason !== null ? (
+        <p className={styles.interpretationModel}>Resolved: {resolutionReason}</p>
+      ) : null}
+    </>
+  );
 }
 
 /**
@@ -622,12 +687,9 @@ export function InterpretationPanel({
   eyebrow,
   density = "comfortable",
   titleVisible = true,
+  placement = "panel",
 }: InterpretationPanelProps): ReactNode {
-  const attributed = [provider?.trim(), model?.trim()].filter(Boolean).join(" · ");
   const Heading = headingLevel === 2 ? "h2" : "h3";
-  const policyId = policy?.trim() || null;
-  const resolutionReason = resolution?.trim() || null;
-  const asked = requestedModel?.trim() || null;
 
   return (
     <section
@@ -659,23 +721,20 @@ export function InterpretationPanel({
         {children}
       </div>
 
-      {/* Only what the backend reported. Nothing is filled in when it reported nothing. */}
-      {attributed ? (
-        <p className={styles.interpretationModel} data-served={served ? "true" : "false"}>
-          Model: {attributed}
-          {served ? null : " (configured; this run recorded no served attempt)"}
-        </p>
-      ) : null}
-      {asked !== null ? (
-        <p className={styles.interpretationModel}>Requested: {asked}, substituted by the gateway</p>
-      ) : null}
-      {policyId !== null ? (
-        <p className={styles.interpretationModel} data-policy={policyId}>
-          Policy: {policyId}
-        </p>
-      ) : null}
-      {resolutionReason !== null ? (
-        <p className={styles.interpretationModel}>Resolved: {resolutionReason}</p>
+      {/*
+        Only what the backend reported, and only where this panel is the place for it.
+        `placement="detail"` moves these exact lines into whatever disclosure the screen nominates —
+        see `ModelAttribution`, which is the same component rendering the same strings.
+      */}
+      {placement === "panel" ? (
+        <ModelAttribution
+          provider={provider}
+          model={model}
+          policy={policy}
+          resolution={resolution}
+          requestedModel={requestedModel}
+          served={served}
+        />
       ) : null}
       {footer ? <div className={styles.interpretationFooter}>{footer}</div> : null}
     </section>

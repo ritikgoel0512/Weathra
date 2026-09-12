@@ -319,26 +319,35 @@ describe("asking a question", () => {
     expect(screen.getByLabelText("Your weather question")).toBeInTheDocument();
   });
 
-  it("shows the context a question will be answered in, before anything is asked", async () => {
+  it("says what the next question will be answered with, before anything is asked", async () => {
     renderAnalyst();
 
-    // The band the 2026-09-10 fidelity review found missing: which place, in which units, over
-    // what horizon, and what the weather there is now. All retrieved, none of it inferred.
-    const context = await screen.findByRole("region", { name: "Question context" });
-    // The reading arrives last of the three, so waiting on it settles the whole band. It is the
-    // readout over the photograph and appears once: the row beneath carries the other measures.
-    expect(await within(context).findByText("15.3 °C")).toBeInTheDocument();
-    // The place is named twice on purpose: over the photograph, and as the resolved focus.
-    expect(within(context).getAllByText("Berlin, Germany").length).toBeGreaterThan(1);
-    expect(within(context).getByText("metric")).toBeInTheDocument();
-    expect(within(context).getByText("3 days")).toBeInTheDocument();
-    expect(within(context).getByText("68 %")).toBeInTheDocument();
+    /*
+     * **The band became a line.** This used to be a photographic focus card carrying the place, its
+     * units, its horizon and a strip of its current readings — about 340 pixels above the
+     * conversation, on a screen whose subject is the conversation, and nothing
+     * `02-ai-weather-analyst.png` draws. Task 34.32 replaced it with the artifact's own centred
+     * context pill.
+     *
+     * Nothing the band asserted is lost. The place and the units are the composer's FOCUS row on
+     * every question and the rail's Analyst context on every answer; the current reading is the
+     * Dashboard's, which is one press away. What this case still holds is the part that matters:
+     * the screen says what the next question resolves against, and it says it without a request to
+     * a language model.
+     */
+    expect(
+      await screen.findByText("Using your saved location and units."),
+    ).toBeInTheDocument();
+
+    const composer = screen.getByRole("form", { name: "Ask Weathra a weather question" });
+    expect(within(composer).getByText("Berlin, Germany")).toBeInTheDocument();
+    expect(within(composer).getByText("metric")).toBeInTheDocument();
 
     // And opening the screen has still asked nothing of a language model.
     expect(streamCalls()).toHaveLength(0);
   });
 
-  it("keeps its workspace when there is no default location to photograph", async () => {
+  it("says so plainly when there is no default location, and still takes a question", async () => {
     fetchMock = vi.fn(async (input: unknown) => {
       const path = new URL(String(input)).pathname;
       if (path === "/api/v1/me/preferences") {
@@ -349,11 +358,17 @@ describe("asking a question", () => {
 
     renderAnalyst();
 
-    const context = await screen.findByRole("region", { name: "Question context" });
-    // No place, so no photograph — and the facts row survives rather than the band collapsing.
-    expect(await within(context).findByText("No default location set")).toBeInTheDocument();
+    /*
+     * The state that matters most on this screen: Weathra never guesses a place, so somebody with
+     * no saved default has to be told that in a sentence rather than by an answer that refuses.
+     */
+    expect(
+      await screen.findByText("Name a place in your question — Weathra never guesses one."),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("Your weather question")).toBeEnabled();
   });
+
+
 
   it("sends the question to the agent stream and shows it in the transcript", async () => {
     renderAnalyst();
@@ -410,6 +425,18 @@ describe("asking a question", () => {
 
 describe("a streamed answer", () => {
   it("renders the run's own steps, and no step the backend did not send", async () => {
+    /*
+     * **On a run that produced no answer**, which is the only state that still shows this list.
+     *
+     * Task 34.32 took the progress region out from under completed replies: it rendered as a titled
+     * "RUN PROGRESS · 8 steps" block below every answer, on a screen that already links to the
+     * whole trace, and the customer-level review of 2026-09-11 named it. A run that produced
+     * nothing keeps it, because then the steps are the only account of what happened — and that is
+     * the case this exercises. What the list may contain is unchanged and is what this asserts.
+     */
+    // Every frame but the `final`, so the stream ends with the steps and no answer.
+    fetchMock = vi.fn(async () => streaming(runFrames().slice(0, -1))) as unknown as Mock;
+
     renderAnalyst();
     await ask("What should I expect?");
 
@@ -436,10 +463,18 @@ describe("a streamed answer", () => {
     renderAnalyst();
     await ask("What should I expect?");
 
+    /*
+      **The panel, and the answer around it.** Task 34.32 moved the model attribution off the face
+      of the reply and into its "Answer details" disclosure: `02-ai-weather-analyst.png` opens on
+      the answer, and a customer reading one should not meet "Policy: free_default" before the
+      weather. It is still on this screen, still the backend's own strings, and still asserted —
+      one disclosure deeper.
+    */
     const panel = await screen.findByRole("region", { name: "AI interpretation" });
+    const answer = panel.closest("article")!;
     expect(within(panel).getByText(/stay close to the seasonal baseline/)).toBeInTheDocument();
     expect(within(panel).getByText(/produced no measurement, forecast, or statistic/i)).toBeInTheDocument();
-    expect(within(panel).getByText(/Model: openrouter · a-configured-model/)).toBeInTheDocument();
+    expect(within(answer).getByText(/Model: openrouter · a-configured-model/)).toBeInTheDocument();
   });
 
   it("separates retrieved figures, deterministic analytics, and the model's language", async () => {
@@ -454,7 +489,12 @@ describe("a streamed answer", () => {
     // The forecast figure is badged FORECAST; the computed one is badged ANALYTICS.
     const retrieved = container.querySelector('[data-tier="retrieved"]') as HTMLElement;
     expect(within(retrieved).getByText("FORECAST")).toBeInTheDocument();
-    expect(within(retrieved).getByRole("heading", { name: "Forecast figures" })).toBeInTheDocument();
+    /*
+      The artifact titles this panel FORECAST VECTOR and its neighbour OBSERVED DATA; task 34.32
+      uses "Forecast" and "Observed data", which is the same role said the way Weathra says it. The
+      badge, the tier and the attribution are what this case is actually about and are unchanged.
+    */
+    expect(within(retrieved).getByRole("heading", { name: "Forecast" })).toBeInTheDocument();
     expect(within(retrieved).getByText("21.4 °C")).toBeInTheDocument();
 
     const computed = container.querySelector('[data-tier="computed"]') as HTMLElement;
@@ -523,9 +563,14 @@ describe("a streamed answer", () => {
     renderAnalyst();
     await ask("What should I expect?");
 
+    /*
+      The compact treatment the frozen Dashboard settled: the band and how far out it is graded on
+      the face of it, the basis and the no-spread note behind the control on the same line. Both are
+      still rendered — `UncertaintyIndicator` keeps `basis` required — and both are still asserted.
+    */
     expect(await screen.findByText("MODERATE CONFIDENCE")).toBeInTheDocument();
+    expect(screen.getByText(/48 h ahead/)).toBeInTheDocument();
     expect(screen.getAllByText(/Confidence decreases with horizon distance/)[0]!).toBeInTheDocument();
-    expect(screen.getByText(/48 h into the forecast horizon/)).toBeInTheDocument();
     expect(screen.getByText(/supplies no forecast spread/i)).toBeInTheDocument();
     // No percentage anywhere: Weathra reads one provider and has none to state.
     expect(document.body.textContent).not.toMatch(/\d+(\.\d+)?%/);
@@ -545,7 +590,7 @@ describe("a streamed answer", () => {
      * that is what this asserts.
      */
     const resolved = container.querySelector(
-      '[aria-label="What this answer resolved to"]',
+      '[aria-label="Answer details"]',
     ) as HTMLElement;
     expect(resolved).not.toBeNull();
     expect(resolved.tagName.toLowerCase()).toBe("details");
@@ -892,7 +937,14 @@ describe("an ambiguous place named in a question", () => {
 
     const asked = await screen.findByText(/Which did you mean\?/);
     expect(asked).toBeInTheDocument();
-    expect(screen.getByText("Weathra needs to know")).toBeInTheDocument();
+    /*
+      **The clarification is a turn in the conversation, not a heading over a report.** Production
+      titled it "Weathra needs to know" and then rendered the whole apparatus underneath — an empty
+      observed card, an empty forecast card, "0 figure(s) checked", the model and policy
+      identifiers and a run-progress strip. Task 34.32 shows the agent's own question, why Weathra
+      will not guess a place, and the two ways to answer it.
+    */
+    expect(screen.getByText(/Weathra does not guess a location/)).toBeInTheDocument();
     expect(screen.getByText(/Springfield, Illinois, US or Springfield, Missouri, US/)).toBeInTheDocument();
 
     // No figure, no forecast, no attribution: nothing was answered for an unchosen place.
@@ -1106,17 +1158,19 @@ describe("what actually served the answer", () => {
     renderAnalyst();
     await ask("What should I expect tomorrow?");
 
-    const panel = await waitFor(() => {
-      const found = document.querySelector('[data-interpretation="true"]');
+    const answer = await waitFor(() => {
+      // The reply around the interpretation region: task 34.32 keeps the model attribution on this
+      // screen and puts it in the answer's own details rather than under the prose.
+      const found = document.querySelector('[data-interpretation="true"]')?.closest("article");
       expect(found).not.toBeNull();
       return found as HTMLElement;
     });
 
     // The synthesis attempt's values — the call that wrote the prose being read.
-    expect(within(panel).getByText("Model: openrouter · a-synthesis-model")).toBeInTheDocument();
-    expect(within(panel).getByText("Policy: free-synthesis")).toBeInTheDocument();
+    expect(within(answer).getByText("Model: openrouter · a-synthesis-model")).toBeInTheDocument();
+    expect(within(answer).getByText("Policy: free-synthesis")).toBeInTheDocument();
     expect(
-      within(panel).getByText("Resolved: First enabled candidate of the plan's synthesis policy."),
+      within(answer).getByText("Resolved: First enabled candidate of the plan's synthesis policy."),
     ).toBeInTheDocument();
   });
 
@@ -1135,16 +1189,24 @@ describe("what actually served the answer", () => {
     renderAnalyst();
     await ask("What should I expect tomorrow?");
 
-    const panel = await waitFor(() => {
-      const found = document.querySelector('[data-interpretation="true"]');
+    const answer = await waitFor(() => {
+      // The reply around the interpretation region: task 34.32 keeps the model attribution on this
+      // screen and puts it in the answer's own details rather than under the prose.
+      const found = document.querySelector('[data-interpretation="true"]')?.closest("article");
       expect(found).not.toBeNull();
       return found as HTMLElement;
     });
 
-    expect(within(panel).getByText("Model: another-gateway · another-model")).toBeInTheDocument();
-    expect(within(panel).getByText("Policy: premium-synthesis")).toBeInTheDocument();
+    expect(within(answer).getByText("Model: another-gateway · another-model")).toBeInTheDocument();
+    expect(within(answer).getByText("Policy: premium-synthesis")).toBeInTheDocument();
     // Not the configured pair the envelope also carries.
-    expect(within(panel).queryByText(/a-configured-model/)).toBeNull();
+    /*
+      Not the configured pair, on the line that names what *served* it. The run record's own
+      "Produced by" footer inside the evidence summary reports the configured client and is a
+      different statement about a different thing — which is why this pins the `Model:` line rather
+      than the string anywhere in the reply.
+    */
+    expect(within(answer).queryByText(/^Model:.*a-configured-model/)).toBeNull();
   });
 
   it("prefers what the record says over what was configured", async () => {
@@ -1163,15 +1225,17 @@ describe("what actually served the answer", () => {
     renderAnalyst();
     await ask("What should I expect tomorrow?");
 
-    const panel = await waitFor(() => {
-      const found = document.querySelector('[data-interpretation="true"]');
+    const answer = await waitFor(() => {
+      // The reply around the interpretation region: task 34.32 keeps the model attribution on this
+      // screen and puts it in the answer's own details rather than under the prose.
+      const found = document.querySelector('[data-interpretation="true"]')?.closest("article");
       expect(found).not.toBeNull();
       return found as HTMLElement;
     });
 
-    expect(within(panel).getByText("Model: openrouter · a-synthesis-model")).toBeInTheDocument();
-    expect(within(panel).queryByText(/the-configured-model/)).toBeNull();
-    expect(panel.querySelector('[data-served="true"]')).not.toBeNull();
+    expect(within(answer).getByText("Model: openrouter · a-synthesis-model")).toBeInTheDocument();
+    expect(within(answer).queryByText(/^Model:.*the-configured-model/)).toBeNull();
+    expect(answer.querySelector('[data-served="true"]')).not.toBeNull();
   });
 
   it("says a substituted model was substituted", async () => {
@@ -1183,15 +1247,17 @@ describe("what actually served the answer", () => {
     renderAnalyst();
     await ask("What should I expect tomorrow?");
 
-    const panel = await waitFor(() => {
-      const found = document.querySelector('[data-interpretation="true"]');
+    const answer = await waitFor(() => {
+      // The reply around the interpretation region: task 34.32 keeps the model attribution on this
+      // screen and puts it in the answer's own details rather than under the prose.
+      const found = document.querySelector('[data-interpretation="true"]')?.closest("article");
       expect(found).not.toBeNull();
       return found as HTMLElement;
     });
 
-    expect(within(panel).getByText("Model: openrouter · got-that-instead")).toBeInTheDocument();
+    expect(within(answer).getByText("Model: openrouter · got-that-instead")).toBeInTheDocument();
     expect(
-      within(panel).getByText("Requested: asked-for-this, substituted by the gateway"),
+      within(answer).getByText("Requested: asked-for-this, substituted by the gateway"),
     ).toBeInTheDocument();
   });
 
@@ -1202,16 +1268,18 @@ describe("what actually served the answer", () => {
     renderAnalyst();
     await ask("What should I expect tomorrow?");
 
-    const panel = await waitFor(() => {
-      const found = document.querySelector('[data-interpretation="true"]');
+    const answer = await waitFor(() => {
+      // The reply around the interpretation region: task 34.32 keeps the model attribution on this
+      // screen and puts it in the answer's own details rather than under the prose.
+      const found = document.querySelector('[data-interpretation="true"]')?.closest("article");
       expect(found).not.toBeNull();
       return found as HTMLElement;
     });
 
     expect(
-      within(panel).getByText(/Model: openrouter · a-configured-model \(configured/),
+      within(answer).getByText(/Model: openrouter · a-configured-model \(configured/),
     ).toBeInTheDocument();
-    expect(within(panel).queryByText(/^Policy:/)).toBeNull();
+    expect(within(answer).queryByText(/^Policy:/)).toBeNull();
   });
 
   it("reports no policy where the backend reported none", async () => {
@@ -1225,16 +1293,18 @@ describe("what actually served the answer", () => {
     renderAnalyst();
     await ask("What should I expect tomorrow?");
 
-    const panel = await waitFor(() => {
-      const found = document.querySelector('[data-interpretation="true"]');
+    const answer = await waitFor(() => {
+      // The reply around the interpretation region: task 34.32 keeps the model attribution on this
+      // screen and puts it in the answer's own details rather than under the prose.
+      const found = document.querySelector('[data-interpretation="true"]')?.closest("article");
       expect(found).not.toBeNull();
       return found as HTMLElement;
     });
 
-    expect(within(panel).getByText("Model: openrouter · a-synthesis-model")).toBeInTheDocument();
-    expect(within(panel).queryByText(/^Policy:/)).toBeNull();
-    expect(within(panel).queryByText(/^Resolved:/)).toBeNull();
-    expect(panel.querySelector("[data-policy]")).toBeNull();
+    expect(within(answer).getByText("Model: openrouter · a-synthesis-model")).toBeInTheDocument();
+    expect(within(answer).queryByText(/^Policy:/)).toBeNull();
+    expect(within(answer).queryByText(/^Resolved:/)).toBeNull();
+    expect(answer.querySelector("[data-policy]")).toBeNull();
   });
 
   it("never asks for a model, a plan, a policy or an entitlement", async () => {

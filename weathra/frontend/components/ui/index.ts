@@ -24,6 +24,8 @@ export type { InputProps } from "./input";
 
 export { IntelligenceMark, PrecipitationMark, StatusMark } from "./marks";
 
+export { ModelAttribution } from "./provenance";
+
 export { Metric } from "./metric";
 export type { MetricProps } from "./metric";
 

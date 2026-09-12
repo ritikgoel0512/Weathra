@@ -35,6 +35,7 @@ import {
   InterpretationPanel,
   Skeleton,
   MethodNote,
+  ModelAttribution,
   ProvenanceSection,
   UncertaintyIndicator,
   formatInstant,
@@ -45,6 +46,7 @@ import type { DataClassName } from "@/lib/design/tokens";
 import {
   agentLabel,
   confidenceOf,
+  type FindingGroup,
   findingGroups,
   GROUP_TITLES,
   findingValue,
@@ -222,76 +224,141 @@ export function AnswerView({ answer, evidenceId = null }: AnswerViewProps): Reac
     model: answer.llm_model,
   });
 
+  /*
+   * **The two figure panels, from the run's own findings.**
+   *
+   * `02-ai-weather-analyst.png` puts an OBSERVED DATA panel and a FORECAST panel under the
+   * synthesis, each holding a handful of *readings*. Ours held the run's metadata instead —
+   * Location, Provider, Retrieved on one side, Window, Provider, Confidence, Spread on the other —
+   * which is provenance wearing the costume of weather, and on a run that retrieved neither it was
+   * two bordered boxes saying so. The customer-level review of 2026-09-11 named both.
+   *
+   * So the panels are the findings the run actually produced, split by the class the backend
+   * stamped on each, and a class with no findings renders **no panel at all** rather than an empty
+   * one. The provenance those panels used to carry has not gone anywhere: it is the compact rule
+   * under the answer and the rail beside it.
+   */
+  const observedGroups = groups.filter((group) => group.dataClass === "observed");
+  const forecastGroups = groups.filter((group) => group.dataClass === "forecast");
+  const computedGroups = groups.filter(
+    (group) => group.dataClass !== "observed" && group.dataClass !== "forecast",
+  );
+
+  /*
+   * **A question the run could not answer is a conversation, not a report.**
+   *
+   * When the agent asks which place it should look at, there is no observation, no forecast, no
+   * computed figure and no interpretation to show — and production rendered the whole apparatus
+   * anyway: an empty observed card, an empty forecast card, a grounding note reading "0 figure(s)
+   * checked", the model and policy identifiers, and a run-progress strip. The clarification is the
+   * answer in that case, so it is the only thing shown.
+   */
+  const clarifying =
+    Boolean(answer.clarification_question) && groups.length === 0 && !answer.answer_prose;
+
   return (
     /*
-      One agent response, as `02-ai-weather-analyst.png` composes it: an agent header, the
-      interpretation, the retrieved and computed figures as compact side-by-side subcards, and the
-      provenance beneath. It used to be a run of unrelated full-width panels, which read as a
-      report rather than as a reply.
+      One agent reply, as `02-ai-weather-analyst.png` composes it: the identity line, then a card
+      that leads with the synthesis, sets the figures beneath it in compact panels, highlights the
+      reading Weathra computed, and closes on one rule of provenance.
     */
     <article className={styles.answer}>
       <header className={styles.agentHead}>
         <span className={styles.agentMark} aria-hidden="true" />
         <span className={styles.agentName}>Weathra Intelligence Agent</span>
-        <RunSummaryLine answer={answer} evidenceId={evidenceId} />
       </header>
 
-      {/* Asked rather than assumed: a reference the run could not resolve. */}
-      {answer.clarification_question ? (
+      {clarifying ? (
         <div className={styles.clarification} role="note">
-          <p className={styles.clarificationTitle}>Weathra needs to know</p>
-          <p>{answer.clarification_question}</p>
-        </div>
-      ) : null}
-
-      <InterpretationPanel
-        /*
-         * What actually served this answer — task 33.6.
-         *
-         * From the run's own inference attempts, which is the only account that is evidence:
-         * `llm_provider` and `llm_model` are read off the configured client and are used only
-         * where the run recorded no attempt, labelled as configured when they are. Nothing here
-         * chooses a model, and nothing here fills in a policy the backend did not report.
-         */
-        provider={inference?.provider ?? null}
-        model={inference?.model ?? null}
-        requestedModel={inference?.requestedModel ?? null}
-        policy={inference?.policyId ?? null}
-        resolution={inference?.resolutionReason ?? null}
-        served={inference?.served ?? true}
-        prominence="lead"
-        footer={
-          grounding.verified ? null : (
-            <p className={styles.note}>
-              {grounding.prose_discarded
-                ? "The interpretation was withheld because it could not be grounded in the figures below."
-                : "Some figures in this interpretation could not be matched to the evidence: " +
-                  ((grounding.ungrounded_figures ?? []).join(", ") || grounding.note || "unstated") +
-                  "."}
-            </p>
-          )
-        }
-      >
-        {answer.answer_prose ? (
-          <p>{answer.answer_prose}</p>
-        ) : (
-          <p>
-            No interpretation was written for this answer. The retrieved and computed figures below
-            are unaffected.
+          <p className={styles.clarificationTitle}>{answer.clarification_question}</p>
+          <p className={styles.note}>
+            Weathra does not guess a location. Name a place in your question, or set a default in
+            Settings and every question will use it.
           </p>
-        )}
-      </InterpretationPanel>
+          <div className={styles.clarificationActions}>
+            <Link className={styles.clarificationAction} href="/locations">
+              Your saved places
+            </Link>
+            <Link className={styles.clarificationAction} href="/settings">
+              Set a default location
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <div className={styles.answerCard}>
+          {/*
+            The card's own head: the badge that marks model-written language, and one short line
+            saying what it rests on. The boundary sentence and the model identifiers used to open
+            the reply; both are still on this screen — the sentence inside the panel below, the
+            identifiers in the answer's details — and neither is the first thing a customer meets.
+          */}
+          <InterpretationPanel
+            /*
+              The region keeps the name it has always had: it *is* the AI interpretation, and that
+              is what a screen reader should hear when it lands here. `titleVisible` only stops it
+              being painted a second time — the card's own badge already says what this is, and the
+              artifact's reply opens on the answer rather than on a heading.
+            */
+            title="AI interpretation"
+            titleVisible={false}
+            density="compact"
+            prominence="lead"
+            placement="detail"
+            footer={
+              grounding.verified ? null : (
+                <p className={styles.note}>
+                  {grounding.prose_discarded
+                    ? "The interpretation was withheld because it could not be grounded in the figures below."
+                    : "Some figures in this interpretation could not be matched to the evidence: " +
+                      ((grounding.ungrounded_figures ?? []).join(", ") || grounding.note || "unstated") +
+                      "."}
+                </p>
+              )
+            }
+          >
+            {answer.answer_prose ? (
+              <p>{answer.answer_prose}</p>
+            ) : (
+              <p>
+                No interpretation was written for this answer. The figures below are unaffected.
+              </p>
+            )}
+          </InterpretationPanel>
 
-      {/* The artifact's fixed pair, from the run's own attribution and resolved context. */}
-      <RunFacts answer={answer} />
+          {/* Asked rather than assumed, where the run also produced figures. */}
+          {answer.clarification_question && !clarifying ? (
+            <p className={styles.clarificationInline}>{answer.clarification_question}</p>
+          ) : null}
 
-      {/*
-        Anything else the run produced, by class. The pair above is the artifact's fixed geometry;
-        this is whatever findings a particular run actually carried, and is often nothing.
-      */}
-      {groups.length > 0 ? (
-        <div className={styles.subcards}>
-          {groups.map((group) => (
+          {/*
+            **The artifact's pair — each present only where the run has something to put in it.**
+
+            They are `ProvenanceSection`s rather than hand-built cards, and that is not a detail:
+            `specs/web-ui` requires the separation between a provider's figures, Weathra's
+            arithmetic and a model's sentences to be *structural*, and that component is what puts
+            `data-tier` on the element and the data-class badge in the header. The recomposition
+            changes which figures are in them and whether an empty one is drawn at all; it does not
+            get to change what makes them checkable.
+          */}
+          {observedGroups.length > 0 || forecastGroups.length > 0 ? (
+            <div className={styles.subcards}>
+              {observedGroups.length > 0 ? (
+                <FigurePanel title="Observed data" groups={observedGroups} />
+              ) : null}
+              {forecastGroups.length > 0 ? (
+                <FigurePanel title="Forecast" groups={forecastGroups} />
+              ) : null}
+            </div>
+          ) : null}
+
+          {/*
+            **The artifact's highlighted interpretation box, filled with what Weathra computed.**
+            Its own reads "Convergence zones have shifted 4km Eastward from standard ECMWF models",
+            which is an atmosphere this product does not model. What earns the same emphasis here is
+            the arithmetic: the statistics the answer actually turns on, each with the method that
+            produced it. Absent entirely on a run that computed nothing.
+          */}
+          {computedGroups.map((group) => (
             <ProvenanceSection
               key={group.key}
               dataClass={group.dataClass}
@@ -306,78 +373,169 @@ export function AnswerView({ answer, evidenceId = null }: AnswerViewProps): Reac
               </ul>
             </ProvenanceSection>
           ))}
+
+          {/* Required on every forecast figure, at the compact step the Dashboard settled. */}
+          {confidence && answer.uncertainty?.basis ? (
+            <UncertaintyIndicator
+              confidence={confidence}
+              basis={answer.uncertainty.basis}
+              hoursAhead={horizonHoursOf(answer.uncertainty)}
+              spreadAvailable={answer.uncertainty.spread_available ?? null}
+              compact
+            />
+          ) : null}
+
+          {(answer.unanswered_parts ?? []).length > 0 ? (
+            <div className={styles.unanswered}>
+              <p className={styles.noteStrong}>Not answered:</p>
+              <ul className={styles.plainList}>
+                {(answer.unanswered_parts ?? []).map((part) => (
+                  <li key={part}>{part}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {/*
+            **One rule, and everything technical behind it.**
+
+            The reply used to close on five surfaces: what it resolved to, "Produced by … Completed
+            …", "How this answer was produced", the evidence summary and a run-progress list. They
+            are all still here and none is summarised away — they are the disclosure on this rule,
+            which is the same economy the frozen Dashboard and Compare Cities use for provenance.
+          */}
+          <div className={styles.answerRule}>
+            <AnswerProvenance answer={answer} />
+            <details className={styles.answerDetails} aria-label="Answer details">
+              <summary className={styles.answerDetailsSummary}>Answer details</summary>
+
+              {/* What served it. Moved off the face of the reply by task 34.32, not dropped. */}
+              <ModelAttribution
+                provider={inference?.provider ?? null}
+                model={inference?.model ?? null}
+                requestedModel={inference?.requestedModel ?? null}
+                policy={inference?.policyId ?? null}
+                resolution={inference?.resolutionReason ?? null}
+                served={inference?.served ?? true}
+              />
+
+              {resolved ? (
+                <>
+                  {resolved.statement ? <p className={styles.note}>{resolved.statement}</p> : null}
+                  <dl className={styles.resolvedList}>
+                    {(resolved.locations ?? []).length > 0 ? (
+                      <div className={styles.resolvedItem}>
+                        <dt>Location</dt>
+                        <dd>
+                          {(resolved.locations ?? []).map((place) => placeLabel(place)).join(", ")}
+                          {resolved.location_source ? ` (from the ${resolved.location_source})` : null}
+                        </dd>
+                      </div>
+                    ) : null}
+                    {resolved.period ? (
+                      <div className={styles.resolvedItem}>
+                        <dt>Window</dt>
+                        <dd>
+                          {formatLocalStamp(resolved.period.start_local)} to{" "}
+                          {formatLocalStamp(resolved.period.end_local)}
+                          {resolved.period.timezone ? ` (${resolved.period.timezone})` : null}
+                        </dd>
+                      </div>
+                    ) : null}
+                    {resolved.unit_system ? (
+                      <div className={styles.resolvedItem}>
+                        <dt>Units</dt>
+                        <dd>
+                          {resolved.unit_system}
+                          {resolved.units_source ? ` (from the ${resolved.units_source})` : null}
+                        </dd>
+                      </div>
+                    ) : null}
+                  </dl>
+                </>
+              ) : null}
+
+              <EvidenceSummary answer={answer} evidenceId={evidenceId} />
+            </details>
+          </div>
         </div>
-      ) : null}
-
-      {/* Required on every forecast figure: the band, and the basis it rests on. */}
-      {confidence && answer.uncertainty?.basis ? (
-        <UncertaintyIndicator
-          confidence={confidence}
-          basis={answer.uncertainty.basis}
-          hoursAhead={horizonHoursOf(answer.uncertainty)}
-          spreadAvailable={answer.uncertainty.spread_available ?? null}
-        />
-      ) : null}
-
-      {(answer.unanswered_parts ?? []).length > 0 ? (
-        <div className={styles.unanswered}>
-          <p className={styles.noteStrong}>Not answered:</p>
-          <ul className={styles.plainList}>
-            {(answer.unanswered_parts ?? []).map((part) => (
-              <li key={part}>{part}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {/*
-        What the run decided the question was about, and where a default came from.
-        *
-        Inside a disclosure, because the rail beside this column already states the resolved
-        location, window and unit system in full: the runtime audit of 2026-09-08 photographed the
-        same three lines twice on one screen, once here and once there. The rail is the copy a
-        reader meets without asking; this is the copy that travels with the answer, kept so a
-        transcript of several turns still says what each individual turn resolved to.
-      */}
-      {resolved ? (
-        <details className={styles.resolved} aria-label="What this answer resolved to">
-          <summary className={styles.resolvedTitle}>What this answer resolved to</summary>
-          {resolved.statement ? <p>{resolved.statement}</p> : null}
-          <dl className={styles.resolvedList}>
-            {(resolved.locations ?? []).length > 0 ? (
-              <div className={styles.resolvedItem}>
-                <dt>Location</dt>
-                <dd>
-                  {(resolved.locations ?? []).map((place) => placeLabel(place)).join(", ")}
-                  {resolved.location_source ? ` (from the ${resolved.location_source})` : null}
-                </dd>
-              </div>
-            ) : null}
-            {resolved.period ? (
-              <div className={styles.resolvedItem}>
-                <dt>Window</dt>
-                <dd>
-                  {formatLocalStamp(resolved.period.start_local)} to{" "}
-                  {formatLocalStamp(resolved.period.end_local)}
-                  {resolved.period.timezone ? ` (${resolved.period.timezone})` : null}
-                </dd>
-              </div>
-            ) : null}
-            {resolved.unit_system ? (
-              <div className={styles.resolvedItem}>
-                <dt>Units</dt>
-                <dd>
-                  {resolved.unit_system}
-                  {resolved.units_source ? ` (from the ${resolved.units_source})` : null}
-                </dd>
-              </div>
-            ) : null}
-          </dl>
-        </details>
-      ) : null}
-
-      <EvidenceSummary answer={answer} evidenceId={evidenceId} />
+      )}
     </article>
+  );
+}
+
+/**
+ * One class of figures the run produced, as the artifact's inset panel.
+ *
+ * The label, the value, and the group's own attribution on the compact rule the frozen screens
+ * settled — a method note per row turned this region into the log the customer-level review of
+ * 2026-09-11 objected to, and the methods are still one press away on that rule.
+ */
+function FigurePanel({
+  title,
+  groups,
+}: {
+  readonly title: string;
+  readonly groups: readonly FindingGroup[];
+}): ReactNode {
+  const first = groups[0];
+  if (first === undefined) return null;
+
+  return (
+    <ProvenanceSection
+      dataClass={first.dataClass}
+      title={title}
+      attribution={attributionOf(first.attribution)}
+      headingLevel={3}
+    >
+      <dl className={styles.facts}>
+        {groups.flatMap((group) =>
+          group.findings.map((finding, index) => (
+            <div className={styles.factRow} key={`${group.key}-${finding.label}-${index}`}>
+              <dt className={styles.factTerm}>{finding.label}</dt>
+              <dd className={styles.factValue} data-reported={findingValue(finding) ? "true" : "false"}>
+                {findingValue(finding) ?? "Not reported"}
+              </dd>
+            </div>
+          )),
+        )}
+      </dl>
+    </ProvenanceSection>
+  );
+}
+
+/**
+ * The reply's one provenance rule.
+ *
+ * The provider the figures came from, the window they cover, and how many agents and tools the run
+ * used — the four facts a reader checks, on one line, at the label step the frozen screens settled.
+ * Everything else the run recorded is the disclosure beside it.
+ */
+function AnswerProvenance({ answer }: { readonly answer: AnswerEnvelope }): ReactNode {
+  const providers = [
+    ...new Set((answer.attribution ?? []).map((entry) => entry.provider).filter(Boolean)),
+  ];
+  const period = answer.resolved?.period ?? null;
+  const record = answer.evidence;
+  const agents = record?.agents?.length ?? 0;
+  const tools = record?.tool_calls?.length ?? 0;
+
+  return (
+    <p className={styles.answerSources}>
+      {providers.length > 0 ? (
+        <span className={styles.answerSource}>{providers.join(" · ")}</span>
+      ) : null}
+      {period ? (
+        <span className={styles.answerSource}>
+          {formatLocalStamp(period.start_local)} to {formatLocalStamp(period.end_local)}
+        </span>
+      ) : null}
+      {agents > 0 || tools > 0 ? (
+        <span className={styles.answerSource}>
+          {agents} {agents === 1 ? "agent" : "agents"} · {tools} {tools === 1 ? "tool" : "tools"}
+        </span>
+      ) : null}
+    </p>
   );
 }
 

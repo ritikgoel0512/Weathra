@@ -22,32 +22,97 @@
 
 /* -------------------------------------------------------------------- heading */
 
+/*
+ * **The workspace header** — task 34.32, against `02-ai-weather-analyst.png`.
+ *
+ * The artifact opens on one row: a circular mark, the workspace's name, a line of session state
+ * under it, and the actions on the far end, over a hairline. Production opened on a display title,
+ * a subtitle, a thread sentence and then a photographic focus band — four stacked blocks and about
+ * 340 pixels before the conversation the screen is for.
+ */
 .heading {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding-block-end: var(--space-3);
+  border-block-end: 1px solid var(--color-border-subtle);
+  min-width: 0;
+}
+
+.headingMark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-pill);
+  background: radial-gradient(
+    70% 70% at 50% 40%,
+    color-mix(in srgb, var(--color-accent) 18%, transparent) 0%,
+    transparent 72%
+  );
+}
+
+.headingText {
+  display: flex;
   flex-direction: column;
-  gap: var(--space-2);
   min-width: 0;
 }
 
 .title {
   font-family: var(--family-display);
-  font-size: var(--type-display-size);
-  line-height: var(--type-display-line);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
   font-weight: var(--type-display-weight);
   color: var(--color-text-primary);
 }
 
-.subtitle,
+/* The session state, at the label step — a status line, not a sentence about the product. */
 .thread {
-  font-size: var(--type-body-size);
-  line-height: var(--type-body-line);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
   color: var(--color-text-muted);
-  max-width: 68ch;
 }
 
-.thread {
+/* The artifact's green dot beside an open conversation. Colour is never the only carrier: the
+   words beside it say which state it is. */
+.thread[data-thread="true"]::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  background: var(--color-status-ok);
+}
+
+.headingActions {
+  margin-inline-start: auto;
+  display: flex;
+  gap: var(--space-2);
+}
+
+/*
+ * The artifact's centred context pill: one line saying what the next question will be answered
+ * with. It names no memory key and no implementation — see `analyst.tsx`.
+ */
+.contextPill {
+  align-self: center;
+  padding: var(--space-1) var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-raised);
   font-size: var(--type-meta-size);
   line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+  text-align: center;
+  max-width: 100%;
 }
 
 /* ----------------------------------------------------------------- transcript */
@@ -519,9 +584,16 @@
   min-width: 0;
 }
 
+/*
+ * Measured off the artifact rather than chosen: its divider sits at x=1104 and its rail content
+ * starts at x=1181, over a content column running 368→1440 — so the conversation takes about 69%
+ * of the width and the rail about 24%, with the gap between them. The conversation dominates, which
+ * is the whole composition.
+ */
 @media (min-width: 1280px) {
   .workspace {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 20rem);
+    grid-template-columns: minmax(0, 2.85fr) minmax(0, 1fr);
+    gap: var(--space-6);
   }
 }
 
@@ -1106,4 +1178,423 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* ==================================================================== task 34.32
+ *
+ * The reconstructed reply and rail, against `02-ai-weather-analyst.png`. The card language is the
+ * frozen Dashboard's and Compare Cities' — those two screens are the quality standard this one was
+ * rebuilt to, and every value below is a task 20.3 token.
+ */
+
+/* ------------------------------------------------------------------ the reply */
+
+/*
+ * **One card, not a stack of panels.** The artifact draws the agent's answer as a single bordered
+ * surface: a badge rule at the top, the synthesis, the figure panels, the highlighted reading, and
+ * one provenance rule at the foot. Production rendered seven full-width regions in sequence —
+ * interpretation, two metadata cards, three finding cards, a confidence band, a resolved
+ * disclosure, a produced-by line and a run-progress list — which is a report, not a reply.
+ */
+.answerCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  min-width: 0;
+}
+
+/* The panel inside the card gives up its frame: the card is the frame. */
+.answerCard > section[data-interpretation="true"] {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.agentName {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+/* The two figure panels, side by side as the artifact sets them. */
+.subcard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+  min-width: 0;
+}
+
+.subcardHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.subcardTitle {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.subcardSource {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+}
+
+.facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.factRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.factTerm {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+  min-width: 0;
+}
+
+.factValue {
+  font-family: var(--family-display);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.factValue[data-reported="false"] {
+  font-family: var(--family-body);
+  font-weight: var(--type-body-weight);
+  color: var(--color-text-muted);
+}
+
+/*
+ * **The artifact's highlighted interpretation box**, carrying what Weathra computed.
+ *
+ * Its own is cyan-outlined and holds the agent's causal reading; ours holds the arithmetic, which
+ * is the thing on this screen that earns that emphasis and can be checked. The outline is the
+ * analytics accent rather than the weather accent, because that is the class of what is in it.
+ */
+/*
+ * The computed region takes the artifact's highlighted treatment: a coloured outline and a tinted
+ * ground, which is the emphasis its own AGENT INTERPRETATION box carries. The accent is the
+ * analytics class rather than the weather one, because that is what is in it.
+ */
+.answerCard > section[data-tier="computed"] {
+  border-color: var(--color-class-analytics);
+  background: color-mix(in srgb, var(--color-class-analytics-surface) 60%, var(--color-surface-inset));
+}
+
+/* The two figure panels sit on the inset ground, as the artifact insets them inside its card. */
+.answerCard > .subcards > section {
+  background: var(--color-surface-inset);
+}
+
+.highlightTitle {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-class-analytics);
+}
+
+.highlightFigures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.highlightFigure {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.highlightFigureLabel {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-secondary);
+  min-width: 0;
+}
+
+.highlightFigureValue {
+  font-family: var(--family-display);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.highlightMethod,
+.answerDetails {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.highlightMethodSummary,
+.answerDetailsSummary {
+  cursor: pointer;
+  color: var(--color-accent);
+}
+
+.highlightMethodSummary:hover,
+.answerDetailsSummary:hover {
+  color: var(--color-accent-strong);
+}
+
+/*
+ * The reply's one provenance rule, at the label step the frozen screens settled — and the whole
+ * technical record behind the control on it.
+ */
+.answerRule {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--color-border-subtle);
+  min-width: 0;
+}
+
+.answerSources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+  min-width: 0;
+}
+
+.answerSource + .answerSource::before {
+  content: "· ";
+}
+
+.answerDetails[open] {
+  flex: 1 0 100%;
+}
+
+.answerDetails > :not(summary) {
+  margin-block-start: var(--space-2);
+}
+
+/*
+ * **The clarification, as a conversational turn.**
+ *
+ * When the agent asks which place to look at there is nothing else to show, and production showed
+ * everything anyway — an empty observed card, an empty forecast card, "0 figure(s) checked", the
+ * model and policy identifiers and a run-progress strip, under a heading reading "Weathra needs to
+ * know". This is the question, why Weathra will not guess, and the two ways to answer it.
+ */
+.clarificationTitle {
+  font-family: var(--family-display);
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
+  color: var(--color-text-primary);
+}
+
+.clarificationActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin-block-start: var(--space-2);
+}
+
+.clarificationAction {
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.clarificationAction:hover {
+  color: var(--color-accent-strong);
+  text-decoration: underline;
+}
+
+.clarificationInline {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-secondary);
+}
+
+/* ------------------------------------------------------------------- the rail */
+
+/* The agents the stream named, each with a status mark rather than a bare word in a box. */
+.railAgents,
+.railSources {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.railAgent,
+.railSource {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.railAgentMark,
+.railSourceMark {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  background: var(--color-status-ok);
+}
+
+.railAgentName {
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  color: var(--color-text-primary);
+  text-transform: capitalize;
+  min-width: 0;
+}
+
+.railSourceText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.railSourceName {
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.railSourceRole {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+}
+
+.railMethod {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.railMethodSummary {
+  cursor: pointer;
+  color: var(--color-accent);
+}
+
+.railMethodSummary:hover {
+  color: var(--color-accent-strong);
+}
+
+.railMethod > :not(summary) {
+  margin-block-start: var(--space-2);
+}
+
+/* The artifact's solid evidence button, which is the rail's one action. */
+.railEvidence {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-block-start: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  text-decoration: none;
+  text-align: center;
+}
+
+.railEvidence:hover {
+  background: var(--color-accent-strong);
+}
+
+/* ----------------------------------------------------------- the suggestions */
+
+/*
+ * The artifact's quiet chips. They were full-width bordered buttons two to a row at the weight of
+ * a primary action, which made the four suggestions louder than the composer beneath them.
+ */
+.starter {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-raised);
+  color: var(--color-text-secondary);
+  font-family: var(--family-body);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  cursor: pointer;
+  text-align: start;
+}
+
+.starter:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-strong);
+}
+
+.starter:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/*
+ * The composer's own label and helper sentence stay in the document for anyone navigating by them,
+ * and come off the screen: the artifact's composer is a box with a placeholder in it.
+ */
+.composer label,
+.composer [class*="fieldDescription"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }

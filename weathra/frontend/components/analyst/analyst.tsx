@@ -38,9 +38,8 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
-import { Button, ErrorState, Field, QuotaState } from "@/components/ui";
+import { Button, ErrorState, Field, IntelligenceMark, QuotaState } from "@/components/ui";
 import type { PreferenceView } from "@/lib/api/schema";
-import { briefingLocationFrom } from "@/lib/dashboard/briefing";
 import { useApiQuery } from "@/lib/query/hooks";
 import { PREFERENCES_KEY } from "@/lib/query/keys";
 import { isAgentUnavailableCode, presentableMessage } from "@/lib/api/errors";
@@ -50,14 +49,13 @@ import { runStepsFrom } from "@/lib/analyst/run";
 import { useSession } from "@/lib/session/provider";
 import { useAgentStream, type AgentStreamState } from "@/hooks/use-agent-stream";
 
-import { AnalystFocus } from "./focus";
 import { AnalystRail } from "./rail";
 import { AnalystIntroduction, AnswerSkeleton, AnswerView, QuestionTurn, RunProgress } from "./sections";
 import styles from "./analyst.module.css";
 
 import { FixtureAnalyst } from "./fixture-analyst";
 import { usingVisilyFixtures } from "@/lib/fixtures/visily";
-import { placeLabel } from "@/lib/locations/place";
+import { friendlyName, placeLabel } from "@/lib/locations/place";
 
 /**
  * Starter questions, as the artifact's chip row.
@@ -207,6 +205,12 @@ function TurnView({
             it, or on `05-agent-evidence.png`. So the progress list renders above only while it is
             the only thing there is to see, and moves below the answer once one exists.
           */}
+          {/*
+            **While it runs, and not after.** `RunProgress` rendered below every settled answer as a
+            titled region reading "RUN PROGRESS · 8 steps" — a customer-facing execution trace under
+            a reply, on a screen that already links to the whole trace. The steps are not lost: they
+            are the Agent Evidence record the answer's own details and the rail both point at.
+          */}
           {run.status === "streaming" ? (
             <>
               <RunProgress steps={runStepsFrom(run.events)} streaming gap={run.gap} />
@@ -221,9 +225,13 @@ function TurnView({
 
           <TerminalState run={run} onRetry={onRetry} />
 
-          {run.status === "streaming" ? null : (
+          {/*
+            A run that produced no answer keeps its steps on screen: they are the only account of
+            what happened, and a failure with nothing under it says less than the stream recorded.
+          */}
+          {run.status !== "streaming" && run.terminal?.kind !== "final" ? (
             <RunProgress steps={runStepsFrom(run.events)} streaming={false} gap={run.gap} />
-          )}
+          ) : null}
         </div>
       )}
     </article>
@@ -248,7 +256,7 @@ export function Analyst(): ReactNode {
   /*
    * The context the question will be answered in — task 21.2's focus band.
    *
-   * Read here rather than inside `AnalystFocus` so the composer's own FOCUS/UNITS row and the band
+   * Read here rather than in the composer so the FOCUS row and the context pill above it cannot
    * above it cannot disagree about the same three facts. Cached under the shared preferences key,
    * so arriving from any other screen spends no request. A failure is not handled: without
    * preferences the band degrades to its no-default state and the composer to its "from your
@@ -259,7 +267,6 @@ export function Analyst(): ReactNode {
     request: (client) => client.preferences(),
   });
   const preferred = preferences.state.kind === "ready" ? preferences.state.data : null;
-  const focusLocation = briefingLocationFrom(preferred ?? undefined);
 
   const [question, setQuestion] = useState("");
   const [turns, setTurns] = useState<readonly Turn[]>([]);
@@ -370,53 +377,63 @@ export function Analyst(): ReactNode {
         "History" control; the threads endpoint exists but no screen lists them, and a control with
         nowhere to go is worse than none — recorded in `docs/design/screens.md` §8.
       */}
+      {/*
+        **The workspace header** — `02-ai-weather-analyst.png` opens on one compact row: a mark, the
+        workspace's name, a line of session state, and the actions. Production opened on a display
+        title, a subtitle, a thread sentence, and then a full photographic focus band carrying the
+        place, its units, its horizon and a strip of current readings — roughly 340 pixels before
+        the conversation, on a screen whose subject is the conversation.
+
+        The place has not gone anywhere: it is the composer's FOCUS on every question and the rail's
+        Analyst context on every answer, which is where the artifact keeps it. The current readings
+        are the Dashboard's, and the Dashboard is one press away.
+
+        The artifact's "History" control is not here: the threads endpoint exists, no screen lists
+        them, and a control with nowhere to go is worse than none — `docs/design/screens.md` §8.
+      */}
       <header className={styles.heading}>
-        <div className={styles.headingRow}>
-          <div className={styles.headingText}>
-            <h1 className={styles.title}>AI Weather Analyst</h1>
-            <p className={styles.subtitle}>
-              Every figure labelled, attributed, and traceable to its run.
-            </p>
-          </div>
-          <div className={styles.headingActions}>
-            <Button size="sm" disabled={busy || turns.length === 0} onClick={startOver}>
-              New analysis
-            </Button>
-          </div>
+        <span className={styles.headingMark} aria-hidden="true">
+          <IntelligenceMark size={30} />
+        </span>
+        <div className={styles.headingText}>
+          <h1 className={styles.title}>AI Weather Analyst</h1>
+          {/*
+            Truthful session state, and no invented identifier. The artifact prints "Thread ID:
+            WXA-7729-ALPHA" beside a green dot; the backend does open a thread, and its id is a key
+            for a log rather than something a customer reads. What is said instead is what the state
+            means for the next question.
+          */}
+          <p className={styles.thread} data-thread={threadId ? "true" : undefined}>
+            {threadId
+              ? `Active conversation · ${turns.length} ${turns.length === 1 ? "question" : "questions"}`
+              : turns.length === 0
+                ? "No conversation open yet"
+                : "No conversation open — the next question starts one"}
+          </p>
         </div>
-        {/*
-          Three states, because a failed first question is not the same as not having asked.
-          *
-          The thread id arrives with an answer, so a run that never produced one leaves it null \u2014
-          and the line read "No conversation open yet. The first question starts one." underneath a
-          question the person had just asked and watched fail, which the runtime audit of 2026-09-08
-          photographed. The middle state says what is true: the question is on screen, the backend
-          opened nothing to follow up against.
-        */}
-        <p className={styles.thread} data-thread={threadId ? "true" : undefined}>
-          {threadId
-            ? "Active conversation \u2014 follow-up questions use its context."
-            : turns.length === 0
-              ? "No conversation open yet. The first question starts one."
-              : "No conversation is open \u2014 the next question starts one."}
-        </p>
+        <div className={styles.headingActions}>
+          <Button size="sm" disabled={busy || turns.length === 0} onClick={startOver}>
+            New analysis
+          </Button>
+        </div>
       </header>
 
       <div className={styles.workspace}>
         <div className={styles.main}>
       {/*
-        The location context, before and after a run alike.
-
-        `02-ai-weather-analyst.png` anchors its workspace on the place under discussion; without
-        this the screen opened on a composer over an empty ground, which is what the 2026-09-10
-        review graded. It stays once a conversation exists, updated to whatever the last answer
-        actually resolved to rather than continuing to assert the default.
+        The artifact's small centred context pill. It states only what is true: a conversation is
+        open, or a saved default will be used, or neither — and it names no memory key and no
+        implementation.
       */}
-      <AnalystFocus
-        location={focusLocation}
-        preferences={preferred}
-        resolved={placeLabel(answer?.resolved?.locations?.[0])}
-      />
+      <p className={styles.contextPill}>
+        {threadId
+          ? preferred?.default_location
+            ? "Using this conversation and your saved location and units."
+            : "Using this conversation's context."
+          : preferred?.default_location
+            ? "Using your saved location and units."
+            : "Name a place in your question — Weathra never guesses one."}
+      </p>
 
       <div className={styles.transcript}>
         {turns.length === 0 ? (
@@ -433,11 +450,17 @@ export function Analyst(): ReactNode {
         )}
       </div>
 
+      {/*
+        The artifact's suggestion chips. They were full-width bordered buttons two to a row, at the
+        weight of a primary action; the artifact sets them as quiet chips a person scans on the way
+        to the composer.
+      */}
       <div className={styles.starters}>
         {STARTERS.map((starter) => (
-          <Button
+          <button
+            type="button"
+            className={styles.starter}
             key={starter}
-            size="sm"
             disabled={busy}
             onClick={() => {
               setQuestion(starter);
@@ -445,11 +468,15 @@ export function Analyst(): ReactNode {
             }}
           >
             {starter}
-          </Button>
+          </button>
         ))}
       </div>
 
-      <form className={styles.composer} onSubmit={onSubmit}>
+      <form
+        className={styles.composer}
+        onSubmit={onSubmit}
+        aria-label="Ask Weathra a weather question"
+      >
         {/*
           `02-ai-weather-analyst.png` puts a FOCUS / DEPTH row above the composer. Both are shown
           read-only rather than as controls: the focus is whatever the last run resolved to, which
@@ -458,16 +485,25 @@ export function Analyst(): ReactNode {
           dropdowns that altered nothing would be the fabrication this pass exists to remove.
         */}
         <div className={styles.composerContext}>
+          {/*
+            **The place by name, before the first question as well as after it.** This read "Your
+            default location" until a run resolved one — which was tolerable while a photographic
+            focus band above it named the place, and is not now that band is gone. The saved default
+            is the answer to "what will this be about", so it is what the row says; a run that
+            resolves somewhere else replaces it, which is the same rule as before.
+          */}
           <span className={styles.composerContextItem}>
             <span className={styles.composerContextTerm}>Focus</span>
             <span className={styles.composerContextValue}>
-              {placeLabel(answer?.resolved?.locations?.[0]) ?? "Your default location"}
+              {placeLabel(answer?.resolved?.locations?.[0]) ??
+                (preferred?.default_location ? friendlyName(preferred.default_location) : null) ??
+                "Named in your question"}
             </span>
           </span>
           <span className={styles.composerContextItem}>
             <span className={styles.composerContextTerm}>Units</span>
             <span className={styles.composerContextValue}>
-              {answer?.resolved?.unit_system ?? "From your preferences"}
+              {answer?.resolved?.unit_system ?? preferred?.unit_system ?? "From your preferences"}
             </span>
           </span>
           <span className={styles.composerContextItem}>
@@ -476,6 +512,12 @@ export function Analyst(): ReactNode {
           </span>
         </div>
 
+        {/*
+          The field keeps its label and its description for everyone who navigates by them; both are
+          visually hidden, because the artifact's composer is a box with a placeholder in it and the
+          Enter/Shift+Enter sentence under production's was a line of instructions on a text area
+          everybody already knows how to use.
+        */}
         <Field
           label="Your weather question"
           description="Enter to send, Shift+Enter for a new line. Follow-ups use this conversation's context."
