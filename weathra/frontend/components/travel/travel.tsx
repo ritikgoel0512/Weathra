@@ -46,6 +46,7 @@ import {
   formatInstant,
 } from "@/components/ui";
 import type {
+  BaselineComparison,
   ComparedWindow,
   DailyOutlookEntry,
   Location,
@@ -54,7 +55,7 @@ import type {
   TravelIntelligence as TravelIntelligenceResult,
   TravelMetric,
 } from "@/lib/api/schema";
-import { briefingLocationFrom } from "@/lib/dashboard/briefing";
+import { briefingLocationFrom, formatFigure, formatReading } from "@/lib/dashboard/briefing";
 import { baselineYearsStatement, formatSigned } from "@/lib/historical/analysis";
 import { friendlyName } from "@/lib/locations/place";
 import { useApiQuery } from "@/lib/query/hooks";
@@ -251,6 +252,19 @@ function TripEditor({
 
 /* ============================================================ the dashboard */
 
+/**
+ * One figure and its unit, rounded the way the rest of Weathra rounds.
+ *
+ * Every value on this screen went through raw interpolation, so a mean the provider computed as
+ * 23.400000000000002 reached a customer with all of it — and a baseline difference read
+ * "1.73571 °C", which claims a precision no forecast has. `formatReading` is the Dashboard's own
+ * rounding, so the same reading cannot be stated two ways in one product.
+ */
+function reading(value: number | null | undefined, unit?: string | null): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return NOT_REPORTED;
+  return formatReading({ value, unit: unit ?? null });
+}
+
 /** A measure key as a person reads it: `temperature_mean` becomes `Temperature mean`. */
 function measureName(measure: string): string {
   const spaced = measure.replace(/_/g, " ");
@@ -259,8 +273,9 @@ function measureName(measure: string): string {
 
 function metricReading(metric: TravelMetric): string {
   if (metric.value === null || metric.value === undefined) return NOT_REPORTED;
-  const unit = metric.unit ?? "";
-  return unit === "%" ? `${metric.value}%` : `${metric.value} ${unit}`.trim();
+  // A percentage reads as a whole number; everything else keeps one decimal.
+  if (metric.unit === "%") return `${Math.round(metric.value)}%`;
+  return reading(metric.value, metric.unit);
 }
 
 /** The hero: the destination, the window, and what the window is. */
@@ -295,7 +310,7 @@ function WeatherWindowHero({
           <span className={styles.heroFigure}>
             <span className={styles.heroFigureLabel}>Best day high</span>
             <span className={styles.heroFigureValue}>
-              {strongest.temperature_max} {strongest.units?.temperature_max ?? "°C"}
+              {reading(strongest.temperature_max, strongest.units?.temperature_max ?? "°C")}
             </span>
           </span>
         ) : null}
@@ -329,8 +344,12 @@ function ViabilityCard({ result }: { readonly result: TravelIntelligenceResult }
           </p>
         ) : (
           <>
-            <div className={styles.ring} role="img" aria-label={`${viability.score} out of 100`}>
-              <span className={styles.ringScore}>{viability.score}</span>
+            <div
+              className={styles.ring}
+              role="img"
+              aria-label={`${formatFigure({ value: viability.score })} out of 100`}
+            >
+              <span className={styles.ringScore}>{formatFigure({ value: viability.score })}</span>
               <span className={styles.ringState}>{viability.state}</span>
             </div>
 
@@ -345,7 +364,7 @@ function ViabilityCard({ result }: { readonly result: TravelIntelligenceResult }
                   <Meter
                     label={measureName(part.measure)}
                     value={part.weight === 0 ? null : part.contribution / part.weight}
-                    valueLabel={`${part.value} ${part.unit ?? ""}`.trim()}
+                    valueLabel={reading(part.value, part.unit)}
                   />
                 </li>
               ))}
@@ -402,19 +421,15 @@ function OutlookCard({ day }: { readonly day: DailyOutlookEntry }): ReactNode {
         </p>
       ) : null}
 
-      <p className={styles.dayFigure}>
-        {day.temperature_max === null || day.temperature_max === undefined
-          ? NOT_REPORTED
-          : `${day.temperature_max} ${unit}`}
-      </p>
+      <p className={styles.dayFigure}>{reading(day.temperature_max, unit)}</p>
       {day.temperature_min !== null && day.temperature_min !== undefined ? (
-        <p className={styles.dayRange}>Low {day.temperature_min} {unit}</p>
+        <p className={styles.dayRange}>Low {reading(day.temperature_min, unit)}</p>
       ) : null}
 
       <p className={styles.dayRain}>
         {day.precipitation_sum === null || day.precipitation_sum === undefined
           ? "No rain reported"
-          : `${day.precipitation_sum} ${day.units?.precipitation_sum ?? "mm"}`}
+          : reading(day.precipitation_sum, day.units?.precipitation_sum ?? "mm")}
         {day.precipitation_probability_max === null ||
         day.precipitation_probability_max === undefined
           ? ""
@@ -457,6 +472,19 @@ function TripTrend({
   const units = days[0]?.units ?? {};
   return (
     <div className={styles.trend}>
+      {/*
+        The chart draws two series on two axes, and neither said which was which: a temperature
+        curve on the left scale and precipitation bars on the right, identifiable only by guessing.
+        The legend names both, and names the measures the points actually carry.
+      */}
+      <p className={styles.trendLegend}>
+        <span className={styles.trendKey} data-series="temperature">
+          Daily high {units.temperature_max ? `(${units.temperature_max})` : ""}
+        </span>
+        <span className={styles.trendKey} data-series="precipitation">
+          Rainfall {units.precipitation_sum ? `(${units.precipitation_sum})` : ""}
+        </span>
+      </p>
       <ForecastTrendChart
         points={points}
         temperatureUnit={units.temperature_max ?? null}
@@ -511,8 +539,7 @@ function PackingStrategy({
         ) : null}
 
         <p className={styles.disclaimer}>
-          Rules over the figures on this screen. Weathra runs no packing model, recommends no
-          products, and no language model wrote this.
+          Based on this trip&rsquo;s forecast. Weathra recommends no products and sells nothing.
         </p>
       </CardBody>
     </Card>
@@ -566,20 +593,12 @@ function TemporalComparison({
                       <Meter
                         label={window.state ?? "Viability"}
                         value={window.viability / 100}
-                        valueLabel={String(window.viability)}
+                        valueLabel={formatFigure({ value: window.viability })}
                       />
                     )}
                   </td>
-                  <td>
-                    {window.temperature_mean === null || window.temperature_mean === undefined
-                      ? NOT_REPORTED
-                      : `${window.temperature_mean} °C`}
-                  </td>
-                  <td>
-                    {window.precipitation_sum === null || window.precipitation_sum === undefined
-                      ? NOT_REPORTED
-                      : `${window.precipitation_sum} mm`}
-                  </td>
+                  <td>{reading(window.temperature_mean, "°C")}</td>
+                  <td>{reading(window.precipitation_sum, "mm")}</td>
                 </tr>
               ))}
             </tbody>
@@ -659,8 +678,7 @@ function SynthesisBand({ result }: { readonly result: TravelIntelligenceResult }
         <CardBody>
           <p className={styles.synthesisProse}>{result.synthesis}</p>
           <p className={styles.disclaimer}>
-            Written by code from the figures in this response. No language model was called, and
-            nothing here is inferred beyond them.
+            Deterministic analysis of the forecast and archive evidence shown on this page.
           </p>
         </CardBody>
       </Card>
@@ -711,6 +729,25 @@ function SynthesisBand({ result }: { readonly result: TravelIntelligenceResult }
       </Card>
     </div>
   );
+}
+
+/**
+ * Where the window sits among the baseline years, said in the terms those years can support.
+ *
+ * A percentile over four years has four possible values, and "100th percentile" reads as a
+ * climatological statement — the kind of claim a thirty-year normal earns and a four-year archive
+ * does not. Counting the years it actually beats says the same arithmetic without the borrowed
+ * authority, and the figure is still the backend's.
+ */
+function standing(baseline: BaselineComparison): string {
+  const years = baseline.baseline.years_used?.length ?? 0;
+  const percentile = baseline.percentile_rank?.value;
+  if (typeof percentile !== "number" || years === 0) return NOT_REPORTED;
+
+  const beaten = Math.round((percentile / 100) * years);
+  if (beaten >= years) return `Warmer than all ${years}`;
+  if (beaten === 0) return `Cooler than all ${years}`;
+  return `Warmer than ${beaten} of ${years}`;
 }
 
 /** The trip window against the archive — present in every state, truthful in each. */
@@ -767,12 +804,8 @@ function HistoricalBaseline({
                   </span>
                 </div>
                 <div className={styles.historicalFigure}>
-                  <span className={styles.historicalLabel}>Percentile</span>
-                  <span className={styles.historicalValue}>
-                    {typeof baseline.percentile_rank?.value === "number"
-                      ? `${Math.round(baseline.percentile_rank.value)}th`
-                      : NOT_REPORTED}
-                  </span>
+                  <span className={styles.historicalLabel}>Against those years</span>
+                  <span className={styles.historicalValue}>{standing(baseline)}</span>
                 </div>
               </div>
 

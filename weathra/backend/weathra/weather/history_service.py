@@ -790,9 +790,12 @@ def _characterize(
     else:
         direction = "below"
 
+    # One decimal, because these are temperatures and rainfall rather than laboratory readings.
+    # `%g` printed the float as computed — "18.2429 °C is 2.75848 °C above ... 15.4844 °C" — which
+    # claims a precision no forecast has and reads as a machine talking to itself.
     sentence = (
-        f"{value:g} {unit} is {abs(signed):g} {unit} {direction} the "
-        f"{baseline.years_count}-year baseline {measure_name} of {baseline.mean.value:g} {unit}"
+        f"{value:.1f} {unit} is {abs(signed):.1f} {unit} {direction} the "
+        f"{baseline.years_count}-year baseline {measure_name} of {baseline.mean.value:.1f} {unit}"
     )
     if score.computed and score.value is not None:
         sentence += f" ({score.value:+.2f} standard deviations)"

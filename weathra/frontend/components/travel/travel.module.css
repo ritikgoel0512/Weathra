@@ -1067,3 +1067,107 @@
   line-height: var(--type-body-line);
   max-width: 62ch;
 }
+
+/* ===================== polish pass: legibility over the same composition ===================== */
+
+/*
+ * The trend's key.
+ *
+ * Two series on two scales, previously distinguishable only by guessing which axis belonged to
+ * which mark. The swatches take the chart's own colours, so the key cannot drift away from what it
+ * describes.
+ */
+.trendLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: 0 0 var(--space-3);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.trendKey {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.trendKey::before {
+  content: "";
+  width: var(--space-3);
+  height: 2px;
+  border-radius: 1px;
+  background: var(--color-accent);
+}
+
+/* The bars are a block rather than a line, so the key says block. */
+.trendKey[data-series="precipitation"]::before {
+  width: var(--space-2);
+  height: var(--space-3);
+  border-radius: 1px;
+  background: var(--color-chart-precipitation, var(--color-accent-muted, var(--color-accent)));
+  opacity: 0.85;
+}
+
+/*
+ * The packing list, given room to breathe.
+ *
+ * The tier badge sat on the same baseline as a title that wraps, so a two-line item pushed its
+ * badge out of line with the ones above and below it. Pinning the badge to the top of its row
+ * keeps the column straight however the titles wrap.
+ */
+.packItem {
+  align-items: start;
+  gap: var(--space-4);
+  padding-bottom: var(--space-4);
+}
+
+.packName {
+  display: block;
+  font-weight: 500;
+  /* Long compound names break between words rather than mid-word. */
+  overflow-wrap: break-word;
+}
+
+.packBecause {
+  display: block;
+  margin-top: 2px;
+  max-width: 34ch;
+}
+
+.packItem > :last-child {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+/* The planning insight, set to be scanned rather than read as another paragraph. */
+.insight {
+  padding: var(--space-4);
+  margin-top: var(--space-1);
+}
+
+.insightText {
+  max-width: 40ch;
+}
+
+/* Section titles at one size across the page, so the hierarchy reads as one system. */
+.historicalLabel,
+.metricLabel {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.metricValue {
+  margin-top: 2px;
+}
+
+/* The trip's own row in the comparison, marked by more than a badge. */
+.windows tr[data-best="true"] {
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+}

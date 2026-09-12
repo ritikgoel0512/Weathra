@@ -499,7 +499,7 @@ class TravelIntelligenceService:
                     value=round(spread, 1),
                     unit=units.get(Measure.TEMPERATURE_MAX, "°C"),
                     detail=(
-                        f"{round(min(lows), 1)}{_RANGE_DASH}{round(max(highs), 1)}"
+                        f"Between {min(lows):.1f} and {max(highs):.1f}"
                         f"{units.get(Measure.TEMPERATURE_MAX, '°C')} across the trip"
                     ),
                     method="the trip's highest reported maximum minus its lowest reported minimum",
@@ -531,7 +531,7 @@ class TravelIntelligenceService:
         if not entries:
             return TravelMetric(
                 key="transit_stability",
-                label="Transit weather stability",
+                label="Travel weather stability",
                 method="the share of trip days with no heavy rain, strong gust or disruptive code",
                 unavailable_reason="No trip days were reported.",
             )
@@ -552,13 +552,13 @@ class TravelIntelligenceService:
         share = round(100.0 * settled / len(entries), 1)
         return TravelMetric(
             key="transit_stability",
-            label="Transit weather stability",
+            label="Travel weather stability",
             value=share,
             unit="%",
             detail=(
-                f"{settled} of {len(entries)} days settled"
+                f"{unsettled} of {len(entries)} days could see heavy rain, strong gusts or a storm"
                 if unsettled
-                else "No disruptive weather reported"
+                else "No disruptive weather expected on any day"
             ),
             method=(
                 f"the share of trip days reporting under {_HEAVY_RAIN_MM} mm of rain, gusts under "
@@ -593,9 +593,9 @@ class TravelIntelligenceService:
             value=round(float(total.value), 1),
             unit=units.get(Measure.PRECIPITATION_SUM, "mm"),
             detail=(
-                "No day reaches 1 mm"
+                "No rain expected on any day"
                 if wet == 0
-                else f"{wet} of {len(entries)} days at or above {_WET_DAY_MM:g} mm"
+                else f"Falling across {wet} of {len(entries)} days"
             ),
             method=total.method,
         )
@@ -605,7 +605,7 @@ class TravelIntelligenceService:
         if not peaks:
             return TravelMetric(
                 key="sun_exposure",
-                label="Strongest sun",
+                label="Peak UV index",
                 method="the highest daily peak UV index across the trip",
                 unavailable_reason="The provider reported no UV index for these days.",
                 data_class=DataClass.FORECAST,
@@ -613,10 +613,10 @@ class TravelIntelligenceService:
         top = max(peaks)
         return TravelMetric(
             key="sun_exposure",
-            label="Strongest sun",
+            label="Peak UV index",
             value=round(top, 1),
             unit=units.get(Measure.UV_INDEX_MAX, "index"),
-            detail="High enough to need cover" if top >= _HIGH_UV else "Moderate at its strongest",
+            detail="Strong enough to need cover" if top >= _HIGH_UV else "Moderate at its peak",
             method=(
                 "the highest daily peak UV index the provider reported across the trip. Weathra "
                 "has no sunshine-duration measure and does not estimate hours in the sun."

@@ -283,9 +283,20 @@ async def _baseline(
             baseline=reference, value=float(value), value_data_class=DataClass.FORECAST
         )
     except WeathraError as failure:
-        logger.info("travel historical baseline unavailable: %s", failure.message)
+        # The provider's own message names measures and ranges — "no usable temperature_mean
+        # observations for this period" — which is the right thing in a log and the wrong thing on
+        # a customer's screen. The code travels for anyone tracing it; the sentence is theirs.
+        logger.info(
+            "travel historical baseline unavailable (%s): %s", failure.code, failure.message
+        )
         failures.append(
-            SectionFailure(section="historical_baseline", reason=failure.message, code=failure.code)
+            SectionFailure(
+                section="historical_baseline",
+                reason=(
+                    "Weathra holds no archive observations for this calendar period at this place."
+                ),
+                code=failure.code,
+            )
         )
         return None
 
@@ -338,21 +349,29 @@ def _hero(
     variance = next((m for m in metrics if m.key == "temperature_variance"), None)
 
     parts = [
-        f"Across {len(entries)} days at {where}, {when} scores {viability.score:g} of 100 for "
-        f"outdoor suitability — {viability.state.lower()}."
+        f"{when} at {where} rates {viability.score:.1f} out of 100 for outdoor conditions, "
+        f"which Weathra calls {viability.state.lower()}."
     ]
     if rain is not None and rain.value is not None:
         parts.append(
-            f"{rain.value:g} {rain.unit} of rain is expected over the trip"
-            + (f", {rain.detail.lower()}." if rain.detail else ".")
+            "No rain is expected across the trip."
+            if rain.value == 0
+            else f"{rain.value:.1f} {rain.unit} of rain is expected across the trip"
+            + (f", {rain.detail[0].lower()}{rain.detail[1:]}." if rain.detail else ".")
         )
     if stability is not None and stability.value is not None:
+        # Said as a traveller would ask it, rather than as the percentage it is computed from.
         parts.append(
-            f"{stability.value:g}% of the days carry no heavy rain, strong gust or disruptive "
-            "weather."
+            "No day is expected to bring heavy rain, strong gusts or a storm."
+            if stability.value >= 100
+            else f"Settled weather is expected on {stability.value:.0f}% of the days."
         )
     if variance is not None and variance.detail:
-        parts.append(f"Temperatures run {variance.detail}.")
+        parts.append(
+            f"Temperatures range {variance.detail[8:]}."
+            if variance.detail.startswith("Between ")
+            else f"Temperatures run {variance.detail}."
+        )
 
     return viability.state, " ".join(parts)
 
@@ -380,7 +399,8 @@ def _synthesis(
         sentences.append(
             f"The weather over {start.strftime('%-d %b')}{_RANGE_DASH}"
             f"{end.strftime('%-d %b')} at {where} "
-            f"rates {viability.score:g} of 100, which Weathra calls {viability.state.lower()}."
+            f"rates {viability.score:.1f} out of 100, which Weathra calls "
+            f"{viability.state.lower()}."
         )
 
     rated = [day for day in outlook if day.viability is not None]
@@ -399,8 +419,8 @@ def _synthesis(
         better = max(alternatives, key=lambda w: w.viability or 0)
         if (better.viability or 0) > selected.viability + 1.0:
             sentences.append(
-                f"{better.label} scores higher at {better.viability:g}; Weathra does not change "
-                "your dates, and this is a weather comparison rather than a booking suggestion."
+                f"{better.label} scores higher at {better.viability:.1f}. Weathra does not change "
+                "your dates; this compares weather, not bookings."
             )
         else:
             sentences.append(
@@ -409,7 +429,7 @@ def _synthesis(
 
     if baseline is not None and baseline.difference.value is not None:
         sentences.append(
-            f"Against Weathra's {baseline.baseline.years_count}-year archive baseline for this "
+            f"Against the {baseline.baseline.years_count} years of archive Weathra holds for this "
             f"calendar period, the window runs {baseline.difference.value:+.1f} "
             f"{baseline.difference.unit or ''}.".replace("  ", " ")
         )

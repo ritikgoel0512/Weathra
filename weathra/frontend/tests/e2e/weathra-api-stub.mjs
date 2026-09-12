@@ -1738,26 +1738,26 @@ const FIXTURES = {
     generated_at: "2026-09-04T06:15:02Z",
     hero_state: "Good",
     hero_summary:
-      "Across 5 days at Barcelona, 14 Sep\u201318 Sep scores 71.4 of 100 for outdoor suitability \u2014 good. 9.3 mm of rain is expected over the trip, 2 of 5 days at or above 1 mm. Temperatures run 18.1\u201330.7\u00b0C across the trip.",
+      "14 Sep\u201318 Sep at Barcelona rates 71.4 out of 100 for outdoor conditions, which Weathra calls good. 9.3 mm of rain is expected across the trip, falling across 2 of 5 days. Settled weather is expected on 80% of the days. Temperatures range between 18.1 and 30.7\u00b0C across the trip.",
     viability: {
       score: 71.4,
       state: "Good",
       basis: "Computed over the trip's own days, from the same weighted components Weathra scores outdoor suitability with elsewhere.",
       disclosure: "The outdoor-suitability score is Weathra's own heuristic, not an authoritative index. It combines temperature comfort (weight 0.5), precipitation (weight 0.3) and wind (weight 0.2).",
       contributions: [
-        { measure: "temperature_mean", value: 23.4, unit: "\u00b0C", direction: "above", weight: 0.5, contribution: 0.381, supporting: statistic("mean", "temperature_mean", 23.4, "\u00b0C", "arithmetic mean of usable points") },
+        { measure: "temperature_mean", value: 23.400000000000002, unit: "\u00b0C", direction: "above", weight: 0.5, contribution: 0.381, supporting: statistic("mean", "temperature_mean", 23.4, "\u00b0C", "arithmetic mean of usable points") },
         { measure: "precipitation_sum", value: 9.3, unit: "mm", direction: "below", weight: 0.3, contribution: 0.214, supporting: statistic("total", "precipitation_sum", 9.3, "mm", "sum of usable points") },
         { measure: "wind_speed_max", value: 17.2, unit: "km/h", direction: "below", weight: 0.2, contribution: 0.119, supporting: statistic("mean", "wind_speed_max", 17.2, "km/h", "arithmetic mean of usable points") },
       ],
     },
     metrics: [
-      { key: "temperature_variance", label: "Temperature variance", value: 12.6, unit: "\u00b0C", detail: "18.1\u201330.7\u00b0C across the trip", method: "the trip's highest reported maximum minus its lowest reported minimum", data_class: "computed_statistic" },
-      { key: "transit_stability", label: "Transit weather stability", value: 80.0, unit: "%", detail: "4 of 5 days settled", method: "the share of trip days reporting under 10.0 mm of rain, gusts under 45.0 km/h and no disruptive weather code. Weather only \u2014 Weathra holds no airline, airport or transport data.", data_class: "computed_statistic" },
-      { key: "precipitation_cluster", label: "Precipitation cluster", value: 9.3, unit: "mm", detail: "2 of 5 days at or above 1 mm", method: "sum of usable points", data_class: "computed_statistic" },
-      { key: "sun_exposure", label: "Strongest sun", value: 6.1, unit: "index", detail: "High enough to need cover", method: "the highest daily peak UV index the provider reported across the trip. Weathra has no sunshine-duration measure and does not estimate hours in the sun.", data_class: "forecast" },
+      { key: "temperature_variance", label: "Temperature variance", value: 12.6, unit: "\u00b0C", detail: "Between 18.1 and 30.7\u00b0C across the trip", method: "the trip's highest reported maximum minus its lowest reported minimum", data_class: "computed_statistic" },
+      { key: "transit_stability", label: "Travel weather stability", value: 80.0, unit: "%", detail: "1 of 5 days could see heavy rain, strong gusts or a storm", method: "the share of trip days reporting under 10.0 mm of rain, gusts under 45.0 km/h and no disruptive weather code. Weather only \u2014 Weathra holds no airline, airport or transport data.", data_class: "computed_statistic" },
+      { key: "precipitation_cluster", label: "Precipitation cluster", value: 9.3, unit: "mm", detail: "Falling across 2 of 5 days", method: "sum of usable points", data_class: "computed_statistic" },
+      { key: "sun_exposure", label: "Peak UV index", value: 6.1, unit: "index", detail: "Strong enough to need cover", method: "the highest daily peak UV index the provider reported across the trip. Weathra has no sunshine-duration measure and does not estimate hours in the sun.", data_class: "forecast" },
     ],
     daily_outlook: [
-      travelDay("2026-09-14", "Mon", 1, 30.7, 20.7, 0, 5, 6.1, 77.4, 3),
+      travelDay("2026-09-14", "Mon", 1, 30.700000000000003, 20.7, 0, 5, 6.1, 77.4, 3),
       travelDay("2026-09-15", "Tue", 2, 28.7, 21.6, 0.2, 18, 5.8, 80.2, 2),
       travelDay("2026-09-16", "Wed", 3, 27.5, 19.3, 4.1, 64, 4.2, 73.0, 4),
       travelDay("2026-09-17", "Thu", 61, 25.5, 18.1, 5.0, 71, 3.6, 91.5, 1),
@@ -1783,7 +1783,7 @@ const FIXTURES = {
     forecast_changes: null,
     historical_baseline: null,
     synthesis:
-      "The weather over 14 Sep\u201318 Sep at Barcelona rates 71.4 of 100, which Weathra calls good. Thu 17 Sep is the strongest day and Mon 14 Sep the weakest. 19\u201323 Sep scores higher at 80.1; Weathra does not change your dates, and this is a weather comparison rather than a booking suggestion.",
+      "The weather over 14 Sep\u201318 Sep at Barcelona rates 71.4 out of 100, which Weathra calls good. Thu 17 Sep is the strongest day and Mon 14 Sep the weakest. 19\u201323 Sep scores higher at 80.1. Weathra does not change your dates; this compares weather, not bookings.",
     synthesis_data_class: "computed_statistic",
     evidence: {
       forecast_provider: "stub-provider",
@@ -1800,7 +1800,7 @@ const FIXTURES = {
     partial_failures: [
       {
         section: "historical_baseline",
-        reason: "The archive holds no usable temperature_mean observations for this period.",
+        reason: "Weathra holds no archive observations for this calendar period at this place.",
         code: "no_data_for_range",
       },
     ],
