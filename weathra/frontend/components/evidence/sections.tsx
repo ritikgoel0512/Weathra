@@ -57,7 +57,7 @@ import { agentLabel, confidenceOf, horizonHoursOf, ROUTING_SOURCE_LABELS } from 
 import { measureLabel } from "@/lib/dashboard/briefing";
 import { dataClassFor } from "@/lib/design/data-class";
 import {
-  figuresFromTools,
+  statisticsFromTools,
   formatDurationMs,
   readableProse,
   hasAnalytics,
@@ -65,7 +65,6 @@ import {
   type EvidenceField,
   type RunRecord,
   type ToolActivity,
-  type ToolFigure,
 } from "@/lib/evidence/record";
 import { formatStatistic, unavailableReason } from "@/lib/historical/analysis";
 import { inferenceMetadataFrom } from "@/lib/inference/served";
@@ -623,23 +622,24 @@ export function DeterministicAnalytics({ record }: { readonly record: RunRecord 
    * reading one the record already holds, and it stops the band from saying "no statistics" on a
    * screen whose synthesis above quotes them.
    */
-  const recovered = hasAnalytics(record) ? [] : figuresFromTools(record);
+  const recovered = hasAnalytics(record) ? [] : statisticsFromTools(record);
 
   if (!hasAnalytics(record) && recovered.length > 0) {
     return (
       <div data-evidence-section="analytics">
         <ProvenanceSection dataClass="analytics" title="Deterministic analytics">
+          {/*
+            Rendered by the same component the analytics list uses, so a figure the run recorded
+            through a tool is presented exactly as one recorded by the agent — label, value, unit
+            and the method that produced it. The band never shows a payload's envelope.
+          */}
           <ul className={styles.figures}>
-            {recovered.map((figure: ToolFigure) => (
-              <li className={styles.figure} key={figure.key} data-statistic={figure.label}>
-                <span className={styles.figureLabel}>{figure.label}</span>
-                <span className={styles.figureValue}>{figure.value}</span>
-                <span className={styles.note}>Returned by {figure.tool}</span>
-              </li>
+            {recovered.map((result, index) => (
+              <StatisticFigure key={`${result.statistic}-${result.measure}-${index}`} result={result} />
             ))}
           </ul>
           <p className={styles.note}>
-            Recovered from this run&rsquo;s own tool results, which is where it recorded them.
+            Computed by Weathra during this run and recorded in its tool results.
           </p>
         </ProvenanceSection>
       </div>
@@ -932,9 +932,9 @@ export function FinalSynthesis({ record }: { readonly record: RunRecord }): Reac
               <p className={styles.note}>This run recorded no grounding report.</p>
             ) : grounding.verified ? (
               <>
+                <p className={styles.groundingVerified}>Grounding verified</p>
                 <p className={styles.note}>
-                  Grounding verified — every figure in this interpretation matched the evidence
-                  above.
+                  Every figure in this interpretation matched the evidence above.
                 </p>
                 <details className={styles.groundingDetail}>
                   <summary>Grounding details</summary>

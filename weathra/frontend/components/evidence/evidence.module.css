@@ -1396,3 +1396,52 @@
   border-bottom: 1px solid var(--color-border-subtle);
   color: var(--color-accent);
 }
+
+/*
+ * A completed stage reads as completed at a glance.
+ *
+ * "Succeeded" in text beside the stage name is accurate and slow: a reader scanning six stages for
+ * a failure was reading six words. The node carries a tick, so the column answers "did all of this
+ * work" before any of it is read — and a failure still carries its own mark and its red border, so
+ * the one case that matters is never told by absence alone.
+ */
+.step[data-status="succeeded"]::before {
+  content: "";
+  background: var(--color-status-ok);
+  border-color: var(--color-status-ok);
+  box-shadow: inset 0 0 0 2px var(--color-surface-base);
+}
+
+.step[data-status="failed"]::before {
+  background: var(--color-status-error);
+  border-color: var(--color-status-error);
+  box-shadow: inset 0 0 0 2px var(--color-surface-base);
+}
+
+/*
+ * The synthesis states that it is grounded, and shows it.
+ *
+ * The verdict was a muted line under the conclusion, indistinguishable in weight from the model
+ * name beside it — so a run whose every figure checked out looked the same as one whose grounding
+ * was never reported.
+ */
+.screen [data-interpretation="true"] .note:first-of-type {
+  color: var(--color-text-secondary);
+}
+
+.groundingVerified {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-status-ok);
+}
+
+.groundingVerified::before {
+  content: "✓";
+  font-size: 1em;
+  line-height: 1;
+}

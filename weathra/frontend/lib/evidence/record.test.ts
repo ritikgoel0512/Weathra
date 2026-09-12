@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { figuresFromTools, readableProse, type RunRecord } from "./record";
+import { readableProse, statisticsFromTools, type RunRecord } from "./record";
 
 describe("prose a person can read", () => {
   it("trims the float tail a model repeats from its input", () => {
@@ -43,55 +43,92 @@ function recordWith(tools: unknown[]): RunRecord {
   return { tools } as unknown as RunRecord;
 }
 
-describe("figures a run recorded through its tools", () => {
-  it("recovers what a computed-statistic result returned", () => {
-    const figures = figuresFromTools(
+describe("statistics a run recorded through its tools", () => {
+  it("recovers the figures nested in a computed-statistic payload", () => {
+    const found = statisticsFromTools(
       recordWith([
         {
           sequence: 3,
           tool: "weather_statistics",
-          result: { ok: true, data_class: "computed_statistic" },
-          resultFields: [
-            { name: "mean_temperature", value: "21.5" },
-            { name: "difference", value: "2.2" },
-          ],
+          result: {
+            ok: true,
+            data_class: "computed_statistic",
+            payload: {
+              // The envelope the band must never print as cards.
+              ok: true,
+              provider: "open-meteo",
+              unit: "°C",
+              measure: "temperature_mean",
+              points_supplied: 7,
+              results: [
+                { statistic: "mean", measure: "temperature_mean", value: 21.5, unit: "°C" },
+                { statistic: "delta", measure: "temperature_mean", value: 2.2, unit: "°C" },
+              ],
+            },
+          },
         },
       ]),
     );
 
-    expect(figures.map((figure) => figure.label)).toEqual(["mean temperature", "difference"]);
-    expect(figures[0]?.value).toBe("21.5");
-    // Every figure names where it came from, so a reader sees a recovered payload for what it is.
-    expect(figures[0]?.tool).toBe("weather_statistics");
+    expect(found.map((result) => result.statistic)).toEqual(["mean", "delta"]);
+    expect(found[0]?.value).toBe(21.5);
+  });
+
+  it("never returns the envelope around the figures", () => {
+    /*
+     * The defect this replaced: walking the payload and printing every key turned the analytics
+     * band into `ok`, `unit`, `period`, `provider`, `data_class` — schema, not analysis.
+     */
+    const found = statisticsFromTools(
+      recordWith([
+        {
+          sequence: 1,
+          tool: "weather_statistics",
+          result: {
+            ok: true,
+            data_class: "computed_statistic",
+            payload: { ok: true, provider: "open-meteo", unit: "°C", points_supplied: 7 },
+          },
+        },
+      ]),
+    );
+
+    expect(found).toEqual([]);
   });
 
   it("ignores a retrieval, because retrieved data is not a statistic", () => {
-    const figures = figuresFromTools(
+    const found = statisticsFromTools(
       recordWith([
         {
           sequence: 1,
           tool: "weather_forecast",
-          result: { ok: true, data_class: "forecast" },
-          resultFields: [{ name: "hourly", value: "24 entries" }],
+          result: {
+            ok: true,
+            data_class: "forecast",
+            payload: { results: [{ statistic: "mean", measure: "temperature", value: 1 }] },
+          },
         },
       ]),
     );
 
-    expect(figures).toEqual([]);
+    expect(found).toEqual([]);
   });
 
-  it("ignores a failed call, which returned no figure to recover", () => {
-    const figures = figuresFromTools(
+  it("ignores a failed call, which computed nothing to recover", () => {
+    const found = statisticsFromTools(
       recordWith([
         {
           sequence: 2,
           tool: "weather_statistics",
-          result: { ok: false, data_class: "computed_statistic" },
-          resultFields: [{ name: "mean", value: "1" }],
+          result: {
+            ok: false,
+            data_class: "computed_statistic",
+            payload: { results: [{ statistic: "mean", measure: "temperature_mean", value: 1 }] },
+          },
         },
       ]),
     );
 
-    expect(figures).toEqual([]);
+    expect(found).toEqual([]);
   });
 });

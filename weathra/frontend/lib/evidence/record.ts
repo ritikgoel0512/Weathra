@@ -396,49 +396,65 @@ export function readableProse(text: string): string {
   });
 }
 
-/** One figure recovered from a stored tool result, for display only. */
-export interface ToolFigure {
-  readonly key: string;
-  readonly label: string;
-  readonly value: string;
-  readonly tool: string;
-}
-
 /**
- * Computed figures the run recorded in a *tool result* rather than in its analytics list.
+ * Statistics the run recorded inside a *tool result* rather than in its analytics list.
  *
  * A run can reach the analytics kernel through the tool boundary — `weather_statistics`,
- * `weather_baseline_comparison` — and when it does, the numbers it computed come back inside that
+ * `weather_baseline_comparison` — and when it does, what it computed comes back nested in that
  * call's payload. `analytics_results` is filled by the analytics *agent*, so a run that computed
- * through tools alone left the deterministic band saying "no statistics" while its own tool results
- * held the means and differences the synthesis above quoted. That is the record contradicting
- * itself on one screen.
+ * through tools alone left the deterministic band reading "no statistics" while its own results
+ * held the means and differences the synthesis above quoted.
  *
- * This reads what is already stored and nothing else: no recomputation, no second request, no new
- * field. Used only when the analytics list is empty, and every figure names the tool it came from
- * so a reader can see it is a recovered payload rather than an agent's own analysis.
+ * **This looks for statistics, not for fields.** The first version of this walked the payload and
+ * printed every key it found, which turned the band into `ok`, `unit`, `period`, `provider`,
+ * `data_class` — the envelope, not the analysis. The figures are nested one level down, under
+ * `results`, shaped exactly like the analytics list's own entries. Only objects carrying a
+ * statistic, a measure and a value are taken, so an envelope can never reach the screen as a card;
+ * where none is found the caller shows the honest empty state instead.
+ *
+ * Nothing is recomputed and nothing is requested: this reads what the run already stored.
  */
-export function figuresFromTools(record: RunRecord): ToolFigure[] {
-  const figures: ToolFigure[] = [];
+export function statisticsFromTools(record: RunRecord): StatisticResult[] {
+  const found: StatisticResult[] = [];
 
   for (const activity of record.tools) {
     if (activity.result?.ok === false) continue;
-    // Only results the backend itself labelled as computed. A forecast payload is retrieved data,
-    // not a statistic, and presenting it as one would be this screen inventing a class.
+    // Only results the backend itself labelled as computed. A retrieval is data, not a statistic.
     if (activity.result?.data_class !== "computed_statistic") continue;
 
-    for (const field of activity.resultFields) {
-      if (field.value === NOT_REPORTED) continue;
-      figures.push({
-        key: `${activity.sequence}-${field.name}`,
-        label: field.name.replace(/_/g, " "),
-        value: field.value,
-        tool: activity.tool,
-      });
+    const payload = activity.result?.payload;
+    if (!isObject(payload)) continue;
+
+    for (const candidate of statisticCandidates(payload)) {
+      found.push(candidate);
     }
   }
 
-  return figures;
+  return found;
+}
+
+/** The statistic-shaped objects inside one payload, nested or at its root. */
+function statisticCandidates(payload: Record<string, unknown>): StatisticResult[] {
+  const nested = [payload.results, payload.statistics, payload.analytics_results]
+    .filter(Array.isArray)
+    .flat();
+  const roots = isStatisticShaped(payload) ? [payload] : [];
+  return [...roots, ...nested].filter(isStatisticShaped) as unknown as StatisticResult[];
+}
+
+/**
+ * Whether a stored object is a statistic rather than an envelope around one.
+ *
+ * Three fields, all of which the analytics layer puts on every result it produces. An envelope has
+ * a provider and a data class; a statistic has a measure and a value.
+ */
+function isStatisticShaped(value: unknown): value is Record<string, unknown> {
+  if (!isObject(value)) return false;
+  return (
+    typeof value.statistic === "string" &&
+    typeof value.measure === "string" &&
+    ("value" in value || "values" in value)
+  );
 }
 
 export function hasAnalytics(record: RunRecord): boolean {
