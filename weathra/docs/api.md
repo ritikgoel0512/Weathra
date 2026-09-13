@@ -126,6 +126,7 @@ or the credential.
 | `POST` | `/api/v1/me/watches/{watch_id}/evaluate` | **protected** | 200 | `WatchRecord` |
 | `GET` | `/api/v1/me/watch-dashboard` | **protected** | 200 | `WatchDashboard` |
 | `GET` | `/api/v1/me/usage` | **protected** | 200 | `UsageResponse` |
+| `PUT` | `/api/v1/me/plan` | **protected** | 200 | `UsageResponse` |
 | `GET` | `/api/v1/admin/allowances` | **protected** | 200 | `AllowanceListResponse` |
 | `PUT` | `/api/v1/admin/allowances/internal` | **protected** | 200 | `AllowanceRecord` |
 | `GET` | `/api/v1/admin/lab/comparisons` | **protected** | 200 | `LabRunListResponse` |
@@ -211,6 +212,7 @@ or the credential.
 | `/me/watches/{watch_id}/evaluate` | **protected** | Checks one watch against the current forecast, on request. |
 | `/me/watch-dashboard` | **protected** | Everything the acting user's Weather Watch screen draws — their own watches, the places those cover, the recorded history of their checks, and the transitions between them. No other subject's, and it evaluates nothing. |
 | `/me/usage` | **protected** | The acting user's own plan, allowances and consumption. No other subject's, and no internal usage. |
+| `/me/plan` | **protected** | Moves the acting user between subscription tiers, and theirs alone — the route takes no subject, and `0015`'s WITH CHECK refuses a row that is not the caller's own. Changes what they are allowed and which class of model answers them; charges nothing, because nothing bills. |
 | `/threads` | **protected** | The acting user's conversation threads. |
 | `/threads/{thread_id}` | **protected** | One of the acting user's threads, and its deletion. |
 

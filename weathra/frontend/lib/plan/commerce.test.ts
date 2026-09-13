@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import type { PlanOfferView, PlansResponse } from "@/lib/api/schema";
 import {
+  BILLING_NOTE,
   allowanceLabel,
-  checkoutFor,
   continueLabel,
   planActionLabel,
+  planChangePrompt,
+  planSelection,
   pricingPublished,
   selectionNotice,
   valueProposition,
@@ -39,41 +41,91 @@ function plans(overrides: Partial<PlansResponse> = {}): PlansResponse {
   return {
     plans: [FREE_PLAN, PRO_PLAN, PREMIUM_PLAN],
     default_plan: "free",
-    self_service: false,
+    self_service: true,
     assignment_note: "",
     count: 3,
     ...overrides,
   } as PlansResponse;
 }
 
-describe("what the product may say about buying a plan", () => {
-  it("reports the default tier as current rather than as something to buy", () => {
-    expect(checkoutFor(FREE_PLAN, plans())).toEqual({ kind: "current" });
-    expect(planActionLabel(FREE_PLAN, plans())).toBe("Start free");
-    // Nothing to activate: a new account is on the default the moment it exists.
-    expect(selectionNotice(FREE_PLAN, plans())).toBeNull();
+describe("what the product may say about a plan", () => {
+  it("reports the tier the account is actually on as current, not the default", () => {
+    // The old bug in miniature: reading `default_plan` here made Free look current to somebody on
+    // Premium, and nothing showed it because no tier was selectable.
+    expect(planSelection(PREMIUM_PLAN, plans(), "premium")).toEqual({ kind: "current" });
+    expect(planSelection(FREE_PLAN, plans(), "premium")).toEqual({ kind: "selectable" });
+    // The only caller that reaches this branch is the signup step, where pressing the tier you are
+    // on is a real action. The comparison table renders a marking rather than a button.
+    expect(planActionLabel(PREMIUM_PLAN, plans(), "premium")).toBe("Start premium");
+    expect(selectionNotice(PREMIUM_PLAN, plans(), "premium")).toBeNull();
   });
 
-  it("refuses to offer checkout while the backend says there is no payment integration", () => {
-    const checkout = checkoutFor(PRO_PLAN, plans());
-    expect(checkout.kind).toBe("unavailable");
-    expect(checkout).not.toHaveProperty("href");
-  });
-
-  it("offers a paid tier the way a product does, not as a request queue", () => {
-    expect(planActionLabel(PRO_PLAN, plans())).toBe("Choose Pro");
-    expect(planActionLabel(PREMIUM_PLAN, plans())).toBe("Choose Premium");
-  });
-
-  it("states the commercial boundary without implying a purchase or an entitlement", () => {
-    const notice = selectionNotice(PRO_PLAN, plans());
-    expect(notice?.title).toBe("Pro selected");
-    expect(notice?.detail).toMatch(/not enabled yet/);
-    expect(notice?.detail).toMatch(/stays on Free/);
-    // None of the words a product uses when money has actually moved.
-    for (const forbidden of [/invoice/i, /subscribed/i, /payment received/i, /card/i, /billed/i]) {
-      expect(notice?.detail).not.toMatch(forbidden);
+  it("offers every tier the account is not on, in both directions", () => {
+    for (const [offer, label] of [
+      [PRO_PLAN, "Choose Pro"],
+      [PREMIUM_PLAN, "Choose Premium"],
+    ] as const) {
+      expect(planSelection(offer, plans(), "free").kind).toBe("selectable");
+      expect(planActionLabel(offer, plans(), "free")).toBe(label);
     }
+    // Downgrading is a choice like any other — a tier a person cannot leave is not one they chose.
+    expect(planSelection(FREE_PLAN, plans(), "premium").kind).toBe("selectable");
+    expect(planActionLabel(FREE_PLAN, plans(), "premium")).toBe("Choose Free");
+  });
+
+  it("stops offering a change when the backend says tiers are not self-selectable", () => {
+    const selection = planSelection(PRO_PLAN, plans({ self_service: false }), "free");
+    expect(selection.kind).toBe("unavailable");
+    // And says why, rather than leaving a control mysteriously dead.
+    expect(selection).toHaveProperty("reason");
+    const notice = selectionNotice(PRO_PLAN, plans({ self_service: false }), "free");
+    expect(notice?.title).toBe("Pro not applied");
+    expect(notice?.detail).toMatch(/stays on Free/);
+  });
+
+  it("says what a change does and does not do before it happens", () => {
+    const prompt = planChangePrompt(PRO_PLAN, FREE_PLAN);
+    expect(prompt.title).toBe("Change plan to Pro?");
+    expect(prompt.lines.join(" ")).toMatch(/allowances update immediately/i);
+    expect(prompt.lines.join(" ")).toMatch(/No payment will be charged/i);
+    expect(prompt.lines.join(" ")).toMatch(/Pricing is not currently published/i);
+  });
+
+  it("warns that a smaller tier is smaller, and only when it is", () => {
+    expect(planChangePrompt(FREE_PLAN, PREMIUM_PLAN).lines[0]).toMatch(/allows less/);
+    expect(planChangePrompt(PREMIUM_PLAN, FREE_PLAN).lines[0]).not.toMatch(/allows less/);
+    // Nothing already used is removed, whichever way it goes — the claim the backend makes too.
+    for (const current of [FREE_PLAN, PREMIUM_PLAN, null]) {
+      expect(planChangePrompt(PRO_PLAN, current).lines[0]).toMatch(/Nothing you have already used/);
+    }
+  });
+
+  it("never uses a word that would imply money moved", () => {
+    const everything = [
+      BILLING_NOTE,
+      planChangePrompt(PREMIUM_PLAN, FREE_PLAN).lines.join(" "),
+      planActionLabel(PRO_PLAN, plans(), "free"),
+      selectionNotice(PRO_PLAN, plans({ self_service: false }), "free")?.detail ?? "",
+    ].join(" ");
+    for (const forbidden of [
+      /invoice/i,
+      /subscribed/i,
+      /payment received/i,
+      /\bcard\b/i,
+      /billed/i,
+      /\bbuy\b/i,
+      /purchase/i,
+      /checkout/i,
+      /\$|€|£/,
+    ]) {
+      expect(everything).not.toMatch(forbidden);
+    }
+  });
+
+  it("states the commercial position in one sentence a screen can show anywhere", () => {
+    expect(BILLING_NOTE).toMatch(/allowances/i);
+    expect(BILLING_NOTE).toMatch(/Pricing is not published/i);
+    expect(BILLING_NOTE).toMatch(/does not charge your account/i);
   });
 
   it("names the chosen tier on the step's primary action", () => {
@@ -84,13 +136,6 @@ describe("what the product may say about buying a plan", () => {
   it("publishes no price, because the plans contract carries none", () => {
     // A figure here would be one this module invented. The screens say so instead of guessing.
     expect(pricingPublished()).toBe(false);
-  });
-
-  it("opens a checkout only once the backend says self-service exists", () => {
-    // The seam a payment provider fills in. Nothing else about the screens changes that day.
-    const checkout = checkoutFor(PRO_PLAN, plans({ self_service: true }));
-    expect(checkout.kind).toBe("available");
-    expect(checkout).toHaveProperty("href");
   });
 });
 

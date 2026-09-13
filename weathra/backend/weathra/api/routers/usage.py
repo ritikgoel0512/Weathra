@@ -36,7 +36,8 @@ from weathra.api.dependencies import CurrentSession, Inference, Quota
 from weathra.api.middleware import annotate
 from weathra.auth.deps import IsAdministrative, RequiredPrincipal
 from weathra.auth.profiles import ensure_profile
-from weathra.domain.entitlements import CallRole
+from weathra.domain.entitlements import CallRole, PlanCode
+from weathra.domain.identity import Principal
 from weathra.entitlements.catalog import CatalogStore
 from weathra.entitlements.plans import PlanStore
 from weathra.entitlements.policies import PolicyStore
@@ -163,8 +164,24 @@ async def read_usage(
     """
     annotate(request, acting_user_id=principal.user_id)
     await ensure_profile(session, principal)
-
     plan_code = await inference.effective_plan(principal, session)
+    return await _usage_for(principal, session, quota, plan_code, administrative=administrative)
+
+
+async def _usage_for(
+    principal: Principal,
+    session: AsyncSession,
+    quota: Quota,
+    plan_code: PlanCode,
+    *,
+    administrative: bool,
+) -> UsageResponse:
+    """The whole answer for one person on one plan.
+
+    Shared by the read and by the plan change, so the two cannot drift: a tier change returns the
+    *recomputed* standing rather than the old one with a new name on it, which is what lets the
+    screen show corrected allowances without a second round trip.
+    """
     plan = await PlanStore(session).require(plan_code)
     subject = QuotaSubject.for_principal(principal, plan_code, administrative=administrative)
     report = await quota.report(subject)
@@ -226,6 +243,63 @@ async def read_usage(
     )
 
 
+# =========================================================================== choosing a tier
+
+
+class PlanSelectionRequest(BaseModel):
+    """Which tier the acting person wants to be on.
+
+    ``PlanCode`` rather than a string, so a body naming a tier that does not exist is refused by
+    validation before the handler runs, with the offending field named. There is no subject field
+    and there will not be one: see the route below.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    plan_code: PlanCode
+
+
+@router.put("/me/plan", response_model=UsageResponse, summary="Choose your plan")
+async def choose_plan(
+    request: Request,
+    body: PlanSelectionRequest,
+    principal: RequiredPrincipal,
+    session: CurrentSession,
+    quota: Quota,
+    administrative: IsAdministrative,
+) -> UsageResponse:
+    """Move yourself between tiers, and read back what that changed.
+
+    **Whose plan, is not a question this route can be asked.** Like ``GET /me/usage`` it takes no
+    subject: the row written is the validated token's, and `0015`'s ``WITH CHECK`` on both verbs
+    means a request shaped to name somebody else writes nothing rather than writing their row. The
+    absence of the parameter and the database's refusal say the same thing twice, which is the
+    pattern this codebase already uses for the one table where a permissive write would matter.
+
+    **Nothing is charged, because nothing bills.** ``specs/usage-limits``' refusal of payment
+    processing is untouched: there is no checkout, no card, no invoice and no subscription record,
+    and pricing is not published. A tier is an allowance and a class of model, and choosing one is
+    free in the literal sense.
+
+    **Usage is not reset.** The counters, the recorded events, the conversations, the saved
+    locations and the watches are all untouched — a tier says what you may do next, not what you
+    have already done. Consumption is counted per window, so a person who has used 37 requests and
+    moves to a plan allowing 25 has used 37 of 25: the response says so rather than quietly
+    forgiving the difference or deleting the history that produced it.
+
+    Returns the same shape ``GET /me/usage`` does, recomputed against the new plan, so a screen can
+    show corrected allowances without asking twice.
+    """
+    annotate(request, acting_user_id=principal.user_id)
+    await ensure_profile(session, principal)
+
+    plan = await PlanStore(session).choose(body.plan_code, subject=principal.user_id)
+    logger.info("plan self-selected", extra={"plan_code": str(plan.plan_code)})
+    return await _usage_for(
+        principal, session, quota, plan.plan_code, administrative=administrative
+    )
+
+
 # =========================================================================== the tiers on offer
 
 
@@ -267,10 +341,17 @@ class PlanOfferView(BaseModel):
 class PlansResponse(BaseModel):
     """The tiers Weathra offers, and how somebody moves between them.
 
-    ``self_service`` is the field that keeps this page honest. Weathra bills nobody: there is no
-    payment integration, no checkout and no self-service upgrade, and a tier above Free is an
-    administrative assignment. A pricing surface that offered a Buy button would be describing a
-    commercial relationship this product does not have.
+    ``self_service`` is the field that keeps this page honest, and what it means is narrow: whether
+    a caller can **move themselves** between tiers. Since the product decision of 2026-09-13 they
+    can — ``PUT /me/plan`` — so it is true.
+
+    It is emphatically **not** a claim that anything is bought. Weathra bills nobody: there is no
+    payment integration, no checkout, no card, no invoice and no subscription record, and no price
+    is published. A tier controls allowances and which class of model answers; choosing one records
+    a row and charges nothing. ``assignment_note`` is where that is said in words, because a
+    pricing surface that let a person pick Premium without saying why it costs nothing would be
+    describing a commercial relationship this product does not have just as surely as a Buy button
+    would.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -280,15 +361,19 @@ class PlansResponse(BaseModel):
     default_plan: str = Field(description="What a new account is on before anybody assigns a tier.")
     self_service: bool = Field(
         default=False,
-        description="Whether a caller can move themselves between tiers. False: no payment exists.",
+        description=(
+            "Whether a caller can move themselves between tiers through 'PUT /me/plan'. True says "
+            "the tier is selectable, never that it is purchasable: no payment exists either way."
+        ),
     )
     assignment_note: str
 
 
 ASSIGNMENT_NOTE = (
-    "Free is what every new account is on. Pro and Premium are assigned by Weathra rather than "
-    "bought here — there is no payment integration in this product — so choosing one records "
-    "nothing and charges nothing."
+    "Free is what every new account is on, and you can move yourself to Pro or Premium at any "
+    "time. Tiers control what Weathra allows you and which class of model answers you — pricing "
+    "is not published, there is no payment integration in this product, and changing tier never "
+    "charges your account."
 )
 
 
@@ -297,7 +382,9 @@ async def list_offered_plans(request: Request, session: CurrentSession) -> Plans
     """What the tiers are and what each allows. Public, because it is a pricing question.
 
     Nothing here is per-caller: no subject is read and no usage is counted, so it answers the same
-    way signed in or not. The caller's *own* standing is `/me/usage`, which is protected.
+    way signed in or not — including ``self_service``, which is a property of the product rather
+    than of whoever is asking. The caller's *own* standing is `/me/usage`, which is protected, and
+    moving between tiers is ``PUT /me/plan``, which is protected for the same reason.
     """
     annotate(request)
     store = PlanStore(session)
@@ -337,7 +424,7 @@ async def list_offered_plans(request: Request, session: CurrentSession) -> Plans
             for plan in sorted(plans, key=lambda plan: plan.rank)
         ),
         default_plan=str(DEFAULT_PLAN),
-        self_service=False,
+        self_service=True,
         assignment_note=ASSIGNMENT_NOTE,
     )
 

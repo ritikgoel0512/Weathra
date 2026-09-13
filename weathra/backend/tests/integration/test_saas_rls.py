@@ -321,36 +321,121 @@ async def test_a_session_with_no_principal_reads_no_user_owned_row(
 # =========================================================================== 26.3 the two shapes
 
 
-async def test_a_caller_cannot_assign_themselves_a_plan(
+async def test_a_caller_can_put_themselves_on_a_plan(
     engines: Engines, clean_database: None
 ) -> None:
-    """The escalation this table's grant exists to prevent.
+    """The product decision of 2026-09-13, at the layer that enforces it.
 
-    An owner policy written ``FOR ALL`` the way every other user-owned table has one would let this
-    succeed, because the row genuinely belongs to the caller. Entitlement is a fact the backend
-    establishes, so the request role holds ``SELECT`` and nothing else.
+    Until `0015` the request role held ``SELECT`` on this table and nothing else, because a tier was
+    an administrative assignment. Tiers are now self-selectable, so the grant and an owner-scoped
+    ``WITH CHECK`` replace that refusal — and the rest of this section is what makes the replacement
+    safe rather than merely permissive.
     """
     user_id = new_user_id()
     async with privileged_session(engines.privileged_sessionmaker) as session:
         await insert_profile(session, user_id)
 
-    with pytest.raises(DBAPIError) as caught:
-        async with session_as(engines, user_id) as session:
-            await session.execute(
-                text("INSERT INTO user_plans (user_id, plan_code) VALUES (:u, 'premium')"),
-                {"u": user_id},
+    async with session_as(engines, user_id) as session:
+        await session.execute(
+            text("INSERT INTO user_plans (user_id, plan_code) VALUES (:u, 'premium')"),
+            {"u": user_id},
+        )
+
+    async with privileged_session(engines.privileged_sessionmaker) as session:
+        assert (
+            await session.scalar(
+                text("SELECT plan_code FROM user_plans WHERE user_id = :u"), {"u": user_id}
             )
-    assert "permission denied" in str(caught.value)
+            == "premium"
+        )
 
 
-async def test_a_caller_cannot_upgrade_their_existing_plan(
+async def test_a_caller_can_change_their_existing_plan_in_both_directions(
     engines: Engines, clean_database: None
 ) -> None:
+    """Up and back down, because a tier a person cannot leave is not one they chose."""
+    first, _ = await _seed_two_users(engines)  # `first` is seeded on premium.
+
+    async with session_as(engines, first) as session:
+        await session.execute(text("UPDATE user_plans SET plan_code = 'free'"))
+    async with session_as(engines, first) as session:
+        assert await session.scalar(text("SELECT plan_code FROM user_plans")) == "free"
+        await session.execute(text("UPDATE user_plans SET plan_code = 'pro'"))
+    async with session_as(engines, first) as session:
+        assert await session.scalar(text("SELECT plan_code FROM user_plans")) == "pro"
+
+
+async def test_a_caller_cannot_put_somebody_else_on_a_plan(
+    engines: Engines, clean_database: None
+) -> None:
+    """The escalation the ``WITH CHECK`` exists to prevent, now that the grant no longer does.
+
+    A row naming another subject is not a row this caller may write, however the statement is
+    shaped — the policy tests ``weathra_current_user_id()`` rather than anything the statement
+    supplied. This is the assertion that has to hold for self-selection to be safe.
+    """
+    first, second = await _seed_two_users(engines)
+
+    with pytest.raises(DBAPIError) as caught:
+        async with session_as(engines, first) as session:
+            await session.execute(
+                text("INSERT INTO user_plans (user_id, plan_code) VALUES (:u, 'premium')"),
+                {"u": new_user_id()},
+            )
+    assert "row-level security" in str(caught.value)
+
+    # And the other shape: an UPDATE that names everybody. It touches one row — the caller's own —
+    # because the policy's USING clause is what decides which rows the statement can see.
+    async with session_as(engines, first) as session:
+        await session.execute(text("UPDATE user_plans SET plan_code = 'free'"))
+
+    async with privileged_session(engines.privileged_sessionmaker) as session:
+        assert (
+            await session.scalar(
+                text("SELECT plan_code FROM user_plans WHERE user_id = :u"), {"u": second}
+            )
+            == "free"  # Unchanged: `second` was seeded on free and nobody else wrote it.
+        )
+        assert (
+            await session.scalar(
+                text("SELECT count(*) FROM user_plans WHERE plan_code = 'premium'")
+            )
+            == 0
+        )
+
+
+async def test_a_caller_cannot_rewrite_their_row_into_somebody_else(
+    engines: Engines, clean_database: None
+) -> None:
+    """Why ``UPDATE`` carries a ``WITH CHECK`` as well as a ``USING``.
+
+    ``USING`` alone would let an owner reach their own row and leave it owned by another subject —
+    a write into somebody else's ownership, which is the same defect `test_the_snapshot_detects_a_
+    weakened_policy` weakens ``saved_locations`` to demonstrate.
+    """
+    first, second = await _seed_two_users(engines)
+
+    with pytest.raises(DBAPIError) as caught:
+        async with session_as(engines, first) as session:
+            await session.execute(
+                text("UPDATE user_plans SET user_id = CAST(:other AS uuid)"), {"other": second}
+            )
+    assert "row-level security" in str(caught.value)
+
+
+async def test_a_caller_cannot_delete_their_plan_row(
+    engines: Engines, clean_database: None
+) -> None:
+    """`0015` grants INSERT and UPDATE and withholds DELETE on purpose.
+
+    Choosing Free is an UPDATE, which keeps ``assigned_by`` and ``assigned_at``. Deleting the row
+    would put somebody back on Free through absence instead, losing the record of who chose it.
+    """
     first, _ = await _seed_two_users(engines)
 
     with pytest.raises(DBAPIError) as caught:
         async with session_as(engines, first) as session:
-            await session.execute(text("UPDATE user_plans SET plan_code = 'premium'"))
+            await session.execute(text("DELETE FROM user_plans"))
     assert "permission denied" in str(caught.value)
 
 

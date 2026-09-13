@@ -4541,9 +4541,23 @@
         "title": "PlanRecord",
         "type": "object"
       },
+      "PlanSelectionRequest": {
+        "additionalProperties": false,
+        "description": "Which tier the acting person wants to be on.\n\n``PlanCode`` rather than a string, so a body naming a tier that does not exist is refused by\nvalidation before the handler runs, with the offending field named. There is no subject field\nand there will not be one: see the route below.",
+        "properties": {
+          "plan_code": {
+            "$ref": "#/components/schemas/PlanCode"
+          }
+        },
+        "required": [
+          "plan_code"
+        ],
+        "title": "PlanSelectionRequest",
+        "type": "object"
+      },
       "PlansResponse": {
         "additionalProperties": false,
-        "description": "The tiers Weathra offers, and how somebody moves between them.\n\n``self_service`` is the field that keeps this page honest. Weathra bills nobody: there is no\npayment integration, no checkout and no self-service upgrade, and a tier above Free is an\nadministrative assignment. A pricing surface that offered a Buy button would be describing a\ncommercial relationship this product does not have.",
+        "description": "The tiers Weathra offers, and how somebody moves between them.\n\n``self_service`` is the field that keeps this page honest, and what it means is narrow: whether\na caller can **move themselves** between tiers. Since the product decision of 2026-09-13 they\ncan \u2014 ``PUT /me/plan`` \u2014 so it is true.\n\nIt is emphatically **not** a claim that anything is bought. Weathra bills nobody: there is no\npayment integration, no checkout, no card, no invoice and no subscription record, and no price\nis published. A tier controls allowances and which class of model answers; choosing one records\na row and charges nothing. ``assignment_note`` is where that is said in words, because a\npricing surface that let a person pick Premium without saying why it costs nothing would be\ndescribing a commercial relationship this product does not have just as surely as a Buy button\nwould.",
         "properties": {
           "assignment_note": {
             "title": "Assignment Note",
@@ -4568,7 +4582,7 @@
           },
           "self_service": {
             "default": false,
-            "description": "Whether a caller can move themselves between tiers. False: no payment exists.",
+            "description": "Whether a caller can move themselves between tiers through 'PUT /me/plan'. True says the tier is selectable, never that it is purchasable: no payment exists either way.",
             "title": "Self Service",
             "type": "boolean"
           }
@@ -11334,6 +11348,56 @@
         ]
       }
     },
+    "/api/v1/me/plan": {
+      "put": {
+        "description": "**Protected.** Moves the acting user between subscription tiers, and theirs alone \u2014 the route takes no subject, and `0015`'s WITH CHECK refuses a row that is not the caller's own. Changes what they are allowed and which class of model answers them; charges nothing, because nothing bills.\n\nMove yourself between tiers, and read back what that changed.\n\n**Whose plan, is not a question this route can be asked.** Like ``GET /me/usage`` it takes no\nsubject: the row written is the validated token's, and `0015`'s ``WITH CHECK`` on both verbs\nmeans a request shaped to name somebody else writes nothing rather than writing their row. The\nabsence of the parameter and the database's refusal say the same thing twice, which is the\npattern this codebase already uses for the one table where a permissive write would matter.\n\n**Nothing is charged, because nothing bills.** ``specs/usage-limits``' refusal of payment\nprocessing is untouched: there is no checkout, no card, no invoice and no subscription record,\nand pricing is not published. A tier is an allowance and a class of model, and choosing one is\nfree in the literal sense.\n\n**Usage is not reset.** The counters, the recorded events, the conversations, the saved\nlocations and the watches are all untouched \u2014 a tier says what you may do next, not what you\nhave already done. Consumption is counted per window, so a person who has used 37 requests and\nmoves to a plan allowing 25 has used 37 of 25: the response says so rather than quietly\nforgiving the difference or deleting the history that produced it.\n\nReturns the same shape ``GET /me/usage`` does, recomputed against the new plan, so a screen can\nshow corrected allowances without asking twice.",
+        "operationId": "choose_plan_api_v1_me_plan_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanSelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Choose your plan",
+        "tags": [
+          "account"
+        ]
+      }
+    },
     "/api/v1/me/preferences": {
       "delete": {
         "description": "**Protected.** Reads, updates, and deletes the acting user's preferences.\n\nRemove your preferences, and return the defaults that now apply.\n\nReturning the defaults rather than nothing: \"your preferences were cleared\" and \"metric now\napplies, as the default\" are the same fact, and a response carrying only the first invites you\nto wonder about the second.",
@@ -11800,7 +11864,7 @@
     },
     "/api/v1/plans": {
       "get": {
-        "description": "**Public.** The subscription tiers and what each allows. A pricing question, not a per-caller one: no subject is read and the answer is the same signed in or out.\n\nWhat the tiers are and what each allows. Public, because it is a pricing question.\n\nNothing here is per-caller: no subject is read and no usage is counted, so it answers the same\nway signed in or not. The caller's *own* standing is `/me/usage`, which is protected.",
+        "description": "**Public.** The subscription tiers and what each allows. A pricing question, not a per-caller one: no subject is read and the answer is the same signed in or out.\n\nWhat the tiers are and what each allows. Public, because it is a pricing question.\n\nNothing here is per-caller: no subject is read and no usage is counted, so it answers the same\nway signed in or not \u2014 including ``self_service``, which is a property of the product rather\nthan of whoever is asking. The caller's *own* standing is `/me/usage`, which is protected, and\nmoving between tiers is ``PUT /me/plan``, which is protected for the same reason.",
         "operationId": "list_offered_plans_api_v1_plans_get",
         "responses": {
           "200": {

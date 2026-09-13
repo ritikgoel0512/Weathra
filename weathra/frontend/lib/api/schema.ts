@@ -948,6 +948,11 @@ export interface PlanRecord {
   readonly rank: number;
 }
 
+/** Which tier the acting person wants to be on. */
+export interface PlanSelectionRequest {
+  readonly plan_code: PlanCode;
+}
+
 /** The tiers Weathra offers, and how somebody moves between them. */
 export interface PlansResponse {
   readonly assignment_note: string;
@@ -955,7 +960,7 @@ export interface PlansResponse {
   /** What a new account is on before anybody assigns a tier. */
   readonly default_plan: string;
   readonly plans: PlanOfferView[];
-  /** Whether a caller can move themselves between tiers. False: no payment exists. */
+  /** Whether a caller can move themselves between tiers through 'PUT /me/plan'. True says the tier is selectable, never that it is purchasable: no payment exists either way. */
   readonly self_service?: boolean;
 }
 
@@ -2445,6 +2450,17 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     parameters: [
       { name: "saved_id", in: "path", required: true },
     ],
+  },
+  {
+    operationId: "choose_plan_api_v1_me_plan_put",
+    method: "PUT",
+    path: "/api/v1/me/plan",
+    requiresToken: true,
+    administrative: false,
+    request: "PlanSelectionRequest",
+    successStatus: 200,
+    response: "UsageResponse",
+    parameters: [],
   },
   {
     operationId: "read_preferences_api_v1_me_preferences_get",

@@ -1,25 +1,26 @@
 /**
- * What Weathra can and cannot truthfully say about buying a plan — the one place that decides.
+ * What Weathra can and cannot truthfully say about a plan — the one place that decides.
  *
- * **The seam.** Everything commercial the product claims passes through `checkoutFor`. Today it
- * answers `unavailable` for every paid tier, because `PlansResponse.self_service` is the backend
- * saying there is no payment integration — not this file assuming it. When a payment provider is
- * added, that answer becomes `available` with somewhere to send the person, and no screen that
- * renders a plan needs to change: the cards, the selection state and the primary action already
- * read their wording from here.
+ * **The seam.** Everything a screen claims about tiers passes through here. What it answers changed
+ * on 2026-09-13: a tier used to be an administrative assignment, so every paid card was inert and
+ * said so. Tiers are now **self-selectable** — `PlansResponse.self_service` is the backend saying
+ * so, not this file assuming it — and `PUT /me/plan` is the write behind that.
  *
- * **What it refuses to do.** It never reports a subscription as active, never describes a payment
- * that has not happened, and never turns a chosen tier into an entitlement. A person who picks Pro
- * on the signup step has expressed a preference in their own browser; the backend has no row for
- * it, their allowances are unchanged, and the copy below says exactly that rather than implying a
- * purchase is in progress. The previous wording — *Ask about Pro*, then *Requested* — was truthful
- * and read like an internal approval queue; this is the same truth said the way a product says it.
+ * **Selectable is not purchasable, and the distinction is the whole honesty of this module.**
+ * Weathra bills nobody: no payment integration, no card, no invoice, no subscription record, and
+ * no published price. Choosing Premium changes what you are allowed and which class of model
+ * answers you, and charges nothing. So the copy below says *change plan*, never *buy*, *upgrade to*
+ * or *subscribe*, and `pricingPublished()` still answers false. The day a payment provider exists,
+ * a price appears in the contract and this file is where that reaches the screens.
  *
- * **Prices are absent, not hidden.** `PlanOfferView` carries a plan's code, name, rank and
- * allowances and no price, because no price exists in the database yet. A figure rendered here
- * would be one this file invented, so tiers state that pricing is not published instead. That is a
- * state the design accounts for and is the honest half of "what it costs, or whether pricing is
- * unavailable".
+ * **What it still refuses to do.** It never reports a subscription as active, never describes a
+ * payment that has not happened, and never claims a tier took effect before the backend said so —
+ * that last one is the mutation's job, and `planSelection` deliberately returns what a control may
+ * *offer*, not what has happened.
+ *
+ * **Prices are absent, not hidden.** `PlanOfferView` carries a plan's code, name, rank, allowances
+ * and model tier, and no price, because no price exists in the database. A figure rendered here
+ * would be one this file invented.
  */
 
 import type { PlanAllowanceView, PlanOfferView, PlansResponse } from "@/lib/api/schema";
@@ -27,35 +28,89 @@ import type { PlanAllowanceView, PlanOfferView, PlansResponse } from "@/lib/api/
 /** The canonical tiers. A fourth would be a product decision, not a rendering one. */
 export const FREE = "free";
 
-export type Checkout =
+/**
+ * What a tier's control may offer, given where the account already is.
+ *
+ * `current` carries no action: a tier you are on is not one to choose. `selectable` is a real
+ * write. `unavailable` survives for the case the backend still owns — a deployment that turns
+ * `self_service` off — and carries the reason rather than leaving a control mysteriously dead.
+ */
+export type PlanSelection =
   | { readonly kind: "current" }
-  | { readonly kind: "available"; readonly href: string }
+  | { readonly kind: "selectable" }
   | { readonly kind: "unavailable"; readonly reason: string };
 
 /**
  * What pressing a tier's button can honestly do.
  *
- * `current` for the tier the account is already on — there is nothing to buy and nothing to
- * activate, because a new account *is* on the default the moment it exists, with no row written.
+ * `currentPlan` is the account's actual tier from `GET /me/usage` — not the default. Reading the
+ * default here was the old bug in miniature: it made *Free* look current to everybody, including
+ * somebody on Premium, because with nothing selectable the distinction never showed.
  */
-export function checkoutFor(plan: PlanOfferView, plans: PlansResponse): Checkout {
-  if (plan.plan_code === plans.default_plan) return { kind: "current" };
-  if (plans.self_service === true) {
-    // The shape a payment provider fills in. Deliberately unreachable today.
-    return { kind: "available", href: `/plan/checkout?tier=${encodeURIComponent(plan.plan_code)}` };
-  }
+export function planSelection(
+  plan: PlanOfferView,
+  plans: PlansResponse,
+  currentPlan: string | null,
+): PlanSelection {
+  if (currentPlan !== null && plan.plan_code === currentPlan) return { kind: "current" };
+  if (plans.self_service === true) return { kind: "selectable" };
   return {
     kind: "unavailable",
-    reason: "Paid checkout is not enabled yet, so nothing is charged and nothing changes today.",
+    reason: "Changing tier is not enabled on this deployment.",
   };
 }
 
-/** The label on a tier's own button. One primary action per card. */
-export function planActionLabel(plan: PlanOfferView, plans: PlansResponse): string {
-  const checkout = checkoutFor(plan, plans);
-  if (checkout.kind === "current") return "Start free";
+/**
+ * The label on a tier's own button. One primary action per card, and it never says "buy".
+ *
+ * The `current` wording is *"Start free"* rather than *"Your plan"* because the only caller that
+ * reaches that branch is the signup step, where pressing the tier you are already on is a real
+ * action — it picks that tier as the choice — and the card already carries a *Current plan* badge
+ * saying where the account stands. The comparison table never asks: a tier the account is on gets
+ * no button there, only a marking.
+ */
+export function planActionLabel(
+  plan: PlanOfferView,
+  plans: PlansResponse,
+  currentPlan: string | null,
+): string {
+  const selection = planSelection(plan, plans, currentPlan);
+  if (selection.kind === "current") return `Start ${plan.display_name.toLowerCase()}`;
   return `Choose ${plan.display_name}`;
 }
+
+/**
+ * What a person is asked before their tier changes, and why it is asked at all.
+ *
+ * A plan change is instant, free and reversible, so the confirmation is not a safety rail — it is
+ * there because *allowances change immediately* and somebody moving down should learn that before
+ * it happens rather than from a meter afterwards. Three short lines: what will change, what will
+ * not, and no payment.
+ */
+export function planChangePrompt(
+  plan: PlanOfferView,
+  current: PlanOfferView | null,
+): { readonly title: string; readonly lines: readonly string[] } {
+  const direction =
+    current === null || current.rank === plan.rank
+      ? null
+      : plan.rank > current.rank
+        ? "up"
+        : "down";
+  return {
+    title: `Change plan to ${plan.display_name}?`,
+    lines: [
+      direction === "down"
+        ? "Your allowances update immediately, and this tier allows less than your current one. Nothing you have already used is removed."
+        : "Your allowances update immediately. Nothing you have already used is removed.",
+      "No payment will be charged. Pricing is not currently published.",
+    ],
+  };
+}
+
+/** The one-line truth about tiers, for anywhere a screen would otherwise imply a subscription. */
+export const BILLING_NOTE =
+  "Plan tiers control your product allowances and which class of model answers you. Pricing is not published, and changing tier does not charge your account.";
 
 /** The label on the step's primary action, which names the tier the person picked. */
 export function continueLabel(plan: PlanOfferView | null): string {
@@ -63,24 +118,47 @@ export function continueLabel(plan: PlanOfferView | null): string {
 }
 
 /**
- * What a person is told after choosing a tier that cannot be bought yet.
+ * What a person is told after choosing a tier, in the case where choosing did not change anything.
  *
- * A state, not an error: they chose something, the choice is remembered, and the reason it is not
- * yet a subscription is stated once without apology or jargon.
+ * Null once the choice is real, which is the normal case now — the screen reports the confirmed
+ * change instead, from what the backend returned. This survives for a deployment with
+ * `self_service` off, where a person must not be left thinking a tier took effect.
  */
 export function selectionNotice(
   plan: PlanOfferView,
   plans: PlansResponse,
+  currentPlan: string | null,
 ): { readonly title: string; readonly detail: string } | null {
-  const checkout = checkoutFor(plan, plans);
-  if (checkout.kind !== "unavailable") return null;
+  const selection = planSelection(plan, plans, currentPlan);
+  if (selection.kind !== "unavailable") return null;
   return {
-    title: `${plan.display_name} selected`,
-    detail: `${checkout.reason} Your account stays on ${nameOf(plans, plans.default_plan)} and keeps its allowances until a paid plan is actually activated.`,
+    title: `${plan.display_name} not applied`,
+    detail: `${selection.reason} Your account stays on ${nameOf(plans, currentPlan ?? plans.default_plan)} and keeps its allowances.`,
   };
 }
 
-function nameOf(plans: PlansResponse, code: string): string {
+/**
+ * What a person is told after picking a tier during signup, where it cannot be written yet.
+ *
+ * The signup step has no session — the address is not verified — so the choice is held in the
+ * browser and applied at the first sign-in. That is a real delay and it is stated rather than
+ * papered over: somebody who reads "Selected" and expects Premium's allowances immediately has
+ * been misled by one word. Null for the tier the account is already on, and null where the choice
+ * cannot be honoured at all (`selectionNotice` speaks there instead).
+ */
+export function heldPlanNotice(
+  plan: PlanOfferView,
+  plans: PlansResponse,
+  currentPlan: string | null,
+): { readonly title: string; readonly detail: string } | null {
+  if (planSelection(plan, plans, currentPlan).kind !== "selectable") return null;
+  return {
+    title: `${plan.display_name} selected`,
+    detail: `Your account starts on ${nameOf(plans, currentPlan ?? plans.default_plan)}. Weathra moves you to ${plan.display_name} when you sign in after verifying your address — nothing is charged, and you can change tier at any time in Plan & Usage.`,
+  };
+}
+
+export function nameOf(plans: PlansResponse, code: string): string {
   return plans.plans.find((plan) => plan.plan_code === code)?.display_name ?? code;
 }
 

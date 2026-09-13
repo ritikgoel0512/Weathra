@@ -50,7 +50,7 @@ function catalogue(): PlansResponse {
   return {
     count: 3,
     default_plan: "free",
-    self_service: false,
+    self_service: true,
     assignment_note: "Pro and Premium are assigned by Weathra rather than bought here.",
     plans: [
       {
@@ -235,8 +235,12 @@ describe("what the tiers show", () => {
     );
     expect(pro.getAttribute("data-chosen")).toBe("true");
     expect(window.localStorage.getItem("weathra.requested-plan")).toBe("pro");
-    // The entitlement is untouched, and the screen says so rather than implying a purchase.
+    // The choice is real but cannot be written yet — no session until the address is verified —
+    // so the screen says when it applies rather than implying it already has, or implying a
+    // purchase.
     expect(screen.getByText("Pro selected")).toBeTruthy();
-    expect(screen.getByText(/Paid checkout is not enabled yet/)).toBeTruthy();
+    expect(screen.getByText(/Your account starts on Free/)).toBeTruthy();
+    expect(screen.getByText(/when you sign in after verifying your address/)).toBeTruthy();
+    expect(screen.getByText(/nothing is charged/)).toBeTruthy();
   });
 });

@@ -16,12 +16,36 @@
 
 import type { DimensionView, PlanCode, UsageResponse } from "@/lib/api/schema";
 
+/**
+ * The two cached reads this screen is built on, named once.
+ *
+ * Here rather than in either component because both of them need both: the comparison changes the
+ * plan and must invalidate the usage read, and the usage read's *Current* badge decides what the
+ * comparison offers. Two literals would be two chances for one of them to go stale unnoticed.
+ */
+export const USAGE_KEY = ["me", "usage"] as const;
+export const PLANS_KEY = ["plans"] as const;
+
 /** Weathra's plans, in order. There is no `plus`: the middle tier is Pro, and the API's own enum agrees. */
+export const PLAN_CODES: readonly PlanCode[] = ["free", "pro", "premium"];
+
 export const PLANS: readonly { code: PlanCode; name: string }[] = [
   { code: "free", name: "Free" },
   { code: "pro", name: "Pro" },
   { code: "premium", name: "Premium" },
 ];
+
+/**
+ * A plan code from the contract, narrowed to one this client can actually ask for.
+ *
+ * `PlanOfferView.plan_code` is a string — `/plans` reads it from a row — while the change request
+ * takes the enum. A tier the client does not know is therefore not offered as a choice rather than
+ * cast into one: sending it would be refused by the backend's own validation, and a button that is
+ * certain to fail is worse than one that is absent.
+ */
+export function asPlanCode(code: string): PlanCode | null {
+  return (PLAN_CODES as readonly string[]).includes(code) ? (code as PlanCode) : null;
+}
 
 /** At or above this share of an allowance, a dimension is worth pointing at. */
 export const NEAR_LIMIT = 0.8;

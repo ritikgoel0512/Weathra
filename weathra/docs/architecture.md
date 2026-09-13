@@ -281,7 +281,7 @@ code that does not exist. So each names the group 26-34 task that owes it, and t
 that task to being open. Close one of those tasks and the first assertion starts demanding its
 tests. Both directions stay honest without anyone maintaining a list of which spec is which.
 
-Of **229** requirements across twenty-one specs, **228** are implemented and tested, **1** is
+Of **230** requirements across twenty-one specs, **229** are implemented and tested, **1** is
 manual-pending, and **0** are open. Exactly **0** requirements have no test. The one that remains
 manual-pending is `web-ui`'s accessibility and responsive layout, which is automatically tested as
 far as automation reaches and still owes a human pass (task 21.8).
@@ -316,9 +316,9 @@ model access or an allowance** and **the Visily design gate** are closed outrigh
 | `model-policy` | 10 | 10 | 0 | 0 | 28 |
 | `model-catalog` | 7 | 7 | 0 | 0 | 26, 27 |
 | `llm-telemetry` | 7 | 7 | 0 | 0 | 29 |
-| `usage-limits` | 9 | 9 | 0 | 0 | 30 |
+| `usage-limits` | 10 | 10 | 0 | 0 | 30 |
 | `model-lab` | 6 | 6 | 0 | 0 | 32 |
-| **Total** | **229** | **228** | **1** | **0** | |
+| **Total** | **230** | **229** | **1** | **0** | |
 
 ### `agent-orchestration`
 
@@ -642,6 +642,7 @@ model access or an allowance** and **the Visily design gate** are closed outrigh
 | Internal and administrative usage is tracked separately | 30.5 | entitlements/quotas.py, auth/roles.py, db/migrations/versions/0010_internal_quota_accounting.py, evaluation/provisioning.py | integration/test_quota_enforcement.py, integration/test_quota_api.py | IMPLEMENTED |
 | Quota administration is privileged and auditable | 31.4 | api/routers/admin/plans.py, entitlements/plans.py, entitlements/audit.py | integration/test_admin_api.py | IMPLEMENTED |
 | No payment processing in this change | 26.2 | db/models.py, db/migrations/versions/0005_saas_operational_tables.py | test_no_payment_processing.py, integration/test_saas_seed.py | IMPLEMENTED |
+| Tiers are selectable by the account they apply to | 34.44 | api/routers/usage.py, entitlements/plans.py, db/migrations/versions/0015_user_plan_self_selection.py | integration/test_quota_api.py, integration/test_saas_rls.py, integration/test_agent_resolution.py | IMPLEMENTED |
 
 ### `model-lab`
 

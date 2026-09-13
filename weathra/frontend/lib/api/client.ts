@@ -52,6 +52,7 @@ import type {
   PlanListResponse,
   PlanMappingRequest,
   PlanRecord,
+  PlanSelectionRequest,
   PlansResponse,
   PolicyAuditResponse,
   PolicyCandidatesRequest,
@@ -288,6 +289,15 @@ export interface ApiClient {
    * supplies, so there is no argument here that could ask about somebody else.
    */
   usage(): Promise<UsageResponse>;
+  /**
+   * Move yourself between tiers.
+   *
+   * Takes no identifier for the same reason `usage()` does not: the backend writes the validated
+   * token's row, and the database refuses one that is not the caller's own. Returns the *whole*
+   * new standing rather than an acknowledgement, so a screen shows corrected allowances against
+   * unchanged consumption without a second read.
+   */
+  choosePlan(request: PlanSelectionRequest): Promise<UsageResponse>;
   preferences(): Promise<PreferenceView>;
   updatePreferences(update: PreferenceUpdate): Promise<PreferenceView>;
   resetPreferences(): Promise<PreferenceView>;
@@ -595,6 +605,7 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
 
     me: () => get<MeResponse>("/api/v1/me"),
     usage: () => get<UsageResponse>("/api/v1/me/usage"),
+    choosePlan: (body) => call<UsageResponse>("PUT", "/api/v1/me/plan", {}, body, true),
     preferences: () => get<PreferenceView>("/api/v1/me/preferences"),
     updatePreferences: (update) =>
       call<PreferenceView>("PUT", "/api/v1/me/preferences", {}, update, true),

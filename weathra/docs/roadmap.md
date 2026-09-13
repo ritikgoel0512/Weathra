@@ -94,9 +94,10 @@ unbuilt.
 Both were designed and approved on 2026-09-09, which closes the design half of the gate and
 settles nothing about the implementation half. `docs/design/screens.md` §5 records what each
 artifact draws that Weathra refuses — a subscription id, a billing interval, a payment method,
-invoices, a self-service upgrade, an enterprise tier, vector-storage-node quotas, and a per-user
+invoices, a *paid* upgrade, an enterprise tier, vector-storage-node quotas, and a per-user
 usage export — because those are the inventions a plan screen attracts, and this change bills
-nobody. When built, the plan-and-usage view shows the signed-in person their own plan, consumption
+nobody. Changing tier is a different thing and is real: since 2026-09-13 a person moves their own
+account between Free, Pro and Premium in one press, which charges nothing because nothing bills. When built, the plan-and-usage view shows the signed-in person their own plan, consumption
 and reset times and nobody else's, and the administrative screen the aggregates that
 `/api/v1/admin/usage` already reports.
 
@@ -160,7 +161,7 @@ the capture path exist; the history does not yet.
 **Billing** needs a payment provider, a webhook path, and reconciliation against someone else's
 invoice — and it needs cost to be an amount owed rather than an estimate. Estimating cost from
 token counts and catalog pricing is honest and cheap; presenting that estimate as a bill would not
-be either, which is why plans are assigned administratively and the estimate is labelled.
+be either, which is why a tier is selected rather than bought and the estimate is labelled.
 
 **Adaptive model routing** needs evidence that a runtime choice beats a declared order, and the
 recorded comparison runs are how that evidence would be gathered. Routing before measuring would

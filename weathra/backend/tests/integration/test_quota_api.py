@@ -591,3 +591,237 @@ async def test_the_suite_can_run_with_enforcement_off(
 
     assert response.status_code == 200
     assert consumed == 25, "the counter was left exactly as the test set it"
+
+
+# =========================================================================== choosing a tier
+
+
+async def _plan_of(api: ApiHarness, user_id: str) -> str | None:
+    async with privileged_session(api.app.state.engines.privileged_sessionmaker) as session:
+        return await session.scalar(
+            text("SELECT plan_code FROM user_plans WHERE user_id = CAST(:u AS uuid)"),
+            {"u": user_id},
+        )
+
+
+async def test_a_person_can_put_themselves_on_every_tier_and_come_back(
+    api_factory: ApiFactory, seeded_reference_data: None
+) -> None:
+    """All six transitions the product offers, through the real route.
+
+    Written as one walk rather than six cases because the property is that the tier is *state*: the
+    order does not matter and no transition is special, which a set of one-way tests would not say.
+    """
+    user_id = new_user_id()
+    async with with_inference(api_factory) as api:  # type: ignore[attr-defined]
+        for wanted in ("pro", "premium", "pro", "free", "premium", "free"):
+            response = await api.client.put(
+                f"{PREFIX}/me/plan",
+                json={"plan_code": wanted},
+                headers=api.authorize(subject=user_id),
+            )
+            assert response.status_code == 200, response.text
+            assert response.json()["plan_code"] == wanted
+            assert await _plan_of(api, user_id) == wanted, "the choice did not reach the database"
+
+
+async def test_choosing_a_tier_returns_that_tiers_allowances_recomputed(
+    api_factory: ApiFactory, seeded_reference_data: None
+) -> None:
+    """The response is the new standing, not the old one relabelled.
+
+    This is what lets the screen correct its allowance figures without asking twice, so it is
+    asserted against the seeded rows rather than against itself.
+    """
+    user_id = new_user_id()
+    async with with_inference(api_factory) as api:  # type: ignore[attr-defined]
+        before = await api.client.get(f"{PREFIX}/me/usage", headers=api.authorize(subject=user_id))
+        after = await api.client.put(
+            f"{PREFIX}/me/plan",
+            json={"plan_code": "premium"},
+            headers=api.authorize(subject=user_id),
+        )
+
+        async with privileged_session(api.app.state.engines.privileged_sessionmaker) as session:
+            seeded = await session.scalar(
+                text(
+                    "SELECT allowance FROM usage_limits "
+                    " WHERE plan_code = 'premium' AND dimension = 'requests_per_day'"
+                )
+            )
+
+    assert before.json()["plan_code"] == "free"
+    body = after.json()
+    assert body["plan_code"] == "premium"
+    daily = {item["dimension"]: item for item in body["dimensions"]}["requests_per_day"]
+    assert daily["allowance"] == seeded
+    assert (
+        daily["allowance"]
+        != {item["dimension"]: item for item in before.json()["dimensions"]}["requests_per_day"][
+            "allowance"
+        ]
+    ), "the tiers must differ or this test proves nothing"
+
+
+async def test_changing_tier_resets_no_usage_and_can_leave_a_caller_over_the_allowance(
+    api_factory: ApiFactory, seeded_reference_data: None
+) -> None:
+    """The downgrade case, and the one a person would most reasonably fear.
+
+    Consumption is what happened; a tier is what may happen next. So moving down does not forgive
+    the window's calls, and the honest reading of a caller at 25 with a smaller allowance is
+    *over* rather than *reset to zero*. Nothing deletes usage, here or anywhere.
+    """
+    user_id = new_user_id()
+    async with with_inference(api_factory) as api:  # type: ignore[attr-defined]
+        install(api)
+        await api.client.put(
+            f"{PREFIX}/me/plan",
+            json={"plan_code": "premium"},
+            headers=api.authorize(subject=user_id),
+        )
+        await exhaust(api, user_id)  # Fills the counter to the *free* allowance: 25.
+
+        response = await api.client.put(
+            f"{PREFIX}/me/plan",
+            json={"plan_code": "free"},
+            headers=api.authorize(subject=user_id),
+        )
+        consumed_after = await api.client.get(
+            f"{PREFIX}/me/usage", headers=api.authorize(subject=user_id)
+        )
+
+    daily = {item["dimension"]: item for item in response.json()["dimensions"]}["requests_per_day"]
+    assert daily["consumed"] == 25, "the plan change reset a counter"
+    assert daily["allowance"] == 25
+    assert daily["remaining"] == 0
+    # And it survives the round trip, rather than being a figure the write happened to return.
+    assert {item["dimension"]: item for item in consumed_after.json()["dimensions"]}[
+        "requests_per_day"
+    ]["consumed"] == 25
+
+
+async def test_choosing_a_tier_leaves_a_callers_own_data_alone(
+    api_factory: ApiFactory, seeded_reference_data: None
+) -> None:
+    """A tier change is not an account reset. The recorded usage events are the case that would
+    hurt most, because they are what every usage figure on the screen is drawn from."""
+    user_id = new_user_id()
+    async with with_inference(api_factory) as api:  # type: ignore[attr-defined]
+        install(api)
+        assert (await ask(api, user_id)).status_code == 200
+        await api.app.state.usage_recorder.drain()
+
+        before = (
+            await api.client.get(f"{PREFIX}/me/usage", headers=api.authorize(subject=user_id))
+        ).json()["recent"]
+        await api.client.put(
+            f"{PREFIX}/me/plan",
+            json={"plan_code": "pro"},
+            headers=api.authorize(subject=user_id),
+        )
+        after = (
+            await api.client.get(f"{PREFIX}/me/usage", headers=api.authorize(subject=user_id))
+        ).json()["recent"]
+
+    assert before["calls"] >= 1
+    assert after["calls"] == before["calls"]
+    assert after["series"] == before["series"]
+
+
+async def test_a_tier_choice_persists_across_sessions(
+    api_factory: ApiFactory, seeded_reference_data: None
+) -> None:
+    """Written state, not a session's memory of a button press. Two separate tokens for the same
+    subject, which is what signing out and back in amounts to here."""
+    user_id = new_user_id()
+    async with with_inference(api_factory) as api:  # type: ignore[attr-defined]
+        await api.client.put(
+            f"{PREFIX}/me/plan",
+            json={"plan_code": "premium"},
+            headers=api.authorize(subject=user_id),
+        )
+    async with with_inference(api_factory) as api:  # type: ignore[attr-defined]
+        response = await api.client.get(
+            f"{PREFIX}/me/usage", headers=api.authorize(subject=user_id)
+        )
+    assert response.json()["plan_code"] == "premium"
+
+
+async def test_choosing_a_tier_changes_only_the_callers_own_plan(
+    api_factory: ApiFactory, seeded_reference_data: None
+) -> None:
+    """The route names no subject, so a body that names one is refused by validation rather than
+    obeyed — and the other person's tier is untouched either way."""
+    mine, theirs = new_user_id(), new_user_id()
+    async with with_inference(api_factory) as api:  # type: ignore[attr-defined]
+        await api.client.put(
+            f"{PREFIX}/me/plan",
+            json={"plan_code": "pro"},
+            headers=api.authorize(subject=theirs),
+        )
+        spoofed = await api.client.put(
+            f"{PREFIX}/me/plan?user_id={theirs}",
+            json={"plan_code": "premium", "user_id": theirs},
+            headers=api.authorize(subject=mine),
+        )
+        honest = await api.client.put(
+            f"{PREFIX}/me/plan?user_id={theirs}",
+            json={"plan_code": "premium"},
+            headers=api.authorize(subject=mine),
+        )
+
+        assert await _plan_of(api, theirs) == "pro", "somebody else's tier was changed"
+        assert await _plan_of(api, mine) == "premium", "the caller's own tier was not changed"
+
+    assert spoofed.status_code == 422, "an extra body field is refused rather than ignored"
+    assert honest.status_code == 200
+    assert honest.json()["user_id"] == mine
+
+
+async def test_an_unknown_tier_is_refused_and_nothing_changes(
+    api_factory: ApiFactory, seeded_reference_data: None
+) -> None:
+    """``PlanCode`` is the validator, so the retired `plus` name and an invented one fail the same
+    way — before the handler runs, with the field named."""
+    user_id = new_user_id()
+    async with with_inference(api_factory) as api:  # type: ignore[attr-defined]
+        await api.client.put(
+            f"{PREFIX}/me/plan",
+            json={"plan_code": "pro"},
+            headers=api.authorize(subject=user_id),
+        )
+        for body in ({"plan_code": "plus"}, {"plan_code": "enterprise"}, {"plan_code": ""}, {}):
+            response = await api.client.put(
+                f"{PREFIX}/me/plan", json=body, headers=api.authorize(subject=user_id)
+            )
+            assert response.status_code == 422, f"{body} was not refused"
+
+        assert await _plan_of(api, user_id) == "pro", "a refused write changed the tier"
+
+
+async def test_choosing_a_tier_refuses_an_unauthenticated_call(
+    api_factory: ApiFactory, seeded_reference_data: None
+) -> None:
+    async with api_factory() as api:
+        response = await api.client.put(f"{PREFIX}/me/plan", json={"plan_code": "premium"})
+    assert response.status_code == 401
+
+
+async def test_the_plans_contract_offers_self_selection_without_claiming_a_purchase(
+    api_factory: ApiFactory, seeded_reference_data: None
+) -> None:
+    """Both halves of the honest answer, because either alone is a different product.
+
+    ``self_service`` true says a person may move themselves. The note is what keeps that from
+    reading as a purchase, and no price is published anywhere in the payload — there is none.
+    """
+    async with api_factory() as api:
+        response = await api.client.get(f"{PREFIX}/plans")
+
+    body = response.json()
+    assert body["self_service"] is True
+    assert "charge" in body["assignment_note"].lower()
+    assert "pricing is not published" in body["assignment_note"].lower()
+    for plan in body["plans"]:
+        assert "price" not in plan, "a price appeared in a contract that has none"

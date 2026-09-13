@@ -721,13 +721,32 @@ Where the backend refuses a request for an exhausted allowance, the frontend SHA
 
 The frontend SHALL show the signed-in person their own plan and usage — the plan name, consumption against allowance per applicable dimension, and each window's reset time — and SHALL show no other person's usage, no internal usage, and no aggregate cost across users. This view is designed in the design phase alongside the administrative screen, and is implemented in this change.
 
-It SHALL name the plans Weathra has and which one is in effect, and SHALL NOT present a plan change as something the person can complete: plan assignment is an administrative write and there is no checkout, no billing interval, no payment instrument and no invoice. An unlimited dimension SHALL be stated as unlimited rather than shown as a proportion of nothing, and a figure the backend reported as absent — a token count the gateway did not send, a window that does not turn over — SHALL be stated as absent rather than as zero. Where the acting principal's traffic is accounted as internal rather than against a product plan, the view SHALL say so, since the plan's allowances are then not what their calls spend.
+It SHALL name the plans Weathra has and which one is in effect, and SHALL offer the person a way to change their own tier in **exactly one** place on the screen — a control that performs the change through the backend rather than recording an intention. It SHALL NOT present that change as a purchase: there is no checkout, no billing interval, no payment instrument, no invoice and no published price, and the view SHALL state plainly that changing tier charges nothing. Before the change is applied the person SHALL be told that their allowances update immediately and that nothing they have already used is removed. An unlimited dimension SHALL be stated as unlimited rather than shown as a proportion of nothing, and a figure the backend reported as absent — a token count the gateway did not send, a window that does not turn over — SHALL be stated as absent rather than as zero. Where the acting principal's traffic is accounted as internal rather than against a product plan, the view SHALL say so, since the plan's allowances are then not what their calls spend.
 
 #### Scenario: Plans named without a checkout
 
 - **WHEN** the plan view is inspected
 - **THEN** the plans Weathra has are named with the one in effect marked
-- **AND** no purchase, upgrade, billing or payment control is offered
+- **AND** no purchase, billing or payment control is offered
+
+#### Scenario: One place to change tier
+
+- **WHEN** the plan view is inspected
+- **THEN** exactly one set of controls offers a tier change
+- **AND** each tier the account is not on carries a working control, and the one it is on carries none
+
+#### Scenario: A tier change is confirmed, performed, and reflected
+
+- **WHEN** a person chooses a different tier and confirms it
+- **THEN** they are told beforehand that allowances change immediately, that nothing already used is removed, and that no payment is taken
+- **AND** the request is made only after the confirmation
+- **AND** once the backend confirms it, the current-tier marking, the plan name and every allowance figure reflect the new tier without a page reload
+
+#### Scenario: A failed tier change claims nothing
+
+- **WHEN** the backend refuses a tier change
+- **THEN** the refusal is reported with the backend's own message
+- **AND** the view still shows the tier the backend last confirmed
 
 #### Scenario: An absent figure is not shown as zero
 

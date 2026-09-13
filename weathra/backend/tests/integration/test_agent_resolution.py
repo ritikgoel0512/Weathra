@@ -250,6 +250,39 @@ async def test_each_tier_reaches_its_own_model_through_a_real_run(
     assert attempt.plan == plan.value
 
 
+async def test_a_tier_a_person_chose_themselves_resolves_the_same_as_an_assigned_one(
+    engines: Engines, wired: tuple[Settings, PolicyResolver]
+) -> None:
+    """`PUT /me/plan` writes the same row `PlanStore.assign` does, so resolution cannot tell them
+    apart — and must not. The policy layer reads `user_plans`; who wrote it is not its question.
+
+    Asserted through a real run rather than by reading the row back, because the claim is about
+    which policy serves the call, not about what the table says.
+    """
+    user_id = new_user_id()
+    async with privileged_session(engines.privileged_sessionmaker) as setup:
+        await insert_profile(setup, user_id)
+
+    settings, resolver = wired
+    principal = Principal.from_claims({"sub": user_id})
+    async with session_as(engines, user_id) as chosen:
+        await PlanStore(chosen).choose(PlanCode.PREMIUM, subject=user_id)
+
+    result = await _run(engines, settings, resolver, principal)
+    attempt = result.envelope.evidence.inference_attempts[-1]
+
+    assert attempt.plan == "premium"
+    assert attempt.policy_id != "free_default", "the chosen tier did not reach the resolver"
+
+    # And back down: a tier is state, so moving down moves resolution down with it.
+    async with session_as(engines, user_id) as chosen:
+        await PlanStore(chosen).choose(PlanCode.FREE, subject=user_id)
+
+    back = await _run(engines, settings, resolver, principal)
+    assert back.envelope.evidence.inference_attempts[-1].plan == "free"
+    assert back.envelope.evidence.inference_attempts[-1].policy_id == "free_default"
+
+
 async def test_a_caller_with_no_plan_row_runs_on_free(
     engines: Engines, wired: tuple[Settings, PolicyResolver]
 ) -> None:

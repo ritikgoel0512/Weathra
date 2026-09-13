@@ -45,6 +45,10 @@ EXPECTED_CHAIN = (
     # own rather than an edit, because 0012 was already applied where it matters.
     "0013_weather_watch_grant_repair",
     "0014_weather_watch_monitoring",
+    # The product decision of 2026-09-13: tiers are self-selectable, so the request role gains an
+    # owner-scoped INSERT and UPDATE on `user_plans` — the grant `0006` deliberately withheld while
+    # a tier was an administrative assignment. Additive, and the `WITH CHECK` is what keeps it safe.
+    "0015_user_plan_self_selection",
 )
 
 # The two roles migrations may name, and what each is for. `0002` creates the assumed role and

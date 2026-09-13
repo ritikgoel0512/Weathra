@@ -15,10 +15,16 @@ unknowable.
 both writes somebody meant differently, and silently clamping a `-1` to `0` would produce a plan
 that refuses every request while looking deliberately configured.
 
-Plan *assignment* — putting a person on a tier — is here too, and is privileged. `user_plans`
-grants the request-serving role `SELECT` and nothing else precisely so that this is the only path,
-and reading a principal's effective plan on the request path is the resolver's job rather than
-this module's.
+**Two ways onto a tier, and they are not the same write.** ``assign`` is administrative: it runs
+under the privileged connection, names a subject, and records the acting principal in
+``admin_audit``, because one person changed another person's entitlement. ``choose`` is a person
+moving *themselves*, runs under the request session, and names no subject at all — the row it
+writes is whichever one ``0015``'s ``WITH CHECK`` allows, which is the caller's own and cannot be
+another. Keeping them separate is what stops the administrative path from being reachable by
+shaping a request.
+
+Reading a principal's effective plan on the request path stays the resolver's job rather than this
+module's, so that "which plan is this person on" has one implementation.
 """
 
 from __future__ import annotations
@@ -272,6 +278,40 @@ class PlanStore:
             window_kind=resolved.window,
             allowance=allowance,
         )
+
+    async def choose(self, plan_code: PlanCode | str, *, subject: str) -> PlanRecord:
+        """Put the acting person on a tier they chose for themselves.
+
+        **The subject is not trusted, and does not need to be.** It is written into the row, but
+        `0015`'s policies carry ``WITH CHECK (user_id::text = weathra_current_user_id())`` on both
+        ``INSERT`` and ``UPDATE``, and the session this runs under is bound to the validated token.
+        So a subject that is not the caller's own does not write somebody else's row — it writes no
+        row at all, and Postgres raises. The check is the database's rather than this function's on
+        purpose: an ownership rule upheld by a Python argument is upheld by whoever remembers it.
+
+        **The plan is validated against the catalogue first**, so an unknown code is a structured
+        ``RecordNotFound`` naming the field rather than a foreign-key violation from three layers
+        down. ``subscription_plans`` stays authoritative: this function knows no tier names.
+
+        **Nothing else changes.** Usage counters, recorded events, conversations, saved locations
+        and watches are untouched — a tier is what a person is allowed, not what they have already
+        done, and `specs/usage-limits` counts consumption per window regardless of plan. The row's
+        ``assigned_by`` is the person themselves, which is what distinguishes a self-selection from
+        an administrative assignment when either is read back.
+        """
+        plan = await self.require(plan_code)
+        await self._session.execute(
+            text(
+                "INSERT INTO user_plans (user_id, plan_code, assigned_by, assigned_at) "
+                "VALUES (CAST(:user AS uuid), :plan, CAST(:user AS uuid), now()) "
+                "ON CONFLICT (user_id) DO UPDATE "
+                "   SET plan_code = excluded.plan_code, "
+                "       assigned_by = excluded.assigned_by, "
+                "       assigned_at = excluded.assigned_at"
+            ),
+            {"user": subject, "plan": str(plan.plan_code)},
+        )
+        return plan
 
     async def assign(
         self, user_id: str, plan_code: PlanCode | str, *, acting_principal: str

@@ -211,6 +211,14 @@ _CLASSIFICATIONS: tuple[EndpointClassification, ...] = (
         "internal usage.",
     ),
     EndpointClassification(
+        "/me/plan",
+        Access.PROTECTED,
+        "Moves the acting user between subscription tiers, and theirs alone — the route takes no "
+        "subject, and `0015`'s WITH CHECK refuses a row that is not the caller's own. Changes what "
+        "they are allowed and which class of model answers them; charges nothing, because nothing "
+        "bills.",
+    ),
+    EndpointClassification(
         "/me/data",
         Access.PROTECTED,
         "Deletes the acting user's Weathra application data.",

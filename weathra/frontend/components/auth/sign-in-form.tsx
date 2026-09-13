@@ -44,6 +44,7 @@ import {
   VERIFY_EMAIL_PATH,
   safeDestination,
 } from "@/lib/routes";
+import { applyRequestedPlan } from "@/lib/plan/requested";
 import { supabaseBrowserClient } from "@/lib/supabase/browser";
 
 import styles from "./auth.module.css";
@@ -125,6 +126,11 @@ export function SignInForm({ destination }: SignInFormProps): ReactNode {
           setPending(false);
           return;
         }
+
+        // A tier chosen during signup could not be written then — there was no session to write it
+        // with. This is the first moment there is one. It never throws and never blocks: signing in
+        // must succeed whether or not a preference does, and an unapplied note keeps for next time.
+        await applyRequestedPlan();
 
         router.replace(target);
         // The session now exists in cookies; this is what makes the server see it.

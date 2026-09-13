@@ -216,11 +216,13 @@ An administrative principal acting on a product path as themselves SHALL still b
 
 ### Requirement: Quota administration is privileged and auditable
 
-Creating and editing plans, allowances, internal allowances, and a principal's plan assignment SHALL require an administrative principal, SHALL be refused for every other caller, and SHALL record the acting principal, the affected subject, the before and after values, and a timestamp. An allowance write with a negative value or an unknown dimension SHALL be refused.
+Creating and editing plans, allowances, internal allowances, and **another principal's** plan assignment SHALL require an administrative principal, SHALL be refused for every other caller, and SHALL record the acting principal, the affected subject, the before and after values, and a timestamp. An allowance write with a negative value or an unknown dimension SHALL be refused.
+
+A caller changing **their own** tier is the one exception, and it is governed by *Tiers are selectable by the account they apply to* below rather than by this requirement. Every other write here stays administrative: nothing a caller does to their own plan may create, edit or raise an allowance, reach another subject's record, or touch an internal allowance.
 
 #### Scenario: Non-administrative change refused
 
-- **WHEN** an ordinary authenticated caller attempts to change their own or another's plan or allowance
+- **WHEN** an ordinary authenticated caller attempts to change another principal's plan, or any allowance including their own
 - **THEN** the request is refused
 - **AND** no plan or allowance record changes
 
@@ -246,10 +248,10 @@ The schema and the plan model SHALL leave room for a later billing integration â
 - **WHEN** the implementation is inspected
 - **THEN** no payment provider integration, checkout flow, card handling, or invoicing exists
 
-#### Scenario: Plans assigned administratively
+#### Scenario: Plans changed without a payment step
 
-- **WHEN** a caller is placed on the Pro plan
-- **THEN** it is done by administrative assignment, with no payment step
+- **WHEN** a caller is placed on the Pro plan, whether by their own selection or by administrative assignment
+- **THEN** it happens with no payment step, no price, and no charge
 
 #### Scenario: Cost is never presented as a charge
 
@@ -261,3 +263,44 @@ The schema and the plan model SHALL leave room for a later billing integration â
 - **WHEN** the plan model is inspected
 - **THEN** it carries a stable plan code and an unused external subscription reference
 - **AND** no behavior depends on either being populated
+
+### Requirement: Tiers are selectable by the account they apply to
+
+An authenticated caller SHALL be able to move **their own** account between the published subscription tiers, in either direction, through an endpoint that takes no subject and acts only on the validated token's principal. The change SHALL be persisted, SHALL take effect for subsequent requests, and SHALL record who made it and when. It SHALL NOT require an administrative principal, SHALL NOT involve a payment step, and SHALL NOT be presented as a purchase â€” no price is published and no charge occurs.
+
+The tier SHALL be validated against the stored plan catalogue, and an unknown tier SHALL be refused with a structured error naming the field. The write SHALL be refused by the database for any row that is not the caller's own, so that ownership is enforced beneath the endpoint rather than only within it. Changing tier SHALL NOT reset, delete or forgive any recorded consumption, usage event, conversation, saved location or watch: consumption already counted in a window remains counted, and a caller whose consumption exceeds the new tier's allowance SHALL be reported as over it rather than as reset.
+
+**This supersedes the previous position**, under which a tier above the default was an administrative assignment only. The product decision of 2026-09-13 made tiers self-selectable. Creating and editing the tiers themselves, and every allowance, remain administrative.
+
+#### Scenario: A caller moves themselves to a higher tier
+
+- **WHEN** an authenticated caller on the Free plan selects the Premium plan
+- **THEN** the change is persisted and takes effect for subsequent requests
+- **AND** no administrative principal is involved and no payment is taken
+
+#### Scenario: A caller moves themselves back down
+
+- **WHEN** an authenticated caller on the Premium plan selects the Free plan
+- **THEN** the change is persisted and takes effect for subsequent requests
+
+#### Scenario: A caller cannot move anybody else
+
+- **WHEN** a request attempts to change a tier for a subject other than the validated principal
+- **THEN** no other subject's plan record changes
+
+#### Scenario: An unknown tier is refused
+
+- **WHEN** a tier that is not in the plan catalogue is selected
+- **THEN** the request is refused with a structured error naming the field
+- **AND** the caller's existing tier is unchanged
+
+#### Scenario: Consumption survives a tier change
+
+- **WHEN** a caller who has consumed part of a window's allowance changes tier
+- **THEN** the consumed figure is unchanged and the allowance is the new tier's
+- **AND** where consumption exceeds the new allowance it is reported as exceeded rather than reset
+
+#### Scenario: The resolved model class follows the tier
+
+- **WHEN** a caller changes tier and makes a subsequent request
+- **THEN** the model policy resolves against the new tier

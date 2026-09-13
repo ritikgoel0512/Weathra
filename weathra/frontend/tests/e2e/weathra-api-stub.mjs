@@ -1685,8 +1685,12 @@ const FIXTURES = {
    */
   "/api/v1/plans": {
     default_plan: "free",
-    self_service: false,
-    assignment_note: "",
+    self_service: true,
+    assignment_note:
+      "Free is what every new account is on, and you can move yourself to Pro or Premium at any " +
+      "time. Tiers control what Weathra allows you and which class of model answers you — pricing " +
+      "is not published, there is no payment integration in this product, and changing tier never " +
+      "charges your account.",
     count: 3,
     plans: [
       {
@@ -3638,6 +3642,45 @@ const server = createServer((request, response) => {
     savedLocations = savedLocations.filter((entry) => entry.id !== savedId);
     response.writeHead(204, CORS);
     response.end();
+    return;
+  }
+
+  /*
+   * Choosing a tier — the write behind Plan & Usage's comparison table.
+   *
+   * It recomputes rather than relabels, the way the real route does: the allowances come from the
+   * chosen tier's rows in the served `/plans` payload, and *consumption is carried across
+   * untouched*, because a tier says what may happen next and not what already has. A stub that
+   * zeroed the counters would let a regression that resets usage on every plan change pass here.
+   */
+  if (path === "/api/v1/me/plan" && (request.method ?? "GET") === "PUT") {
+    void (async () => {
+      const body = await readJson(request);
+      const offer = FIXTURES["/api/v1/plans"].plans.find((plan) => plan.plan_code === body.plan_code);
+      if (!offer) {
+        send(response, 422, {
+          code: "validation_failed",
+          message: "That tier is not one Weathra offers.",
+          details: { field: "plan_code" },
+        });
+        return;
+      }
+      const usage = FIXTURES["/api/v1/me/usage"];
+      usage.plan_code = offer.plan_code;
+      usage.plan_name = offer.display_name;
+      usage.dimensions = usage.dimensions.map((dimension) => {
+        const allowance = offer.allowances.find(
+          (entry) => entry.dimension === dimension.dimension,
+        )?.allowance;
+        if (allowance === undefined) return { ...dimension, allowance: null, remaining: null };
+        return {
+          ...dimension,
+          allowance,
+          remaining: Math.max(0, allowance - dimension.consumed),
+        };
+      });
+      send(response, 200, usage);
+    })();
     return;
   }
 

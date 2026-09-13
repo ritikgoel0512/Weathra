@@ -8,16 +8,17 @@
  * here is a price list written into the frontend, and there is no fourth tier: the canonical three
  * are Free, Pro and Premium.
  *
- * **It does not sell anything, and it says so.** Weathra has no payment integration, no checkout
- * and no self-service upgrade — `PlansResponse.self_service` is the backend saying that in the
- * contract rather than this file assuming it. So Free is not "activated" here either: a new account
- * is on Free the moment it exists, with no row in `user_plans` at all, and a button claiming to
- * have enrolled somebody would be describing a write that never happened. What the screen does is
- * show what each tier allows and where the person already stands.
+ * **It does not sell anything, and it says so.** Weathra has no payment integration and no
+ * checkout, and no price is published. Tiers *are* self-selectable since 2026-09-13 —
+ * `PlansResponse.self_service` is the backend saying so — but selecting one charges nothing and
+ * never could, so nothing on this screen reads as a purchase.
  *
- * Choosing Pro or Premium records a preference in this browser and nothing more. It is carried to
- * the account screen so somebody can say what they asked for; it changes no entitlement, and the
- * card says as much before it is pressed rather than after.
+ * **What it cannot do here is write the choice, and the reason is the flow rather than the
+ * product.** This step sits between creating an account and verifying the address, so there is no
+ * session yet and `PUT /me/plan` has nothing to authenticate. The choice is held in this browser
+ * and applied at the first successful sign-in — `lib/plan/requested` owns that, and the card says
+ * so before it is pressed rather than after. A person who loses the note lands on Free, which is
+ * where every new account starts, and changes tier in one press on Plan & Usage.
  *
  * **Nothing it reads is trusted to be well-formed.** This screen is reached from a redirect that
  * carries an address in the query string, and it is the only unauthenticated screen that calls the
@@ -33,19 +34,21 @@ import { useState, type ReactNode } from "react";
 import { Badge, Button, ErrorState, LoadingState, Meter } from "@/components/ui";
 import {
   continueLabel,
+  heldPlanNotice,
   planActionLabel,
   pricingPublished,
   selectionNotice,
   valueProposition,
 } from "@/lib/plan/commerce";
 import type { PlanAllowanceView, PlanOfferView, PlansResponse } from "@/lib/api/schema";
+import { rememberRequestedPlan } from "@/lib/plan/requested";
 import { useApiQuery } from "@/lib/query/hooks";
 import { VERIFY_EMAIL_PATH } from "@/lib/routes";
 
 import styles from "./auth.module.css";
 
-/** Where a chosen tier is remembered until there is an account screen to ask about it. */
-export const REQUESTED_PLAN_KEY = "weathra.requested-plan";
+/** Re-exported so this screen's own tests and callers keep one name for the note. */
+export { REQUESTED_PLAN_KEY } from "@/lib/plan/requested";
 
 const DIMENSION_LABELS: Record<string, string> = {
   requests_per_day: "Requests",
@@ -162,7 +165,7 @@ function PlanCard({
   readonly highest: ReadonlyMap<string, number>;
 }): ReactNode {
   const proposition = valueProposition(plan, plans);
-  const actionLabel = planActionLabel(plan, plans);
+  const actionLabel = planActionLabel(plan, plans, isDefault ? plan.plan_code : null);
   // Stated, not guessed: no price exists in the plans contract, so none is rendered.
   const pricingNote = pricingPublished()
     ? ""
@@ -264,12 +267,7 @@ export function PlanChoice(): ReactNode {
 
   const choose = (code: string): void => {
     setChosen(code);
-    try {
-      window.localStorage.setItem(REQUESTED_PLAN_KEY, code);
-    } catch {
-      // A browser that refuses storage loses the note and nothing else: no entitlement depends on
-      // it, so there is nothing here worth failing the screen over.
-    }
+    rememberRequestedPlan(code);
   };
 
   /** The way on, which every branch below keeps available. */
@@ -314,9 +312,14 @@ export function PlanChoice(): ReactNode {
   const highest = ceilings(offered);
   const response = envelope as PlansResponse;
   const selected = offered.find((plan) => plan.plan_code === chosen) ?? null;
-  // The truthful state after choosing a tier that cannot be bought yet. Null for the current plan,
-  // and null again the day a payment provider makes `self_service` true.
-  const notice = selected ? selectionNotice(selected, response) : null;
+  // Two notices, one shown. `heldPlanNotice` is the ordinary case — the choice is real and will be
+  // applied at the first sign-in, which is a delay worth stating rather than implying. The other
+  // speaks only where a deployment has turned `self_service` off and the choice cannot be honoured
+  // at all, where a person must not be left thinking a tier will take effect.
+  const notice = selected
+    ? (heldPlanNotice(selected, response, defaultPlan) ??
+      selectionNotice(selected, response, defaultPlan))
+    : null;
 
   return (
     <div className={styles.planStep}>

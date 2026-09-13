@@ -31,7 +31,7 @@ vi.mock("next/navigation", () => ({
 const PLANS: PlansResponse = {
   count: 3,
   default_plan: "free",
-  self_service: false,
+  self_service: true,
   assignment_note:
     "Free is what every new account is on. Pro and Premium are assigned by Weathra rather than bought here.",
   plans: [
@@ -138,9 +138,11 @@ describe("what the screen does not claim", () => {
 
     expect(screen.getByRole("button", { name: "Selected" })).toBeInTheDocument();
     expect(screen.getByText("Pro selected")).toBeInTheDocument();
-    expect(screen.getByText(/Paid checkout is not enabled yet/)).toBeInTheDocument();
-    // The commercial boundary is stated, and no entitlement is implied.
-    expect(screen.getByText(/stays on Free/)).toBeInTheDocument();
+    // The tier is genuinely selectable now, but not from here: there is no session yet, so the
+    // choice is held and applied at the first sign-in. Stating the delay is the honest part.
+    expect(screen.getByText(/Your account starts on Free/)).toBeInTheDocument();
+    expect(screen.getByText(/when you sign in after verifying your address/)).toBeInTheDocument();
+    expect(screen.getByText(/nothing is charged/)).toBeInTheDocument();
   });
 
   it("names the chosen tier on the step's primary action", async () => {

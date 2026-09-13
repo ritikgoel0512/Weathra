@@ -21,9 +21,11 @@
 import type { ReactNode } from "react";
 
 import { Badge, Card, CardBody, CardHeader, ErrorState, LoadingState, Meter } from "@/components/ui";
-import type { UsageResponse } from "@/lib/api/schema";
+import type { PlansResponse, UsageResponse } from "@/lib/api/schema";
+import { modelTierLabel, valueProposition } from "@/lib/plan/commerce";
 import {
-  PLANS,
+  PLANS_KEY,
+  USAGE_KEY,
   headlineDimension,
   isInternal,
   pressuredDimensions,
@@ -37,8 +39,6 @@ import { useApiQuery } from "@/lib/query/hooks";
 import { ActivityChart, deltaOf, peakOf, pointsOf, type Delta } from "./activity";
 import { PlanComparison } from "./comparison";
 import styles from "./plan.module.css";
-
-const USAGE_KEY = ["me", "usage"] as const;
 
 function count(value: number | null | undefined): string {
   return value === null || value === undefined ? "—" : value.toLocaleString("en-GB");
@@ -159,6 +159,71 @@ function Allowance({ reading }: { reading: DimensionReading }): ReactNode {
   );
 }
 
+/**
+ * The tier a person is on, said once and said large.
+ *
+ * **What was here before, and why it went.** A list of all three tiers with a *Current* badge
+ * against one of them — a plan *selector* in everything but function, sitting above a second one at
+ * the foot of the page. Two competing places to change plan is the defect `specs/web-ui` warns
+ * about in a different register, and neither of them worked. The choice now lives in exactly one
+ * place, the comparison table below, and this panel answers only "which tier am I on".
+ *
+ * **The description is derived, never written.** `valueProposition` computes a tier's one line from
+ * its own allowances against the tier below, and the model class comes from `/plans` — three rows
+ * deep in the database. A sentence typed here would be a promise no row supports, and would go
+ * stale the moment an allowance was edited. Where `/plans` has not loaded, the panel says what it
+ * knows — the tier's name, from the usage read — rather than waiting on a second request to name
+ * something it already has.
+ */
+function CurrentPlan({
+  usage,
+  internal,
+}: {
+  readonly usage: UsageResponse;
+  readonly internal: boolean;
+}): ReactNode {
+  const { state } = useApiQuery<PlansResponse>({
+    key: PLANS_KEY,
+    request: (client) => client.plans(),
+  });
+  const offer =
+    state.kind === "ready"
+      ? (state.data.plans ?? []).find((plan) => plan.plan_code === usage.plan_code)
+      : undefined;
+  const modelClass = offer ? modelTierLabel(offer) : null;
+
+  return (
+    <Card aria-labelledby="plan-card">
+      <CardHeader title="Current tier" titleId="plan-card" />
+      <CardBody>
+        <p className={styles.currentTier}>
+          <span className={styles.currentTierName}>{usage.plan_name}</span>
+          <Badge tone="ok">Current</Badge>
+        </p>
+        {offer && state.kind === "ready" ? (
+          <p className={styles.currentTierValue}>{valueProposition(offer, state.data)}</p>
+        ) : null}
+        {modelClass === null ? null : (
+          <p className={styles.currentTierFact}>
+            <span className={styles.currentTierFactLabel}>Answers with</span>
+            <span>{modelClass}</span>
+          </p>
+        )}
+        {internal ? (
+          <p className={styles.planNote}>
+            Your calls are accounted as internal usage, not against this plan&rsquo;s allowances.
+          </p>
+        ) : (
+          <p className={styles.planNote}>
+            Change tier in <a href="#comparison">Compare plans</a> below. Nothing is charged.
+          </p>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+
 function Ready({ usage }: { usage: UsageResponse }): ReactNode {
   const dimensions = usage.dimensions.map(readDimension);
   const headline = headlineDimension(usage.dimensions);
@@ -177,35 +242,7 @@ function Ready({ usage }: { usage: UsageResponse }): ReactNode {
       </header>
 
       <div className={styles.top}>
-        <Card aria-labelledby="plan-card">
-          <CardHeader
-            title="Your plan"
-            titleId="plan-card"
-            badge={<Badge tone="accent">{usage.plan_name}</Badge>}
-          />
-          <CardBody>
-            <ol className={styles.tiers}>
-              {PLANS.map((plan) => {
-                const active = plan.code === usage.plan_code;
-                return (
-                  <li key={plan.code} className={styles.tier} data-active={active || undefined}>
-                    <span>{plan.name}</span>
-                    {active ? <Badge tone="ok">Current</Badge> : null}
-                  </li>
-                );
-              })}
-            </ol>
-            <p className={styles.planNote}>
-              Every account starts on Free. Compare the plans below to see what each one allows.
-            </p>
-            {internal ? (
-              <p className={styles.planNote}>
-                Your calls are accounted as internal usage, not against this plan&rsquo;s
-                allowances.
-              </p>
-            ) : null}
-          </CardBody>
-        </Card>
+        <CurrentPlan usage={usage} internal={internal} />
 
         <div className={styles.tiles}>
           <Tile

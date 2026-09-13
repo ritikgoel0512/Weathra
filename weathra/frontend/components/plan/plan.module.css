@@ -38,30 +38,52 @@
   align-items: start;
 }
 
-.tiers {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.tier {
+/*
+ * The current tier, at the weight the artifact gives it.
+ *
+ * It replaced a list of all three tiers with a badge against one — which read as a plan selector
+ * sitting above the real one, and answered "which tier am I on" at the same size as the two
+ * answers that were not the question.
+ */
+.currentTier {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
-  color: var(--color-text-secondary);
+  gap: var(--space-3);
+  margin: 0;
+  flex-wrap: wrap;
 }
 
-.tier[data-active] {
-  background: var(--color-surface-inset);
-  border-color: var(--color-accent-muted);
+.currentTierName {
+  font-family: var(--font-display);
+  font-size: var(--type-display-size, 2rem);
+  font-weight: var(--type-display-weight, 700);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
   color: var(--color-text-primary);
+}
+
+.currentTierValue {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-secondary);
+  max-width: 44ch;
+}
+
+.currentTierFact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+  color: var(--color-text-primary);
+}
+
+.currentTierFactLabel {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .planNote {
@@ -314,6 +336,20 @@
   .columns {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  /*
+   * The placement has to be released with the track, not just the track.
+   *
+   * `.columns > .side` pins the activity rail to column 2 spanning both rows. Collapsing the
+   * template to one column left that placement standing, so the browser created an *implicit*
+   * second column for the rail and squeezed Allowances into whatever was left — roughly sixty
+   * pixels at 375, with every label wrapping a word to a line. The 375 capture is what showed it;
+   * no component test can, because it is a property of the computed layout.
+   */
+  .columns > .side {
+    grid-column: auto;
+    grid-row: auto;
+  }
 }
 
 /* ------------------------------------------------- the activity chart and its derived tiles */
@@ -457,45 +493,71 @@
   display: block;
 }
 
-.upgradeList {
-  display: grid;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
+/* The current tier's column, marked once in the header and once at the foot. */
+.comparison thead th[data-current] {
+  color: var(--color-accent);
 }
 
-.upgradeRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-3);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
+.comparison tfoot th,
+.comparison tfoot td {
+  border-bottom: none;
+  padding-top: var(--space-3);
+  vertical-align: bottom;
 }
 
-.upgradeRow[data-current] {
-  border-color: var(--color-accent);
-}
-
-.upgradeText {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.upgradeName {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  color: var(--color-text-primary);
-}
-
-.upgradeValue {
+.comparisonCurrent {
   color: var(--color-text-muted);
   font-size: var(--type-meta-size);
+}
+
+/* ------------------------------------------------- confirming a change of tier */
+
+.confirm {
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  border: 1px solid var(--color-accent-muted);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+}
+
+.confirm:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.confirmTitle {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-weight: var(--type-ui-weight);
+}
+
+.confirmLine {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+  max-width: 60ch;
+}
+
+.confirmActions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.changeStatus {
+  margin: var(--space-3) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  max-width: 68ch;
+}
+
+.changeStatus[data-tone="error"] {
+  color: var(--color-danger, var(--color-text-primary));
+}
+
+.changeStatus[data-tone="saved"] {
+  color: var(--color-text-primary);
 }
 
 .billingState {
