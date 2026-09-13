@@ -111,6 +111,47 @@ async def test_a_country_code_qualifier_also_works() -> None:
     assert resolution.location.region == "Illinois"
 
 
+async def test_an_everyday_country_name_resolves_like_the_code_it_stands_for() -> None:
+    """ "New York, USA" is the ordinary English form, and it used to resolve to nothing at all.
+
+    Open-Meteo answers with ``country="United States"`` and ``country_code="US"``, so an exact
+    match against a candidate's own fields rejected "USA" — and the qualifier the *supervisor's
+    plan* writes is exactly this form. A location that does not resolve retrieves nothing, so the
+    run that asked for it recorded no source, cited nothing and computed nothing.
+    """
+    resolution = await geocoder(fixture("geocode_new_york")).resolve("New York, USA")
+
+    assert isinstance(resolution, Resolved)
+    assert resolution.location.country_code == "US"
+
+
+async def test_an_alias_narrows_to_its_own_country_rather_than_the_larger_candidate() -> None:
+    """The alias narrows; it does not wave a query through to whatever is most popular.
+
+    This fixture holds a New York in the United States with eight million people and more than one
+    in England. "New York, UK" means an English one, and an alias that let the American city
+    through would be exactly the substitution this geocoder refuses to make.
+
+    That it comes back *ambiguous* is the point rather than a shortcoming: the qualifier narrowed
+    the field to the country asked for, and the remaining choice between two real places in it is
+    one only the caller can make.
+    """
+    resolution = await geocoder(fixture("geocode_new_york")).resolve("New York, UK")
+
+    assert resolution.kind == "ambiguous"
+    assert {candidate.country_code for candidate in resolution.candidates} == {"GB"}
+
+
+async def test_an_unlisted_qualifier_is_still_refused_rather_than_guessed() -> None:
+    """The table is a short list of unambiguous names, not a licence to approximate.
+
+    Anything not in it falls through to the exact match and, failing that, to the refusal — so a
+    qualifier naming a country none of the candidates is in stays unresolvable.
+    """
+    with pytest.raises(LocationNotFound):
+        await geocoder(fixture("geocode_new_york")).resolve("New York, Iceland")
+
+
 async def test_a_qualifier_matching_nothing_is_unresolvable() -> None:
     """Not "the nearest Springfield": the caller asked for one in Iceland and there is none."""
     with pytest.raises(LocationNotFound) as caught:

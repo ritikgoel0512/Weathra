@@ -125,8 +125,45 @@ def split_qualifier(query: str) -> tuple[str, str | None]:
     return (name or cleaned), (qualifier or None)
 
 
+# Everyday names for countries that are not the name Open-Meteo returns, mapped to the ISO alpha-2
+# code it *does* return.
+#
+# **Why this is here and not treated as a caller error.** The qualifier is usually not typed by a
+# person: the supervisor's plan names the place, and a model writing "London, UK" or "Austin, USA"
+# is writing the ordinary English form. Open-Meteo answers with `country="United Kingdom"` and
+# `country_code="GB"`, so an exact match against the candidate's own fields rejected every one of
+# the twenty Londons — and a run whose location does not resolve retrieves nothing, cites nothing
+# and computes nothing, so it persists an evidence record holding the supervisor and no other
+# stage. One unrecognised abbreviation was costing the whole run.
+#
+# Deliberately short, and only aliases whose mapping is unambiguous. A guessy table would resolve a
+# place the caller did not mean, which is worse than asking: "Weathra does not substitute a nearby
+# or similarly spelled place" is the rule this must not break. Anything not listed still falls
+# through to the exact match and, failing that, to the clarifying question.
+_COUNTRY_ALIASES: Mapping[str, str] = {
+    "uk": "gb",
+    "u.k.": "gb",
+    "great britain": "gb",
+    "britain": "gb",
+    "usa": "us",
+    "u.s.": "us",
+    "u.s.a.": "us",
+    "united states of america": "us",
+    "uae": "ae",
+    "u.a.e.": "ae",
+    "holland": "nl",
+    "czech republic": "cz",
+    "south korea": "kr",
+    "north korea": "kp",
+}
+
+
 def _matches_qualifier(location: Location, qualifier: str) -> bool:
-    """Whether a candidate sits in the region or country the caller named."""
+    """Whether a candidate sits in the region or country the caller named.
+
+    A part matches the candidate's region, country or country code exactly, or — for the everyday
+    country names in `_COUNTRY_ALIASES` — the code that name stands for.
+    """
     parts = [part.strip().casefold() for part in qualifier.split(",") if part.strip()]
     if not parts:
         return False
@@ -135,7 +172,12 @@ def _matches_qualifier(location: Location, qualifier: str) -> bool:
         for value in (location.region, location.country, location.country_code)
         if value
     }
-    return all(any(part == candidate for candidate in haystack) for part in parts)
+
+    def known(part: str) -> bool:
+        alias = _COUNTRY_ALIASES.get(part)
+        return part in haystack or (alias is not None and alias in haystack)
+
+    return all(known(part) for part in parts)
 
 
 # The precision a cached point is keyed at, matching `providers.cache.COORDINATE_DECIMALS`:
