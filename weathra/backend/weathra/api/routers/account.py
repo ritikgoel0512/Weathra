@@ -23,25 +23,32 @@ saved locations, 1 preference row, 2 threads, 5 runs" is.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Path, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from weathra.api.dependencies import Configuration, CurrentSession, Memory, Places
+from weathra.analytics.saved_places import PlaceReading, PlacesComparison, compare_places
+from weathra.analytics.watch import WatchState
+from weathra.api.dependencies import Configuration, CurrentSession, Memory, Places, WeatherFor
 from weathra.api.middleware import annotate
 from weathra.api.routers.support import resolve_for_saving
 from weathra.auth.deps import RequiredPrincipal
 from weathra.auth.profiles import ensure_profile, touch_profile
 from weathra.auth.roles import is_administrative
-from weathra.domain.location import Location
-from weathra.domain.weather import UnitSystem
+from weathra.domain.errors import WeathraError
+from weathra.domain.location import Location, location_identifier
+from weathra.domain.weather import Measure, UnitSystem
 from weathra.memory.locations import SavedLocationRecord, SavedLocationStore
 from weathra.memory.preferences import UNSET, PreferenceStore, PreferenceView, Unset
 from weathra.memory.retention import AccountDeletionReport as DeletionReport
 from weathra.memory.retention import delete_account_data
+from weathra.memory.watches import WatchStore
+from weathra.providers.base import WeatherProvider
 
 __all__ = ["router"]
 
@@ -396,3 +403,238 @@ async def delete_my_data(
             "sign-in itself is managed by Supabase Auth and is not deleted by this endpoint."
         ),
     )
+
+
+# =========================================================== the saved locations workspace
+
+
+class SavedPlaceConditions(BaseModel):
+    """What a provider reported at one saved place, with when and from whom."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    values: dict[Measure, float | None] = Field(default_factory=dict)
+    units: dict[Measure, str] = Field(default_factory=dict)
+    observed_at: datetime
+    provider: str
+    retrieved_at: datetime
+
+
+class SavedPlaceCard(BaseModel):
+    """One saved place, with whatever is currently known about it."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    saved_id: str
+    location: Location = Field(description="The canonical resolved place. Coordinates are inside.")
+    label: str | None = None
+    is_default: bool = Field(
+        default=False, description="Whether this is the place every screen opens on."
+    )
+    watch_count: int = Field(default=0, ge=0, description="Enabled Weather Watches here.")
+    met_watch_count: int = Field(
+        default=0, ge=0, description="Of those, how many are currently met."
+    )
+    conditions: SavedPlaceConditions | None = None
+    unavailable: str | None = Field(
+        default=None,
+        description="Why there are no conditions. A saved place is never dropped for this.",
+    )
+
+
+class SavedPlacesSummary(BaseModel):
+    """The allowance, and what the saved set covers. Counted, never estimated."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    saved_count: int = Field(ge=0)
+    limit: int = Field(ge=1)
+    remaining: int = Field(ge=0)
+    country_count: int = Field(ge=0)
+    timezone_count: int = Field(ge=0)
+
+
+class SavedPlaceAttention(BaseModel):
+    """One real reason a saved place wants looking at. Never decoration."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    kind: str = Field(description="'watch_met' or 'unavailable'. A stable identifier to branch on.")
+    saved_id: str
+    name: str
+    detail: str
+
+
+class SavedLocationsOverview(BaseModel):
+    """Everything the Saved Locations screen draws, from one read."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    summary: SavedPlacesSummary
+    places: tuple[SavedPlaceCard, ...] = ()
+    comparison: PlacesComparison | None = Field(
+        default=None, description="Absent below two places with readings. Not an empty table."
+    )
+    attention: tuple[SavedPlaceAttention, ...] = ()
+    unit_system: UnitSystem
+
+
+@router.get(
+    "/me/locations/overview",
+    response_model=SavedLocationsOverview,
+    summary="Your saved locations, with what the weather is doing at each",
+)
+async def locations_overview(
+    request: Request,
+    principal: RequiredPrincipal,
+    session: CurrentSession,
+    settings: Configuration,
+    weather: WeatherFor,
+) -> SavedLocationsOverview:
+    """The saved places and their current conditions, in one request rather than one per card.
+
+    **One provider call per place, not per component.** The cards, the comparison and the attention
+    strip are three readings of the same retrieval; a screen where each fetched its own would cost
+    three times as much to say the same thing, and would let two panels disagree about the
+    temperature in one city.
+
+    **A provider failure loses a card's weather, never the card.** Each retrieval is awaited
+    independently and a failure is recorded on that place as `unavailable`. Dropping the place
+    instead would make a provider outage look like somebody's saved location disappearing.
+
+    **It retrieves current conditions only.** Today's high and low would need a second call per
+    place — the forecast endpoint — and doubling the upstream cost of opening a screen is how this
+    product exhausted a provider allowance once already. What a card shows is what one `current`
+    call carries, and it is badged as observed because that is what it is.
+    """
+    annotate(request, acting_user_id=principal.user_id)
+    await ensure_profile(session, principal)
+
+    store = SavedLocationStore(session, principal, settings)
+    saved = await store.list()
+    preferences = await PreferenceStore(session, principal, settings).read()
+    default_id = (
+        None if preferences.default_location is None else preferences.default_location.identifier
+    )
+    unit_system = preferences.unit_system or UnitSystem.METRIC
+
+    watches = await WatchStore(session, principal).list()
+    readings = await asyncio.gather(
+        *(_conditions_at(weather, record.location, unit_system) for record in saved)
+    )
+
+    places: list[SavedPlaceCard] = []
+    for record, (conditions, failure) in zip(saved, readings, strict=True):
+        here = [
+            watch
+            for watch in watches
+            if location_identifier(watch.location.latitude, watch.location.longitude)
+            == record.location_id
+        ]
+        places.append(
+            SavedPlaceCard(
+                saved_id=record.id,
+                location=record.location,
+                label=record.label,
+                is_default=default_id is not None and record.location_id == default_id,
+                watch_count=sum(1 for watch in here if watch.enabled),
+                met_watch_count=sum(1 for watch in here if watch.state is WatchState.MET),
+                conditions=conditions,
+                unavailable=failure,
+            )
+        )
+
+    return SavedLocationsOverview(
+        summary=SavedPlacesSummary(
+            saved_count=len(saved),
+            limit=store.limit,
+            remaining=max(store.limit - len(saved), 0),
+            country_count=len(
+                {record.location.country for record in saved if record.location.country}
+            ),
+            timezone_count=len({record.location.timezone for record in saved}),
+        ),
+        places=tuple(places),
+        comparison=compare_places(
+            [
+                PlaceReading(
+                    saved_id=card.saved_id,
+                    name=card.label or card.location.display_name,
+                    values=card.conditions.values,
+                    units=card.conditions.units,
+                )
+                for card in places
+                if card.conditions is not None
+            ]
+        ),
+        attention=_attention(places),
+        unit_system=unit_system,
+    )
+
+
+async def _conditions_at(
+    provider: WeatherProvider, location: Location, unit_system: UnitSystem
+) -> tuple[SavedPlaceConditions | None, str | None]:
+    """One place's current conditions, or the reason there are none.
+
+    The failure is caught rather than raised because this endpoint's contract is that every saved
+    place comes back. One unreachable city must not empty the whole screen.
+    """
+    try:
+        current = await provider.current(location, unit_system=unit_system)
+    except WeathraError as exc:
+        logger.info("current conditions unavailable for a saved place: %s", exc)
+        return None, str(exc)
+    except Exception as exc:  # an unexpected failure is still one card's weather, not the page
+        logger.exception("current conditions raised for a saved place")
+        return None, f"{type(exc).__name__} while retrieving the current conditions."
+
+    return (
+        SavedPlaceConditions(
+            values=dict(current.values),
+            units=dict(current.units),
+            observed_at=current.observed_at_local,
+            provider=current.provider,
+            retrieved_at=current.retrieved_at,
+        ),
+        None,
+    )
+
+
+def _attention(places: Sequence[SavedPlaceCard]) -> tuple[SavedPlaceAttention, ...]:
+    """The saved places that genuinely want looking at, and nothing else.
+
+    Two reasons, both of which Weathra actually knows: a Weather Watch whose condition is met at
+    this place, and a place whose conditions could not be retrieved. The approved screen carries a
+    standing "atmospheric attention required" banner; a banner that is always there is decoration,
+    and on a weather product decoration that says *attention* is worse than none.
+    """
+    found: list[SavedPlaceAttention] = []
+    for card in places:
+        name = card.label or card.location.display_name
+        if card.met_watch_count > 0:
+            found.append(
+                SavedPlaceAttention(
+                    kind="watch_met",
+                    saved_id=card.saved_id,
+                    name=name,
+                    detail=(
+                        f"{card.met_watch_count} of your "
+                        f"{card.watch_count} watch{'' if card.watch_count == 1 else 'es'} here "
+                        "is currently met."
+                        if card.met_watch_count == 1
+                        else f"{card.met_watch_count} of your {card.watch_count} watches here are "
+                        "currently met."
+                    ),
+                )
+            )
+        elif card.unavailable is not None:
+            found.append(
+                SavedPlaceAttention(
+                    kind="unavailable",
+                    saved_id=card.saved_id,
+                    name=name,
+                    detail="Weathra could not retrieve the current conditions for this place.",
+                )
+            )
+    return tuple(found)

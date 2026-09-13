@@ -28,300 +28,65 @@
  * `docs/design/screens.md` §5 and §8.
  */
 
-import Link from "next/link";
 
 import { PLACE_PARAM } from "@/components/shell/top-bar";
 
-import { useCallback, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 
 import {
-  Badge,
   Button,
-  DataClassBadge,
   EmptyState,
   ErrorState,
   Input,
-  LoadingState,
-  Meter,
   Skeleton,
 } from "@/components/ui";
 import { ViewStateSwitch } from "@/components/view-state";
 import type {
-  CurrentResponse,
   Location,
   SavedLocationRecord,
-  SavedLocationsResponse,
+  SavedLocationsOverview,
 } from "@/lib/api/schema";
 import {
-  coordinatesOf,
-  isUnnamedPlace,
-  matchesFilter,
-  placeKey,
+  attentionFrom,
+  cardsFrom,
+  comparisonRowsFrom,
+  filterCards,
+  overviewFactsFrom,
+  usageFrom,
+  usageShare,
+  type WorkspaceCard,
+} from "@/lib/locations/workspace";
+import { formatMeasured } from "@/lib/format/figures";
+
+import {
+  AttentionStrip,
+  LocationComparison,
+  MultiLocationOverview,
+  Panel,
+  PlaceCard,
+  UsageStrip,
+  WorkspaceHeader,
+} from "./workspace";
+import {
   friendlyName,
-  savedLocationDisplay,
-  savedLocationLabel,
   sendableName,
 } from "@/lib/locations/place";
 import { useApiMutation, useApiQuery } from "@/lib/query/hooks";
-import { PREFERENCES_KEY, SAVED_LOCATIONS_KEY } from "@/lib/query/keys";
-import { formatReading, readingFor } from "@/lib/dashboard/briefing";
+import {
+  PREFERENCES_KEY,
+  SAVED_LOCATIONS_KEY,
+  SAVED_LOCATIONS_OVERVIEW_KEY,
+} from "@/lib/query/keys";
 import { useLocationResolution } from "@/hooks/use-location-resolution";
 
 import { CandidateChoice } from "./candidate-choice";
 import styles from "./locations.module.css";
+import workspace from "./workspace.module.css";
 
 import { FixtureLocations } from "./fixture-locations";
 import { usingVisilyFixtures } from "@/lib/fixtures/visily";
 
-/** One saved place: what it is called, where it is, and how to remove it. */
-/**
- * Naming a place the backend could only describe by its coordinates.
- *
- * It writes through the ordinary save: `POST /me/locations` with the same coordinates updates the
- * label rather than duplicating the place (`specs/memory`), so naming one is idempotent and nobody
- * has to remove and re-add anything. The coordinates go back exactly as they came, so this cannot
- * move a place while renaming it.
- */
-function NamePlace({
-  record,
-  onName,
-  busy,
-  disabled,
-}: {
-  readonly record: SavedLocationRecord;
-  readonly onName: (record: SavedLocationRecord, label: string) => void;
-  readonly busy: boolean;
-  readonly disabled: boolean;
-}): ReactNode {
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState("");
-  const inputId = `name-place-${record.id}`;
-
-  if (!open) {
-    return (
-      <div className={styles.nameRow}>
-        <p className={styles.nameHint}>
-          Weathra has no name for this place. Enter the town or city and its details are restored;
-          enter anything else and it becomes your own name for it.
-        </p>
-        <Button size="sm" onClick={() => setOpen(true)} disabled={disabled}>
-          Name this place
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <form
-      className={styles.nameRow}
-      onSubmit={(event) => {
-        event.preventDefault();
-        const label = draft.trim();
-        if (label === "") return;
-        onName(record, label);
-      }}
-    >
-      <Input
-        id={inputId}
-        label="What is this place called?"
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        placeholder="A town or city, or your own name for it"
-        maxLength={200}
-      />
-      <Button type="submit" variant="primary" size="sm" busy={busy} disabled={draft.trim() === ""}>
-        Save name
-      </Button>
-    </form>
-  );
-}
-
-
-/**
- * The current conditions at one saved place.
- *
- * `06-saved-locations.png` puts weather on every card, and it is the reason the screen exists: a
- * list of names and coordinates answers nothing a person came here to ask. This reads
- * `/weather/current` for the card's own coordinates — the same endpoint the Dashboard uses, so the
- * two cannot disagree — and the query layer caches it, so opening the screen twice is one request
- * per place rather than two.
- *
- * A place whose provider reports nothing renders nothing rather than a row of dashes. The card is
- * still a card; it simply has no weather to show yet.
- */
-/**
- * Where "Open" goes: the Dashboard, briefing on this place.
- *
- * `?place=` carries a *name* for the backend's resolver to turn into a location, which is the one
- * path that resolves — so a place whose only name is its coordinates sends none, and the Dashboard
- * opens on the person's default rather than asking the geocoder to geocode a coordinate string.
- * `sendableName` is the same guard Settings uses for the same reason.
- */
-function briefingHref(record: SavedLocationRecord): string {
-  const name = sendableName(record.location);
-  return name ? `/?${PLACE_PARAM}=${encodeURIComponent(name)}` : "/";
-}
-
-function CardWeather({ location }: { readonly location: Location }): ReactNode {
-  const { state } = useApiQuery<CurrentResponse>({
-    key: ["weather", "current", placeKey(location)],
-    request: (client) =>
-      client.current({ latitude: location.latitude, longitude: location.longitude }),
-  });
-
-  if (state.kind === "loading") return <Skeleton height="var(--space-5)" />;
-  if (state.kind !== "ready") return null;
-
-  const temperature = readingFor("temperature", state.data.values, state.data.units);
-  const humidity = readingFor("relative_humidity", state.data.values, state.data.units);
-  const wind = readingFor("wind_speed", state.data.values, state.data.units);
-  const precipitation = readingFor("precipitation", state.data.values, state.data.units);
-
-  if (!temperature && !humidity && !wind && !precipitation) return null;
-
-  /*
-   * `06-saved-locations.png` puts three labelled chips under the temperature — PRECIP, HUMIDITY,
-   * WIND — rather than a run-on line of "68 % humidity · 14 km/h wind", which is what this card
-   * had. The chips are the artifact's density and they are also easier to read: the measure is a
-   * label above its figure instead of a word after it. A measure the provider did not report has
-   * no chip, so the row is as wide as the reading was.
-   */
-  const chips = [
-    { key: "precipitation", label: "Precip", reading: precipitation },
-    { key: "humidity", label: "Humidity", reading: humidity },
-    { key: "wind", label: "Wind", reading: wind },
-  ].filter((chip) => chip.reading);
-
-  return (
-    <div className={styles.cardWeather}>
-      <div className={styles.cardReadout}>
-        <DataClassBadge dataClass="observed" />
-        {temperature ? <span className={styles.cardTemp}>{formatReading(temperature)}</span> : null}
-      </div>
-      {chips.length === 0 ? null : (
-        <dl className={styles.cardChips}>
-          {chips.map((chip) => (
-            <div className={styles.cardChip} key={chip.key}>
-              <dt>{chip.label}</dt>
-              <dd>{formatReading(chip.reading!)}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
-    </div>
-  );
-}
-
-function LocationCard({
-  record,
-  onRemove,
-  onName,
-  removing,
-  naming,
-  disabled,
-}: {
-  readonly record: SavedLocationRecord;
-  readonly onRemove: (record: SavedLocationRecord) => void;
-  readonly onName: (record: SavedLocationRecord, label: string) => void;
-  readonly removing: boolean;
-  readonly naming: boolean;
-  readonly disabled: boolean;
-}): ReactNode {
-  // The place's own name, spelled for a person. Shown under the card's title only when the title is
-  // the person's *label* — repeating "Berlin, Germany" under "Berlin, Germany" is noise, and the
-  // qualified form the geocoder round-trips ("Berlin, Berlin, DE") is not for reading.
-  const canonical = friendlyName(record.location);
-  const name = savedLocationLabel(record);
-  const unnamed = isUnnamedPlace(record);
-  const shown = savedLocationDisplay(record);
-
-  return (
-    <li className={styles.card} data-saved-location={record.id}>
-      {/*
-        **No photography here, deliberately.** A city image was added and reverted the same day:
-        `06-saved-locations.png` draws these cards without one — a freshness dot, the place, a
-        dominant temperature, the condition, the high and low, and three metric tiles — and
-        `location-imagery.test.tsx` holds that line. The artifact governs imagery, and a saved-place
-        list is the one surface in the set it deliberately leaves unpictured: four cards across
-        answer "what is it doing at my places", and a photograph on each is the thing that stops
-        four fitting.
-      */}
-      <span className={styles.cardName}>{shown}</span>
-      {/*
-        The person's label never replaces the canonical name — it sits above it. Except where the
-        canonical name *is* the coordinates: repeating them under "Unnamed place" would present a
-        coordinate string as the thing this place is called, which is the whole defect.
-      */}
-      {unnamed || name === canonical ? null : (
-        <span className={styles.cardCanonical}>{canonical}</span>
-      )}
-      {unnamed ? (
-        <NamePlace record={record} onName={onName} busy={naming} disabled={disabled} />
-      ) : null}
-
-      <CardWeather location={record.location} />
-
-      {/*
-        The time zone stays on the card: it is what the place's own day is measured in, and every
-        figure above is stamped in it. The coordinates move behind a disclosure — they are how
-        Weathra identifies a point, not what a person calls one, and a card that leads with
-        `52.5200, 13.4050` is a database row with a picture on it.
-      */}
-      <dl className={styles.cardFacts}>
-        <div className={styles.cardRow}>
-          <dt className={styles.cardTerm}>Time zone</dt>
-          <dd className={styles.cardValue}>{record.location.timezone}</dd>
-        </div>
-      </dl>
-      <details className={styles.cardCoordinates}>
-        <summary className={styles.cardCoordinatesSummary}>Coordinates</summary>
-        <span className={styles.cardValue}>{coordinatesOf(record.location)}</span>
-      </details>
-
-      {/*
-        A small control with a full accessible name.
-        *
-        It was a `Remove {place name}` button across the width of the card, which on a card titled
-        "Berlin, Germany" made the loudest thing about a saved place the way to delete it — the
-        runtime audit of 2026-09-08 photographed a red button wrapping onto two lines beneath every
-        entry. `06-saved-locations.png` keeps per-card actions in a quiet corner control. The label
-        a screen reader announces is unchanged, because "Remove" repeated down a list of places says
-        nothing about which place.
-      */}
-      <div className={styles.cardActions}>
-        {/*
-          The way in, beside the way out. A saved place whose only control removed it made the
-          loudest thing about it the way to lose it; opening one brings up its briefing, which is
-          what somebody saved it for.
-        */}
-        <Link className={styles.cardOpen} href={briefingHref(record)}>
-          <Button variant="secondary" size="sm">
-            Open
-          </Button>
-        </Link>
-        <Button
-          variant="danger"
-          size="sm"
-          busy={removing}
-          disabled={disabled && !removing}
-          onClick={() => onRemove(record)}
-          aria-label={removing ? `Removing ${name}` : `Remove ${name}`}
-        >
-          {removing ? "Removing…" : "Remove"}
-        </Button>
-      </div>
-    </li>
-  );
-}
-
-/**
- * The add form: a place name, an optional label of the person's own, and two steps.
- *
- * Resolve, then save. The two are separate because they answer different questions and because
- * `specs/web-ui` requires the first to be *presented* when it has several answers. Nothing is
- * saved from an ambiguous or unknown name, and what is saved is the candidate's coordinates — the
- * canonical point the backend returned — rather than any string.
- */
 function AddLocation({
   atLimit,
   limit,
@@ -356,7 +121,7 @@ function AddLocation({
         label: input.label,
       }),
     // The saved list, and the default-location choices Settings offers from it.
-    invalidates: [SAVED_LOCATIONS_KEY, PREFERENCES_KEY],
+    invalidates: [SAVED_LOCATIONS_KEY, SAVED_LOCATIONS_OVERVIEW_KEY, PREFERENCES_KEY],
     onDone: () => {
       setPlace("");
       setLabel("");
@@ -502,221 +267,6 @@ function AddLocation({
   );
 }
 
-/** The list, its filter, and the remove control on each card. */
-function SavedList({ response }: { readonly response: SavedLocationsResponse }): ReactNode {
-  const [filter, setFilter] = useState("");
-  const [removingId, setRemovingId] = useState<string | null>(null);
-
-  const remove = useApiMutation<string, void>({
-    run: (client, savedId) => client.removeSavedLocation(savedId),
-    invalidates: [SAVED_LOCATIONS_KEY, PREFERENCES_KEY],
-    onDone: () => setRemovingId(null),
-  });
-
-  const onRemove = useCallback(
-    (record: SavedLocationRecord) => {
-      if (remove.busy) return;
-      setRemovingId(record.id);
-      remove.submit(record.id);
-    },
-    [remove],
-  );
-
-  const [namingId, setNamingId] = useState<string | null>(null);
-
-  /*
-   * Naming an unnamed place, through the ordinary save.
-   *
-   * `POST /me/locations` with the same coordinates updates the label rather than duplicating the
-   * place, so this is idempotent and nobody removes and re-adds anything. The coordinates are sent
-   * back exactly as they were stored — naming a place must not be able to move it — and no name is
-   * sent, because for one of these rows the only name the backend holds is the coordinates.
-   */
-  /*
-   * Naming an unnamed place *repairs* it where it can, and labels it where it cannot.
-   *
-   * The typed text is sent as the place name as well as the label. `POST /me/locations` resolves a
-   * name against the coordinates already stored — the pair is what picks the right candidate — and
-   * the save replaces the stored location with the canonical one, so a row that has been reading
-   * "48.1374, 11.5755" since it was created comes back as Munich, Germany, with its region and
-   * country, from the geocoder rather than from anything typed here.
-   *
-   * Text that resolves to nothing is not an error: the backend falls back to the coordinates it was
-   * given and the label stands on its own, which is what somebody naming a cabin wants. Text that
-   * resolves to a *different* place is refused by the backend, and that refusal is shown, because
-   * quietly moving a saved point to another city is the one outcome nobody could want.
-   *
-   * This is the recovery for old rows. Nothing is hardcoded to a city and running it twice changes
-   * nothing the second time.
-   */
-  const name = useApiMutation<{ record: SavedLocationRecord; label: string }, SavedLocationRecord>({
-    run: (client, input) =>
-      client.saveLocation({
-        location: input.label,
-        latitude: input.record.location.latitude,
-        longitude: input.record.location.longitude,
-        label: input.label,
-      }),
-    invalidates: [SAVED_LOCATIONS_KEY, PREFERENCES_KEY],
-    onDone: () => setNamingId(null),
-  });
-
-  const onName = useCallback(
-    (record: SavedLocationRecord, label: string) => {
-      if (name.busy) return;
-      setNamingId(record.id);
-      name.submit({ record, label });
-    },
-    [name],
-  );
-
-  const shown = response.locations.filter((record) => matchesFilter(record, filter));
-
-  return (
-    <section className={styles.panel} aria-label="Your saved locations">
-      <div className={styles.toolbar}>
-        <h2 className={styles.panelTitle}>Your saved locations</h2>
-        <div className={styles.badgeRow}>
-          <Badge tone="neutral">
-            {response.count} of {response.limit}
-          </Badge>
-        </div>
-      </div>
-
-      <div className={styles.filterField}>
-        <Input
-          label="Filter these locations"
-          description="Narrows the list below. It searches nothing new."
-          name="filter"
-          type="search"
-          value={filter}
-          autoComplete="off"
-          onChange={(event) => setFilter(event.target.value)}
-        />
-      </div>
-
-      {remove.state.kind === "error" ? (
-        <ErrorState failure={remove.state.failure} title="That location was not removed" />
-      ) : null}
-
-      {name.state.kind === "error" ? (
-        <ErrorState failure={name.state.failure} title="That name was not saved" />
-      ) : null}
-
-      {shown.length === 0 ? (
-        <p className={styles.note} role="status">
-          {response.count === 0
-            ? "You have saved no locations yet."
-            : `None of your ${response.count} saved locations match “${filter.trim()}”.`}
-        </p>
-      ) : (
-        <ul className={styles.grid}>
-          {shown.map((record) => (
-            <LocationCard
-              key={record.id}
-              record={record}
-              onRemove={onRemove}
-              onName={onName}
-              removing={remove.busy && removingId === record.id}
-              naming={name.busy && namingId === record.id}
-              disabled={remove.busy || name.busy}
-            />
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-
-/* ------------------------------------------------------- the workspace panels */
-
-/**
- * The lower panels of `06-saved-locations.png`: what this list adds up to, and where to take it.
- *
- * The artifact fills this area with "Global Vector Analysis", grounding-health percentages, a node
- * count and a 42-millisecond latency. None of those is a figure any endpoint produces, and
- * inventing a health score for a list of place names would be a claim about nothing. What the panel
- * carries instead is arithmetic over the records themselves — how many places, how many distinct
- * time zones, how many countries, how much of the allowance is used — which is deterministic,
- * checkable, and genuinely what a summary of a saved list is.
- *
- * **Why it is one panel and not three.** It was three: a "Node health index" of meters, a
- * "Workspace summary" of counts, and a "Live metadata" block — every one of them counting the same
- * list, over a status strip that counted it a fourth time. The runtime audit of 2026-09-08
- * photographed two saved places under three panels of statistics about those two places, and the
- * whole lower half of the screen read as an operations console for a list of place names. The
- * figures that mean something are here, once.
- *
- * Two rows are gone rather than moved: "Telemetry sync — not measured" and "Latency — not
- * reported". Both existed to hold the artifact's shape where Weathra has no measurement, and a row
- * that will say "not measured" on every account forever is not provenance about a figure — there is
- * no figure. What Weathra does and does not know about a saved place is on the card itself.
- *
- * The comparison panel is a real route rather than a summary: Compare Cities is the screen that
- * weighs saved places against each other, and it already seeds itself from this list.
- */
-function WorkspacePanels({ response }: { readonly response: SavedLocationsResponse }): ReactNode {
-  const records = response.locations;
-  const zones = new Set(records.map((record) => record.location.timezone).filter(Boolean));
-  const countries = new Set(
-    records.map((record) => record.location.country).filter((value): value is string => !!value),
-  );
-  const remaining = Math.max(0, response.limit - response.count);
-
-  return (
-    <div className={styles.panelRow}>
-      <section className={styles.panel} aria-label="What you have saved">
-        <h2 className={styles.panelTitle}>What you have saved</h2>
-        <p className={styles.note}>Counted from the places above, not from any measurement.</p>
-        <dl className={styles.summary}>
-          <div className={styles.summaryFact}>
-            <dt>Places saved</dt>
-            <dd>{response.count}</dd>
-          </div>
-          <div className={styles.summaryFact}>
-            <dt>Time zones</dt>
-            <dd>{zones.size}</dd>
-          </div>
-          <div className={styles.summaryFact}>
-            <dt>Countries</dt>
-            <dd>{countries.size > 0 ? countries.size : "Not reported"}</dd>
-          </div>
-          <div className={styles.summaryFact}>
-            <dt>Remaining</dt>
-            <dd>{remaining}</dd>
-          </div>
-        </dl>
-        {/* The one figure here a person can act on: how much of the allowance is gone. */}
-        <Meter
-          label="Allowance used"
-          value={response.limit > 0 ? response.count / response.limit : null}
-          unavailable="No limit reported"
-          note={`${response.count} of ${response.limit} places.`}
-        />
-      </section>
-
-      <section className={styles.panel} aria-label="Compare these cities">
-        <h2 className={styles.panelTitle}>Compare these cities</h2>
-        <p className={styles.note}>
-          Compare Cities weighs saved places against one criterion over the same window, in each
-          place&rsquo;s own local time, and seeds itself from this list.
-        </p>
-        <p className={styles.note}>
-          {records.length >= 2
-            ? "You have enough places saved to compare."
-            : "Save at least two places to compare them."}
-        </p>
-        <div className={styles.actions}>
-          <Link className={styles.panelAction} href="/compare">
-            Open Compare Cities
-          </Link>
-        </div>
-      </section>
-    </div>
-  );
-}
-
 export function SavedLocations(): ReactNode {
   /*
    * Visual-fidelity review only.
@@ -727,63 +277,106 @@ export function SavedLocations(): ReactNode {
    * `lib/fixtures/visily.ts` for what that does and does not guarantee. Nothing below changes.
    */
   if (usingVisilyFixtures()) return <FixtureLocations />;
-  const { state, retry } = useApiQuery<SavedLocationsResponse>({
-    key: SAVED_LOCATIONS_KEY,
-    request: (client) => client.savedLocations(),
-    // An empty list is a normal first day, not a failure — and never rendered as though it were a
-    // populated answer.
-    isEmpty: (data) => data.locations.length === 0,
+  return <SavedLocationsWorkspace />;
+}
+
+/**
+ * The workspace — `docs/design/screens/06-saved-locations.png`.
+ *
+ *     1  header, with search and Add location                       full width
+ *     2  attention, only where something is actually wrong          full width
+ *     3  the saved places, as weather cards                         responsive grid
+ *     4  multi-location overview      ·  location comparison        70 / 30
+ *     5  saved location usage                                       full width
+ *
+ * **One read feeds every panel.** `GET /me/locations/overview` returns the saved places, the
+ * current conditions at each, the comparison across them and which want attention — together. The
+ * screen before this issued one `GET /weather/current` *per card* from inside the card component,
+ * so opening it cost a provider call per saved place per render, and the comparison panel had no
+ * way to see any of those answers.
+ *
+ * **The allowance is a strip, not the subject.** It used to be the largest panel on the page — a
+ * quota readout above the weather, on a screen whose question is what the weather is doing.
+ */
+function SavedLocationsWorkspace(): ReactNode {
+  const [query, setQuery] = useState("");
+  const [adding, setAdding] = useState(false);
+  const router = useRouter();
+
+  /*
+   * One clock for the whole screen, so no two cards date their readings from different instants,
+   * and a page left open stops claiming a reading was taken "just now" an hour later.
+   */
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const { state, retry } = useApiQuery<SavedLocationsOverview>({
+    key: SAVED_LOCATIONS_OVERVIEW_KEY,
+    request: (client) => client.savedLocationsOverview(),
+    // An empty list is a normal first day, not a failure.
+    isEmpty: (data) => (data.places ?? []).length === 0,
   });
 
-  const response = state.kind === "ready" ? state.data : null;
+  const remove = useApiMutation<string, void>({
+    run: (client, savedId) => client.removeSavedLocation(savedId),
+    invalidates: [SAVED_LOCATIONS_OVERVIEW_KEY, SAVED_LOCATIONS_KEY, PREFERENCES_KEY],
+  });
+
+  const overview = state.kind === "ready" ? state.data : null;
+  const cards = overview ? cardsFrom(overview) : [];
+  const shown = filterCards(cards, query);
+  const comparison = overview?.comparison ?? null;
+  const rows = overview ? comparisonRowsFrom(cards, overview) : [];
+
+  const open = (card: WorkspaceCard) => {
+    const place = (overview?.places ?? []).find((entry) => entry.saved_id === card.savedId);
+    const name = place ? sendableName(place.location) : null;
+    router.push(name ? `/?${PLACE_PARAM}=${encodeURIComponent(name)}` : "/");
+  };
 
   return (
     <section className={styles.screen} aria-label="Saved Locations">
-      <header className={styles.heading}>
-        <h1 className={styles.title}>Saved Locations</h1>
-        <p className={styles.subtitle}>
-          Offered by every screen that asks for a location. Follows you across devices.
-        </p>
-      </header>
-
-      {/* The add form is available whatever state the list is in: a failed read is not a reason to
-          stop somebody saving a place. */}
-      <AddLocation
-        atLimit={response !== null && response.count >= response.limit}
-        limit={response?.limit ?? 0}
-        startOpen={state.kind === "empty"}
+      <WorkspaceHeader
+        query={query}
+        onQuery={setQuery}
+        onAdd={() => setAdding(true)}
+        saved={overview?.summary.saved_count ?? 0}
+        limit={overview?.summary.limit ?? 0}
+        atLimit={overview !== null && overview.summary.remaining === 0}
       />
 
-      {/*
-        The artifact's attention strip. It carries a real condition when there is one — the saved
-        allowance running out is the only one this screen can know about — and says so plainly when
-        there is not, rather than inventing an atmospheric alert to fill the row.
-      */}
-      {response ? (
-        <p
-          className={styles.attention}
-          data-tone={response.count >= response.limit ? "warning" : "ok"}
-          role="status"
-        >
-          <span className={styles.attentionTitle}>
-            {response.count >= response.limit ? "Allowance reached" : "Room to save more"}
-          </span>
-          <span>
-            {response.count >= response.limit
-              ? `You have ${response.count} of ${response.limit} places saved. Remove one to save another.`
-              : `${response.count} of ${response.limit} places saved. No attention required.`}
-          </span>
-        </p>
+      <AttentionStrip items={overview ? attentionFrom(overview) : []} />
+
+      {/* The add form is available whatever state the read is in: a failed list is not a reason to
+          stop somebody saving a place. */}
+      {adding || state.kind === "empty" ? (
+        <AddLocation
+          atLimit={overview !== null && overview.summary.remaining === 0}
+          limit={overview?.summary.limit ?? 0}
+          startOpen
+        />
       ) : null}
 
       <ViewStateSwitch
         state={state}
         retry={retry}
-        loading={() => <LoadingState label="Loading your saved locations" lines={4} />}
+        loading={() => (
+          /* Skeletons at the card's own size, so nothing jumps when the readings arrive. */
+          <ul className={workspace.cards} aria-busy="true">
+            {[0, 1, 2].map((index) => (
+              <li className={workspace.cardSkeleton} key={index}>
+                <Skeleton height="var(--space-7)" />
+              </li>
+            ))}
+          </ul>
+        )}
         empty={() => (
-          <EmptyState title="You have not saved any locations yet">
-            Save a place above and it will appear here, and as a choice on the Dashboard, Historical
-            Analytics and Compare Cities.
+          <EmptyState title="Save your first location">
+            Keep the places you care about available across Weathra — on the Dashboard, in Compare
+            Cities, in Historical Analytics and as a place to watch.
           </EmptyState>
         )}
         error={(failure, again) => (
@@ -795,8 +388,58 @@ export function SavedLocations(): ReactNode {
         )}
         ready={(data) => (
           <>
-            <SavedList response={data} />
-            <WorkspacePanels response={data} />
+            {shown.length === 0 ? (
+              <p className={styles.note}>
+                No saved location matches &ldquo;{query}&rdquo;. This searches the places you have
+                saved; use Add location to save somewhere new.
+              </p>
+            ) : (
+              <ul className={workspace.cards}>
+                {shown.map((card) => (
+                  <PlaceCard
+                    card={card}
+                    key={card.savedId}
+                    now={now}
+                    onOpen={() => open(card)}
+                    onCompare={() => router.push("/compare")}
+                    onRemove={() => remove.submit(card.savedId)}
+                    removing={remove.busy}
+                  />
+                ))}
+              </ul>
+            )}
+
+            <div className={workspace.body}>
+              <Panel
+                id="locations-overview"
+                title="Multi-location overview"
+                icon="grid"
+                level="lead"
+                subtitle="Computed by Weathra from the readings above. No language model is involved."
+              >
+                <MultiLocationOverview
+                  facts={overviewFactsFrom(comparison)}
+                  single={cards[0] ?? null}
+                />
+              </Panel>
+
+              <Panel id="locations-comparison" title="Location comparison" icon="compare">
+                <LocationComparison
+                  rows={rows}
+                  spread={
+                    typeof comparison?.temperature_spread === "number"
+                      ? formatMeasured(
+                          comparison.temperature_spread,
+                          comparison.temperature_unit ?? null,
+                        )
+                      : null
+                  }
+                  onCompare={() => router.push("/compare")}
+                />
+              </Panel>
+            </div>
+
+            <UsageStrip figures={usageFrom(data)} share={usageShare(data)} />
           </>
         )}
       />

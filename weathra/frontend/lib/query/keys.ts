@@ -18,6 +18,9 @@
 export const PREFERENCES_KEY = ["me", "preferences"] as const;
 
 /** The acting user's saved locations, read by Saved Locations, Historical and Compare. */
+/** The Saved Locations workspace's one read: the saved places and the weather at each. */
+export const SAVED_LOCATIONS_OVERVIEW_KEY = ["me", "locations", "overview"] as const;
+
 export const SAVED_LOCATIONS_KEY = ["me", "locations"] as const;
 
 /** The acting user's conversation threads, read by Settings. */

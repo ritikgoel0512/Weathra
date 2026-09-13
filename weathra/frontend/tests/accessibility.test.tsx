@@ -313,16 +313,18 @@ describe("Agent Evidence", () => {
 describe("Saved Locations", () => {
   it("labels every input and names every control, populated", async () => {
     const { container } = mount(<SavedLocations />);
-    await screen.findByRole("region", { name: "Your saved locations" });
+    await screen.findAllByRole("button", { name: "View analytics" });
     expectAccessible(container);
   });
 
   it("stays accessible while it is asking which place was meant", async () => {
     const person = userEvent.setup();
     const { container } = mount(<SavedLocations />);
-    await screen.findByRole("region", { name: "Your saved locations" });
+    await screen.findAllByRole("button", { name: "View analytics" });
 
-    await person.type(screen.getByLabelText("Place"), "Springfield");
+    // Adding is the header's primary action rather than a form standing open above the weather.
+    await person.click(screen.getByRole("button", { name: "Add location" }));
+    await person.type(await screen.findByLabelText("Place"), "Springfield");
     await person.click(screen.getByRole("button", { name: "Save location" }));
     await screen.findByRole("group", { name: "Places matching what you entered" });
 
@@ -336,9 +338,18 @@ describe("Saved Locations", () => {
   });
 
   it("stays accessible with an empty list", async () => {
-    fetchMock = backend({ "/api/v1/me/locations": { count: 0, limit: 20, locations: [] } });
+    fetchMock = backend({
+      "/api/v1/me/locations": { count: 0, limit: 20, locations: [] },
+      "/api/v1/me/locations/overview": {
+        summary: { saved_count: 0, limit: 20, remaining: 20, country_count: 0, timezone_count: 0 },
+        places: [],
+        comparison: null,
+        attention: [],
+        unit_system: "metric",
+      },
+    });
     const { container } = mount(<SavedLocations />);
-    await screen.findByText("You have not saved any locations yet");
+    await screen.findByText("Save your first location");
     expectAccessible(container);
   });
 });
@@ -551,7 +562,7 @@ describe("keyboard-only operation", () => {
 
   it("reaches every control on Saved Locations and Historical Analytics", async () => {
     const saved = mount(<SavedLocations />);
-    await screen.findByRole("region", { name: "Your saved locations" });
+    await screen.findAllByRole("button", { name: "View analytics" });
     expectReachableInOrder(saved.container);
     saved.unmount();
 
@@ -597,9 +608,10 @@ describe("keyboard-only operation", () => {
   it("chooses a candidate with Enter, from the keyboard alone", async () => {
     const person = userEvent.setup();
     mount(<SavedLocations />);
-    await screen.findByRole("region", { name: "Your saved locations" });
+    await screen.findAllByRole("button", { name: "View analytics" });
 
-    await person.type(screen.getByLabelText("Place"), "Springfield");
+    await person.click(screen.getByRole("button", { name: "Add location" }));
+    await person.type(await screen.findByLabelText("Place"), "Springfield");
     await person.click(screen.getByRole("button", { name: "Save location" }));
     const group = await screen.findByRole("group", { name: "Places matching what you entered" });
 

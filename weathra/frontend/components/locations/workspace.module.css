@@ -1,0 +1,634 @@
+/*
+ * Saved Locations — `docs/design/screens/06-saved-locations.png`.
+ *
+ * A multi-location weather workspace: a header band, a responsive grid of weather cards, a 70/30
+ * summary-against-comparison row, and the allowance as a strip at the foot. Every colour is a role
+ * from `app/globals.css`; the accent carries the readings, `ok` carries observed provenance, and
+ * warning is reserved for the attention strip — which is drawn only when something is wrong.
+ */
+
+/* -------------------------------------------------------------------- header */
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-raised);
+  min-width: 0;
+}
+
+.header::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  block-size: 2px;
+  background: linear-gradient(90deg, var(--color-accent) 0%, transparent 70%);
+}
+
+.headerText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 62ch;
+  min-width: 0;
+}
+
+.headerKicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.headerCount {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+}
+
+.headerControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.search {
+  inline-size: min(20rem, 100%);
+  min-width: 0;
+}
+
+/* ----------------------------------------------------------------- attention */
+
+/*
+ * Drawn only when a saved place genuinely wants looking at. The approved screen carries a standing
+ * "atmospheric attention required" banner; a banner that is always there is decoration, and on a
+ * weather product decoration reading *attention* is worse than none.
+ */
+.attention {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.attentionItem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  min-width: 0;
+}
+
+.attentionItem[data-tone="watch"] {
+  background: var(--color-status-warning-surface);
+  border-color: color-mix(in srgb, var(--color-status-warning) 32%, transparent);
+  color: var(--color-status-warning);
+}
+
+.attentionItem[data-tone="unavailable"] {
+  background: var(--color-surface-inset);
+  border-color: var(--color-border-subtle);
+  color: var(--color-text-muted);
+}
+
+.attentionName {
+  color: var(--color-text-primary);
+  font-size: var(--type-ui-size);
+  font-weight: var(--type-ui-weight);
+  overflow-wrap: anywhere;
+}
+
+.attentionDetail {
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------- the cards */
+
+/*
+ * Four across where there is room, then three, two, one. `auto-fit` with a floor rather than fixed
+ * breakpoints, so a card never squeezes below the width its three metric chips need.
+ */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(272px, 100%), 1fr));
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+@media (min-width: 1500px) {
+  .cards {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  min-width: 0;
+}
+
+/* A place whose weather did not arrive keeps its card, and says so rather than looking empty. */
+.card[data-unavailable="true"] {
+  border-style: dashed;
+}
+
+.cardSkeleton {
+  /* The card's own height, so nothing jumps when the readings arrive. */
+  min-block-size: 13.5rem;
+  padding: var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.cardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.cardIdentity {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.cardName {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  overflow-wrap: anywhere;
+}
+
+.cardQualifier {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  overflow-wrap: anywhere;
+}
+
+.cardFlags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  justify-content: flex-end;
+  flex: none;
+}
+
+.flag {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+  white-space: nowrap;
+}
+
+.flag[data-kind="default"] {
+  color: var(--color-accent);
+  border-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
+}
+
+.flag[data-kind="met"] {
+  color: var(--color-status-warning);
+  border-color: color-mix(in srgb, var(--color-status-warning) 40%, transparent);
+}
+
+.cardReadout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.cardTemperature {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-readout-size, 2rem);
+  line-height: 1.05;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.cardCondition {
+  margin: 0;
+  color: var(--color-accent);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  overflow-wrap: anywhere;
+}
+
+/* The artifact's three labelled chips, rather than a run-on line of measure names. */
+.chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(76px, 100%), 1fr));
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+  min-width: 0;
+}
+
+.chip {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.chip dt {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+}
+
+.chip dd {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-ui-size);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cardUnavailable {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.cardFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-block-start: auto;
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--color-border-subtle);
+  min-width: 0;
+}
+
+.cardProvenance {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.cardAge {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cardActions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* ------------------------------------------------------------------- panels */
+
+.body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .body {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
+  }
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  min-width: 0;
+}
+
+.panel[data-level="lead"] {
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-raised);
+}
+
+.panel[data-level="lead"]::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  block-size: 2px;
+  background: linear-gradient(90deg, var(--color-accent) 0%, transparent 70%);
+}
+
+.panelHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  min-width: 0;
+}
+
+.panelHeadings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.panelTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+}
+
+.panelIcon {
+  display: inline-flex;
+  color: var(--color-accent);
+}
+
+.panelSubtitle {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  max-width: 70ch;
+}
+
+.panelAside {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+
+.panelBody {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: 0 var(--space-4) var(--space-4);
+  min-width: 0;
+}
+
+/* ----------------------------------------------------------------- the facts */
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  inline-size: 100%;
+  min-width: 0;
+}
+
+.fact {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.fact dt {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.fact dd {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  overflow-wrap: anywhere;
+}
+
+.factNote {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.singleOverview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  inline-size: 100%;
+  min-width: 0;
+}
+
+.quiet,
+.note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  max-width: 62ch;
+}
+
+/* ------------------------------------------------------------ the comparison */
+
+.comparison {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  inline-size: 100%;
+  list-style: none;
+  min-width: 0;
+}
+
+.comparisonRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-block-end: 1px solid var(--color-border-subtle);
+  min-width: 0;
+}
+
+.comparisonRow:last-child {
+  border-block-end: none;
+}
+
+.comparisonName {
+  color: var(--color-text-secondary);
+  font-size: var(--type-ui-size);
+  overflow-wrap: anywhere;
+}
+
+.comparisonValue {
+  color: var(--color-text-primary);
+  font-size: var(--type-ui-size);
+  font-weight: var(--type-ui-weight);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.comparisonSpread {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: var(--space-3);
+  inline-size: 100%;
+  background: var(--color-surface-inset);
+  border-inline-start: 2px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.comparisonSpreadLabel {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+}
+
+.comparisonSpreadValue {
+  color: var(--color-accent);
+  font-size: var(--type-card-size);
+  font-weight: var(--type-card-weight);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- the usage */
+
+/*
+ * The allowance, demoted. It used to be the largest panel on a screen whose question is what the
+ * weather is doing; it is a strip now, and still says every figure it said before.
+ */
+.usage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.usageBar {
+  display: block;
+  block-size: 4px;
+  inline-size: 100%;
+  background: var(--color-surface-overlay);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.usageFill {
+  display: block;
+  block-size: 100%;
+  background: var(--color-accent);
+  border-radius: var(--radius-pill);
+}
+
+.usageFigures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.usageFigure {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.usageLabel {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+}
+
+.usageValue {
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+  font-variant-numeric: tabular-nums;
+}

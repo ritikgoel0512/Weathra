@@ -250,6 +250,73 @@ export const BACKEND_FIXTURES: Readonly<Record<string, unknown>> = {
     ],
   },
 
+  /** The Saved Locations workspace's one read: the saved places and the weather at each. */
+  "/api/v1/me/locations/overview": {
+    summary: {
+      saved_count: 2,
+      limit: 20,
+      remaining: 18,
+      country_count: 1,
+      timezone_count: 1,
+    },
+    places: [
+      {
+        saved_id: "s-berlin",
+        location: BERLIN,
+        label: null,
+        is_default: true,
+        watch_count: 0,
+        met_watch_count: 0,
+        conditions: {
+          values: { temperature: 21.1, precipitation: 0, relative_humidity: 64, wind_speed: 22.5 },
+          units: {
+            temperature: "°C",
+            precipitation: "mm",
+            relative_humidity: "%",
+            wind_speed: "km/h",
+          },
+          observed_at: "2026-09-13T14:00:00+02:00",
+          provider: "open-meteo",
+          retrieved_at: "2026-09-13T12:05:00Z",
+        },
+        unavailable: null,
+      },
+      {
+        saved_id: "s-munich",
+        location: MUNICH,
+        label: "Office",
+        is_default: false,
+        watch_count: 0,
+        met_watch_count: 0,
+        conditions: {
+          values: { temperature: 14.8, precipitation: 1.4, relative_humidity: 81, wind_speed: 11.2 },
+          units: {
+            temperature: "°C",
+            precipitation: "mm",
+            relative_humidity: "%",
+            wind_speed: "km/h",
+          },
+          observed_at: "2026-09-13T14:00:00+02:00",
+          provider: "open-meteo",
+          retrieved_at: "2026-09-13T12:05:00Z",
+        },
+        unavailable: null,
+      },
+    ],
+    comparison: {
+      compared: 2,
+      warmest: { saved_id: "s-berlin", name: "Berlin", value: 21.1, unit: "°C" },
+      coolest: { saved_id: "s-munich", name: "Office", value: 14.8, unit: "°C" },
+      temperature_spread: 6.3,
+      temperature_unit: "°C",
+      wettest: { saved_id: "s-munich", name: "Office", value: 1.4, unit: "mm" },
+      windiest: { saved_id: "s-berlin", name: "Berlin", value: 22.5, unit: "km/h" },
+      reporting_precipitation: 1,
+    },
+    attention: [],
+    unit_system: "metric",
+  },
+
   "/api/v1/threads": {
     count: 1,
     threads: [

@@ -113,6 +113,7 @@ or the credential.
 | `GET` | `/api/v1/me` | **protected** | 200 | `MeResponse` |
 | `DELETE` | `/api/v1/me/data` | **protected** | 200 | `DeletionResponse` |
 | `GET` | `/api/v1/me/locations` | **protected** | 200 | `SavedLocationsResponse` |
+| `GET` | `/api/v1/me/locations/overview` | **protected** | 200 | `SavedLocationsOverview` |
 | `POST` | `/api/v1/me/locations` | **protected** | 201 | `SavedLocationRecord` |
 | `DELETE` | `/api/v1/me/locations/{saved_id}` | **protected** | 204 | `no body` |
 | `DELETE` | `/api/v1/me/preferences` | **protected** | 200 | `PreferenceView` |
@@ -202,6 +203,7 @@ or the credential.
 | `/me` | **protected** | The acting user's own profile and effective preferences. |
 | `/me/data` | **protected** | Deletes the acting user's Weathra application data. |
 | `/me/locations` | **protected** | Lists and adds the acting user's saved locations. |
+| `/me/locations/overview` | **protected** | The acting user's own saved locations with the current conditions at each, the deterministic comparison across them, and which of them want attention. No other subject's, and it retrieves one provider call per saved place rather than per card. |
 | `/me/locations/{saved_id}` | **protected** | Removes one of the acting user's saved locations. |
 | `/me/preferences` | **protected** | Reads, updates, and deletes the acting user's preferences. |
 | `/me/watches` | **protected** | Lists and creates the acting user's weather watches. |

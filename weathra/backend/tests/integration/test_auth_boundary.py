@@ -90,6 +90,7 @@ PROTECTED_REQUESTS: tuple[tuple[str, str, dict[str, Any]], ...] = (
     ("DELETE", "/me/preferences", {}),
     ("GET", "/me/usage", {}),
     ("GET", "/me/locations", {}),
+    ("GET", "/me/locations/overview", {}),
     ("POST", "/me/locations", {"json": {"location": "Berlin"}}),
     ("DELETE", "/me/locations/{saved_id}", {}),
     # The watch routes. `POST /me/watches` names a place rather than reusing the one `_own_ids`

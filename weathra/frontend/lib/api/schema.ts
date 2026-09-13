@@ -874,6 +874,30 @@ export interface PeriodComparison {
   readonly unit_system: UnitSystem;
 }
 
+/** One end of one comparison: which place, and the reading that put it there. */
+export interface PlaceExtreme {
+  /** The canonical place name, as a person reads it. */
+  readonly name: string;
+  readonly saved_id: string;
+  readonly unit?: string | null;
+  readonly value: number;
+}
+
+/** What the saved places' current readings say about each other. */
+export interface PlacesComparison {
+  /** Places with a reading. Never the number saved. */
+  readonly compared: number;
+  readonly coolest?: PlaceExtreme | null;
+  /** Places whose current reading carries precipitation above zero. */
+  readonly reporting_precipitation?: number;
+  /** Warmest less coolest, where both exist. */
+  readonly temperature_spread?: number | null;
+  readonly temperature_unit?: string | null;
+  readonly warmest?: PlaceExtreme | null;
+  readonly wettest?: PlaceExtreme | null;
+  readonly windiest?: PlaceExtreme | null;
+}
+
 /** One allowance, as a customer reads it rather than as the limiter stores it. */
 export interface PlanAllowanceView {
   /** Null is unlimited. A dimension with no row is not capped. */
@@ -1170,11 +1194,65 @@ export interface SavedLocationRequest {
   readonly longitude?: number | null;
 }
 
+/** Everything the Saved Locations screen draws, from one read. */
+export interface SavedLocationsOverview {
+  readonly attention?: SavedPlaceAttention[];
+  /** Absent below two places with readings. Not an empty table. */
+  readonly comparison?: PlacesComparison | null;
+  readonly places?: SavedPlaceCard[];
+  readonly summary: SavedPlacesSummary;
+  readonly unit_system: UnitSystem;
+}
+
 /** Your saved locations, and the limit they count against. */
 export interface SavedLocationsResponse {
   readonly count: number;
   readonly limit: number;
   readonly locations: SavedLocationRecord[];
+}
+
+/** One real reason a saved place wants looking at. Never decoration. */
+export interface SavedPlaceAttention {
+  readonly detail: string;
+  /** 'watch_met' or 'unavailable'. A stable identifier to branch on. */
+  readonly kind: string;
+  readonly name: string;
+  readonly saved_id: string;
+}
+
+/** One saved place, with whatever is currently known about it. */
+export interface SavedPlaceCard {
+  readonly conditions?: SavedPlaceConditions | null;
+  /** Whether this is the place every screen opens on. */
+  readonly is_default?: boolean;
+  readonly label?: string | null;
+  /** The canonical resolved place. Coordinates are inside. */
+  readonly location: Location;
+  /** Of those, how many are currently met. */
+  readonly met_watch_count?: number;
+  readonly saved_id: string;
+  /** Why there are no conditions. A saved place is never dropped for this. */
+  readonly unavailable?: string | null;
+  /** Enabled Weather Watches here. */
+  readonly watch_count?: number;
+}
+
+/** What a provider reported at one saved place, with when and from whom. */
+export interface SavedPlaceConditions {
+  readonly observed_at: string;
+  readonly provider: string;
+  readonly retrieved_at: string;
+  readonly units?: Record<string, string>;
+  readonly values?: Record<string, number | null>;
+}
+
+/** The allowance, and what the saved set covers. Counted, never estimated. */
+export interface SavedPlacesSummary {
+  readonly country_count: number;
+  readonly limit: number;
+  readonly remaining: number;
+  readonly saved_count: number;
+  readonly timezone_count: number;
 }
 
 /** The archive year whose mean for this window sits closest to the scenario's own. */
@@ -2342,6 +2420,17 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     request: "SavedLocationRequest",
     successStatus: 201,
     response: "SavedLocationRecord",
+    parameters: [],
+  },
+  {
+    operationId: "locations_overview_api_v1_me_locations_overview_get",
+    method: "GET",
+    path: "/api/v1/me/locations/overview",
+    requiresToken: true,
+    administrative: false,
+    request: null,
+    successStatus: 200,
+    response: "SavedLocationsOverview",
     parameters: [],
   },
   {

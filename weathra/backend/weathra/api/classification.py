@@ -171,6 +171,13 @@ _CLASSIFICATIONS: tuple[EndpointClassification, ...] = (
         "Lists and adds the acting user's saved locations.",
     ),
     EndpointClassification(
+        "/me/locations/overview",
+        Access.PROTECTED,
+        "The acting user's own saved locations with the current conditions at each, the "
+        "deterministic comparison across them, and which of them want attention. No other "
+        "subject's, and it retrieves one provider call per saved place rather than per card.",
+    ),
+    EndpointClassification(
         "/me/locations/{saved_id}",
         Access.PROTECTED,
         "Removes one of the acting user's saved locations.",

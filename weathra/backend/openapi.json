@@ -4209,6 +4209,130 @@
         "title": "PeriodComparison",
         "type": "object"
       },
+      "PlaceExtreme": {
+        "additionalProperties": false,
+        "description": "One end of one comparison: which place, and the reading that put it there.",
+        "properties": {
+          "name": {
+            "description": "The canonical place name, as a person reads it.",
+            "title": "Name",
+            "type": "string"
+          },
+          "saved_id": {
+            "title": "Saved Id",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "saved_id",
+          "name",
+          "value"
+        ],
+        "title": "PlaceExtreme",
+        "type": "object"
+      },
+      "PlacesComparison": {
+        "additionalProperties": false,
+        "description": "What the saved places' current readings say about each other.\n\nEvery field is optional because every field depends on at least two places having reported the\nmeasure it ranks. A comparison with a warmest and no windiest is a comparison where nobody\nreported wind, and saying nothing about wind is the correct answer to that.",
+        "properties": {
+          "compared": {
+            "description": "Places with a reading. Never the number saved.",
+            "minimum": 0.0,
+            "title": "Compared",
+            "type": "integer"
+          },
+          "coolest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaceExtreme"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reporting_precipitation": {
+            "default": 0,
+            "description": "Places whose current reading carries precipitation above zero.",
+            "minimum": 0.0,
+            "title": "Reporting Precipitation",
+            "type": "integer"
+          },
+          "temperature_spread": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Warmest less coolest, where both exist.",
+            "title": "Temperature Spread"
+          },
+          "temperature_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature Unit"
+          },
+          "warmest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaceExtreme"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "wettest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaceExtreme"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "windiest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaceExtreme"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "compared"
+        ],
+        "title": "PlacesComparison",
+        "type": "object"
+      },
       "PlanAllowanceView": {
         "additionalProperties": false,
         "description": "One allowance, as a customer reads it rather than as the limiter stores it.",
@@ -5535,6 +5659,51 @@
         "title": "SavedLocationRequest",
         "type": "object"
       },
+      "SavedLocationsOverview": {
+        "additionalProperties": false,
+        "description": "Everything the Saved Locations screen draws, from one read.",
+        "properties": {
+          "attention": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SavedPlaceAttention"
+            },
+            "title": "Attention",
+            "type": "array"
+          },
+          "comparison": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlacesComparison"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Absent below two places with readings. Not an empty table."
+          },
+          "places": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SavedPlaceCard"
+            },
+            "title": "Places",
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/SavedPlacesSummary"
+          },
+          "unit_system": {
+            "$ref": "#/components/schemas/UnitSystem"
+          }
+        },
+        "required": [
+          "summary",
+          "unit_system"
+        ],
+        "title": "SavedLocationsOverview",
+        "type": "object"
+      },
       "SavedLocationsResponse": {
         "additionalProperties": false,
         "description": "Your saved locations, and the limit they count against.",
@@ -5563,6 +5732,204 @@
           "locations"
         ],
         "title": "SavedLocationsResponse",
+        "type": "object"
+      },
+      "SavedPlaceAttention": {
+        "additionalProperties": false,
+        "description": "One real reason a saved place wants looking at. Never decoration.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "kind": {
+            "description": "'watch_met' or 'unavailable'. A stable identifier to branch on.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "saved_id": {
+            "title": "Saved Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "saved_id",
+          "name",
+          "detail"
+        ],
+        "title": "SavedPlaceAttention",
+        "type": "object"
+      },
+      "SavedPlaceCard": {
+        "additionalProperties": false,
+        "description": "One saved place, with whatever is currently known about it.",
+        "properties": {
+          "conditions": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SavedPlaceConditions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_default": {
+            "default": false,
+            "description": "Whether this is the place every screen opens on.",
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location",
+            "description": "The canonical resolved place. Coordinates are inside."
+          },
+          "met_watch_count": {
+            "default": 0,
+            "description": "Of those, how many are currently met.",
+            "minimum": 0.0,
+            "title": "Met Watch Count",
+            "type": "integer"
+          },
+          "saved_id": {
+            "title": "Saved Id",
+            "type": "string"
+          },
+          "unavailable": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why there are no conditions. A saved place is never dropped for this.",
+            "title": "Unavailable"
+          },
+          "watch_count": {
+            "default": 0,
+            "description": "Enabled Weather Watches here.",
+            "minimum": 0.0,
+            "title": "Watch Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "saved_id",
+          "location"
+        ],
+        "title": "SavedPlaceCard",
+        "type": "object"
+      },
+      "SavedPlaceConditions": {
+        "additionalProperties": false,
+        "description": "What a provider reported at one saved place, with when and from whom.",
+        "properties": {
+          "observed_at": {
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "retrieved_at": {
+            "format": "date-time",
+            "title": "Retrieved At",
+            "type": "string"
+          },
+          "units": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/Measure"
+            },
+            "title": "Units",
+            "type": "object"
+          },
+          "values": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/Measure"
+            },
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "observed_at",
+          "provider",
+          "retrieved_at"
+        ],
+        "title": "SavedPlaceConditions",
+        "type": "object"
+      },
+      "SavedPlacesSummary": {
+        "additionalProperties": false,
+        "description": "The allowance, and what the saved set covers. Counted, never estimated.",
+        "properties": {
+          "country_count": {
+            "minimum": 0.0,
+            "title": "Country Count",
+            "type": "integer"
+          },
+          "limit": {
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "remaining": {
+            "minimum": 0.0,
+            "title": "Remaining",
+            "type": "integer"
+          },
+          "saved_count": {
+            "minimum": 0.0,
+            "title": "Saved Count",
+            "type": "integer"
+          },
+          "timezone_count": {
+            "minimum": 0.0,
+            "title": "Timezone Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "saved_count",
+          "limit",
+          "remaining",
+          "country_count",
+          "timezone_count"
+        ],
+        "title": "SavedPlacesSummary",
         "type": "object"
       },
       "ScenarioAnalog": {
@@ -10886,6 +11253,36 @@
           }
         ],
         "summary": "Save a location",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/v1/me/locations/overview": {
+      "get": {
+        "description": "**Protected.** The acting user's own saved locations with the current conditions at each, the deterministic comparison across them, and which of them want attention. No other subject's, and it retrieves one provider call per saved place rather than per card.\n\nThe saved places and their current conditions, in one request rather than one per card.\n\n**One provider call per place, not per component.** The cards, the comparison and the attention\nstrip are three readings of the same retrieval; a screen where each fetched its own would cost\nthree times as much to say the same thing, and would let two panels disagree about the\ntemperature in one city.\n\n**A provider failure loses a card's weather, never the card.** Each retrieval is awaited\nindependently and a failure is recorded on that place as `unavailable`. Dropping the place\ninstead would make a provider outage look like somebody's saved location disappearing.\n\n**It retrieves current conditions only.** Today's high and low would need a second call per\nplace \u2014 the forecast endpoint \u2014 and doubling the upstream cost of opening a screen is how this\nproduct exhausted a provider allowance once already. What a card shows is what one `current`\ncall carries, and it is badged as observed because that is what it is.",
+        "operationId": "locations_overview_api_v1_me_locations_overview_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedLocationsOverview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Your saved locations, with what the weather is doing at each",
         "tags": [
           "account"
         ]

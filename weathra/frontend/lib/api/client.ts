@@ -65,6 +65,7 @@ import type {
   ResolvedResponse,
   SavedLocationRecord,
   SavedLocationRequest,
+  SavedLocationsOverview,
   SavedLocationsResponse,
   ScenarioRequest,
   ScenarioResponse,
@@ -292,6 +293,15 @@ export interface ApiClient {
   resetPreferences(): Promise<PreferenceView>;
 
   savedLocations(): Promise<SavedLocationsResponse>;
+
+  /**
+   * The Saved Locations screen, from one read.
+   *
+   * The saved places, the current conditions at each, the deterministic comparison across them and
+   * which of them want attention — together, so no two panels can disagree about the temperature in
+   * one city, and so the page costs one provider call per saved place rather than one per card.
+   */
+  savedLocationsOverview(): Promise<SavedLocationsOverview>;
   saveLocation(request: SavedLocationRequest): Promise<SavedLocationRecord>;
   removeSavedLocation(savedId: string): Promise<void>;
 
@@ -592,6 +602,8 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
       call<PreferenceView>("DELETE", "/api/v1/me/preferences", {}, NO_BODY, true),
 
     savedLocations: () => get<SavedLocationsResponse>("/api/v1/me/locations"),
+    savedLocationsOverview: () =>
+      get<SavedLocationsOverview>("/api/v1/me/locations/overview"),
     saveLocation: (request) =>
       call<SavedLocationRecord>("POST", "/api/v1/me/locations", {}, request, true),
     removeSavedLocation: (savedId) =>

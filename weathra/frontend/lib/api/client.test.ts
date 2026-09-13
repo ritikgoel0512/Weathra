@@ -451,6 +451,7 @@ async function invoke(client: ApiClient, operation: ApiOperation): Promise<unkno
       client.updatePreferences({ unit_system: "metric" }),
     delete_preferences_api_v1_me_preferences_delete: () => client.resetPreferences(),
     list_locations_api_v1_me_locations_get: () => client.savedLocations(),
+    locations_overview_api_v1_me_locations_overview_get: () => client.savedLocationsOverview(),
     save_location_api_v1_me_locations_post: () => client.saveLocation({ location: "Berlin" }),
     remove_location_api_v1_me_locations__saved_id__delete: () =>
       client.removeSavedLocation(identifier),

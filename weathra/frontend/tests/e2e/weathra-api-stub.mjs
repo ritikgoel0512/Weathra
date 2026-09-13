@@ -1188,6 +1188,124 @@ const FIXTURES = {
    * provider the same way it renders a calm one is a screen that lies in exactly the situation
    * somebody is relying on it.
    */
+  /**
+   * `GET /api/v1/me/locations/overview` — the Saved Locations workspace's one read.
+   *
+   * Three places, deliberately: two with readings so the comparison has something to compare, and
+   * one whose provider could not be reached, because a card that keeps its place and loses only its
+   * weather is the state this screen is most likely to get wrong.
+   */
+  "/api/v1/me/locations/overview": {
+    summary: {
+      saved_count: 3,
+      limit: 25,
+      remaining: 22,
+      country_count: 3,
+      timezone_count: 3,
+    },
+    places: [
+      {
+        saved_id: "s-berlin",
+        location: BERLIN,
+        label: null,
+        is_default: true,
+        watch_count: 2,
+        met_watch_count: 1,
+        conditions: {
+          values: {
+            temperature: 21.1,
+            apparent_temperature: 20.4,
+            precipitation: 0,
+            relative_humidity: 64,
+            wind_speed: 22.5,
+            weather_code: 3,
+          },
+          units: {
+            temperature: "°C",
+            apparent_temperature: "°C",
+            precipitation: "mm",
+            relative_humidity: "%",
+            wind_speed: "km/h",
+          },
+          observed_at: "2026-09-13T14:00:00+02:00",
+          provider: "open-meteo",
+          retrieved_at: "2026-09-13T12:05:00Z",
+        },
+        unavailable: null,
+      },
+      {
+        saved_id: "s-munich",
+        location: MUNICH,
+        label: "Office",
+        is_default: false,
+        watch_count: 1,
+        met_watch_count: 0,
+        conditions: {
+          values: {
+            temperature: 14.8,
+            precipitation: 1.4,
+            relative_humidity: 81,
+            wind_speed: 11.2,
+            weather_code: 61,
+          },
+          units: {
+            temperature: "°C",
+            precipitation: "mm",
+            relative_humidity: "%",
+            wind_speed: "km/h",
+          },
+          observed_at: "2026-09-13T14:00:00+02:00",
+          provider: "open-meteo",
+          retrieved_at: "2026-09-13T12:05:00Z",
+        },
+        unavailable: null,
+      },
+      {
+        saved_id: "s-reykjavik",
+        location: {
+          display_name: "Reykjavík",
+          latitude: 64.1466,
+          longitude: -21.9426,
+          timezone: "Atlantic/Reykjavik",
+          region: "Capital Region",
+          country: "Iceland",
+          country_code: "IS",
+        },
+        label: null,
+        is_default: false,
+        watch_count: 0,
+        met_watch_count: 0,
+        conditions: null,
+        unavailable: "open-meteo did not respond in time.",
+      },
+    ],
+    comparison: {
+      compared: 2,
+      warmest: { saved_id: "s-berlin", name: "Berlin", value: 21.1, unit: "°C" },
+      coolest: { saved_id: "s-munich", name: "Office", value: 14.8, unit: "°C" },
+      temperature_spread: 6.3,
+      temperature_unit: "°C",
+      wettest: { saved_id: "s-munich", name: "Office", value: 1.4, unit: "mm" },
+      windiest: { saved_id: "s-berlin", name: "Berlin", value: 22.5, unit: "km/h" },
+      reporting_precipitation: 1,
+    },
+    attention: [
+      {
+        kind: "watch_met",
+        saved_id: "s-berlin",
+        name: "Berlin",
+        detail: "1 of your 2 watches here is currently met.",
+      },
+      {
+        kind: "unavailable",
+        saved_id: "s-reykjavik",
+        name: "Reykjavík",
+        detail: "Weathra could not retrieve the current conditions for this place.",
+      },
+    ],
+    unit_system: "metric",
+  },
+
   "/api/v1/me/watch-dashboard": {
     summary: {
       active_watch_count: 3,
