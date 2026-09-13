@@ -36,6 +36,7 @@ from weathra.domain.weather import Measure, Series, SeriesEntry
 __all__ = [
     "CHANGE_FLOOR",
     "HEADLINE",
+    "MONITORING_CHANGES",
     "WatchChange",
     "WatchCrossing",
     "WatchOutcome",
@@ -86,6 +87,33 @@ CHANGE_FLOOR: dict[Measure, float] = {
 # How far the first crossing must move before it is worth saying so. An hourly series cannot
 # resolve anything finer, so anything under an hour is the same hour reported twice.
 CROSSING_FLOOR = timedelta(hours=1)
+
+# The event kinds that are a *monitoring change*, as opposed to something that merely happened.
+#
+# This is the set the "changes detected" figure counts, and the distinction it draws is the whole
+# point of that figure. An activity feed is an audit stream — it should record that a watch was
+# created, because somebody will want to know when. A change counter is an intelligence figure: it
+# answers "has the weather done anything since I last looked", and a watch's own creation is not
+# something the weather did. Counting it made a brand-new watch report one change while the panel
+# beside it correctly said nothing had changed yet, which is a screen contradicting itself.
+#
+# Every kind below is a difference between two *evaluations*: a state turned over, a reading moved
+# past the materiality floor for its measure, or the first threshold crossing moved by more than the
+# series can resolve. `watch_created` is deliberately absent and is the only kind currently outside
+# the set — a new one is outside it until somebody decides it answers that question.
+MONITORING_CHANGES: frozenset[str] = frozenset(
+    {
+        "condition_met",
+        "condition_cleared",
+        "reading_lost",
+        "reading_recovered",
+        "state_changed",
+        "reading_moved",
+        "crossing_moved",
+        "crossing_appeared",
+        "crossing_cleared",
+    }
+)
 
 
 def holds(*, comparison: str, threshold: float, value: float | None) -> bool | None:

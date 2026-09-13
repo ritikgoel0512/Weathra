@@ -34,6 +34,7 @@ from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from weathra.analytics.watch import (
+    MONITORING_CHANGES,
     WatchChange,
     WatchOutcome,
     WatchState,
@@ -183,15 +184,23 @@ class WatchHistory:
         return tuple(_event(row) for row in rows)
 
     async def count_events_since(self, since: datetime) -> int:
-        """How many transitions happened in a window. The `changes detected` figure, and only that.
+        """How many *monitoring changes* happened in a window. The "changes detected" figure.
 
-        Transitions rather than evaluations: a pass that found nothing new is not a change, and a
-        counter that incremented on every scheduled check would report a number about the schedule
-        rather than about the weather.
+        Not every event. A pass that found nothing new is not a change, and neither is a watch being
+        created — counting that made a brand-new watch report one change while the panel beside it
+        correctly said nothing had changed yet. The kinds that count are named in
+        `analytics/watch.py`'s `MONITORING_CHANGES`, which is the one place that distinction is
+        drawn, so this figure and the What Changed panel cannot disagree about it.
+
+        The feed keeps every event regardless: an audit stream and an intelligence figure are
+        different things, and the fix is the counter's predicate rather than the feed's contents.
         """
         found = await self._session.scalar(
-            text("SELECT count(*) FROM weather_watch_events WHERE occurred_at >= :since"),
-            {"since": since},
+            text(
+                "SELECT count(*) FROM weather_watch_events "
+                " WHERE occurred_at >= :since AND event_type = ANY(:kinds)"
+            ),
+            {"since": since, "kinds": list(MONITORING_CHANGES)},
         )
         return int(found or 0)
 

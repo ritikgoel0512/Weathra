@@ -573,6 +573,10 @@ describe("the first-watch place, from typing it and from the URL", () => {
     // The canonical coordinates the resolver returned — never a name for the backend to re-resolve.
     await waitFor(() =>
       expect(api.createWatch).toHaveBeenCalledWith({
+        // The name *and* the pair. Coordinates alone produced a production watch labelled
+        // `51.5085, -0.1257` on every surface, because Open-Meteo has no reverse geocoding and a
+        // save by coordinates names the point after itself.
+        location: LONDON.display_name,
         latitude: LONDON.latitude,
         longitude: LONDON.longitude,
         measure: "temperature",
@@ -679,6 +683,104 @@ describe("creating the first watch", () => {
 
     // With no place resolved the control refuses rather than sending a watch about nowhere.
     expect(screen.getByRole("button", { name: "Create watch" })).toBeDisabled();
+  });
+});
+
+describe("the place a watch is about, as a person reads it", () => {
+  /*
+   * A production watch created from London rendered `51.5085, -0.1257` on six surfaces. The cause
+   * was the create payload carrying coordinates only, so the *stored* canonical name became the
+   * coordinate string — every screen was faithfully displaying what had been saved.
+   *
+   * These cases hold the display end of that: whatever the backend stores is what is shown, the
+   * canonical name is preferred wherever there is one, and no coordinate pair is ever assembled
+   * into a place name in the interface.
+   */
+  it("names every surface from the stored canonical location", async () => {
+    mount(client());
+    await screen.findByRole("heading", { name: "Watch evidence" });
+
+    for (const region of [
+      "Watched locations",
+      "Active watches",
+      "Temporal watch analysis",
+      "What changed?",
+    ]) {
+      const panel = screen.getByRole("region", { name: region });
+      expect(within(panel).getAllByText(/London, England, United Kingdom/).length, region)
+        .toBeGreaterThan(0);
+    }
+  });
+
+  it("shows no coordinate pair as a place name anywhere on the screen", async () => {
+    const { container } = mount(client());
+    await screen.findByRole("heading", { name: "Activity feed" });
+
+    // Two signed decimals separated by a comma is what a coordinate label looks like. Latitude and
+    // longitude are internal metadata and must never reach a surface as the name of a place.
+    expect(container.textContent ?? "").not.toMatch(/-?\d{1,3}\.\d{4}, ?-?\d{1,3}\.\d{4}/);
+  });
+
+  it("keeps two places distinct rather than merging them by label", async () => {
+    mount(client());
+    const panel = await screen.findByRole("region", { name: "Watched locations" });
+
+    const cards = within(panel).getAllByRole("button");
+    expect(cards).toHaveLength(2);
+    expect(cards[0]).toHaveTextContent("London");
+    expect(cards[1]).toHaveTextContent("Munich");
+  });
+});
+
+describe("changes detected, against what the panel beside it says", () => {
+  it("reads zero for a watch that has only been checked once", async () => {
+    const data = dashboard();
+    mount(
+      client({}, {
+        ...data,
+        summary: { ...(data.summary as Record<string, unknown>), changes_detected: 0 },
+        selected: {
+          ...(data.selected as Record<string, unknown>),
+          changes: [],
+          evaluation_count: 1,
+        },
+        activity: [
+          {
+            id: "e-1",
+            watch_id: "w-london",
+            occurred_at: "2026-09-13T12:00:00Z",
+            event_type: "watch_created",
+            new_state: "pending",
+            summary: "Watch created: London temperature above 25 °C.",
+          },
+        ],
+      }),
+    );
+    await screen.findByRole("heading", { name: "Watched locations" });
+
+    // The KPI and the panel agree: nothing has changed, and the creation is not a change.
+    const counters = screen.getByText("Changes detected").closest("li");
+    expect(counters).toHaveTextContent("0");
+    expect(
+      within(screen.getByRole("region", { name: "What changed?" })).getByText(
+        /only been checked once so far/,
+      ),
+    ).toBeInTheDocument();
+
+    // The feed still carries the creation, because an audit stream is not a change counter.
+    expect(
+      within(screen.getByRole("region", { name: "Activity feed" })).getByText("Watch created"),
+    ).toBeInTheDocument();
+  });
+
+  it("reads what the backend counted once a real transition has happened", async () => {
+    mount(client());
+    await screen.findByRole("heading", { name: "Watched locations" });
+
+    expect(screen.getByText("Changes detected").closest("li")).toHaveTextContent("3");
+    expect(
+      within(screen.getByRole("region", { name: "What changed?" })).getByText("State change"),
+    ).toBeInTheDocument();
   });
 });
 

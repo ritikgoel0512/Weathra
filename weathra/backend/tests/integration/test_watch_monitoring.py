@@ -271,6 +271,117 @@ async def test_a_degraded_pass_is_recorded_rather_than_skipped(
     assert [event.event_type for event in events] == ["reading_lost"]
 
 
+async def test_only_a_monitoring_change_counts_towards_changes_detected(
+    engines: Engines, clean_database: None
+) -> None:
+    """The KPI and the What Changed panel must not contradict each other on a new watch.
+
+    A watch created and checked once reported "1 change detected" beside a panel correctly saying
+    nothing had changed yet, because the counter counted every event and creation is one. Creation
+    is something that happened; it is not something the weather did.
+    """
+    user = new_user_id()
+    async with session_as(engines, user) as session:
+        await insert_profile(session, user)
+        watch = await _watch(session, user)
+        await record_creation(session, user_id=user, watch=watch, place="London", at=AT)
+        watch, _, _ = await record_evaluation(
+            session,
+            user_id=user,
+            watch=watch,
+            evidence=_evidence(22.0, met=False),
+            place="London",
+            evaluated_at=AT,
+            provider="open-meteo",
+            retrieved_at=AT,
+        )
+        history = WatchHistory(session, _principal(user))
+        after_first = await history.count_events_since(AT - timedelta(hours=1))
+        feed_after_first = await history.events()
+
+        # A second check that turns the condition over is a real change.
+        watch, _, _ = await record_evaluation(
+            session,
+            user_id=user,
+            watch=watch,
+            evidence=_evidence(26.3, met=True),
+            place="London",
+            evaluated_at=AT + timedelta(hours=1),
+            provider="open-meteo",
+            retrieved_at=AT + timedelta(hours=1),
+        )
+        after_second = await history.count_events_since(AT - timedelta(hours=1))
+
+    assert after_first == 0, "a watch created and checked once has detected nothing"
+    # The feed still holds the creation: an audit stream and an intelligence figure differ.
+    assert [event.event_type for event in feed_after_first] == ["watch_created"]
+    # The turn-over, and the 4.3 °C move that produced it. Both are differences between checks.
+    assert after_second == 2
+
+
+async def test_a_restated_watch_replaces_a_coordinate_label_with_the_real_one(
+    engines: Engines, clean_database: None
+) -> None:
+    """The repair path for a watch saved before the name was sent alongside the coordinates.
+
+    Open-Meteo has no reverse geocoding, so a point cannot be asked what it is called and a watch
+    saved by coordinates alone is named after its own latitude and longitude. Re-stating it with the
+    canonical name replaces that label — and keeps the watch, so its history survives the repair.
+    """
+    user = new_user_id()
+    coordinates_only = Location(
+        display_name="51.5072, -0.1276",
+        latitude=LONDON.latitude,
+        longitude=LONDON.longitude,
+        timezone=LONDON.timezone,
+    )
+
+    async with session_as(engines, user) as session:
+        await insert_profile(session, user)
+        store = WatchStore(session, _principal(user))
+        legacy = await store.create(
+            location=coordinates_only,
+            measure=Measure.TEMPERATURE,
+            comparison="above",
+            threshold=25.0,
+        )
+        await record_creation(session, user_id=user, watch=legacy, place="London", at=AT)
+        assert legacy.location.display_name == "51.5072, -0.1276"
+
+        repaired = await store.create(
+            location=LONDON, measure=Measure.TEMPERATURE, comparison="above", threshold=25.0
+        )
+        feed = await WatchHistory(session, _principal(user)).events()
+
+    assert repaired.id == legacy.id, "the same watch, not a second one"
+    assert repaired.location.display_name == "London"
+    assert repaired.location.country == "United Kingdom"
+    assert repaired.location.region == "England"
+    assert len(feed) == 1, "and its history is intact: nothing was deleted to repair the name"
+
+
+async def test_two_places_keep_their_own_labels_and_coordinates(
+    engines: Engines, clean_database: None
+) -> None:
+    """Grouping is by the rounded point, so two places cannot merge however alike their names."""
+    user = new_user_id()
+    async with session_as(engines, user) as session:
+        await insert_profile(session, user)
+        store = WatchStore(session, _principal(user))
+        await store.create(
+            location=LONDON, measure=Measure.TEMPERATURE, comparison="above", threshold=25.0
+        )
+        await store.create(
+            location=MUNICH, measure=Measure.TEMPERATURE, comparison="above", threshold=25.0
+        )
+        watches = await store.list()
+
+    by_name = {watch.location.display_name: watch.location for watch in watches}
+    assert set(by_name) == {"London", "Munich"}
+    assert by_name["London"].latitude == LONDON.latitude
+    assert by_name["Munich"].latitude == MUNICH.latitude
+
+
 # ------------------------------------------------------------------ the scheduled pass
 
 

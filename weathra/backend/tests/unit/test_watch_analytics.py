@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from weathra.analytics.watch import (
+    MONITORING_CHANGES,
     WatchOutcome,
     WatchState,
     changes_between,
@@ -395,3 +396,65 @@ def test_a_window_that_starts_or_stops_crossing_is_reported_either_way() -> None
         place="London",
     )
     assert any(change.kind == "crossing_cleared" for change in cleared)
+
+
+# ------------------------------------------------------------------ what counts as a change
+
+
+def test_creating_a_watch_is_activity_rather_than_a_monitoring_change() -> None:
+    """The one distinction the "changes detected" figure exists to draw.
+
+    An activity feed should record that a watch was created — somebody will want to know when. A
+    change counter answers "has the weather done anything since I last looked", and a watch's own
+    creation is not something the weather did. Counting it made a brand-new watch report one change
+    beside a panel correctly saying nothing had changed yet.
+    """
+    assert "watch_created" not in MONITORING_CHANGES
+
+
+def test_every_difference_between_two_evaluations_counts() -> None:
+    """The set is exactly the kinds `changes_between` can produce, and nothing else."""
+    assert sorted(MONITORING_CHANGES) == [
+        "condition_cleared",
+        "condition_met",
+        "crossing_appeared",
+        "crossing_cleared",
+        "crossing_moved",
+        "reading_lost",
+        "reading_moved",
+        "reading_recovered",
+        "state_changed",
+    ]
+
+
+def test_the_countable_kinds_are_the_ones_the_comparison_actually_emits() -> None:
+    """A kind `changes_between` can emit but the counter ignores would be a silent undercount."""
+    emitted = {
+        change.kind
+        for previous_state, current_state, previous, current in (
+            (
+                WatchState.NOT_MET,
+                WatchState.MET,
+                outcome(value=22.0),
+                outcome(value=26.3, met=True),
+            ),
+            (
+                WatchState.MET,
+                WatchState.NOT_MET,
+                outcome(value=26.3, met=True),
+                outcome(value=20.0),
+            ),
+            (WatchState.NOT_MET, WatchState.DEGRADED, outcome(value=22.0), outcome()),
+            (WatchState.DEGRADED, WatchState.NOT_MET, outcome(), outcome(value=22.0)),
+        )
+        for change in changes_between(
+            previous=previous,
+            previous_state=previous_state,
+            current=current,
+            current_state=current_state,
+            place="London",
+        )
+    }
+    assert emitted <= MONITORING_CHANGES, (
+        f"these kinds are produced but not counted: {sorted(emitted - MONITORING_CHANGES)}"
+    )

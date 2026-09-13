@@ -142,6 +142,20 @@ export function WeatherWatch(): ReactNode {
   const create = useApiMutation<DraftWatch, WatchRecord>({
     run: (client, input) =>
       client.createWatch({
+        /*
+         * The name *and* the coordinates, which together are what makes the stored place readable.
+         *
+         * Sending coordinates alone looked sufficient — they identify the point exactly — and it is
+         * what produced a production watch labelled `51.5085, -0.1257` on every surface. Open-Meteo
+         * has no reverse geocoding, so a save by coordinates names the point after itself, and that
+         * coordinate string became the canonical `display_name` in the row every screen reads.
+         *
+         * `resolve_for_saving` is built for the pair: it resolves the *name* server-side and uses
+         * the coordinates only to pick which of that name's candidates was meant. So the name
+         * supplies the identity, the pair pins the choice, and a client still cannot assert a place
+         * the provider does not know.
+         */
+        location: input.location?.display_name,
         latitude: input.location?.latitude,
         longitude: input.location?.longitude,
         measure: input.measure as WatchRecord["measure"],

@@ -173,6 +173,14 @@ class WatchStore:
 
         Upsert rather than refuse, for the same reason saving a location twice updates its label:
         asking the same question again is a person changing their threshold, not an error.
+
+        **The stored location is refreshed too, and that is what repairs a badly-named row.** The
+        conflict key is the *rounded point*, so the incoming row is the same place by definition —
+        but its canonical name may be better than the one on file. A watch saved by coordinates
+        alone is named after its own latitude and longitude, because Open-Meteo has no reverse
+        geocoding and a point cannot be asked what it is called; re-stating that watch with the name
+        beside the coordinates replaces the coordinate label with the real one. Without this line
+        the only repair would be deleting the watch and its whole history.
         """
         self._check(measure, comparison)
 
@@ -185,7 +193,8 @@ class WatchStore:
                     "        CAST(:location AS jsonb), :label, :measure, :comparison, :threshold) "
                     "ON CONFLICT (user_id, location_id, measure) DO UPDATE "
                     "   SET comparison = excluded.comparison, threshold = excluded.threshold, "
-                    "       label = excluded.label, enabled = true, updated_at = now() "
+                    "       label = excluded.label, location = excluded.location, "
+                    "       enabled = true, updated_at = now() "
                     f"RETURNING {COLUMNS}"
                 ),
                 {
