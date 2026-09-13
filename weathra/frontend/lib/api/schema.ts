@@ -28,6 +28,18 @@ export type AdminAction = "catalog_create" | "catalog_edit" | "catalog_enable" |
 /** The six specialized agents, plus the two nodes that frame a run. */
 export type AgentName = "supervisor" | "current" | "satellite" | "forecast" | "historical" | "analytics" | "rag" | "synthesis";
 
+/** One logical stage of the pipeline, with every action it performed. */
+export interface AgentStage {
+  /** Every action the stage performed, in order. Never empty. */
+  readonly actions?: AgentStep[];
+  readonly agent: AgentName;
+  /** The sum of its actions', which is what it cost. */
+  readonly duration_ms: number;
+  readonly started_at: string;
+  /** The worst of its actions': one failure is not a pass. */
+  readonly status: StepStatus;
+}
+
 /** One agent's turn in the run, in order, with what it cost. */
 export interface AgentStep {
   readonly agent: AgentName;
@@ -35,6 +47,8 @@ export interface AgentStep {
   /** Why the supervisor selected it, or why it failed or was skipped. */
   readonly reason?: string | null;
   readonly sequence: number;
+  /** The logical stage this action belongs to. Always derived from ``agent`` — anything supplied is replaced — so a stored record cannot disagree with itself. */
+  readonly stage?: AgentName;
   readonly started_at: string;
   readonly status: StepStatus;
 }
@@ -533,6 +547,8 @@ export type Direction = "above" | "below";
 /** Who supplied a piece of data, for where, for when, and when it was fetched. */
 export interface EvidenceAttribution {
   readonly data_class: DataClass;
+  /** For a source Weathra computed rather than retrieved: the retrieved sources it was computed over, each named as its provider and data class. Empty for a retrieval, which is derived from nothing — it *is* the origin. */
+  readonly derived_from?: string[];
   readonly location: Location;
   /** For a window. Null when the datum is a single instant. */
   readonly period?: Period | null;
@@ -572,6 +588,8 @@ export interface EvidenceRecord {
   /** Why the supervisor chose the agents it chose. */
   readonly routing_reason?: string | null;
   readonly routing_source?: "model" | "deterministic_fallback";
+  /** The run's execution flow, one entry per logical stage. Always derived from ``agents`` — anything supplied is replaced. */
+  readonly stages?: AgentStage[];
   readonly started_at: string;
   readonly steps_used?: number;
   readonly thread_id?: string | null;

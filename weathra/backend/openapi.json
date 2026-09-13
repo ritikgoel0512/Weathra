@@ -97,6 +97,47 @@
         "title": "AgentName",
         "type": "string"
       },
+      "AgentStage": {
+        "additionalProperties": false,
+        "description": "One logical stage of the pipeline, with every action it performed.\n\nThe execution record at the altitude the pipeline actually has: one entry per stage, in the\norder the stages first ran, each holding its own actions rather than standing beside them. An\nagent asked for two archive windows performed two actions in one stage \u2014 it did not become two\nstages, and a reader counting stages should get the number of stages.",
+        "properties": {
+          "actions": {
+            "default": [],
+            "description": "Every action the stage performed, in order. Never empty.",
+            "items": {
+              "$ref": "#/components/schemas/AgentStep"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "agent": {
+            "$ref": "#/components/schemas/AgentName"
+          },
+          "duration_ms": {
+            "description": "The sum of its actions', which is what it cost.",
+            "minimum": 0.0,
+            "title": "Duration Ms",
+            "type": "number"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StepStatus",
+            "description": "The worst of its actions': one failure is not a pass."
+          }
+        },
+        "required": [
+          "agent",
+          "status",
+          "started_at",
+          "duration_ms"
+        ],
+        "title": "AgentStage",
+        "type": "object"
+      },
       "AgentStep": {
         "additionalProperties": false,
         "description": "One agent's turn in the run, in order, with what it cost.",
@@ -125,6 +166,11 @@
             "minimum": 1.0,
             "title": "Sequence",
             "type": "integer"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/AgentName",
+            "default": "supervisor",
+            "description": "The logical stage this action belongs to. Always derived from ``agent`` \u2014 anything supplied is replaced \u2014 so a stored record cannot disagree with itself."
           },
           "started_at": {
             "format": "date-time",
@@ -2791,6 +2837,15 @@
             ],
             "title": "Routing Source",
             "type": "string"
+          },
+          "stages": {
+            "default": [],
+            "description": "The run's execution flow, one entry per logical stage. Always derived from ``agents`` \u2014 anything supplied is replaced.",
+            "items": {
+              "$ref": "#/components/schemas/AgentStage"
+            },
+            "title": "Stages",
+            "type": "array"
           },
           "started_at": {
             "format": "date-time",
@@ -7885,6 +7940,15 @@
         "properties": {
           "data_class": {
             "$ref": "#/components/schemas/DataClass"
+          },
+          "derived_from": {
+            "default": [],
+            "description": "For a source Weathra computed rather than retrieved: the retrieved sources it was computed over, each named as its provider and data class. Empty for a retrieval, which is derived from nothing \u2014 it *is* the origin.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Derived From",
+            "type": "array"
           },
           "location": {
             "$ref": "#/components/schemas/Location"
