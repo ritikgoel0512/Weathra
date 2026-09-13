@@ -391,7 +391,7 @@ describe("Settings", () => {
     await screen.findByRole("region", { name: "Conversation memory" });
     expectAccessible(container);
 
-    await person.click(screen.getByRole("button", { name: "Delete this conversation" }));
+    await person.click(screen.getByRole("button", { name: "Delete" }));
     expectAccessible(container);
   });
 

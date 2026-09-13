@@ -44,6 +44,7 @@ import type {
 import { useApiMutation, useApiQuery } from "@/lib/query/hooks";
 import { PREFERENCES_KEY, SAVED_LOCATIONS_KEY, THREADS_KEY } from "@/lib/query/keys";
 import { placeKey } from "@/lib/locations/place";
+import { readableInstant, visibleConversations } from "@/lib/settings/conversations";
 import {
   UNIT_OPTIONS,
   choiceFor,
@@ -410,20 +411,31 @@ function ThreadRow({
   readonly disabled: boolean;
 }): ReactNode {
   const name = thread.title?.trim() || "Untitled conversation";
+  const places = (thread.locations ?? []).join(", ");
 
   return (
     <li className={styles.thread} data-thread={thread.id}>
-      <span className={styles.threadTitle}>{name}</span>
-      <p className={styles.note}>
-        Last active {formatInstant(thread.last_activity_at) ?? "not reported"} · removed
-        automatically after {formatInstant(thread.expires_at) ?? "not reported"}
-      </p>
-      {(thread.locations ?? []).length > 0 ? (
-        <p className={styles.note}>Places established: {(thread.locations ?? []).join(", ")}</p>
-      ) : null}
+      <div className={styles.threadMain}>
+        <span className={styles.threadTitle}>{name}</span>
+        {places ? <span className={styles.threadPlaces}>{places}</span> : null}
+        {/*
+          A date somebody is deciding something about, so the month is a word. Still the backend's
+          own instant in UTC — nothing here converts a stored timestamp.
+        */}
+        <span className={styles.threadDates}>
+          Last active: {readableInstant(thread.last_activity_at) ?? "not reported"}
+          {" · "}
+          Expires: {readableInstant(thread.expires_at) ?? "not reported"}
+        </span>
+      </div>
 
+      {/*
+        The destructive control is the smallest thing in the row. It was a full-width red bar under
+        every conversation, which made a list of them read as a page of warnings — and the same
+        confirmation still stands behind it, unchanged.
+      */}
       <ConfirmAction
-        trigger="Delete this conversation"
+        trigger="Delete"
         title={`Delete the memory of “${name}”?`}
         confirmLabel="Delete this conversation's memory"
         busy={deleting}
@@ -451,6 +463,7 @@ function ThreadRow({
  */
 export function ConversationMemory(): ReactNode {
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   const { state, retry } = useApiQuery<ThreadsResponse>({
     key: THREADS_KEY,
@@ -478,8 +491,8 @@ export function ConversationMemory(): ReactNode {
       <h2 className={styles.panelTitle}>Conversation memory</h2>
       <p className={styles.body}>
         Each conversation with the AI Weather Analyst keeps its turns so a follow-up question can
-        resolve against them. Weathra removes them on its own after a bounded period; you can remove
-        one now. This is not the same as signing out, and it deletes nothing durable.
+        resolve against them. Weathra removes them on its own after the period each one shows below;
+        you can remove one now. This is not the same as signing out, and it deletes nothing durable.
       </p>
 
       {remove.state.kind === "saved" ? (
@@ -507,19 +520,41 @@ export function ConversationMemory(): ReactNode {
             onRetry={again}
           />
         )}
-        ready={(data) => (
-          <ul className={styles.threads}>
-            {data.threads.map((thread) => (
-              <ThreadRow
-                key={thread.id}
-                thread={thread}
-                onDelete={onDelete}
-                deleting={remove.busy && deletingId === thread.id}
-                disabled={remove.busy}
-              />
-            ))}
-          </ul>
-        )}
+        ready={(data) => {
+          const shown = visibleConversations(data.threads, expanded);
+          const hidden = data.threads.length - shown.length;
+
+          return (
+            <>
+              <p className={styles.threadCount}>
+                {data.threads.length} active conversation
+                {data.threads.length === 1 ? "" : "s"}
+              </p>
+              <ul className={styles.threads}>
+                {shown.map((thread) => (
+                  <ThreadRow
+                    key={thread.id}
+                    thread={thread}
+                    onDelete={onDelete}
+                    deleting={remove.busy && deletingId === thread.id}
+                    disabled={remove.busy}
+                  />
+                ))}
+              </ul>
+              {/*
+                Collapsed by default and nothing hidden: the count above says how many there are and
+                this opens the rest in place. Settings used to render every retained conversation in
+                full, which on an account that had used the Analyst put several screens of history
+                under the settings.
+              */}
+              {hidden > 0 ? (
+                <Button size="sm" onClick={() => setExpanded(true)}>
+                  View all conversations ({data.threads.length})
+                </Button>
+              ) : null}
+            </>
+          );
+        }}
       />
     </section>
   );

@@ -119,6 +119,19 @@ const THREADS = {
   ],
 };
 
+/** Eleven conversations, which is the shape that made Settings a page of history. */
+const MANY_THREADS = {
+  count: 11,
+  threads: Array.from({ length: 11 }, (_, index) => ({
+    id: `t-${index + 1}`,
+    title: `Conversation ${index + 1}`,
+    created_at: "2026-09-03T09:00:00Z",
+    last_activity_at: `2026-09-${String(13 - index).padStart(2, "0")}T08:16:00Z`,
+    expires_at: `2026-10-${String(13 - index).padStart(2, "0")}T08:16:00Z`,
+    locations: ["London, England, United Kingdom"],
+  })),
+};
+
 const DELETION = {
   removed: {
     user_id: ME.user_id,
@@ -670,7 +683,7 @@ describe("deleting a conversation's memory", () => {
     const memory = await screen.findByRole("region", { name: "Conversation memory" });
     expect(within(memory).getByText("Berlin this week")).toBeInTheDocument();
 
-    await person.click(within(memory).getByRole("button", { name: "Delete this conversation" }));
+    await person.click(within(memory).getByRole("button", { name: "Delete" }));
 
     // Nothing is sent by opening the confirmation.
     expect(
@@ -711,7 +724,7 @@ describe("deleting a conversation's memory", () => {
     await openIntelligenceTab(person);
 
     const memory = await screen.findByRole("region", { name: "Conversation memory" });
-    await person.click(within(memory).getByRole("button", { name: "Delete this conversation" }));
+    await person.click(within(memory).getByRole("button", { name: "Delete" }));
     await person.click(
       within(memory).getByRole("button", { name: "Delete this conversation's memory" }),
     );
@@ -750,7 +763,7 @@ describe("deleting a conversation's memory", () => {
     await openIntelligenceTab(person);
 
     const memory = await screen.findByRole("region", { name: "Conversation memory" });
-    await person.click(within(memory).getByRole("button", { name: "Delete this conversation" }));
+    await person.click(within(memory).getByRole("button", { name: "Delete" }));
     await person.click(
       within(memory).getByRole("button", { name: "Delete this conversation's memory" }),
     );
@@ -869,7 +882,7 @@ describe("deleting the person's Weathra data", () => {
     // so it sits with the rest of what the assistant remembers.
     await openIntelligenceTab(person);
     expect(await screen.findByRole("region", { name: "Conversation memory" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Delete this conversation" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
     // And the two heavier operations are not on this tab at all.
     expect(screen.queryByRole("button", { name: "Delete my Weathra data" })).not.toBeInTheDocument();
   });
@@ -1082,6 +1095,105 @@ describe("the Transparency tab", () => {
     await screen.findByText("How Weathra labels data");
 
     expect(screen.queryByRole("button", { name: /Save preferences/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("the AI Intelligence tab's composition", () => {
+  it("names the provider and the model as a product does, with the identifier a press away", async () => {
+    const person = userEvent.setup();
+    renderSettings();
+    await person.click(screen.getByRole("tab", { name: "AI Intelligence" }));
+
+    const panel = await screen.findByRole("tabpanel");
+    expect(within(panel).getByText("OpenRouter")).toBeInTheDocument();
+    expect(within(panel).getByText("NVIDIA Nemotron Nano 9B v2")).toBeInTheDocument();
+
+    // The raw identifier is not hidden — it is one disclosure away, verbatim.
+    expect(within(panel).queryByText(/nvidia\/nemotron-nano-9b-v2/)).not.toBeVisible();
+    await person.click(within(panel).getByText("Technical details"));
+    expect(within(panel).getByText(/openrouter, model nvidia\/nemotron-nano-9b-v2\./)).toBeVisible();
+  });
+
+  it("puts the person's own recent use above their conversation history", async () => {
+    const person = userEvent.setup();
+    renderSettings();
+    await person.click(screen.getByRole("tab", { name: "AI Intelligence" }));
+
+    const panel = await screen.findByRole("tabpanel");
+    const text = panel.textContent ?? "";
+    // Three counted figures should not be reachable only by scrolling past somebody's history.
+    expect(text.indexOf("Your recent AI use")).toBeGreaterThan(-1);
+    expect(text.indexOf("Your recent AI use")).toBeLessThan(text.indexOf("Conversation memory"));
+    expect(within(panel).getByText("Calls")).toBeInTheDocument();
+    expect(within(panel).getByText("Plan")).toBeInTheDocument();
+  });
+});
+
+describe("conversation memory as a summary", () => {
+  async function openMemory() {
+    const person = userEvent.setup();
+    renderSettings();
+    await person.click(screen.getByRole("tab", { name: "AI Intelligence" }));
+    await screen.findByRole("region", { name: "Conversation memory" });
+    return person;
+  }
+
+  it("counts them all and opens with only the most recent few", async () => {
+    fetchMock = backend(settingsRoutes({ "GET /api/v1/threads": () => jsonResponse(200, MANY_THREADS) }));
+    await openMemory();
+
+    const memory = screen.getByRole("region", { name: "Conversation memory" });
+    expect(within(memory).getByText("11 active conversations")).toBeInTheDocument();
+    // Three rows, not eleven: nothing is hidden, and the count above says how many there are.
+    expect(within(memory).getAllByRole("listitem")).toHaveLength(3);
+    expect(within(memory).getByText("Conversation 1")).toBeInTheDocument();
+    expect(within(memory).queryByText("Conversation 4")).not.toBeInTheDocument();
+  });
+
+  it("opens the rest in place, without leaving the tab", async () => {
+    fetchMock = backend(settingsRoutes({ "GET /api/v1/threads": () => jsonResponse(200, MANY_THREADS) }));
+    const person = await openMemory();
+    const memory = screen.getByRole("region", { name: "Conversation memory" });
+
+    await person.click(within(memory).getByRole("button", { name: "View all conversations (11)" }));
+
+    expect(within(memory).getAllByRole("listitem")).toHaveLength(11);
+    expect(within(memory).getByText("Conversation 11")).toBeInTheDocument();
+    expect(
+      within(memory).queryByRole("button", { name: /View all conversations/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers no expansion when there is nothing more to show", async () => {
+    await openMemory();
+    const memory = screen.getByRole("region", { name: "Conversation memory" });
+
+    expect(within(memory).getByText("1 active conversation")).toBeInTheDocument();
+    expect(
+      within(memory).queryByRole("button", { name: /View all conversations/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("writes both dates as a person reads them, and keeps retention visible", async () => {
+    await openMemory();
+    const memory = screen.getByRole("region", { name: "Conversation memory" });
+
+    // The backend's own instants, in UTC, with the month as a word.
+    // "Sept" is en-GB's own abbreviation for September, which is the point of using the locale
+    // rather than slicing three letters off the month name.
+    const dates = within(memory).getByText(/Last active:/);
+    expect(dates).toHaveTextContent("Last active: 4 Sept 2026, 08:40 UTC");
+    expect(dates).toHaveTextContent("Expires: 11 Sept 2026, 08:40 UTC");
+    expect(within(memory).getByText(/removes them on its own after the period/)).toBeInTheDocument();
+  });
+
+  it("still says so when there are none at all", async () => {
+    fetchMock = backend(
+      settingsRoutes({ "GET /api/v1/threads": () => jsonResponse(200, { count: 0, threads: [] }) }),
+    );
+    await openMemory();
+
+    expect(await screen.findByText("You have no stored conversations")).toBeInTheDocument();
   });
 });
 

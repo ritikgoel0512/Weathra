@@ -2097,16 +2097,72 @@ const FIXTURES = {
     },
   },
 
+  /*
+   * Several conversations, not one.
+   *
+   * The Settings capture with a single thread could not show the state the page was rebuilt for: an
+   * account that has used the Analyst keeps a list of them, and rendering every one in full is what
+   * made the tab several screens of history. Seven is enough to photograph the summary, the five
+   * shown by default, and the control that opens the rest.
+   */
   "/api/v1/threads": {
-    count: 1,
+    count: 7,
     threads: [
       {
         id: "t-1",
         title: "Berlin this week",
         created_at: "2026-09-03T09:00:00Z",
-        last_activity_at: "2026-09-04T08:40:00Z",
-        expires_at: "2026-09-11T08:40:00Z",
+        last_activity_at: "2026-09-13T08:16:00Z",
+        expires_at: "2026-10-13T08:16:00Z",
         locations: ["Berlin, Berlin, DE"],
+      },
+      {
+        id: "t-2",
+        title: "Rain over the weekend in London",
+        created_at: "2026-09-02T09:00:00Z",
+        last_activity_at: "2026-09-12T17:04:00Z",
+        expires_at: "2026-10-12T17:04:00Z",
+        locations: ["London, England, United Kingdom"],
+      },
+      {
+        id: "t-3",
+        title: "Munich against last September",
+        created_at: "2026-09-01T09:00:00Z",
+        last_activity_at: "2026-09-11T11:22:00Z",
+        expires_at: "2026-10-11T11:22:00Z",
+        locations: ["Munich, Bavaria, Germany"],
+      },
+      {
+        id: "t-4",
+        title: "Wind on the coast",
+        created_at: "2026-08-31T09:00:00Z",
+        last_activity_at: "2026-09-10T09:48:00Z",
+        expires_at: "2026-10-10T09:48:00Z",
+        locations: ["Reykjavík, Capital Region, Iceland"],
+      },
+      {
+        id: "t-5",
+        title: "Travel window for Barcelona",
+        created_at: "2026-08-30T09:00:00Z",
+        last_activity_at: "2026-09-09T14:30:00Z",
+        expires_at: "2026-10-09T14:30:00Z",
+        locations: ["Barcelona, Catalonia, Spain"],
+      },
+      {
+        id: "t-6",
+        title: "Was August unusually dry?",
+        created_at: "2026-08-29T09:00:00Z",
+        last_activity_at: "2026-09-08T10:05:00Z",
+        expires_at: "2026-10-08T10:05:00Z",
+        locations: ["Berlin, Berlin, DE"],
+      },
+      {
+        id: "t-7",
+        title: "Comparing Tokyo and Seoul",
+        created_at: "2026-08-28T09:00:00Z",
+        last_activity_at: "2026-09-07T08:12:00Z",
+        expires_at: "2026-10-07T08:12:00Z",
+        locations: ["Tokyo, Tokyo, Japan", "Seoul, South Korea"],
       },
     ],
   },

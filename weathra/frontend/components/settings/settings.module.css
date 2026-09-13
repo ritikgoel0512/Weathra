@@ -318,10 +318,19 @@
   min-width: 0;
 }
 
+/*
+ * One conversation, as a row rather than a card of its own.
+ *
+ * The text and the control sit side by side, which is what keeps the destructive button small: in a
+ * column it stretched to the row's full width, and a list of conversations read as a column of red
+ * bars. The confirmation behind it is unchanged — only its trigger stops dominating.
+ */
 .thread {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
   padding: var(--space-3);
   background: var(--color-surface-inset);
   border: 1px solid var(--color-border-subtle);
@@ -329,12 +338,48 @@
   min-width: 0;
 }
 
+.threadMain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+/* Once the confirmation opens it is the row's subject, so it takes the whole width. */
+.thread > [role="group"] {
+  flex-basis: 100%;
+}
+
 .threadTitle {
-  font-size: var(--type-card-size);
-  line-height: var(--type-card-line);
-  font-weight: var(--type-card-weight);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
   color: var(--color-text-primary);
   overflow-wrap: anywhere;
+}
+
+.threadPlaces {
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  overflow-wrap: anywhere;
+}
+
+.threadDates {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* How many there are, above the few that are shown. */
+.threadCount {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-ui-size);
+  font-weight: var(--type-ui-weight);
 }
 
 /* --------------------------------------------------------------- confirmation */
@@ -553,4 +598,66 @@
   line-height: var(--type-meta-line);
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
+}
+
+/* The three counted figures about the person's own AI use, as tiles rather than a definition list. */
+.counters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  inline-size: 100%;
+  min-width: 0;
+}
+
+.counter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.counter dt {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+}
+
+.counter dd {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* The raw identifier, one press away from the name it was read out of. */
+.technical {
+  margin-block-start: var(--space-1);
+  min-width: 0;
+}
+
+.technical summary {
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: 400;
+}
+
+.technical summary:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.technical[open] summary {
+  margin-block-end: var(--space-1);
 }

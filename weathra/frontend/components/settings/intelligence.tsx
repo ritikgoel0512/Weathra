@@ -35,6 +35,8 @@ import { Badge, Card, CardBody, CardHeader, DataClassBadge, Skeleton } from "@/c
 import type { ReadinessResponse, UsageResponse } from "@/lib/api/schema";
 import { useApiQuery } from "@/lib/query/hooks";
 
+import { describeInference } from "@/lib/settings/inference";
+
 import { ConversationMemory } from "./sections";
 import styles from "./settings.module.css";
 
@@ -62,6 +64,7 @@ function Analyst({
 }): ReactNode {
   const inference = dependency(readiness, "inference_provider");
   const configured = inference?.configured ?? false;
+  const described = describeInference(inference?.detail);
 
   return (
     <Card>
@@ -87,19 +90,36 @@ function Analyst({
             </dd>
           </div>
           <div className={styles.fact}>
+            <dt>Provider</dt>
+            <dd>
+              {pending ? <Skeleton height="var(--space-4)" /> : (described.provider ?? "—")}
+            </dd>
+          </div>
+          <div className={styles.fact}>
             <dt>Model</dt>
             {/*
-              The backend's own sentence. It names the provider and the model and never the
-              credential — a page that assembled this from a constant could claim a model the
-              deployment is not using.
+              Read out of the identifier the probe reported, never out of a table beside it: a
+              lookup of pretty model names goes stale the moment a deployment changes its model, and
+              a settings page confidently naming a model the backend is not using is worse than one
+              printing an identifier. The identifier itself is a press away, verbatim.
             */}
-            <dd className={styles.factDetail}>
+            <dd>
               {pending ? (
                 <Skeleton height="var(--space-4)" />
+              ) : described.model !== null ? (
+                <>
+                  {described.model}
+                  {described.modelId ? (
+                    <details className={styles.technical}>
+                      <summary>Technical details</summary>
+                      <p className={styles.factDetail}>{described.detail}</p>
+                    </details>
+                  ) : null}
+                </>
               ) : (
-                // Never a guess: where the probe did not answer, this says so rather than naming a
-                // model from a constant that could be wrong.
-                (inference?.detail ?? "Not reported by this deployment.")
+                <span className={styles.factDetail}>
+                  {described.detail ?? "Not reported by this deployment."}
+                </span>
               )}
             </dd>
           </div>
@@ -187,17 +207,15 @@ function Memory(): ReactNode {
             <div className={styles.fact}>
               <dt>Conversation context</dt>
               <dd className={styles.factDetail}>
-                Follow-up questions can use relevant context from the same conversation — the place
-                you were asking about, the window, the units. It lasts as long as the conversation
-                does, and deleting one removes it.
+                Used for follow-up questions inside the same conversation — the place, the window,
+                the units. Deleting a conversation removes it.
               </dd>
             </div>
             <div className={styles.fact}>
               <dt>Preference memory</dt>
               <dd className={styles.factDetail}>
-                Your units, default forecast horizon and default location are reused wherever a
-                screen does not ask you to choose. They are the settings on the General tab — change
-                or reset them there.
+                Reuses your units, default forecast horizon and default location. Change or reset
+                them on the General tab.
               </dd>
             </div>
           </dl>
@@ -229,16 +247,16 @@ function RecentUse(): ReactNode {
         subtitle={`Language model calls made for you over the last ${recent.days} days.`}
       />
       <CardBody>
-        <dl className={styles.facts}>
-          <div className={styles.fact}>
+        <dl className={styles.counters}>
+          <div className={styles.counter}>
             <dt>Calls</dt>
             <dd>{recent.calls}</dd>
           </div>
-          <div className={styles.fact}>
+          <div className={styles.counter}>
             <dt>Failed</dt>
             <dd>{recent.failures}</dd>
           </div>
-          <div className={styles.fact}>
+          <div className={styles.counter}>
             <dt>Plan</dt>
             <dd>{usage.state.data.plan_name}</dd>
           </div>
@@ -259,13 +277,18 @@ export function IntelligenceTab(): ReactNode {
 
   return (
     <div className={styles.stack}>
+      {/*
+        Recent use sits directly under the analyst it is about. It was last on the tab, which put it
+        beneath the whole conversation list — three counted figures reachable only by scrolling
+        through somebody's history.
+      */}
       <Analyst
         readiness={readiness.state.kind === "ready" ? readiness.state.data : null}
         pending={readiness.state.kind === "loading"}
       />
+      <RecentUse />
       <Grounding />
       <Memory />
-      <RecentUse />
     </div>
   );
 }
