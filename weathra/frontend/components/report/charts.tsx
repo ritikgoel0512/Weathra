@@ -53,6 +53,7 @@ import {
 } from "recharts";
 
 import { Button, ScrollRegion } from "@/components/ui";
+import { formatMeasured, placesFor } from "@/lib/report/figures";
 import { roundTo } from "@/lib/report/view-model";
 
 import styles from "./report.module.css";
@@ -108,12 +109,11 @@ function TimelineTooltip({
         Temperature:{" "}
         {point.temperature === null
           ? "not reported"
-          : `${point.temperature}${temperatureUnit ? ` ${temperatureUnit}` : ""}`}
+          : formatMeasured(point.temperature, temperatureUnit)}
       </p>
       {point.precipitation === null ? null : (
         <p className={styles.tooltipValue}>
-          Precipitation: {point.precipitation}
-          {precipitationUnit ? ` ${precipitationUnit}` : ""}
+          Precipitation: {formatMeasured(point.precipitation, precipitationUnit)}
         </p>
       )}
     </div>
@@ -157,8 +157,17 @@ function TimelineFigures({
                 <tr key={point.stamp}>
                   <th scope="row">{point.stamp}</th>
                   {/* Never a zero for an absent reading: they are different facts. */}
-                  <td>{point.temperature === null ? "not reported" : point.temperature}</td>
-                  <td>{point.precipitation === null ? "not reported" : point.precipitation}</td>
+                  {/* The unit is in the column head, so the cell carries the figure alone. */}
+                  <td>
+                    {point.temperature === null
+                      ? "not reported"
+                      : roundTo(point.temperature, placesFor(temperatureUnit))}
+                  </td>
+                  <td>
+                    {point.precipitation === null
+                      ? "not reported"
+                      : roundTo(point.precipitation, placesFor(precipitationUnit))}
+                  </td>
                 </tr>
               ))}
             </tbody>

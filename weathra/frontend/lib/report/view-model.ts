@@ -49,7 +49,6 @@ import type {
 import {
   dayPrecipitationFrom,
   forecastDaysFrom,
-  formatReading,
   measureLabel,
   readingsFrom,
   statisticPhrase,
@@ -60,6 +59,8 @@ import type { DataClassName } from "@/lib/design/tokens";
 import { conditionFor, type Condition } from "@/lib/weather/condition";
 
 import type { ReportIconName } from "@/components/report/icons";
+
+import { formatFigureFor, formatMeasured } from "./figures";
 
 /* --------------------------------------------------------------- the limits */
 
@@ -108,7 +109,7 @@ export function formatSigma(value: number): string {
 
 /** A signed figure, so a delta reads as a direction before it reads as a number. */
 export function signedOf(value: number, unit: string | null | undefined): string {
-  return `${value > 0 ? "+" : ""}${formatReading({ value, unit: unit ?? null })}`;
+  return `${value > 0 ? "+" : ""}${formatMeasured(value, unit)}`;
 }
 
 /** Which way a figure points, for a tone. Never the only carrier — the sign leads. */
@@ -122,7 +123,7 @@ export function toneOf(value: number): "up" | "down" | "flat" {
 export function figureOf(result: StatisticResult | null | undefined): string | null {
   if (!result) return null;
   if (result.value === null || result.value === undefined) return null;
-  return formatReading({ value: result.value, unit: result.unit ?? null });
+  return formatMeasured(result.value, result.unit ?? null);
 }
 
 /** One figure on the report: already formatted, already labelled, already classed. */
@@ -388,7 +389,7 @@ export function currentTilesFrom(current: CurrentResponse | null): CurrentTiles 
     shown: ranked.slice(0, CURRENT_TILE_LIMIT).map((reading) => ({
       key: reading.key,
       label: measureLabel(reading.key),
-      value: roundTo(reading.value, 1),
+      value: formatFigureFor(reading.value, reading.unit),
       unit: reading.unit,
       icon: MEASURE_ICONS[reading.key] ?? null,
     })),

@@ -108,7 +108,8 @@ function statistic(measure: string, name: string, value: number | null, unit: st
 
 const ANSWER = {
   answer: {
-    answer_prose: "A settled week, a little warmer than the record for this window.",
+    answer_prose:
+      "A settled week: the mean of 20.142857142857142 °C sits above the record, with 6.700000000000001 mm of rain and gusts to 18.671428571428573 km/h.",
     llm_provider: "openrouter",
     llm_model: "a-model",
     grounding: { verified: true, figures_checked: 9, method: "m" },
@@ -448,11 +449,31 @@ describe("the grounded synthesis", () => {
     mount(client({ ask }));
 
     expect(
-      await screen.findByText("A settled week, a little warmer than the record for this window."),
+      await screen.findByText(/A settled week: the mean of 20.1 °C/),
     ).toBeInTheDocument();
     expect(ask).toHaveBeenCalledTimes(1);
     // The control the artifact does not have, and the report no longer needs.
     expect(screen.queryByRole("button", { name: /model reading/i })).not.toBeInTheDocument();
+  });
+
+  it("reads the model's own figures at the precision their units are read at", async () => {
+    mount(client());
+    const panel = await screen.findByRole("region", { name: "Grounded synthesis" });
+
+    expect(await within(panel).findByText(/20.1 °C/)).toHaveTextContent(
+      "A settled week: the mean of 20.1 °C sits above the record, with 6.7 mm of rain and gusts to 18.7 km/h.",
+    );
+  });
+
+  it("leaves the stored prose the grounding check ran against untouched", async () => {
+    const ask = vi.fn().mockResolvedValue(ANSWER);
+    mount(client({ ask }));
+    await screen.findByText(/A settled week: the mean of 20.1 °C/);
+
+    // Formatting is the last step before a pixel. The record keeps every digit it arrived with,
+    // because that is what Agent Evidence renders and what the run's own grounding check matched.
+    expect(ANSWER.answer.answer_prose).toContain("20.142857142857142 °C");
+    expect(ANSWER.answer.answer_prose).toContain("6.700000000000001 mm");
   });
 
   it("names the classes it was grounded on and links the run that produced it", async () => {
@@ -471,7 +492,7 @@ describe("the grounded synthesis", () => {
   it("spends one run per window rather than one per render", async () => {
     const ask = vi.fn().mockResolvedValue(ANSWER);
     mount(client({ ask }));
-    await screen.findByText("A settled week, a little warmer than the record for this window.");
+    await screen.findByText(/A settled week: the mean of 20.1 °C/);
 
     await userEvent.click(screen.getByRole("radio", { name: "3 days" }));
     await waitFor(() => expect(ask).toHaveBeenCalledTimes(2));

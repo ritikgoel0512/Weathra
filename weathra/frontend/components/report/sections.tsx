@@ -47,6 +47,7 @@ import type {
   StatisticResult,
 } from "@/lib/api/schema";
 import { formatReading, measureLabel, statisticPhrase } from "@/lib/dashboard/briefing";
+import { formatProse } from "@/lib/report/figures";
 import { friendlyName } from "@/lib/locations/place";
 import type { ViewFailure } from "@/lib/query/state";
 import {
@@ -610,7 +611,13 @@ export function GroundedSynthesis({
 
   return (
     <div className={styles.synthesisBody}>
-      <p className={styles.synthesis}>{answer.answer_prose}</p>
+      {/*
+        Read at the precision its units are read at — display only. `answer.answer_prose` is
+        untouched: it is what the run's own grounding check matched against and what Agent Evidence
+        renders, and rewriting that record to tidy a page would make the audit disagree with the
+        answer it audited.
+      */}
+      <p className={styles.synthesis}>{formatProse(answer.answer_prose)}</p>
 
       {chips.length > 0 ? (
         <ul className={styles.chips}>
