@@ -1,18 +1,20 @@
 /**
- * Weather Intelligence Report — composed from six endpoints, adding no figure of its own, and
- * *showing a curated subset of them*.
+ * Weather Intelligence Report — the artifact's composition, from real endpoints only.
  *
- * The case that matters most is still the model one: the report is complete before any language
- * model is asked anything. The artifact's narrative appears the moment the page opens; Weathra's
- * costs a model call and an allowance, so it is a control rather than a side effect of navigation.
+ * Two things these cases exist to hold shut, and both were defects the last pass left behind.
  *
- * The cases added with the curation pass guard the other half of it — that a cap is a cap and not
- * a deletion. Each endpoint below is given more than the report shows, and each case asserts both
- * halves: what the page leads with, and that the remainder is one press away rather than gone.
+ * **The report is complete when it is generated.** The synthesis was a button, so the artifact's
+ * most conclusive block was the one obviously unfinished thing on the page. It runs with the
+ * report now — once per window, not once per render, because it is a real model call against a real
+ * allowance and a duplicate is a real cost.
+ *
+ * **A cap is a cap and not a deletion.** Each endpoint below returns more than the report shows,
+ * and each case asserts both halves: what the page leads with, and that the remainder is one press
+ * away rather than gone.
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -42,7 +44,7 @@ const PERIOD = {
 
 /** Nine reported measures, so the six-tile cap has something to leave over. */
 const CURRENT_VALUES = {
-  temperature: 18.4,
+  temperature: 18.44,
   precipitation: 4.2,
   relative_humidity: 72.4,
   wind_speed: 14.2,
@@ -69,7 +71,6 @@ const CURRENT_UNITS = {
 function dailyEntries() {
   return [
     { time_local: "2026-09-10T00:00:00+02:00", time_utc: "a", values: { temperature_max: 19.6, temperature_min: 10.4, precipitation_sum: 1.6, weather_code_dominant: 61 } },
-    // No range at all: the card stays, the figure does not.
     { time_local: "2026-09-11T00:00:00+02:00", time_utc: "b", values: {} },
     { time_local: "2026-09-12T00:00:00+02:00", time_utc: "c", values: { temperature_max: 24.5, temperature_min: 13.1, precipitation_sum: 0, weather_code_dominant: 0 } },
     { time_local: "2026-09-13T00:00:00+02:00", time_utc: "d", values: { temperature_max: 22.8, temperature_min: 12.4, precipitation_sum: 0.2 } },
@@ -84,11 +85,11 @@ function dailyEntries() {
 /** Five movements, so the three-note cap has something to leave over. */
 function dayChanges() {
   return [
-    { local_date: "2026-09-11", measure: "temperature_max", change: 1.4, current: 21, previous: 19.6, material: true, statement: "s1", unit: "°C" },
-    { local_date: "2026-09-13", measure: "temperature_max", change: -1.1, current: 21.7, previous: 22.8, material: true, statement: "s2", unit: "°C" },
-    { local_date: "2026-09-14", measure: "precipitation_sum", change: 0.1, current: 3.5, previous: 3.4, material: false, statement: "s3", unit: "mm" },
-    { local_date: "2026-09-15", measure: "temperature_min", change: 0.9, current: 10.6, previous: 9.7, material: true, statement: "s4", unit: "°C" },
-    { local_date: "2026-09-16", measure: "temperature_max", change: 0.2, current: 18, previous: 17.8, material: false, statement: "s5", unit: "°C" },
+    { local_date: "2026-09-11", measure: "temperature_max", change: 1.4, current: 21, previous: 19.6, material: true, statement: "The high for 11 September rose.", unit: "°C" },
+    { local_date: "2026-09-13", measure: "temperature_max", change: -1.1, current: 21.7, previous: 22.8, material: true, statement: "The high for 13 September fell.", unit: "°C" },
+    { local_date: "2026-09-14", measure: "precipitation_sum", change: 0.1, current: 3.5, previous: 3.4, material: false, statement: "Rainfall for 14 September barely moved.", unit: "mm" },
+    { local_date: "2026-09-15", measure: "temperature_min", change: 0.9, current: 10.6, previous: 9.7, material: true, statement: "The low for 15 September rose.", unit: "°C" },
+    { local_date: "2026-09-16", measure: "temperature_max", change: 0.2, current: 18, previous: 17.8, material: false, statement: "The high for 16 September barely moved.", unit: "°C" },
   ];
 }
 
@@ -104,6 +105,17 @@ function statistic(measure: string, name: string, value: number | null, unit: st
     provenance: {},
   };
 }
+
+const ANSWER = {
+  answer: {
+    answer_prose: "A settled week, a little warmer than the record for this window.",
+    llm_provider: "openrouter",
+    llm_model: "a-model",
+    grounding: { verified: true, figures_checked: 9, method: "m" },
+  },
+  evidence_id: "run-9b5849dd-1a2b",
+  memory_available: true,
+};
 
 function client(overrides: Partial<ApiClient> = {}): ApiClient {
   return {
@@ -151,7 +163,7 @@ function client(overrides: Partial<ApiClient> = {}): ApiClient {
       },
     }),
     changes: vi.fn().mockResolvedValue({
-      statement: "Two days moved materially and three did not.",
+      statement: "Three days moved materially and two did not.",
       comparison_available: true,
       current_retrieved_at: "f",
       changes: dayChanges(),
@@ -191,7 +203,7 @@ function client(overrides: Partial<ApiClient> = {}): ApiClient {
         unit: "°C",
         anomalies: [
           { time_local: "2026-09-10T18:00:00+02:00", time_utc: "h3", value: 17.8, deviation: 2.8, deviation_score: 3.9 },
-          { time_local: "2026-09-12T06:00:00+02:00", time_utc: "h4", value: 9.1, deviation: -5.9, deviation_score: 5.4 },
+          { time_local: "2026-09-12T06:00:00+02:00", time_utc: "h4", value: 9.1, deviation: -5.9, deviation_score: 7.250775664373425 },
         ],
         provenance: {},
         minimum: statistic("temperature", "minimum", 9.1, "°C"),
@@ -222,11 +234,12 @@ function client(overrides: Partial<ApiClient> = {}): ApiClient {
       measure: "temperature_mean",
       observed_or_forecast_value: 16.4,
       observed_data_class: "forecast",
-      characterization: "Warmer than the 3-year baseline for this calendar period.",
+      characterization:
+        "16.4 °C is 1.7 °C above the 3-year baseline temperature mean of 14.7 °C (+0.67 standard deviations).",
       difference: statistic("temperature_mean", "delta", 1.7, "°C"),
-      z_score: statistic("temperature_mean", "z_score", 1.21, ""),
+      z_score: { ...statistic("temperature_mean", "z_score", 0.6706849412785952, ""), unit: "" },
     }),
-    ask: vi.fn(),
+    ask: vi.fn().mockResolvedValue(ANSWER),
     ...overrides,
   } as unknown as ApiClient;
 }
@@ -241,66 +254,75 @@ function mount(api: ApiClient) {
   );
 }
 
-describe("the report's shape", () => {
-  it("opens on the artifact's regions, in its order", async () => {
+describe("the report's composition", () => {
+  it("opens on the artifact's regions, under the artifact's names", async () => {
     mount(client());
     expect(
       await screen.findByRole("heading", { name: "Weather Intelligence Report" }),
     ).toBeInTheDocument();
 
-    for (const section of [
-      "Conditions now",
+    for (const region of [
       "Forecast outlook",
-      "What changed",
-      "The window, against the record",
+      "What changed?",
+      "Deterministic thermal analysis",
       "Historical context",
-      "Weathra's reading",
+      "Anomaly attention",
+      "Grounded synthesis",
       "Grounding evidence",
     ]) {
-      expect(await screen.findByRole("heading", { name: section })).toBeInTheDocument();
+      expect(await screen.findByRole("heading", { name: region })).toBeInTheDocument();
     }
+    expect(screen.getByRole("region", { name: "Current conditions" })).toBeInTheDocument();
   });
 
-  it("leads with the backend's own statement, and does not print it twice", async () => {
+  it("leads with a decision-level headline rather than with the backend's arithmetic", async () => {
     mount(client());
-    const hero = await screen.findByRole("heading", {
-      name: /Warmer than the 3-year baseline/,
+    const headline = await screen.findByRole("heading", {
+      name: /Slightly above the seasonal record/,
     });
-    expect(hero).toBeInTheDocument();
 
-    // The comparison characterizes; the analysis summarises. Two backend sentences, one each.
-    expect(await screen.findByText(/mean temperature across the window/)).toBeInTheDocument();
-    expect(screen.getAllByText(/Warmer than the 3-year baseline/)).toHaveLength(1);
+    expect(headline).toHaveTextContent(
+      "Slightly above the seasonal record, warming through the window, with rain on 4 of 7 days.",
+    );
+    // The exact sentence is still on the page, one level down, where being exact is the job.
+    expect(screen.getByText(/is 1.7 °C above the 3-year baseline/)).toBeInTheDocument();
   });
 
-  it("carries exactly three hero figures, and none of them is an invented count", async () => {
+  it("draws no photograph where the artifact puts its conclusion", async () => {
+    const { container } = mount(client());
+    await screen.findByRole("heading", { name: /Slightly above the seasonal record/ });
+
+    expect(container.querySelectorAll("img")).toHaveLength(0);
+  });
+
+  it("carries exactly three hero figures, none of them an invented count", async () => {
     mount(client());
-    await screen.findByRole("heading", { name: /Warmer than the 3-year baseline/ });
+    await screen.findByRole("heading", { name: /Slightly above the seasonal record/ });
 
     expect(screen.getByText("Outlook confidence")).toBeInTheDocument();
-    expect(screen.getByText("Against the baseline")).toBeInTheDocument();
-    expect(screen.getByText("Trend across the window")).toBeInTheDocument();
-    expect(screen.getByText("+1.7 °C")).toBeInTheDocument();
-    expect(screen.getByText("1.21 σ from the mean")).toBeInTheDocument();
+    expect(screen.getByText("Grounded sources")).toBeInTheDocument();
+    // How unusual the *window* is. Which entry was worst belongs to the attention card, and
+    // printing one figure in both places is the duplication this composition exists to remove.
+    expect(screen.getByText("Distance from baseline")).toBeInTheDocument();
+    expect(screen.getByText("0.67σ")).toBeInTheDocument();
+    expect(screen.getAllByText("-5.9 °C")).toHaveLength(1);
   });
 });
 
 describe("the report's curation", () => {
-  it("shows six observed measures and keeps the rest one press away", async () => {
+  it("shows six observed measures with their glyphs, and keeps the rest one press away", async () => {
     mount(client());
-    const panel = await screen.findByRole("region", { name: "Conditions now" });
+    const panel = await screen.findByRole("region", { name: "Current conditions" });
 
-    // Six of the nine the provider reported, in the artifact's order.
     const [grid] = within(panel).getAllByRole("list");
     expect(grid).toBeDefined();
     expect(within(grid!).getAllByRole("listitem")).toHaveLength(6);
-    expect(within(grid!).getByText("Temperature")).toBeInTheDocument();
     expect(within(grid!).getByText("UV index")).toBeInTheDocument();
-    expect(within(grid!).queryByText("Dew point")).not.toBeInTheDocument();
+    // Rounded at the tile, never at the precision the provider sent.
+    expect(within(grid!).getByText("18.4")).toBeInTheDocument();
 
-    // Nothing is dropped: the remaining three are behind the panel's own disclosure.
     expect(within(panel).getByText("Dew point")).not.toBeVisible();
-    await userEvent.click(within(panel).getByText("3 more measures reported"));
+    await userEvent.click(within(panel).getByText("More conditions (3)"));
     expect(within(panel).getByText("Dew point")).toBeVisible();
   });
 
@@ -308,42 +330,59 @@ describe("the report's curation", () => {
     mount(client());
     const panel = await screen.findByRole("region", { name: "Forecast outlook" });
 
-    // Nine days came back; seven cards are drawn.
     expect(within(panel).getAllByRole("listitem")).toHaveLength(7);
-    expect(within(panel).getByText("Light rain")).toBeInTheDocument();
-    // The day with no range keeps its card and says so rather than being dropped.
+    // The day with no high keeps its card and names what it did report.
     expect(within(panel).getByText("No high reported")).toBeInTheDocument();
   });
 
-  it("shows three movements, material first, and says how many it is not showing", async () => {
+  it("names each movement's subject, and states a first retrieval as its own state", async () => {
     mount(client());
-    const panel = await screen.findByRole("region", { name: "What changed" });
+    const panel = await screen.findByRole("region", { name: "What changed?" });
 
     expect(within(panel).getAllByRole("listitem")).toHaveLength(3);
+    expect(within(panel).getAllByText("Temperature shift")).toHaveLength(3);
     expect(within(panel).getByText("+1.4 °C")).toBeInTheDocument();
-    expect(within(panel).getByText("-1.1 °C")).toBeInTheDocument();
-    expect(within(panel).getByText("+0.9 °C")).toBeInTheDocument();
     expect(within(panel).getByText(/2 further movements/)).toBeInTheDocument();
   });
 
-  it("puts one chart on the page, with the figures that describe it under it", async () => {
+  it("reports a window with no earlier retrieval in two lines, not a panel of prose", async () => {
+    mount(
+      client({
+        changes: vi.fn().mockResolvedValue({
+          statement: "No earlier snapshot of this window is on record.",
+          comparison_available: false,
+          current_retrieved_at: "f",
+          location: BERLIN,
+          period: PERIOD,
+          provider: "open-meteo",
+          unit_system: "metric",
+        }),
+      }),
+    );
+    const panel = await screen.findByRole("region", { name: "What changed?" });
+
+    expect(
+      await within(panel).findByText("No earlier retrieval of this window is stored yet."),
+    ).toBeInTheDocument();
+    expect(within(panel).getByText(/baseline the next one is compared against/)).toBeInTheDocument();
+  });
+
+  it("puts one chart on the page, with four rounded figures under it", async () => {
     mount(client());
-    const panel = await screen.findByRole("region", {
-      name: "The window, against the record",
-    });
+    const panel = await screen.findByRole("region", { name: "Deterministic thermal analysis" });
 
     expect(
       within(panel).getByRole("img", { name: /Temperature through the forecast window/ }),
     ).toBeInTheDocument();
-    // The gap is counted rather than bridged, and the sentence says which way round it is.
     expect(within(panel).getByText(/1 hour in this window was not reported/)).toBeInTheDocument();
 
-    // The baseline and the comparison arrive after the window they are asked for is named.
     expect(await within(panel).findByText("Baseline mean")).toBeInTheDocument();
-    for (const stat of ["Highest temperature", "Average temperature", "Distance from baseline"]) {
+    for (const stat of ["Highest temperature", "Average temperature", "Against baseline"]) {
       expect(within(panel).getByText(stat)).toBeInTheDocument();
     }
-    expect(within(panel).getByText("1.21 σ")).toBeInTheDocument();
+    // The sigma is the hero's figure; this row states the difference in the measure's own unit.
+    expect(within(panel).getByText("+1.7 °C")).toBeInTheDocument();
+    expect(within(panel).queryByText("0.67σ")).not.toBeInTheDocument();
   });
 
   it("keeps the chart region and its reason when the provider reported no hourly series", async () => {
@@ -356,43 +395,35 @@ describe("the report's curation", () => {
         }),
       }),
     );
-    await screen.findByRole("heading", { name: "The window, against the record" });
+    await screen.findByRole("heading", { name: "Deterministic thermal analysis" });
 
-    // The frame stays: a paragraph where a plot belongs is how a chart region stops being one.
     expect(
       screen.getByRole("img", { name: /reported no hourly series for this window/ }),
     ).toBeInTheDocument();
   });
 
-  it("states the record as three figures and one paragraph, not as a panel of prose", async () => {
+  it("states the record as three figures and the archive's own labelling", async () => {
     mount(client());
     const panel = await screen.findByRole("region", { name: "Historical context" });
 
     expect(await within(panel).findByText("14.7 °C")).toBeInTheDocument();
     expect(within(panel).getByText("17.4 °C")).toBeInTheDocument();
-    expect(within(panel).getByText("1.8 °C")).toBeInTheDocument();
     expect(within(panel).getByText("Archive coverage")).toBeInTheDocument();
-  });
-
-  it("drops the whole record panel when the backend computed no baseline", async () => {
-    mount(client({ baseline: vi.fn().mockRejectedValue(new Error("no baseline")) }));
-    await screen.findByRole("heading", { name: "Historical context" });
-
-    expect(
-      await screen.findByText(/archive returned no baseline for this calendar window/),
-    ).toBeInTheDocument();
+    // Not the hero's supporting sentence again, and no legalistic caveat in a context card.
+    expect(within(panel).queryByText(/standard deviations/)).not.toBeInTheDocument();
+    expect(within(panel).queryByText(/meteorological authority/)).not.toBeInTheDocument();
   });
 });
 
 describe("the attention card", () => {
-  it("names the entry that stood out furthest, against the threshold that flagged it", async () => {
+  it("leads with one deviation and hides the method that found it", async () => {
     mount(client());
-    const panel = await screen.findByRole("region", { name: "Needs attention" });
+    const panel = await screen.findByRole("region", { name: "Anomaly attention" });
 
-    expect(within(panel).getByText("2 entries stood out")).toBeInTheDocument();
-    // The furthest of the two, by the backend's own score.
     expect(within(panel).getByText("-5.9 °C")).toBeInTheDocument();
-    expect(within(panel).getByText(/5.4 against a threshold of 3.5/)).toBeInTheDocument();
+    expect(within(panel).getByText("Strongest deviation in this window")).toBeInTheDocument();
+    expect(within(panel).getByText(/2 entries flagged/)).toBeInTheDocument();
+    expect(within(panel).queryByText(/median absolute deviation/)).not.toBeInTheDocument();
   });
 
   it("is not drawn at all when the window was unremarkable", async () => {
@@ -407,8 +438,95 @@ describe("the attention card", () => {
     );
     await screen.findByRole("heading", { name: "Historical context" });
 
-    // An alert panel that is always present is not an alert.
-    expect(screen.queryByRole("heading", { name: "Needs attention" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Anomaly attention" })).not.toBeInTheDocument();
+  });
+});
+
+describe("the grounded synthesis", () => {
+  it("is part of generating the report, not a control on it", async () => {
+    const ask = vi.fn().mockResolvedValue(ANSWER);
+    mount(client({ ask }));
+
+    expect(
+      await screen.findByText("A settled week, a little warmer than the record for this window."),
+    ).toBeInTheDocument();
+    expect(ask).toHaveBeenCalledTimes(1);
+    // The control the artifact does not have, and the report no longer needs.
+    expect(screen.queryByRole("button", { name: /model reading/i })).not.toBeInTheDocument();
+  });
+
+  it("names the classes it was grounded on and links the run that produced it", async () => {
+    mount(client());
+    const panel = await screen.findByRole("region", { name: "Grounded synthesis" });
+
+    for (const chip of ["Conditions now", "Forecast", "Archive record", "Analytics"]) {
+      expect(await within(panel).findByText(chip)).toBeInTheDocument();
+    }
+    expect(within(panel).getByRole("link", { name: /Audit intelligence trace/ })).toHaveAttribute(
+      "href",
+      "/evidence/run-9b5849dd-1a2b",
+    );
+  });
+
+  it("spends one run per window rather than one per render", async () => {
+    const ask = vi.fn().mockResolvedValue(ANSWER);
+    mount(client({ ask }));
+    await screen.findByText("A settled week, a little warmer than the record for this window.");
+
+    await userEvent.click(screen.getByRole("radio", { name: "3 days" }));
+    await waitFor(() => expect(ask).toHaveBeenCalledTimes(2));
+
+    // Settling, re-rendering and the other five reads resolving are not further runs.
+    await waitFor(() => expect(ask).toHaveBeenCalledTimes(2));
+  });
+
+  it("keeps the rest of the report when the model call fails", async () => {
+    mount(client({ ask: vi.fn().mockRejectedValue(new Error("allowance exhausted")) }));
+    await screen.findByRole("heading", { name: "Grounded synthesis" });
+
+    expect(await screen.findByText(/That reading was not produced/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Everything above is retrieved or computed and is unaffected/),
+    ).toBeInTheDocument();
+    // The chart is still there.
+    expect(
+      screen.getByRole("img", { name: /Temperature through the forecast window/ }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("the header, the grounding panel and the status strip", () => {
+  it("names the report by the run that can be audited", async () => {
+    mount(client());
+    expect(await screen.findByText("Report ref · 9B5849DD")).toBeInTheDocument();
+  });
+
+  it("re-reads the window when the horizon control is changed", async () => {
+    const forecast = vi.fn();
+    const api = client();
+    mount(client({ forecast: forecast.mockImplementation(api.forecast as ReturnType<typeof vi.fn>) }));
+    await screen.findByRole("heading", { name: "Forecast outlook" });
+
+    expect(forecast).toHaveBeenCalledWith(expect.objectContaining({ days: 7 }));
+    await userEvent.click(screen.getByRole("radio", { name: "3 days" }));
+    expect(forecast).toHaveBeenCalledWith(expect.objectContaining({ days: 3 }));
+  });
+
+  it("names one source per class of figure, the model included", async () => {
+    mount(client());
+    const panel = await screen.findByRole("region", { name: "Grounding evidence" });
+
+    for (const role of ["Conditions now", "Forecast", "Archive record", "Analytics"]) {
+      expect(await within(panel).findByText(role)).toBeInTheDocument();
+    }
+    expect(within(panel).getByText("Weathra")).toBeInTheDocument();
+    expect(await within(panel).findByText("Synthesis")).toBeInTheDocument();
+  });
+
+  it("reports the reads that returned and the grounding check that ran", async () => {
+    mount(client());
+    expect(await screen.findByText("Retrieval complete")).toBeInTheDocument();
+    expect(await screen.findByText("Grounding verified")).toBeInTheDocument();
   });
 });
 
@@ -417,109 +535,48 @@ describe("the deep dive", () => {
     mount(client());
     await screen.findByRole("heading", { name: "Grounding evidence" });
 
-    // None of the three is a band on the page any more.
-    expect(screen.queryByText("Computed for this window")).not.toBeVisible();
+    expect(screen.getByText("Computed for this window")).not.toBeVisible();
 
     await userEvent.click(screen.getByText("Deep dive"));
 
     expect(screen.getByRole("heading", { name: "Computed for this window" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Confidence by horizon" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "What was retrieved, and when" })).toBeVisible();
     // Every finding is still here, including the one the engine could not compute.
     expect(screen.getByText("Not computable")).toBeInTheDocument();
-    expect(
-      screen.getByRole("img", {
-        name: /Deviation score per flagged entry, against a threshold of 3.5/,
-      }),
-    ).toBeInTheDocument();
-  });
-});
-
-describe("the report's window", () => {
-  it("re-reads the window when the horizon control is changed", async () => {
-    const forecast = vi.fn();
-    const api = client();
-    const spied = client({
-      forecast: forecast.mockImplementation(api.forecast as ReturnType<typeof vi.fn>),
-    });
-    mount(spied);
-    await screen.findByRole("heading", { name: "Forecast outlook" });
-
-    expect(forecast).toHaveBeenCalledWith(expect.objectContaining({ days: 7 }));
-
-    await userEvent.click(screen.getByRole("radio", { name: "3 days" }));
-
-    expect(forecast).toHaveBeenCalledWith(expect.objectContaining({ days: 3 }));
-  });
-});
-
-describe("the model's reading", () => {
-  it("is complete before any language model is asked anything", async () => {
-    const ask = vi.fn();
-    mount(client({ ask }));
-    await screen.findByRole("heading", { name: "Weathra's reading" });
-
-    // Opening the report spends no model call and no allowance, and the control is secondary.
-    expect(ask).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: /Add a model reading/ })).toBeInTheDocument();
-  });
-
-  it("names what it was read from, and what wrote it, when it is asked for", async () => {
-    const ask = vi.fn().mockResolvedValue({
-      answer: {
-        answer_prose: "A settled week.",
-        llm_provider: "openrouter",
-        llm_model: "a-model",
-        attribution: [{ provider: "open-meteo", data_class: "forecast", location: BERLIN, retrieved_at: "x" }],
-      },
-      evidence_id: "run-1",
-      memory_available: true,
-    });
-    mount(client({ ask }));
-    await screen.findByRole("button", { name: /Add a model reading/ });
-
-    await userEvent.click(screen.getByRole("button", { name: /Add a model reading/ }));
-
-    expect(await screen.findByText("A settled week.")).toBeInTheDocument();
-    expect(screen.getByText("Read from open-meteo")).toBeInTheDocument();
-    expect(screen.getByText("openrouter · a-model")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /how this answer was produced/ })).toHaveAttribute(
-      "href",
-      "/evidence/run-1",
-    );
-  });
-});
-
-describe("the grounding panel", () => {
-  it("names one source per class of figure, and no latency for any of them", async () => {
-    mount(client());
-    const panel = await screen.findByRole("region", { name: "Grounding evidence" });
-
-    expect(await within(panel).findByText("Archive record")).toBeInTheDocument();
-    for (const role of ["Conditions now", "Outlook", "Statistics"]) {
-      expect(within(panel).getByText(role)).toBeInTheDocument();
-    }
-    expect(within(panel).getByText("Computed by Weathra")).toBeInTheDocument();
+    // And the caveat the context card no longer carries.
+    expect(screen.getByText(/not a climate normal published by a meteorological authority/)).toBeVisible();
   });
 });
 
 describe("the artifact's invented apparatus", () => {
-  it("is claimed nowhere on the page", async () => {
+  it("is claimed nowhere on the page, and no raw float reaches it", async () => {
     const { container } = mount(client());
     await screen.findByRole("heading", { name: "Grounding evidence" });
+    await screen.findByText("Grounding verified");
     const text = container.textContent ?? "";
 
     for (const invented of [
       "Neural Agent",
       "neural agent",
       "Evidence Nodes",
-      "Download PDF",
       "Export PDF",
-      "Report ID",
       "Stability Index",
       "Model alignment",
       "Retrieval score",
+      "sensor",
+      "SYSTEM_LOCKED",
     ]) {
       expect(text, `the report mentions ${invented}`).not.toContain(invented);
+    }
+
+    // No figure is printed at the precision it was computed at.
+    expect(text).not.toContain("0.6706849412785952");
+    expect(text).not.toContain("7.250775664373425");
+    // Every sigma figure on the page is at two places, which is where a z-score stops meaning
+    // anything more.
+    for (const sigma of text.match(/-?\d+(\.\d+)?σ/g) ?? []) {
+      expect(sigma).toMatch(/^-?\d+(\.\d{1,2})?σ$/);
     }
   });
 });

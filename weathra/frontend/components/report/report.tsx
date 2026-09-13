@@ -1,60 +1,55 @@
 "use client";
 
 /**
- * Weather Intelligence Report — one place, read across every surface Weathra has, and *curated*.
+ * Weather Intelligence Report — `docs/design/screens/12-weather-intelligence-report.png`.
  *
- * Built against `docs/design/screens/12-weather-intelligence-report.png`. Composed from
- * `/weather/current`, `/weather/forecast`, `/weather/changes`, `/weather/analysis`,
- * `/weather/history/baseline` and `/weather/history/baseline/comparison` — the report is a
- * *reading* of those six, and adds no figure of its own.
+ * Composed from `/weather/current`, `/weather/forecast`, `/weather/changes`, `/weather/analysis`,
+ * `/weather/history/baseline`, `/weather/history/baseline/comparison` and one `/agent/ask` run.
+ * Every figure on it is retrieved or deterministically computed; the screen adds none of its own.
  *
- * **The last rebuild made it a report with charts through it; this one makes it a report somebody
- * would read.** Every endpoint's whole payload was on the page: every computed finding as its own
- * tile, every horizon band as its own bar, every flagged entry plotted and then listed again
- * underneath, a paragraph of provenance under every source, and a full-width "Ask Weathra to read
- * this" call to action where the artifact puts its conclusion. Nine panels, about 2,800 pixels of
- * report, and the decisions a person actually came for scattered among the working.
+ * **The artifact's macro composition, and it is the composition rather than a resemblance to it.**
+ * Seven rows, each one a wide analytical column beside a narrow context column:
  *
- * The artifact's answer is curation, and it is structural rather than cosmetic. Seven regions, in
- * this order, each answering exactly one question:
+ *     1  report header                                              full width
+ *     2  the conclusion, three figures         ·  six observed tiles
+ *     3  forecast outlook, seven days          ·  what changed
+ *     4  deterministic thermal analysis        ·  historical context
+ *     5  …the same chart's summary figures     ·  anomaly attention
+ *     6  grounded synthesis                    ·  grounding evidence
+ *     7  status strip                                               full width
  *
- *     header          what is this, where, over what window
- *     hero            what is happening, in one statement and three figures
- *     conditions      what is it like right now                       (six tiles)
- *     outlook         what are the next few days                      (seven cards)
- *     what changed    what moved since the last retrieval             (three notes)
- *     the record      how unusual is this, against the archive        (one chart, one side card)
- *     the reading     what Weathra concludes, and what it rests on    (one paragraph, four rows)
+ * Rows four and five are one chart card on the left against two stacked cards on the right, which
+ * is how the artifact draws them.
  *
- * Every count above is a constant in `lib/report/view-model.ts`, which is also where the choosing
- * happens — so what the report shows is one module's decision rather than a rule re-litigated in
- * each panel. **Nothing is deleted.** What a cap dropped is behind that panel's own disclosure, and
- * the three regions this pass took off the page — every finding, the confidence scale, and the
- * flagged entries — are together behind *Deep dive* at the foot of the screen.
+ * **Three things this pass changed, and each was a defect rather than a preference.**
  *
- * **A region whose data did not arrive is not drawn.** No zero bars, no filled meters, no
- * placeholder tiles: `EmptyChart` keeps a chart region's geometry when a series is genuinely
- * expected and absent, and everything else is omitted with the backend's own reason.
+ * *The photograph is gone.* A 220-pixel picture of the city sat where the artifact puts its
+ * conclusion, with the current temperature over it — the first thing a reader scanned spent on the
+ * one fact they already had. The reading it carried is the first of the six tiles beside the hero.
  *
- * **The synthesis is asked for, not spent automatically, and it is no longer the loudest thing on
- * the page.** The artifact's is written by an agent it calls neural and appears the moment the page
- * opens. Weathra's is a real model call against a real allowance, so it stays a control — a
- * secondary one, in a card the report is complete without.
+ * *The synthesis is part of generating the report.* It was a button. The artifact's most
+ * conclusive block was, in production, the one obviously unfinished thing on the page, and asking
+ * somebody to press a control to finish a report they had already asked for is not a bargain worth
+ * keeping. The run starts with the report; the card draws a skeleton while it is in flight and the
+ * backend's own failure with a retry when it does not land, because it is a real model call against
+ * a real allowance and pretending otherwise would be the opposite mistake.
+ *
+ * *No figure is printed at the precision it was computed at.* `0.6706849412785952 σ` was on the
+ * page. Rounding lives in `lib/report/view-model.ts` with everything else that decides what the
+ * report says.
  *
  * **What the artifact draws and Weathra does not have:** an agent version string, an evidence-node
- * count, a report identifier, a PDF export, a confidence percentage attached to the narrative, a
- * decadal stability index, a model-alignment score, and named third-party feeds with millisecond
- * latencies. Recorded in `docs/design/screens.md` §5.
+ * count, a retrieval score, a PDF export, a confidence percentage attached to the narrative, a
+ * decadal stability index, a model-alignment score, named third-party feeds with millisecond
+ * latencies, and a sensor network in the footer. The report reference is the one exception that
+ * became real: it is the evidence id of the synthesis run, which is a record somebody can open.
+ * Recorded in `docs/design/screens.md` §5.
  */
 
 import { ScreenPreview } from "@/components/locations/screen-preview";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import {
-  Badge,
-  Card,
-  CardBody,
-  CardHeader,
   DataClassBadge,
   EmptyChart,
   ErrorState,
@@ -72,11 +67,7 @@ import type {
   PreferenceView,
   WhatChanged,
 } from "@/lib/api/schema";
-import {
-  briefingLocationFrom,
-  calendarWindowFrom,
-  formatFigure,
-} from "@/lib/dashboard/briefing";
+import { briefingLocationFrom, calendarWindowFrom } from "@/lib/dashboard/briefing";
 import { friendlyName } from "@/lib/locations/place";
 import { useApiMutation, useApiQuery } from "@/lib/query/hooks";
 import { PREFERENCES_KEY } from "@/lib/query/keys";
@@ -85,13 +76,14 @@ import {
   changedFrom,
   chartStatsFrom,
   currentTilesFrom,
-  evidenceChipsFrom,
+  footerFrom,
   groundingFrom,
+  headlineFrom,
   heroFiguresFrom,
   historicalContextFrom,
   isReportHorizon,
   outlookFrom,
-  synthesisFrom,
+  reportReferenceFrom,
 } from "@/lib/report/view-model";
 
 import {
@@ -105,54 +97,19 @@ import {
   ChartStats,
   ConditionTiles,
   DeepDive,
+  FooterStrip,
   GroundedSynthesis,
   GroundingPanel,
   HistoricalContextCard,
+  HourlyTraceLink,
+  IntelligenceHero,
   OutlookStrip,
+  Region,
   ReportHeader,
-  ReportHero,
   ReportPlaceChooser,
-  WhatChangedNotes,
+  WhatChangedPanel,
 } from "./sections";
 import styles from "./report.module.css";
-
-/** One panel of the report. The badge names the class of everything inside it. */
-function Panel({
-  title,
-  id,
-  dataClass,
-  badges,
-  subtitle,
-  children,
-}: {
-  readonly title: string;
-  readonly id: string;
-  readonly dataClass:
-    "observed" | "forecast" | "historical" | "analytics" | "interpretation";
-  /** A second class, where a panel genuinely reads two — the record against the window. */
-  readonly badges?: ReactNode;
-  readonly subtitle?: string;
-  readonly children: ReactNode;
-}): ReactNode {
-  return (
-    <Card aria-labelledby={id}>
-      {/* Level two: these sit directly under the screen's own `h1`. */}
-      <CardHeader
-        headingLevel={2}
-        title={title}
-        titleId={id}
-        subtitle={subtitle}
-        badge={
-          <>
-            {badges}
-            <DataClassBadge dataClass={dataClass} />
-          </>
-        }
-      />
-      <CardBody>{children}</CardBody>
-    </Card>
-  );
-}
 
 /** The hourly window as plottable points. An hour with no temperature stays null, never zero. */
 function timelineFrom(forecast: ForecastResponse | null): TimelinePoint[] {
@@ -181,13 +138,27 @@ function scopeOf(days: number): string {
   return `Current conditions, a ${days}-day outlook and the archive record for the same window.`;
 }
 
+/**
+ * The analytical block's title.
+ *
+ * The artifact's is "Deterministic Thermal Drift Analysis", and thermal is only the right word
+ * while temperature is genuinely what is plotted and compared. It is — the chart draws the hourly
+ * temperature series and the baseline is asked for on `temperature_mean` — so the title says so;
+ * a measure change would take the general title rather than keep a word the plot no longer earns.
+ */
+function analysisTitleFor(measure: string | null | undefined): string {
+  return measure?.startsWith("temperature")
+    ? "Deterministic thermal analysis"
+    : "Deterministic weather analysis";
+}
+
 function ReportFor({
   location,
   chooser,
   defaultHorizon,
 }: {
   readonly location: Location;
-  /** The screen's place control, folded into the header bar. */
+  /** The screen's place control, folded into the header band. */
   readonly chooser: ReactNode;
   /** The horizon the person's preferences ask for, as the control's starting value. */
   readonly defaultHorizon: string;
@@ -224,14 +195,7 @@ function ReportFor({
     forecast.state.kind === "ready" ? forecast.state.data.period : undefined,
   );
   const baseline = useApiQuery<Baseline>({
-    key: [
-      "weather",
-      "baseline",
-      place.latitude,
-      place.longitude,
-      window?.start,
-      window?.end,
-    ],
+    key: ["weather", "baseline", place.latitude, place.longitude, window?.start, window?.end],
     request: (client) =>
       client.baseline({
         ...place,
@@ -276,24 +240,50 @@ function ReportFor({
       }),
   });
 
+  /*
+   * The synthesis runs once per window, as part of generating the report.
+   *
+   * The window is the guard, not the callback: `submit` is recreated whenever the mutation's
+   * pending flag flips, so an effect that depended on it would fire a second run the moment the
+   * first one settled — a model call and an allowance spent on a duplicate. It is held in a ref
+   * instead and the effect keys on the window alone. Changing the horizon is a person asking for a
+   * different report, which is a run; re-rendering is not.
+   */
+  const submitRef = useRef(synthesis.submit);
+  useEffect(() => {
+    submitRef.current = synthesis.submit;
+  }, [synthesis.submit]);
+
+  const asked = useRef<string | null>(null);
+  const windowKey = `${place.latitude},${place.longitude},${days}`;
+  useEffect(() => {
+    if (asked.current === windowKey) return;
+    asked.current = windowKey;
+    submitRef.current();
+  }, [windowKey]);
+
   const forecastData = forecast.state.kind === "ready" ? forecast.state.data : null;
   const currentData = current.state.kind === "ready" ? current.state.data : null;
   const changesData = changes.state.kind === "ready" ? changes.state.data : null;
   const analysisData = analysis.state.kind === "ready" ? analysis.state.data : null;
   const baselineData = baseline.state.kind === "ready" ? baseline.state.data : null;
   const comparisonData = comparison.state.kind === "ready" ? comparison.state.data : null;
+  const answer = synthesis.state.kind === "saved" ? synthesis.state.data.answer : null;
+  const evidenceId =
+    synthesis.state.kind === "saved" ? (synthesis.state.data.evidence_id ?? null) : null;
 
   /*
-   * The shell outlives the report.
+   * The header outlives the report.
    *
    * Both branches below used to replace the whole screen with one sentence, so a provider hiccup
-   * took the heading, the place chooser and the horizon control with it — and those are the two
+   * took the heading, the place chooser and the window control with it — and those are the two
    * controls that would let a person try somewhere else, or a shorter window.
    */
   const header = (
     <ReportHeader
       location={location}
       scope={scopeOf(forecastData?.horizon_days ?? days)}
+      reference={reportReferenceFrom(evidenceId)}
       horizon={horizon}
       onHorizon={setHorizon}
       retrievedAt={forecastData?.attribution?.retrieved_at ?? null}
@@ -305,10 +295,7 @@ function ReportFor({
     return (
       <div className={styles.screen}>
         {header}
-        <LoadingState
-          label={`Building the report for ${friendlyName(location)}`}
-          lines={6}
-        />
+        <LoadingState label={`Building the report for ${friendlyName(location)}`} lines={6} />
       </div>
     );
   }
@@ -326,45 +313,42 @@ function ReportFor({
   const plottable = timeline.some((point) => point.temperature !== null);
   const deviations = deviationsFrom(analysisData);
 
-  const heroSynthesis = synthesisFrom({
+  const outlook = outlookFrom(forecastData);
+  const grounding = groundingFrom({
+    current: currentData,
+    forecast: forecastData,
+    baseline: baselineData,
     analysis: analysisData,
+    answer,
+  });
+  const headline = headlineFrom({
     comparison: comparisonData,
+    analysis: analysisData,
+    outlook,
   });
   const heroFigures = heroFiguresFrom({
     forecast: forecastData,
     comparison: comparisonData,
     analysis: analysisData,
+    groundingRows: grounding.length,
+    answer,
   });
   const tiles = currentTilesFrom(currentData);
-  const outlook = outlookFrom(forecastData);
   const changed = changedFrom(changesData);
   const stats = chartStatsFrom({
     analysis: analysisData,
     baseline: baselineData,
     comparison: comparisonData,
   });
-  const historical = historicalContextFrom({
-    baseline: baselineData,
-    comparison: comparisonData,
-    headline: heroSynthesis.headline,
-  });
+  const historical = historicalContextFrom({ baseline: baselineData });
   const attention = anomalyAttentionFrom(analysisData);
-  const grounding = groundingFrom({
-    current: currentData,
-    forecast: forecastData,
-    baseline: baselineData,
-    analysis: analysisData,
-    formatStamp: formatInstant,
-  });
 
-  const temperature = currentData?.values?.temperature;
-  const reading =
-    typeof temperature === "number"
-      ? {
-          figure: formatFigure({ value: temperature }),
-          unit: currentData?.units?.temperature ?? null,
-        }
-      : null;
+  const reads = [currentData, forecastData, changesData, analysisData, baselineData, comparisonData];
+  const footer = footerFrom({
+    reads: reads.length,
+    returned: reads.filter((read) => read !== null).length,
+    answer,
+  });
 
   const baselineMean =
     typeof baselineData?.mean?.value === "number" ? baselineData.mean.value : null;
@@ -372,40 +356,44 @@ function ReportFor({
     forecastData?.hourly?.units?.temperature ?? currentData?.units?.temperature ?? null;
   const precipitationUnit = forecastData?.hourly?.units?.precipitation ?? null;
 
-  const answer = synthesis.state.kind === "saved" ? synthesis.state.data.answer : null;
+  const retrievals = [
+    currentData?.attribution?.retrieved_at
+      ? {
+          label: `Conditions · ${currentData.attribution.provider}`,
+          detail: formatInstant(currentData.attribution.retrieved_at) ?? "not reported",
+        }
+      : null,
+    forecastData?.attribution?.retrieved_at
+      ? {
+          label: `Forecast · ${forecastData.attribution.provider}`,
+          detail: formatInstant(forecastData.attribution.retrieved_at) ?? "not reported",
+        }
+      : null,
+    baselineData ? { label: "Archive record", detail: baselineData.labelling } : null,
+  ].filter((entry): entry is { label: string; detail: string } => entry !== null);
 
   return (
     <div className={styles.screen}>
       {header}
 
-      {/* What is happening, and what it is like right now. */}
-      <div className={styles.lead}>
-        <ReportHero
-          location={location}
-          synthesis={heroSynthesis}
-          figures={heroFigures}
-          reading={reading}
-          observedAt={currentData?.observed_at_utc ?? null}
-        />
-
-        {tiles.shown.length > 0 ? (
-          <Panel id="report-now" title="Conditions now" dataClass="observed">
-            <ConditionTiles tiles={tiles} />
-          </Panel>
-        ) : null}
+      {/* ROW 2 — the conclusion, and what it is like right now. */}
+      <div className={styles.band}>
+        <IntelligenceHero headline={headline} figures={heroFigures} />
+        <ConditionTiles tiles={tiles} observedAt={currentData?.observed_at_utc ?? null} />
       </div>
 
-      {/* What the next few days look like, and what moved since the last retrieval. */}
+      {/* ROW 3 — the days ahead, and what moved since the last retrieval. */}
       <div className={styles.band}>
-        <Panel
+        <Region
           id="report-outlook"
           title="Forecast outlook"
-          dataClass="forecast"
+          icon="outlook"
           subtitle={
             forecastData?.attribution?.provider
-              ? `Day by day, from ${forecastData.attribution.provider}.`
+              ? `Daily steps · ${forecastData.attribution.provider}`
               : undefined
           }
+          action={plottable ? <HourlyTraceLink /> : undefined}
         >
           {outlook.length > 0 ? (
             <OutlookStrip days={outlook} />
@@ -414,118 +402,98 @@ function ReportFor({
               This provider reported no daily outlook for this window.
             </p>
           )}
-        </Panel>
+        </Region>
 
-        <Panel id="report-moved" title="What changed" dataClass="forecast">
-          {changed ? (
-            <WhatChangedNotes changed={changed} />
-          ) : (
-            <p className={styles.quiet}>
-              No earlier forecast is on record to compare this window against.
-            </p>
-          )}
-        </Panel>
+        <Region id="report-moved" title="What changed?" icon="changed">
+          <WhatChangedPanel changed={changed} />
+        </Region>
       </div>
 
-      {/*
-        The one analytical block. The window plotted against the archive record, with the figures
-        that describe it under the plot — and beside it, the record itself and whatever the backend
-        flagged. Everything else it computed is behind *Deep dive*.
-      */}
+      {/* ROWS 4 and 5 — one chart against the record, with the record and the flags beside it. */}
       <div className={styles.band}>
-        <Panel
-          id="report-window"
-          title="The window, against the record"
-          dataClass="analytics"
-          badges={<DataClassBadge dataClass="historical" />}
-          subtitle="The forecast series, with the archive baseline drawn through it."
-        >
-          {plottable ? (
-            <ForecastTimelineChart
-              points={timeline}
-              temperatureUnit={temperatureUnit}
-              precipitationUnit={precipitationUnit}
-              baselineValue={baselineMean}
-              /*
-                One word. The label sits inside the plot at the reference line, and
-                "Baseline 3-year mean" was long enough to run over the series beneath it. What the
-                baseline is built from is stated in full in the panel beside this chart, where it
-                has room to be a sentence.
-              */
-              baselineLabel={baselineData ? "Baseline" : null}
-              missing={missingHours}
-              title="Temperature through the forecast window"
-            />
-          ) : (
-            <EmptyChart
-              title="Temperature through the forecast window"
-              reason="This provider reported no hourly series for this window."
-            />
-          )}
+        <div className={styles.analysisColumn} id="report-analysis">
+          <Region
+            id="report-analysis-title"
+            title={analysisTitleFor(baselineData?.measure ?? "temperature_mean")}
+            icon="analytics"
+            subtitle="Forecast values against the archive baseline for the same calendar window."
+          >
+            {plottable ? (
+              <ForecastTimelineChart
+                points={timeline}
+                temperatureUnit={temperatureUnit}
+                precipitationUnit={precipitationUnit}
+                baselineValue={baselineMean}
+                /*
+                  One word. The label sits inside the plot at the reference line, and
+                  "Baseline 3-year mean" was long enough to run over the series beneath it. What the
+                  baseline is built from is stated in the card beside this chart, where it has room.
+                */
+                baselineLabel={baselineData ? "Baseline" : null}
+                missing={missingHours}
+                title="Temperature through the forecast window"
+              />
+            ) : (
+              <EmptyChart
+                title="Temperature through the forecast window"
+                reason="This provider reported no hourly series for this window."
+              />
+            )}
 
-          <ChartStats stats={stats} />
-        </Panel>
+            <ChartStats stats={stats} />
+          </Region>
+        </div>
 
         <div className={styles.sideColumn}>
-          <Panel
+          <Region
             id="report-history"
             title="Historical context"
-            dataClass="historical"
-            subtitle={
-              historical ? undefined : "No baseline is available for this window yet."
-            }
+            icon="history"
+            subtitle={historical ? undefined : "No baseline is available for this window yet."}
           >
             {historical ? (
               <HistoricalContextCard context={historical} />
             ) : (
               <p className={styles.quiet}>
-                The archive returned no baseline for this calendar window, so nothing is
-                placed against it.
+                The archive returned no baseline for this calendar window, so nothing is placed
+                against it.
               </p>
             )}
-          </Panel>
+          </Region>
 
           {/* Drawn only when the backend flagged something. An always-present alert is not one. */}
           {attention ? (
-            <Panel id="report-attention" title="Needs attention" dataClass="analytics">
+            <Region id="report-attention" title="Anomaly attention" icon="alert" tone="alert">
               <AnomalyAttentionCard attention={attention} />
-            </Panel>
+            </Region>
           ) : null}
         </div>
       </div>
 
-      {/* What Weathra concludes, and what the conclusion rests on. */}
+      {/* ROW 6 — what Weathra concludes, and what the conclusion rests on. */}
       <div className={styles.band}>
-        <Panel
+        <Region
           id="report-synthesis"
-          title="Weathra's reading"
-          dataClass="interpretation"
+          title="Grounded synthesis"
+          icon="interpretation"
+          level="lead"
           subtitle="Written by a language model about the figures above. It produces no measurement."
+          badges={<DataClassBadge dataClass="interpretation" />}
         >
-          {synthesis.state.kind === "error" ? (
-            <ErrorState
-              failure={synthesis.state.failure}
-              title="That reading was not produced"
-            />
-          ) : (
-            <GroundedSynthesis
-              answer={answer}
-              chips={evidenceChipsFrom({ answer, baseline: baselineData })}
-              evidenceId={
-                synthesis.state.kind === "saved"
-                  ? (synthesis.state.data.evidence_id ?? null)
-                  : null
-              }
-              busy={synthesis.busy}
-              onAsk={() => synthesis.submit()}
-            />
-          )}
-        </Panel>
+          <GroundedSynthesis
+            answer={answer}
+            chips={grounding.map((row) => ({ label: row.role, dataClass: row.dataClass }))}
+            evidenceId={evidenceId}
+            busy={synthesis.busy}
+            failure={synthesis.state.kind === "error" ? synthesis.state.failure : null}
+            onRetry={() => synthesis.submit()}
+          />
+        </Region>
 
-        <Panel
+        <Region
           id="report-sources"
           title="Grounding evidence"
-          dataClass="observed"
+          icon="grounding"
           subtitle="What each part of this report was read from."
         >
           {grounding.length > 0 ? (
@@ -533,22 +501,28 @@ function ReportFor({
           ) : (
             <p className={styles.quiet}>No provider reported an attribution for this report.</p>
           )}
-        </Panel>
+        </Region>
       </div>
 
-      {/* The working, kept and moved off the page. */}
+      {/* ROW 7 — the working, and the status strip. */}
       <DeepDive
         analysis={analysisData}
         forecast={forecastData}
         deviations={deviations}
+        baselineNote={
+          baselineData
+            ? `The baseline is computed by Weathra from ${baselineData.years_used?.length ?? 0} year${
+                (baselineData.years_used?.length ?? 0) === 1 ? "" : "s"
+              } of retrieved archive observations for this calendar window. It is not a climate normal published by a meteorological authority.`
+            : null
+        }
+        retrievals={retrievals}
       />
 
-      {analysisData?.from_cache ? (
-        <p className={styles.quiet}>
-          <Badge tone="neutral">Cached</Badge> The statistics above were served from Weathra&apos;s
-          own cache of this window.
-        </p>
-      ) : null}
+      <FooterStrip
+        states={footer}
+        retrievedAt={forecastData?.attribution?.retrieved_at ?? null}
+      />
     </div>
   );
 }
@@ -565,9 +539,7 @@ export function WeatherIntelligenceReport(): ReactNode {
     return <LoadingState label="Reading your preferences" lines={4} />;
   }
   if (preferences.state.kind === "error") {
-    return (
-      <ErrorState failure={preferences.state.failure} onRetry={preferences.retry} />
-    );
+    return <ErrorState failure={preferences.state.failure} onRetry={preferences.retry} />;
   }
   if (preferences.state.kind !== "ready") return null;
 
@@ -606,7 +578,7 @@ export function WeatherIntelligenceReport(): ReactNode {
             lead="Name a place above, or set a default in Settings and every screen opens on it. Nothing below is filled in yet because no place has been chosen."
             regions={[
               {
-                title: "Conditions now",
+                title: "Current conditions",
                 blurb:
                   "Temperature, wind, humidity and pressure as retrieved, with the moment they were observed.",
               },
@@ -616,15 +588,15 @@ export function WeatherIntelligenceReport(): ReactNode {
                 chart: 150,
               },
               {
-                title: "The window, against the record",
+                title: "Deterministic thermal analysis",
                 blurb:
                   "How this period compares with the climate baseline for the same place and time of year.",
                 chart: 150,
               },
               {
-                title: "Weathra's reading",
+                title: "Grounded synthesis",
                 blurb:
-                  "An interpretation of the figures above, clearly separated from them, asked for rather than spent on arrival.",
+                  "An interpretation of the figures above, clearly separated from them, with the sources it was grounded on.",
               },
             ]}
           />

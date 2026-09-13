@@ -53,6 +53,7 @@ import {
 } from "recharts";
 
 import { Button, ScrollRegion } from "@/components/ui";
+import { roundTo } from "@/lib/report/view-model";
 
 import styles from "./report.module.css";
 
@@ -446,8 +447,8 @@ export function DeviationChart({
             <span className={styles.deviationStamp}>{row.stamp}</span>
             <span className={styles.deviationValue}>
               {row.deviation > 0 ? "+" : ""}
-              {row.deviation}
-              {unit ? ` ${unit}` : ""} · {row.score} from the median
+              {roundTo(row.deviation, 1)}
+              {unit ? ` ${unit}` : ""} · {roundTo(row.score, 2)} from the median
             </span>
           </li>
         ))}

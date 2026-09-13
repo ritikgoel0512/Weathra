@@ -212,6 +212,20 @@ invented figure reads as a real operational fact.
 charts through it rather than sections of figures — and that rebuild made its refusals worth
 naming rather than leaving to the general rule above.
 
+It was rebuilt a third time on 2026-09-13, against the artifact rather than against a reading of
+it. Three things changed that were defects rather than preferences. **The photograph went.** A
+220-pixel picture of the city sat where the artifact puts its conclusion, with the current
+temperature over it — the first block a reader scans, spent on the one fact they already had; the
+reading it carried is now the first of the six tiles beside the hero. **The synthesis became part
+of generating the report.** It was a control, so the artifact's most conclusive block was in
+production the one obviously unfinished thing on the page; the run starts with the report, once per
+window, and the card draws the backend's own failure with a retry rather than going missing when
+the allowance is spent. **Nothing is printed at the precision it was computed at** —
+`0.6706849412785952 σ` was on the page, and rounding now lives in the view model with everything
+else that decides what the report says. The artifact's own vocabulary came with it: FORECAST
+OUTLOOK, WHAT CHANGED?, DETERMINISTIC THERMAL ANALYSIS, HISTORICAL CONTEXT, ANOMALY ATTENTION,
+GROUNDED SYNTHESIS, GROUNDING EVIDENCE, and a status strip.
+
 It was rebuilt a second time on 2026-09-13, and that pass was about *curation* rather than about
 graphical weight. The first rebuild had the artifact's sections and its charts and rendered every
 endpoint exhaustively inside them: a tile per computed finding, a bar per horizon band, every
@@ -229,7 +243,10 @@ rather than re-slicing one already fetched.
 | "Neural Agent v4.2" and the agent version beside the synthesis | The gateway and model key the run actually resolved to, written by the backend. Weathra versions no agent of its own. |
 | "EVIDENCE NODES: 47" and the node count beside the sources | The sources the report actually read, listed with what each supplied. Nothing is counted for effect. |
 | "EXPORT PDF" | Nothing. There is no report export; see the export row above. A disabled control would advertise the capability in order to deny it. |
-| "REPORT ID: WX-INTEL-882-B" | Nothing. No report is issued, stored or identified, so there is no id to print. |
+| "REPORT ID: WX-INTEL-882-B" | The evidence id of the synthesis run, shortened. Weathra issues no report and stores none — but that run *is* stored, and naming the report by the record somebody can open is the honest version of the field. Nothing is printed before the record exists. |
+| "RETRIEVAL SCORE 0.964" over three named feeds with millisecond latencies | One row per class of figure, each naming the provider that answered and the class it supplied. Nothing scores a retrieval. |
+| "ALL SENSOR NODES OPERATIONAL · TELEMETRY_SYNC: 100% · VALIDATED AUDIT LOG · SYSTEM_LOCKED" | How many of the report's reads returned, and whether the synthesis run's own grounding check verified every figure in its prose. Both are real booleans from real checks, and the second says so when it is false. |
+| The hero attributed to AI INTERPRETATION | ANALYTICS. The hero's headline and its three figures are computed deterministically with no model involved, and `specs/web-ui` forbids a design that implies a language model produced a number. AI INTERPRETATION appears once, on the synthesis a model actually wrote. |
 | "CONFIDENCE 96.4%" attached to the narrative | The forecast's own banded confidence with its basis and horizon. A percentage on a piece of prose attributes a measured certainty to a sentence nothing measured. |
 | "DECADAL STABILITY INDEX", "MODEL ALIGNMENT SCORE" | Nothing. Neither is computed, and both name a capability in order to display it. |
 | Named third-party feeds with millisecond latencies | The one provider each figure came from, with the period it covers and when it was retrieved. |
