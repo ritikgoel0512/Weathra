@@ -73,6 +73,45 @@ const ARCHIVE_SOURCE = {
   retrieved_at: "2026-09-04T09:04:57Z",
 };
 
+/**
+ * The imagery row.
+ *
+ * `satellite_observation` is a class the design system fixes no badge for — the sixth of the
+ * backend's six, added so a picture of a region is never conflated with a provider's figure for a
+ * place. It is in the fixture because the table's data-class column printed `not reported` for it,
+ * which is the one column whose whole job is to say what kind of claim a row supports.
+ */
+const OBSERVED_SOURCE = {
+  provider: "open-meteo",
+  location: BERLIN,
+  data_class: "current",
+  period: WINDOW,
+  retrieved_at: "2026-09-04T09:04:55Z",
+};
+
+/**
+ * Weathra's own arithmetic, as a source in its own right.
+ *
+ * The kernel's figures are computed over a provider's series and are not the provider's numbers.
+ * The row says so, under `computed_statistic`, so the class of figure a reader is most likely to
+ * challenge is not the one class with nothing in the table to challenge.
+ */
+const ANALYTICS_SOURCE = {
+  provider: "weathra-analytics",
+  location: BERLIN,
+  data_class: "computed_statistic",
+  period: WINDOW,
+  retrieved_at: "2026-09-04T09:04:58Z",
+};
+
+const SATELLITE_SOURCE = {
+  provider: "nasa-gibs",
+  location: BERLIN,
+  data_class: "satellite_observation",
+  period: WINDOW,
+  retrieved_at: "2026-09-04T09:04:58Z",
+};
+
 const PROVENANCE = {
   location: BERLIN,
   period: WINDOW,
@@ -274,8 +313,21 @@ const STORED_EVIDENCE = {
   anomaly_reports: [ANOMALIES],
   trend_reports: [TREND],
   citations: CITATIONS,
-  attributions: [FORECAST_SOURCE, ARCHIVE_SOURCE],
-  data_classes: ["forecast", "computed_statistic", "ai_interpretation"],
+  attributions: [
+    OBSERVED_SOURCE,
+    FORECAST_SOURCE,
+    ARCHIVE_SOURCE,
+    SATELLITE_SOURCE,
+    ANALYTICS_SOURCE,
+  ],
+  data_classes: [
+    "current",
+    "forecast",
+    "historical_observation",
+    "satellite_observation",
+    "computed_statistic",
+    "ai_interpretation",
+  ],
   llm_provider: "openrouter",
   llm_model: "a-configured-model",
   started_at: "2026-09-04T09:04:55Z",
@@ -540,6 +592,23 @@ describe("the agent execution sequence", () => {
     ).toBeInTheDocument();
     expect(within(flow).getByText(/planned by the model/)).toBeInTheDocument();
   });
+
+  it("calls the retrieval stage what the rest of the screen calls it: the RAG agent", async () => {
+    /*
+     * It was the "Knowledge agent" in the flow and "RAG knowledge evidence" in the panel below,
+     * which made a reader work out that the stage and the evidence it produced were the same
+     * thing. One name, and it is the pipeline's own.
+     */
+    renderScreen();
+    const flow = await screen.findByRole("region", { name: "Execution flow" });
+
+    const rag = within(flow)
+      .getAllByRole("listitem")
+      .find((step) => step.getAttribute("data-agent") === "rag");
+    expect(rag).toBeDefined();
+    expect(rag).toHaveTextContent("5. RAG agent");
+    expect(within(flow).queryByText(/Knowledge agent/)).toBeNull();
+  });
 });
 
 describe("the tool calls and their results", () => {
@@ -637,6 +706,38 @@ describe("the deterministic analytics", () => {
       within(analytics).getByText(/Method: median absolute deviation, threshold 3\.5\./),
     ).toBeInTheDocument();
   });
+
+  it("leads with exactly three findings, each about a different subject", async () => {
+    /*
+     * The defect this replaced. Selection walked the statistics in storage order and only let the
+     * anomaly scan and the trend compete for slots the statistics had not taken, so a rich run led
+     * with a minimum, a maximum and a mean of one measure and kept its anomaly behind a
+     * disclosure. Ranking is across all three shapes at once, and each slot goes to a subject no
+     * other slot has taken.
+     */
+    renderScreen();
+    const analytics = await screen.findByRole("region", { name: "Deterministic analytics" });
+
+    const row = analytics.querySelector("[data-primary-figures]") as HTMLElement;
+    const primary = within(row).getAllByRole("listitem");
+    expect(primary).toHaveLength(3);
+
+    /*
+     * This record scans precipitation for anomalies, fits a temperature trend, computes a mean and
+     * records a maximum it could not compute. The scan answers "did anything stand out" and leads;
+     * the trend is the next subject; the mean takes the third slot because the only remaining
+     * subject is an absence, and a band that leads with "not computable" has spent a third of
+     * itself on one.
+     */
+    expect(row).toHaveTextContent("Anomalies · Precipitation");
+    expect(row).toHaveTextContent("Trend · Temperature");
+    expect(row).toHaveTextContent("Mean · Temperature");
+    expect(row).not.toHaveTextContent("Not computable");
+
+    // Nothing is gone: what did not lead is one press away, the absence included.
+    const more = within(analytics).getByText(/Every figure this run computed \(4\)/);
+    expect(more.closest("details")).toHaveTextContent("Wind gust, highest");
+  });
 });
 
 describe("the retrieved knowledge", () => {
@@ -706,16 +807,20 @@ describe("provenance and the data classes", () => {
     expect(sources).toHaveAttribute("data-tier", "retrieved");
 
     /*
-     * Attribution rows only. The corpus row that follows them is derived from citations rather than
-     * from a retrieval, and is asserted separately.
+     * One row per recorded retrieval, in the order the run recorded them, and nothing derived from
+     * anything else: what was observed, what was forecast, what the archive held, what was
+     * photographed, and what Weathra computed over them.
      */
-    const rows = within(sources)
-      .getAllByRole("row")
-      .slice(1)
-      .filter((row) => row.getAttribute("data-source-class") !== "knowledge");
-    expect(rows).toHaveLength(2);
+    const rows = within(sources).getAllByRole("row").slice(1);
+    expect(rows.map((row) => row.getAttribute("data-source-class"))).toEqual([
+      "current",
+      "forecast",
+      "historical_observation",
+      "satellite_observation",
+      "computed_statistic",
+    ]);
 
-    const forecastRow = at(rows, 0);
+    const forecastRow = at(rows, 1);
     expect(forecastRow).toHaveAttribute("data-source-class", "forecast");
     expect(forecastRow).toHaveTextContent("open-meteo");
     expect(forecastRow).toHaveTextContent("Berlin, Germany");
@@ -734,9 +839,68 @@ describe("provenance and the data classes", () => {
      */
     expect(within(forecastRow).getByText("FORECAST")).toBeInTheDocument();
 
-    const archiveRow = at(rows, 1);
+    const archiveRow = at(rows, 2);
     expect(archiveRow).toHaveAttribute("data-source-class", "historical_observation");
     expect(within(archiveRow).getByText("HISTORICAL")).toBeInTheDocument();
+
+    // Weathra's own arithmetic is a source of this answer and is credited as itself.
+    const analyticsRow = at(rows, 4);
+    expect(analyticsRow).toHaveTextContent("weathra-analytics");
+    expect(within(analyticsRow).getByText("ANALYTICS")).toBeInTheDocument();
+  });
+
+  it("names the satellite row's class rather than reporting it as unreported", async () => {
+    /*
+     * `satellite_observation` is the sixth of the backend's six classes and not one of the design
+     * system's five badges, so it fell through to `not reported` — in the one column whose whole
+     * job is to say what kind of claim a row supports, on a row whose imagery was retrieved,
+     * attributed and stored. It keeps its own word and borrows observed's colour, because an image
+     * from orbit is an observation and adding a sixth colour is a design-system change.
+     */
+    renderScreen();
+    const sources = await screen.findByRole("region", { name: "Grounded data sources" });
+
+    const satellite = within(sources)
+      .getAllByRole("row")
+      .find((row) => row.getAttribute("data-source-class") === "satellite_observation");
+    expect(satellite).toBeDefined();
+    expect(satellite).toHaveTextContent("nasa-gibs");
+
+    const badge = within(satellite as HTMLElement).getByText("SATELLITE");
+    expect(badge).toHaveAttribute("data-stored-class", "satellite_observation");
+    expect(satellite?.textContent).not.toContain("not reported");
+  });
+
+  it("keeps the knowledge corpus out of the table and in its own panel", async () => {
+    /*
+     * The corpus had a derived row here, counted out of the citations, and it carried no provider,
+     * no place and no window because a passage has none. Nothing is dropped from the record: the
+     * documents, the chunks, the relevance and the passages are the RAG panel's whole subject.
+     */
+    renderScreen();
+    const sources = await screen.findByRole("region", { name: "Grounded data sources" });
+
+    expect(within(sources).queryByText("Weathra knowledge corpus")).toBeNull();
+    expect(within(sources).queryByText("KNOWLEDGE")).toBeNull();
+    for (const row of within(sources).getAllByRole("row").slice(1)) {
+      expect(row.getAttribute("data-source-class")).not.toBe("knowledge");
+    }
+    // The count over the table is the retrievals, not the retrievals plus a derived row.
+    expect(sources).toHaveTextContent(`${STORED_EVIDENCE.attributions.length} sources`);
+
+    const rag = screen.getByRole("region", { name: "RAG knowledge evidence" });
+    expect(within(rag).getByText(at(CITATIONS, 0).title)).toBeInTheDocument();
+  });
+
+  it("carries every class the run recorded in the closing provenance line", async () => {
+    renderScreen();
+    await screen.findByRole("region", { name: "Grounded data sources" });
+
+    const line = screen.getByText(/Data classes in this run/);
+    // Including the satellite class, which this line used to drop silently.
+    expect(within(line).getByText("SATELLITE")).toBeInTheDocument();
+    expect(within(line).getByText("FORECAST")).toBeInTheDocument();
+    expect(within(line).getByText("ANALYTICS")).toBeInTheDocument();
   });
 
   it("keeps retrieved data, deterministic analytics, knowledge and interpretation as separate regions", async () => {
@@ -781,20 +945,36 @@ describe("provenance and the data classes", () => {
     );
   });
 
-  it("shows the uncertainty the backend stated, with its basis", async () => {
+  it("shows the uncertainty the backend stated inside the stage that retrieved the forecast", async () => {
+    /*
+     * It had a standalone panel of its own, headed level with the execution flow and the evidence
+     * tables, for one supporting reading about one retrieval. It is the forecast stage's own
+     * disclosure now: the same band, the same basis, one press away, beside what that stage did.
+     */
     renderScreen();
-    const uncertainty = await screen.findByRole("region", { name: "Forecast uncertainty" });
+    const flow = await screen.findByRole("region", { name: "Execution flow" });
 
+    const forecast = within(flow)
+      .getAllByRole("listitem")
+      .find((step) => step.getAttribute("data-agent") === "forecast");
+    expect(forecast).toBeDefined();
+
+    const disclosure = within(forecast as HTMLElement).getByText("Forecast uncertainty");
+    await userEvent.click(disclosure);
+
+    const uncertainty = within(forecast as HTMLElement).getByRole("group", {
+      name: "Forecast uncertainty",
+    });
     expect(within(uncertainty).getByText("HIGH CONFIDENCE")).toBeInTheDocument();
     expect(
       within(uncertainty).getByText(
-        /Confidence falls with horizon distance and derives from one provider's output\./,
+        /Confidence falls with horizon distance and derives from one provider/,
       ),
     ).toBeInTheDocument();
     expect(
       within(uncertainty).getByText(/This provider supplies no forecast spread/),
     ).toBeInTheDocument();
-    // No percentage: the artifact's "Confidence 98.4%" has nothing behind it.
+    // No invented percentage: the artifact's "Confidence 98.4%" has nothing behind it.
     expect(uncertainty.textContent).not.toMatch(/\d+(\.\d+)?%/);
   });
 });
@@ -833,6 +1013,46 @@ describe("the AI interpretation", () => {
      */
     expect(within(synthesis).getByText(/2 figures checked by/)).toBeInTheDocument();
     expect(within(synthesis).getByText("how last year's same day compared")).toBeInTheDocument();
+  });
+
+  it("keeps the conclusion and the verdict primary, and every diagnostic behind the disclosure", async () => {
+    /*
+     * What the primary card is *for*: the grounded conclusion, the verdict on it, and the chips
+     * saying what it rests on. What it filled up with instead: a "Not answered" list, a
+     * figure-check count, a method string, a model identifier and a resolver note — five technical
+     * lines at the same weight as the paragraph they were describing.
+     *
+     * Nothing left the record. Everything named below is inside "Grounding details", one press
+     * from where the reader already is.
+     */
+    renderScreen();
+    const synthesis = await screen.findByRole("region", { name: "Final grounded synthesis" });
+
+    const details = within(synthesis).getByText("Grounding details").closest("details");
+    expect(details).not.toBeNull();
+
+    // Primary: the prose and the verdict, and neither is inside the disclosure.
+    const prose = within(synthesis).getByText(PROSE);
+    const verdict = within(synthesis).getByText(/Grounding verified/);
+    expect(details?.contains(prose)).toBe(false);
+    expect(details?.contains(verdict)).toBe(false);
+
+    // Secondary: what the run did not answer, how the check was performed, and what answered.
+    for (const moved of [
+      "how last year's same day compared",
+      /Not answered/,
+      /2 figures checked by/,
+      /figures extracted from the prose/,
+      /a-configured-model/,
+    ]) {
+      const node = within(synthesis).getByText(moved);
+      expect(details?.contains(node), `${String(moved)} is still primary content`).toBe(true);
+    }
+
+    // And the chips stay above it: they are counts of what is on this page, not diagnostics.
+    const chips = synthesis.querySelector("[data-evidence-chips]");
+    expect(chips).not.toBeNull();
+    expect(details?.contains(chips as Node)).toBe(false);
   });
 });
 
@@ -945,12 +1165,16 @@ describe("nothing on the screen came from anywhere but the record", () => {
       toolCalls(),
     ).toHaveLength(STORED_EVIDENCE.tool_calls.length);
     /*
-     * A header row, one row per stored attribution, and — because this record cites knowledge — the
-     * corpus row derived from those citations. Every row traces to something the record holds.
+     * A header row and one row per stored attribution — nothing else. The corpus had a derived row
+     * here and no longer does: a passage has no provider, no place and no window to put in the
+     * four columns, and RAG knowledge evidence is its own panel. Every row traces to a retrieval
+     * the record holds.
      */
-    expect(
-      within(screen.getByRole("region", { name: "Grounded data sources" })).getAllByRole("row"),
-    ).toHaveLength(STORED_EVIDENCE.attributions.length + 2);
+    const sources = screen.getByRole("region", { name: "Grounded data sources" });
+    expect(within(sources).getAllByRole("row")).toHaveLength(
+      STORED_EVIDENCE.attributions.length + 1,
+    );
+    expect(within(sources).queryByText("Weathra knowledge corpus")).toBeNull();
     expect(
       within(screen.getByRole("region", { name: "RAG knowledge evidence" })).getAllByRole("listitem"),
     ).toHaveLength(CITATIONS.length);
@@ -1030,7 +1254,6 @@ describe("the panel headings do not claim panels contain one another", () => {
       "MCP evidence",
       "Grounded data sources",
       "Deterministic analytics",
-      "Forecast uncertainty",
       "RAG knowledge evidence",
       "Final grounded synthesis",
     ]) {

@@ -53,7 +53,6 @@ import {
   ResolvedContextPanel,
   RunHeader,
   ToolActivityPanel,
-  UncertaintyPanel,
 } from "./sections";
 import styles from "./evidence.module.css";
 
@@ -119,19 +118,22 @@ function RecordView({ response }: { readonly response: EvidenceResponse }): Reac
       <div className={styles.body}>
         {/*
           The artifact's two columns, in its own order: the pipeline and the tool layer down the
-          narrow left rail, the evidence the run produced down the wide right one. Forecast
-          uncertainty moved to the left column — it is a small supporting reading about one
-          retrieval, and between the analytics and the knowledge it broke the right column's
-          sequence of four primary panels in half.
+          narrow left rail, the evidence the run produced down the wide right one.
+
+          Two panels on the left and four on the right, and forecast uncertainty is not a seventh.
+          It was a standalone panel here — a major heading, level with the execution flow and the
+          tool layer, for one supporting reading about one retrieval — and on a rich run it sat
+          between the two columns' primary panels as a third thing of equal weight. It is now
+          inside the forecast stage that produced it, one press away, where the rest of what that
+          stage did already is. Nothing about it left the record.
         */}
         <div className={styles.column}>
           <ExecutionFlow record={record} />
           <ToolActivityPanel record={record} />
-          <UncertaintyPanel record={record} />
         </div>
 
         <div className={styles.column}>
-          <GroundedSources sources={record.sources} citations={record.citations} />
+          <GroundedSources sources={record.sources} />
           <DeterministicAnalytics record={record} />
           <KnowledgeEvidence citations={record.citations} />
           <FinalSynthesis record={record} />

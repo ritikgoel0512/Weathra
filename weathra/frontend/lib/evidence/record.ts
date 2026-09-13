@@ -397,35 +397,83 @@ export function readableProse(text: string): string {
 }
 
 /**
- * How many figures the deterministic band leads with. The artifact sets three across its row.
+ * How many findings the deterministic band leads with. The artifact sets three across its row.
  */
 export const PRIMARY_FIGURES = 3;
 
 /**
- * The statistics a reader needs first, chosen by what a decision turns on.
+ * One card the deterministic band can lead with.
  *
- * A comparison run records ten results — a mean, a minimum, a maximum and a range for each window,
- * then the differences between them — and rendering them in storage order puts "minimum of the
- * first window" where the artifact puts the anomaly. Ten cards is a dump whatever each one says.
+ * Three shapes, because the analytics kernel produces three: a statistic, an anomaly scan, a
+ * trend. They are ranked *together* rather than in three separate queues — an anomaly scan that
+ * found a real outlier is a more useful first card than the fourth-best descriptive statistic, and
+ * the queue-per-shape version could never say so because a statistic could only be beaten by
+ * another statistic.
+ */
+export type AnalyticsCard =
+  | { readonly kind: "statistic"; readonly result: StatisticResult }
+  | { readonly kind: "anomaly"; readonly report: AnomalyReport }
+  | { readonly kind: "trend"; readonly report: TrendReport };
+
+/**
+ * What a decision turns on, in order.
  *
- * The ranking is by *statistic kind*, not by value: a difference or a z-score answers "is this
- * unusual", a total answers "how much", and an extreme answers neither on its own. Nothing is
- * hidden — everything past the first three sits behind the band's own disclosure — and nothing is
- * reordered within a rank, so the run's own sequence still decides ties.
+ * The ranking is by *kind of finding*, not by value: a difference or a z-score answers "is this
+ * unusual", an anomaly scan answers "did anything stand out", a total answers "how much", and an
+ * extreme or a range answers none of them on its own. The extremes sit at the bottom deliberately
+ * — a rich comparison run computes a minimum, a maximum and a range for every window it read, and
+ * storage order put "minimum of the first window" in the place the artifact puts its finding.
  */
 const FIGURE_PRIORITY: readonly string[] = [
+  // Is this different from what it was compared against?
   "delta",
   "difference",
-  "z_score",
   "percentage_change",
+  // Did anything stand out?
+  "anomaly_scan",
+  "z_score",
   "anomaly",
   "percentile_rank",
-  "trend",
+  // How much, and which way — a total is the accumulation a risk is read off, a trend its direction.
   "total",
+  "trend",
+  // What it was typically like. True, and the least likely of these to change a decision.
   "mean",
+  "median",
   "standard_deviation",
   "range",
+  "minimum",
+  "maximum",
 ];
+
+/** The kind of finding a card is, as the priority list spells it. */
+function cardKind(card: AnalyticsCard): string {
+  if (card.kind === "anomaly") return "anomaly_scan";
+  if (card.kind === "trend") return "trend";
+  return String(card.result.statistic ?? "");
+}
+
+/**
+ * What a card is *about*, with the aggregate it was taken over removed.
+ *
+ * `temperature_max`, `temperature_min` and `temperature_mean` are one subject computed three ways,
+ * and a band led by all three says one thing three times — which is exactly what a reader saw: a
+ * minimum high, a maximum high and a mean, filling every primary slot with the same measure. The
+ * suffix comes off so the diversity rule below can tell "another temperature figure" from "the
+ * precipitation signal", which is a different finding about a different risk.
+ */
+function measureFamily(card: AnalyticsCard): string {
+  const measure =
+    card.kind === "statistic"
+      ? String(card.result.measure ?? "")
+      : String(card.report.measure ?? "");
+  return measure.replace(/_(max|min|mean|sum|total|median|range)$/, "");
+}
+
+/** The window a card covers, as a key. Cards with no provenance share one bucket. */
+function cardPeriodKey(card: AnalyticsCard): string {
+  return periodKeyOf(card.kind === "statistic" ? card.result : card.report);
+}
 
 /** The window a figure was computed over, as a key. Figures with no provenance share one bucket. */
 function periodKeyOf(figure: unknown): string {
@@ -436,122 +484,117 @@ function periodKeyOf(figure: unknown): string {
 }
 
 /**
- * The same figure, recorded twice, collapsed to one.
+ * The same finding, recorded twice, collapsed to one.
  *
  * A run can compute a mean through the analytics agent *and* record it again in a statistics tool
  * result, so the band drew two cards reading "Mean · Temperature max" with the same number — which
- * looks like two findings and is one. Identity is the statistic, the measure and the window it
- * covers: two means over *different* windows are two findings and must both survive, which is the
- * whole point of a comparison.
+ * looks like two findings and is one. Identity is the finding, the measure, the window it covers
+ * and the value: two means over *different* windows are two findings and must both survive.
  */
-function deduplicate<T>(figures: readonly T[]): T[] {
+function deduplicate(cards: readonly AnalyticsCard[]): AnalyticsCard[] {
   const seen = new Set<string>();
-  const kept: T[] = [];
+  const kept: AnalyticsCard[] = [];
 
-  for (const figure of figures) {
-    const record: Record<string, unknown> = isObject(figure) ? figure : {};
+  for (const card of cards) {
+    const held: Record<string, unknown> =
+      card.kind === "statistic"
+        ? (card.result as unknown as Record<string, unknown>)
+        : (card.report as unknown as Record<string, unknown>);
     const key = [
-      String(record.statistic ?? ""),
-      String(record.measure ?? ""),
-      periodKeyOf(figure),
-      String(record.value ?? ""),
+      cardKind(card),
+      String(held.measure ?? ""),
+      cardPeriodKey(card),
+      String(held.value ?? held.direction ?? ""),
     ].join("|");
     if (seen.has(key)) continue;
     seen.add(key);
-    kept.push(figure);
+    kept.push(card);
   }
 
   return kept;
 }
 
 /**
- * Whether these figures are a comparison: one statistic computed over two different windows.
+ * Whether the card carries a figure at all.
  *
- * A comparison run's three most useful figures are not its three highest-ranked *kinds* — they are
- * the two sides and the difference between them, in that order, because that is the shape of the
- * question. Ranking by kind alone put the delta first and then two means a reader could not tell
- * apart.
+ * The kernel records what it could *not* compute as well as what it could — a maximum over a
+ * measure the provider supplied nothing for, with the reason. That belongs in the record and is
+ * shown with its reason, but it is not a finding to lead with: a row of three cards where one
+ * reads "not computable" has spent a third of the band on an absence.
  */
-function comparisonFigures<T extends { readonly statistic?: string }>(
-  figures: readonly T[],
-): T[] | null {
-  const byKind = new Map<string, T[]>();
-  for (const figure of figures) {
-    const record: Record<string, unknown> = isObject(figure) ? figure : {};
-    const kind = `${String(record.statistic ?? "")}|${String(record.measure ?? "")}`;
-    byKind.set(kind, [...(byKind.get(kind) ?? []), figure]);
-  }
-
-  // The statistic computed over more than one window is the comparison's two sides. A mean is
-  // preferred over an extreme where both qualify: a comparison of two windows is a comparison of
-  // what they were typically like, and "the coldest hour of each" is the answer to a question
-  // nobody asked here.
-  const candidates = [...byKind.entries()].filter(
-    ([kind, group]) =>
-      group.length === 2 &&
-      !kind.startsWith("delta") &&
-      !kind.startsWith("difference") &&
-      new Set(group.map(periodKeyOf)).size === 2,
-  );
-  const sides = (
-    candidates.find(([kind]) => kind.startsWith("mean")) ?? candidates[0]
-  )?.[1];
-  if (sides === undefined) return null;
-
-  // Later window first: "this period, that period, the difference" is how the question is asked.
-  const ordered = [...sides].sort((left, right) => periodKeyOf(right).localeCompare(periodKeyOf(left)));
-
-  const difference = figures.find((figure) => {
-    const held: Record<string, unknown> = isObject(figure) ? figure : {};
-    const statistic = String(held.statistic ?? "");
-    return statistic === "delta" || statistic === "difference";
-  });
-  if (difference !== undefined) return [...ordered, difference];
-
-  /*
-   * Two sides and no stored difference.
-   *
-   * A comparison the *analytics agent* performed records a `delta`, and that is the third card. A
-   * run that compared two windows by retrieving each of them separately — the archive for last
-   * year, the forecast for this week — computed no delta, and Weathra does not compute one here:
-   * an evidence screen that does its own arithmetic is no longer showing evidence. So the third
-   * card is the highest-ranked figure the run actually computed over either window, which is the
-   * anomaly or the trend where there is one. Two sides and a real third beats two sides and a
-   * number this screen made up.
-   */
-  const chosen = new Set(ordered);
-  const third = ranked(figures.filter((figure) => !chosen.has(figure)))[0];
-  return third === undefined ? [...ordered] : [...ordered, third];
+function hasFigure(card: AnalyticsCard): boolean {
+  if (card.kind !== "statistic") return true;
+  const held = card.result as unknown as Record<string, unknown>;
+  if (held.status === "not_computable") return false;
+  return held.value !== null && held.value !== undefined ? true : "values" in held;
 }
 
-/** The figures in the order the band leads with them: by what a decision turns on, then by run. */
-function ranked<T extends { readonly statistic?: string }>(figures: readonly T[]): T[] {
-  return figures
-    .map((figure, index) => {
-      const rank = FIGURE_PRIORITY.indexOf(String(figure.statistic ?? ""));
-      return { figure, index, rank: rank === -1 ? FIGURE_PRIORITY.length : rank };
+/**
+ * The cards in the order the band leads with them.
+ *
+ * What was computed before what was not, then by what a decision turns on, then by the order the
+ * run recorded them — so a tie is broken by the run itself rather than by anything invented here.
+ */
+function ranked(cards: readonly AnalyticsCard[]): AnalyticsCard[] {
+  return cards
+    .map((card, index) => {
+      const rank = FIGURE_PRIORITY.indexOf(cardKind(card));
+      return {
+        card,
+        index,
+        computed: hasFigure(card) ? 0 : 1,
+        rank: rank === -1 ? FIGURE_PRIORITY.length : rank,
+      };
     })
-    .sort((left, right) => left.rank - right.rank || left.index - right.index)
-    .map((entry) => entry.figure);
+    .sort(
+      (left, right) =>
+        left.computed - right.computed || left.rank - right.rank || left.index - right.index,
+    )
+    .map((entry) => entry.card);
 }
 
-export function leadingFigures<T extends { readonly statistic?: string }>(
-  figures: readonly T[],
-): { readonly primary: readonly T[]; readonly rest: readonly T[] } {
-  const unique = deduplicate(figures);
+/**
+ * The three findings the band leads with, and everything else behind them.
+ *
+ * Two rules, in this order.
+ *
+ * **Rank decides what is worth leading with.** `FIGURE_PRIORITY` above, applied across all three
+ * shapes at once, so a comparison's delta and a real anomaly outrank the descriptive statistics
+ * the kernel computes on its way to them.
+ *
+ * **One subject per slot, while there is another subject to show.** Rank alone still filled the
+ * row with one measure — the difference, the mean and the range of the same temperature — and a
+ * reader got three views of one thing while the precipitation the run also computed sat behind a
+ * disclosure. So each primary slot takes the highest-ranked card about a subject no slot has yet,
+ * and only once the subjects run out does the row fall back to rank alone. A run that genuinely
+ * computed one measure still leads with its three best figures about it; nothing is invented to
+ * fill a slot, and nothing is dropped — the rest is one press away, in rank order.
+ */
+export function leadingAnalytics(cards: readonly AnalyticsCard[]): {
+  readonly primary: readonly AnalyticsCard[];
+  readonly rest: readonly AnalyticsCard[];
+} {
+  const ordered = ranked(deduplicate(cards));
 
-  const comparison = comparisonFigures(unique);
-  if (comparison !== null) {
-    const chosen = new Set(comparison);
-    return { primary: comparison, rest: unique.filter((figure) => !chosen.has(figure)) };
+  const primary: AnalyticsCard[] = [];
+  const subjects = new Set<string>();
+
+  for (const card of ordered) {
+    if (primary.length === PRIMARY_FIGURES) break;
+    // A subject whose only card is an absence does not earn a slot on the strength of being new.
+    if (!hasFigure(card)) continue;
+    const subject = measureFamily(card);
+    if (subjects.has(subject)) continue;
+    subjects.add(subject);
+    primary.push(card);
   }
 
-  const ordered = ranked(unique);
+  // The subjects ran out before the slots did: fill what is left by rank, nothing skipped.
+  const chosen = new Set(primary);
+  const remaining = ordered.filter((card) => !chosen.has(card));
+  const filled = [...primary, ...remaining.slice(0, PRIMARY_FIGURES - primary.length)];
 
-  return {
-    primary: ordered.slice(0, PRIMARY_FIGURES),
-    rest: ordered.slice(PRIMARY_FIGURES),
-  };
+  return { primary: filled, rest: remaining.slice(filled.length - primary.length) };
 }
 
 /** One logical stage of a run: an agent, and every action it took. */

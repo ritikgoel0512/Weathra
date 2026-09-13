@@ -10,8 +10,14 @@
  * exported below, because every product screen in group 21 needs all four.
  */
 
-export { Badge, DataClassBadge, DATA_CLASS_LABELS, DATA_CLASS_DESCRIPTIONS } from "./badge";
-export type { BadgeProps, BadgeTone, DataClassBadgeProps } from "./badge";
+export {
+  Badge,
+  DataClassBadge,
+  StoredClassBadge,
+  DATA_CLASS_LABELS,
+  DATA_CLASS_DESCRIPTIONS,
+} from "./badge";
+export type { BadgeProps, BadgeTone, DataClassBadgeProps, StoredClassBadgeProps } from "./badge";
 
 export { Button } from "./button";
 export type { ButtonProps, ButtonSize, ButtonVariant } from "./button";

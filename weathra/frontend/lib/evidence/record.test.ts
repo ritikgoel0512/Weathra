@@ -10,9 +10,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   agentStages,
-  leadingFigures,
+  leadingAnalytics,
   readableProse,
   statisticsFromTools,
+  type AnalyticsCard,
   type RunRecord,
 } from "./record";
 
@@ -229,29 +230,74 @@ function figure(statistic: string, measure: string, value: number, window: strin
   };
 }
 
-describe("the figures the analytics band leads with", () => {
-  it("leads a comparison with its two sides and the difference, in that order", () => {
+/** The same, as the card the band ranks. */
+function card(statistic: string, measure: string, value: number, window: string) {
+  return { kind: "statistic" as const, result: figure(statistic, measure, value, window) as never };
+}
+
+function values(cards: readonly AnalyticsCard[]): unknown[] {
+  return cards.map((entry) =>
+    entry.kind === "statistic" ? entry.result.value : entry.report.measure,
+  );
+}
+
+function kinds(cards: readonly AnalyticsCard[]): string[] {
+  return cards.map((entry) =>
+    entry.kind === "statistic" ? String(entry.result.statistic) : entry.kind,
+  );
+}
+
+describe("the findings the analytics band leads with", () => {
+  it("leads with the difference, then one finding per subject", () => {
     /*
-     * The shape of the question decides the shape of the answer. Ranking by statistic *kind* alone
-     * put the delta first and then two means a reader could not tell apart; a comparison's three
-     * useful figures are this period, that period, and what separates them.
+     * The defect this replaced. A rich comparison computes a mean, a minimum, a maximum and a
+     * range for each window it read and then the difference between them, and ranking put three
+     * views of one temperature across the row — a minimum high, a maximum high and a mean — while
+     * the difference the question was actually about sat behind a disclosure.
      */
-    const { primary, rest } = leadingFigures([
-      figure("mean", "temperature_max", 21.5, "2026-09-04"),
-      figure("minimum", "temperature_max", 16.1, "2026-09-04"),
-      figure("maximum", "temperature_max", 25.9, "2026-09-04"),
-      figure("range", "temperature_max", 9.8, "2026-09-04"),
-      figure("mean", "temperature_max", 19.2, "2025-09-04"),
-      figure("minimum", "temperature_max", 14.4, "2025-09-04"),
-      figure("maximum", "temperature_max", 24.0, "2025-09-04"),
-      figure("range", "temperature_max", 9.6, "2025-09-04"),
-      figure("delta", "temperature_max", 2.3, "2026-09-04"),
+    const { primary, rest } = leadingAnalytics([
+      card("minimum", "temperature_max", 16.1, "2026-09-04"),
+      card("maximum", "temperature_max", 25.9, "2026-09-04"),
+      card("mean", "temperature_max", 21.5, "2026-09-04"),
+      card("range", "temperature_max", 9.8, "2026-09-04"),
+      card("mean", "temperature_max", 19.2, "2025-09-04"),
+      card("total", "precipitation_sum", 18.2, "2026-09-04"),
+      card("delta", "temperature_max", 2.3, "2026-09-04"),
+      { kind: "trend" as const, report: { measure: "wind_speed", direction: "rising" } as never },
     ]);
 
     expect(primary).toHaveLength(3);
-    expect(primary.map((entry) => entry.value)).toEqual([21.5, 19.2, 2.3]);
-    // The extremes and ranges are still in the record, behind the band's own disclosure.
-    expect(rest).toHaveLength(6);
+    expect(kinds(primary)).toEqual(["delta", "total", "trend"]);
+    // Three subjects, not three views of one: temperature, precipitation, wind.
+    expect(values(primary)).toEqual([2.3, 18.2, "wind_speed"]);
+    expect(rest).toHaveLength(5);
+  });
+
+  it("promotes the anomaly scan over the descriptive statistics it was computed beside", () => {
+    const { primary } = leadingAnalytics([
+      card("mean", "temperature_max", 21.5, "2026-09-04"),
+      card("minimum", "temperature_max", 16.1, "2026-09-04"),
+      { kind: "anomaly" as const, report: { measure: "precipitation" } as never },
+    ]);
+
+    expect(kinds(primary)).toEqual(["anomaly", "mean", "minimum"]);
+  });
+
+  it("falls back to rank alone once the run has no other subject to show", () => {
+    /*
+     * A run that genuinely computed one measure still leads with its three best figures about it.
+     * The diversity rule is there to find another subject, not to leave a slot empty when there
+     * is none.
+     */
+    const { primary, rest } = leadingAnalytics([
+      card("minimum", "temperature_max", 16.1, "2026-09-04"),
+      card("maximum", "temperature_max", 25.9, "2026-09-04"),
+      card("mean", "temperature_max", 21.5, "2026-09-04"),
+      card("delta", "temperature_max", 2.3, "2026-09-04"),
+    ]);
+
+    expect(kinds(primary)).toEqual(["delta", "mean", "minimum"]);
+    expect(rest).toHaveLength(1);
   });
 
   it("collapses the same figure recorded twice", () => {
@@ -261,29 +307,28 @@ describe("the figures the analytics band leads with", () => {
      * one. Two means over *different* windows are two findings and both survive — that distinction
      * is the whole of a comparison.
      */
-    const { primary, rest } = leadingFigures([
-      figure("mean", "temperature_max", 21.5, "2026-09-04"),
-      figure("mean", "temperature_max", 21.5, "2026-09-04"),
-      figure("mean", "temperature_max", 19.2, "2025-09-04"),
-      figure("delta", "temperature_max", 2.3, "2026-09-04"),
+    const { primary, rest } = leadingAnalytics([
+      card("mean", "temperature_max", 21.5, "2026-09-04"),
+      card("mean", "temperature_max", 21.5, "2026-09-04"),
+      card("mean", "temperature_max", 19.2, "2025-09-04"),
+      card("delta", "temperature_max", 2.3, "2026-09-04"),
     ]);
 
-    expect(primary.map((entry) => entry.value)).toEqual([21.5, 19.2, 2.3]);
+    expect(values(primary)).toEqual([2.3, 21.5, 19.2]);
     expect(rest).toHaveLength(0);
   });
 
-  it("caps a non-comparison run at three, by what a decision turns on", () => {
-    const { primary, rest } = leadingFigures([
-      figure("minimum", "temperature_max", 16.1, "2026-09-04"),
-      figure("maximum", "temperature_max", 25.9, "2026-09-04"),
-      figure("mean", "temperature_max", 21.5, "2026-09-04"),
-      figure("total", "precipitation_sum", 18.2, "2026-09-04"),
-      figure("z_score", "temperature_mean", 1.18, "2026-09-04"),
+  it("ranks by what a decision turns on, never by storage order", () => {
+    const { primary, rest } = leadingAnalytics([
+      card("minimum", "temperature_max", 16.1, "2026-09-04"),
+      card("maximum", "temperature_max", 25.9, "2026-09-04"),
+      card("mean", "temperature_max", 21.5, "2026-09-04"),
+      card("total", "precipitation_sum", 18.2, "2026-09-04"),
+      card("z_score", "wind_gust_max", 1.18, "2026-09-04"),
     ]);
 
-    expect(primary).toHaveLength(3);
     // A z-score and a total answer "is this unusual" and "how much"; an extreme answers neither.
-    expect(primary.map((entry) => entry.statistic)).toEqual(["z_score", "total", "mean"]);
+    expect(kinds(primary)).toEqual(["z_score", "total", "mean"]);
     expect(rest).toHaveLength(2);
   });
 });

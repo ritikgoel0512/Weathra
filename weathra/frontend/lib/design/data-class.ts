@@ -101,3 +101,44 @@ export type ConfidenceLevel = (typeof CONFIDENCE_LEVELS)[number];
 export function confidenceLevelFor(value: string | null | undefined): ConfidenceLevel | null {
   return CONFIDENCE_LEVELS.includes(value as ConfidenceLevel) ? (value as ConfidenceLevel) : null;
 }
+
+/* ------------------------------------------------ classes the five do not cover */
+
+/**
+ * How a stored class the design system fixes no badge for is shown.
+ *
+ * `design-system.md` §9 fixes five classes and their colours, and `satellite_observation` — kept
+ * apart in the domain so a picture of a region is never conflated with a provider's figure for a
+ * place — is not one of them. Adding a sixth is a design-system change; *naming* the class a reader
+ * is looking at is a wiring one, and until this existed the evidence table printed `not reported`
+ * in the one column whose whole job is to say what kind of claim a row supports.
+ *
+ * So the class keeps its own **word** and borrows a **colour**. `SATELLITE` is the backend's own
+ * `satellite_observation` said the way the five fixed labels say theirs, and the colour is
+ * observed's because an image from orbit is an observation — the same choice the Analyst's source
+ * rail already made, written down once here so the two surfaces cannot drift apart. Borrowing a
+ * colour is never a claim that this *is* that class: the word is what the reader reads.
+ */
+export interface UnbadgedClass {
+  /** The word the badge announces, in the register of the five fixed labels. */
+  readonly label: string;
+  /** The class whose colour it borrows. */
+  readonly dataClass: DataClassName;
+  /** What it means, for the badge's title — the honest sentence, as the five fixed ones have. */
+  readonly description: string;
+}
+
+/** Every stored class this build can name but the design system fixes no badge for. */
+export const UNBADGED_CLASSES: Readonly<Record<string, UnbadgedClass>> = {
+  satellite_observation: {
+    label: "SATELLITE",
+    dataClass: "observed",
+    description: "Imagery observed from orbit. A picture of a region, carrying no figure of its own.",
+  },
+};
+
+/** The borrowed-badge spec for a stored class, or null when one of the five covers it — or nothing does. */
+export function unbadgedClassFor(value: string | null | undefined): UnbadgedClass | null {
+  if (typeof value !== "string") return null;
+  return UNBADGED_CLASSES[value] ?? null;
+}

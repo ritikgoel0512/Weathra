@@ -68,7 +68,13 @@ export const AGENT_LABELS: Readonly<Record<string, string>> = {
   forecast: "Forecast agent",
   historical: "Historical agent",
   analytics: "Analytics agent",
-  rag: "Knowledge agent",
+  /*
+   * "RAG agent", which is what the pipeline calls this stage and what every other surface that
+   * names it — the RAG Knowledge Evidence panel, `docs/agents.md` — already says. "Knowledge
+   * agent" was a softer word for the same node, and a reader following one name through the
+   * execution flow into the evidence panel below it had to work out that they were the same stage.
+   */
+  rag: "RAG agent",
   synthesis: "Synthesis",
 };
 

@@ -1923,7 +1923,7 @@ describe("the rail beside a successful answer", () => {
     expect(within(status).getAllByText("Used")).toHaveLength(2);
     // The record names two; no row is invented for the four capabilities that did not run.
     expect(within(status).queryByText("Historical agent")).toBeNull();
-    expect(within(status).queryByText("Knowledge agent")).toBeNull();
+    expect(within(status).queryByText("RAG agent")).toBeNull();
   });
 
   it("names each source the way its own documentation does, with what it supplied", async () => {

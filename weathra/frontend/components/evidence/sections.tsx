@@ -35,13 +35,13 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   AttributionFooter,
   Badge,
-  DataClassBadge,
   InterpretationPanel,
   MethodNote,
   ModelAttribution,
   NOT_REPORTED,
   ProvenanceSection,
   ScrollRegion,
+  StoredClassBadge,
   UncertaintyIndicator,
   formatInstant,
   formatLocalStamp,
@@ -56,12 +56,12 @@ import type {
 import { agentLabel, confidenceOf, horizonHoursOf, ROUTING_SOURCE_LABELS } from "@/lib/analyst/run";
 import { auditOf, provenanceOf, recordHash } from "@/lib/evidence/audit";
 import { measureLabel } from "@/lib/dashboard/briefing";
-import { dataClassFor } from "@/lib/design/data-class";
+import { dataClassFor, unbadgedClassFor } from "@/lib/design/data-class";
 import {
   agentStages,
   analyticsFromTools,
-  leadingFigures,
-  PRIMARY_FIGURES,
+  leadingAnalytics,
+  type AnalyticsCard,
   formatDurationMs,
   readableProse,
   runStatusOf,
@@ -315,6 +315,26 @@ const STAGE_STATE_LABELS: Readonly<Record<string, string>> = {
 export function ExecutionFlow({ record }: { readonly record: RunRecord }): ReactNode {
   const stages = agentStages(record);
 
+  /*
+   * Forecast uncertainty, inside the stage that retrieved the forecast.
+   *
+   * It had a standalone panel of its own on this screen, headed level with the execution flow and
+   * the tool layer — a major section for one supporting reading about one retrieval, which on a
+   * rich run pushed the primary evidence down the page behind it. The reading itself is not
+   * demoted: it is the forecast stage's own disclosure now, beside what that stage did and what it
+   * cost, which is where a reader asking "how good is this forecast" is already looking.
+   *
+   * Where a run reported uncertainty and recorded no forecast stage to hang it on — the retrieval
+   * having been recorded under another agent — it is rendered after the stages rather than
+   * dropped. The record does not lose a reading because the flow had nowhere tidy to put it.
+   */
+  const uncertainty = record.answer?.uncertainty ?? null;
+  const confidence = confidenceOf(uncertainty);
+  const showsUncertainty = uncertainty !== null && confidence !== null && Boolean(uncertainty.basis);
+  const uncertaintyStage = showsUncertainty
+    ? (stages.find((stage) => stage.agent === "forecast")?.agent ?? null)
+    : null;
+
   /** The slowest stage, which is what every bar below is a share of. */
   const longest = stages.reduce(
     (slowest, stage) =>
@@ -410,11 +430,19 @@ export function ExecutionFlow({ record }: { readonly record: RunRecord }): React
                     </ul>
                   </details>
                 ) : null}
+
+                {stage.agent === uncertaintyStage ? (
+                  <ForecastUncertainty record={record} />
+                ) : null}
               </li>
             );
           })}
         </ol>
       )}
+
+      {showsUncertainty && uncertaintyStage === null ? (
+        <ForecastUncertainty record={record} />
+      ) : null}
     </section>
   );
 }
@@ -450,7 +478,10 @@ function FieldList({
 
 function ToolEntry({ activity }: { readonly activity: ToolActivity }): ReactNode {
   const result = activity.result;
-  const resultClass = dataClassFor(result?.data_class);
+  // Named the way the record spells it, so an imagery call reads SATELLITE rather than unbadged.
+  const resultClass = result?.data_class ?? null;
+  const namedResultClass =
+    dataClassFor(resultClass) !== null || unbadgedClassFor(resultClass) !== null;
 
   return (
     <li className={styles.tool} data-tool={activity.tool} data-sequence={activity.sequence}>
@@ -479,8 +510,8 @@ function ToolEntry({ activity }: { readonly activity: ToolActivity }): ReactNode
       ) : result.ok ? (
         <div data-tool-result="ok">
           <p className={styles.noteStrong}>
-            Returned{resultClass ? " " : ""}
-            {resultClass ? <DataClassBadge dataClass={resultClass} /> : null}
+            Returned{namedResultClass ? " " : ""}
+            {namedResultClass ? <StoredClassBadge value={resultClass} /> : null}
           </p>
           {result.attribution ? (
             <p className={styles.note}>
@@ -640,40 +671,34 @@ export function ToolActivityPanel({ record }: { readonly record: RunRecord }): R
  * The artifact's "Grounded data sources" table, with its invented providers and station identifiers
  * replaced by the attributions the run actually recorded. The table scrolls inside its own
  * container so the page never scrolls sideways.
+ *
+ * **One row per recorded retrieval, and nothing else.** The corpus had a derived row here for a
+ * while, counted out of the citations, and on a rich run that made six rows out of five retrievals
+ * — with the sixth carrying no provider, no place and no window, because a passage has none. The
+ * corpus is evidence and keeps every bit of it: RAG knowledge evidence is its own panel, with the
+ * documents, the chunks, the relevance and the passages themselves. Nothing is dropped from the
+ * record; the table below states what was *retrieved from a provider*, which is what its four
+ * columns are about.
  */
 export function GroundedSources({
   sources,
-  citations = [],
 }: {
   readonly sources: readonly EvidenceAttribution[];
-  /** Passages the run cited. The corpus is a grounded source and belongs in this table. */
-  readonly citations?: readonly KnowledgeCitation[];
 }): ReactNode {
-  /*
-   * The knowledge corpus, as a row of its own.
-   *
-   * A retrieval records an attribution; the corpus records citations instead, so a run that leaned
-   * on documentation showed nothing in the table that said where the explanation came from. The row
-   * is derived from citations the run actually recorded — the documents it read, counted — and is
-   * omitted entirely when it cited none. Weathra's own corpus, so the provider is Weathra.
-   */
-  const documents = [...new Set(citations.map((citation) => citation.document_id))];
   return (
     <section
       className={styles.panel}
       aria-label="Grounded data sources"
       data-evidence-section="sources"
       data-tier="retrieved"
-      data-empty={sources.length === 0 && documents.length === 0 ? "true" : undefined}
+      data-empty={sources.length === 0 ? "true" : undefined}
     >
       <header className={styles.panelHeader}>
         <h2 className={styles.panelTitle}>Grounded data sources</h2>
-        <span className={styles.panelCount}>
-          {sources.length + (documents.length > 0 ? 1 : 0)} sources
-        </span>
+        <span className={styles.panelCount}>{sources.length} sources</span>
       </header>
 
-      {sources.length === 0 && documents.length === 0 ? (
+      {sources.length === 0 ? (
         <p className={styles.emptyNote}>
           No provider data — this run answered from knowledge rather than from a weather retrieval.
         </p>
@@ -699,7 +724,12 @@ export function GroundedSources({
             </thead>
             <tbody>
               {sources.map((source, index) => {
-                const dataClass = dataClassFor(source.data_class);
+                /*
+                 * The class the row was stored under, named rather than translated. A satellite
+                 * observation is not one of the design system's five and used to fall through to
+                 * `not reported` here — the imagery was retrieved, recorded and attributed, and
+                 * the only column that says what kind of claim it supports said nothing.
+                 */
                 return (
                   <tr
                     key={`${source.provider}-${source.retrieved_at}-${index}`}
@@ -708,25 +738,12 @@ export function GroundedSources({
                     <td className={styles.sourceProvider}>{source.provider}</td>
                     <td>{placeLabel(source.location) ?? NOT_REPORTED}</td>
                     <td title={exactCoverageOf(source)}>{coverageOf(source)}</td>
-                    <td>{dataClass ? <DataClassBadge dataClass={dataClass} /> : NOT_REPORTED}</td>
+                    <td>
+                      <StoredClassBadge value={source.data_class} fallback={NOT_REPORTED} />
+                    </td>
                   </tr>
                 );
               })}
-
-              {/* The corpus, where the run cited it. Derived from real citations, never invented. */}
-              {documents.length > 0 ? (
-                <tr data-source-class="knowledge">
-                  <td className={styles.sourceProvider}>Weathra knowledge corpus</td>
-                  <td>&mdash;</td>
-                  <td>
-                    {documents.length} {documents.length === 1 ? "document" : "documents"},{" "}
-                    {citations.length} {citations.length === 1 ? "passage" : "passages"}
-                  </td>
-                  <td>
-                    <Badge tone="neutral">KNOWLEDGE</Badge>
-                  </td>
-                </tr>
-              ) : null}
             </tbody>
           </table>
         </ScrollRegion>
@@ -815,6 +832,13 @@ function TrendFigure({ report }: { readonly report: TrendReport }): ReactNode {
  * calculated deterministically from retrieved values, by Weathra and not by a language model, and
  * each carries the method that produced it.
  */
+/** One selected finding, rendered as whichever of the three shapes it is. */
+function AnalyticsFigure({ card }: { readonly card: AnalyticsCard }): ReactNode {
+  if (card.kind === "statistic") return <StatisticFigure result={card.result} />;
+  if (card.kind === "anomaly") return <AnomalyFigure report={card.report} />;
+  return <TrendFigure report={card.report} />;
+}
+
 export function DeterministicAnalytics({ record }: { readonly record: RunRecord }): ReactNode {
   /*
    * Everything the run computed, from wherever it recorded it.
@@ -849,30 +873,25 @@ export function DeterministicAnalytics({ record }: { readonly record: RunRecord 
   }
 
   /*
-   * Three figures lead, chosen by what a decision turns on rather than by storage order.
+   * Three findings lead, chosen by what a decision turns on rather than by storage order.
    *
-   * A comparison run records a mean, a minimum, a maximum and a range for each window and then the
-   * differences between them; rendering those as stored puts "minimum of the first window" where
-   * the artifact puts the finding. `leadingFigures` leads a comparison with its two sides and the
-   * difference, and everything else with the figures that answer "is this unusual" before the ones
-   * that answer "how much". Nothing is dropped: the rest is one press away.
+   * A rich run records a mean, a minimum, a maximum and a range for every window it read, then the
+   * differences between them, then an anomaly scan and a trend. Rendering those as stored put
+   * "minimum of the first window" and "maximum of the first window" where the artifact puts the
+   * finding, and the run's difference and its precipitation signal behind a disclosure.
+   *
+   * `leadingAnalytics` ranks all three shapes together — statistics, the anomaly scan, the trend —
+   * and gives each primary slot to a subject no other slot has taken, so the row reads as three
+   * findings about three things rather than three views of one. Nothing is dropped: everything
+   * past the three is one press away, in the same order.
    */
-  const leading = leadingFigures(statistics);
-  const secondary = [...leading.rest];
-
-  /*
-   * The anomaly scan and the trend are findings in their own right, so they compete for the third
-   * card rather than waiting behind every descriptive statistic the kernel happened to compute.
-   * A run with a real anomaly and four means should lead with the anomaly.
-   */
-  const spare = PRIMARY_FIGURES - leading.primary.length;
-  const promotedAnomalies = anomalies.slice(0, Math.max(0, spare));
-  const promotedTrends = trends.slice(0, Math.max(0, spare - promotedAnomalies.length));
-  const remainingAnomalies = anomalies.slice(promotedAnomalies.length);
-  const remainingTrends = trends.slice(promotedTrends.length);
-
-  const total = statistics.length + anomalies.length + trends.length;
-  const held = secondary.length + remainingAnomalies.length + remainingTrends.length;
+  const cards: AnalyticsCard[] = [
+    ...statistics.map((result) => ({ kind: "statistic" as const, result })),
+    ...anomalies.map((report) => ({ kind: "anomaly" as const, report })),
+    ...trends.map((report) => ({ kind: "trend" as const, report })),
+  ];
+  const leading = leadingAnalytics(cards);
+  const total = cards.length;
 
   return (
     <div data-evidence-section="analytics">
@@ -883,32 +902,17 @@ export function DeterministicAnalytics({ record }: { readonly record: RunRecord 
         </p>
 
         <ul className={styles.figures} data-primary-figures="true">
-          {leading.primary.map((result, index) => (
-            <StatisticFigure key={`${result.statistic}-${result.measure}-${index}`} result={result} />
-          ))}
-          {promotedAnomalies.map((report, index) => (
-            <AnomalyFigure key={`anomaly-${report.measure}-${index}`} report={report} />
-          ))}
-          {promotedTrends.map((report, index) => (
-            <TrendFigure key={`trend-${report.measure}-${index}`} report={report} />
+          {leading.primary.map((card, index) => (
+            <AnalyticsFigure card={card} key={`primary-${index}`} />
           ))}
         </ul>
 
-        {held > 0 ? (
+        {leading.rest.length > 0 ? (
           <details className={styles.moreFigures}>
             <summary>Every figure this run computed ({total})</summary>
             <ul className={styles.figures}>
-              {secondary.map((result, index) => (
-                <StatisticFigure
-                  key={`rest-${result.statistic}-${result.measure}-${index}`}
-                  result={result}
-                />
-              ))}
-              {remainingAnomalies.map((report, index) => (
-                <AnomalyFigure key={`rest-anomaly-${report.measure}-${index}`} report={report} />
-              ))}
-              {remainingTrends.map((report, index) => (
-                <TrendFigure key={`rest-trend-${report.measure}-${index}`} report={report} />
+              {leading.rest.map((card, index) => (
+                <AnalyticsFigure card={card} key={`rest-${index}`} />
               ))}
             </ul>
           </details>
@@ -1214,33 +1218,35 @@ export function ResolvedContextPanel({ record }: { readonly record: RunRecord })
 /* --------------------------------------------------------------- uncertainty */
 
 /**
- * The forecast uncertainty the backend stated, shown only when it stated one.
+ * The forecast uncertainty the backend stated, inside the stage that retrieved the forecast.
  *
  * The artifact's header carries a "Confidence 98.4%" figure with nothing behind it, which
  * `docs/design/screens.md` §5 records as refused. What is shown instead is the band the backend
  * reported together with the basis it rests on — and nothing at all when the run reported neither.
+ *
+ * A disclosure rather than a panel. This was a standalone major section of the screen, which gave
+ * one supporting reading about one retrieval the same weight as the execution flow and the
+ * evidence tables; `docs/design/screens.md` §8 records the composition it is not part of. Closed by
+ * default, open in one press, and identical in content: the band, the basis, the horizon and
+ * whether the provider supplied a spread.
  */
-export function UncertaintyPanel({ record }: { readonly record: RunRecord }): ReactNode {
+function ForecastUncertainty({ record }: { readonly record: RunRecord }): ReactNode {
   const uncertainty = record.answer?.uncertainty ?? null;
   const confidence = confidenceOf(uncertainty);
   if (uncertainty === null || confidence === null || !uncertainty.basis) return null;
 
   return (
-    <section
-      className={styles.panel}
-      aria-label="Forecast uncertainty"
-      data-evidence-section="uncertainty"
-    >
-      <header className={styles.panelHeader}>
-        <h2 className={styles.panelTitle}>Forecast uncertainty</h2>
-      </header>
-      <UncertaintyIndicator
-        confidence={confidence}
-        basis={uncertainty.basis}
-        hoursAhead={horizonHoursOf(uncertainty)}
-        spreadAvailable={uncertainty.spread_available ?? null}
-      />
-    </section>
+    <details className={styles.stepActionsDetail} data-evidence-section="uncertainty">
+      <summary>Forecast uncertainty</summary>
+      <div role="group" aria-label="Forecast uncertainty">
+        <UncertaintyIndicator
+          confidence={confidence}
+          basis={uncertainty.basis}
+          hoursAhead={horizonHoursOf(uncertainty)}
+          spreadAvailable={uncertainty.spread_available ?? null}
+        />
+      </div>
+    </details>
   );
 }
 
@@ -1282,8 +1288,8 @@ export function FinalSynthesis({ record }: { readonly record: RunRecord }): Reac
   }
   if (grounding?.figures_checked) chips.push(`${grounding.figures_checked} figures checked`);
   for (const value of record.dataClasses) {
-    const dataClass = dataClassFor(value);
-    if (dataClass !== null) chips.push(humanize(value));
+    // Named classes only — a class this build cannot name would become a chip saying nothing.
+    if (dataClassFor(value) !== null || unbadgedClassFor(value) !== null) chips.push(humanize(value));
   }
 
   return (
@@ -1326,11 +1332,7 @@ export function FinalSynthesis({ record }: { readonly record: RunRecord }): Reac
               <p className={styles.noteStrong}>
                 {grounding.prose_discarded
                   ? "The interpretation was withheld because it could not be grounded in the evidence above."
-                  : "Some figures in this interpretation could not be matched to the evidence above: " +
-                    ((grounding.ungrounded_figures ?? []).join(", ") ||
-                      grounding.note ||
-                      "unstated") +
-                    "."}
+                  : "Some figures in this interpretation could not be matched to the evidence above."}
               </p>
             )}
 
@@ -1344,21 +1346,17 @@ export function FinalSynthesis({ record }: { readonly record: RunRecord }): Reac
               </p>
             ) : null}
 
-            {unanswered.length > 0 ? (
-              <>
-                <p className={styles.noteStrong}>Not answered:</p>
-                <ul className={styles.plainList}>
-                  {unanswered.map((part) => (
-                    <li key={part}>{part}</li>
-                  ))}
-                </ul>
-              </>
-            ) : null}
-
             {/*
               Everything about *how* the conclusion was produced, in one place: which model, under
-              which policy, and how the grounding check was performed. None of it is the answer,
-              and all of it is what a reader checking the answer eventually wants.
+              which policy, how the grounding check was performed, which figures it could not
+              match, and what the run did not answer.
+
+              All of it was primary content, directly under the conclusion and set at the same
+              weight — a "Not answered" list, a figure-check count, a method string, a model
+              identifier and a resolver note, which together read as a debug envelope wrapped
+              around a paragraph. None of it is the conclusion; all of it is what a reader checking
+              the conclusion eventually wants, and it is one press from where they are. What stays
+              above is the verdict itself, which is the one thing that must never need a press.
             */}
             <details className={styles.groundingDetail}>
               <summary>Grounding details</summary>
@@ -1369,6 +1367,32 @@ export function FinalSynthesis({ record }: { readonly record: RunRecord }): Reac
                     {grounding.figures_checked} figures checked by {grounding.method}.
                   </p>
                 ) : null}
+
+                {/*
+                  The figures that did not match, named. The verdict above says that some did not;
+                  this says which, because a reader who opens this is asking exactly that.
+                */}
+                {grounding !== null && !grounding.verified && !grounding.prose_discarded ? (
+                  <p className={styles.note}>
+                    Unsupported figures:{" "}
+                    {(grounding.ungrounded_figures ?? []).join(", ") ||
+                      grounding.note ||
+                      "unstated"}
+                    .
+                  </p>
+                ) : null}
+
+                {unanswered.length > 0 ? (
+                  <>
+                    <p className={styles.noteStrong}>Not answered:</p>
+                    <ul className={styles.plainList}>
+                      {unanswered.map((part) => (
+                        <li key={part}>{part}</li>
+                      ))}
+                    </ul>
+                  </>
+                ) : null}
+
                 <ModelAttribution
                   provider={inference?.provider ?? null}
                   model={inference?.model ?? null}
@@ -1406,9 +1430,17 @@ export function FinalSynthesis({ record }: { readonly record: RunRecord }): Reac
  * from acquiring a plausible-looking default.
  */
 export function RecordProvenance({ record }: { readonly record: RunRecord }): ReactNode {
-  const classes = record.dataClasses
-    .map((value) => dataClassFor(value))
-    .filter((value): value is NonNullable<typeof value> => value !== null);
+  /*
+   * Every class the run recorded, including the ones the design system fixes no badge for.
+   *
+   * This filtered on `dataClassFor` and so dropped `satellite_observation` silently: a run whose
+   * imagery was its own grounded row had that row's class missing from the summary of the classes
+   * in the run. `StoredClassBadge` names it; what is filtered out here is only a class this build
+   * cannot name at all, which is the one case where saying nothing is right.
+   */
+  const classes = record.dataClasses.filter(
+    (value) => dataClassFor(value) !== null || unbadgedClassFor(value) !== null,
+  );
 
   return (
     <AttributionFooter
@@ -1421,7 +1453,7 @@ export function RecordProvenance({ record }: { readonly record: RunRecord }): Re
       <p className={styles.note}>
         Data classes in this run:{" "}
         {classes.length > 0 ? (
-          classes.map((dataClass) => <DataClassBadge key={dataClass} dataClass={dataClass} />)
+          classes.map((value) => <StoredClassBadge key={value} value={value} />)
         ) : (
           <span>{NOT_REPORTED}</span>
         )}

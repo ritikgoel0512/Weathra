@@ -18,6 +18,7 @@
 
 import type { ReactNode } from "react";
 
+import { dataClassFor, unbadgedClassFor } from "@/lib/design/data-class";
 import type { DataClassName } from "@/lib/design/tokens";
 
 import styles from "./primitives.module.css";
@@ -81,6 +82,44 @@ export function DataClassBadge({ dataClass }: DataClassBadgeProps): ReactNode {
       title={DATA_CLASS_DESCRIPTIONS[dataClass]}
     >
       {DATA_CLASS_LABELS[dataClass]}
+    </span>
+  );
+}
+
+export interface StoredClassBadgeProps {
+  /** The backend's own `data_class` string, exactly as the record stored it. */
+  readonly value: string | null | undefined;
+  /** What to render for a class this build cannot name. Nothing, unless a caller says otherwise. */
+  readonly fallback?: ReactNode;
+}
+
+/**
+ * The badge for a class as the *record* spells it, including the ones the five do not cover.
+ *
+ * `DataClassBadge` takes a design-system class and is the right thing wherever a screen already
+ * knows which of the five it is holding. This takes the stored string, which is what an evidence
+ * row actually has, and is the only place a class outside the five acquires a label — a satellite
+ * observation reads `SATELLITE` rather than `not reported`, on observed's colour, with the reason
+ * for both recorded beside the table in `lib/design/data-class.ts`.
+ *
+ * A value this build cannot name renders the caller's `fallback` — nothing by default — rather
+ * than this guessing a word for a class it does not know.
+ */
+export function StoredClassBadge({ value, fallback = null }: StoredClassBadgeProps): ReactNode {
+  const fixed = dataClassFor(value);
+  if (fixed !== null) return <DataClassBadge dataClass={fixed} />;
+
+  const borrowed = unbadgedClassFor(value);
+  if (borrowed === null) return fallback;
+
+  return (
+    <span
+      className={styles.badge}
+      data-class={borrowed.dataClass}
+      data-stored-class={value}
+      title={borrowed.description}
+    >
+      {borrowed.label}
     </span>
   );
 }
