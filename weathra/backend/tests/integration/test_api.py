@@ -16,6 +16,7 @@ import json
 import re
 import uuid
 from contextlib import AbstractAsyncContextManager
+from datetime import date
 
 import pytest
 
@@ -1923,14 +1924,27 @@ async def test_the_scenario_endpoint_carries_its_effects_and_its_history(
 
     The three blocks are asserted together because the screen draws them together: a response
     carrying the adjusted series but no counted effects would render a lab with empty result cards,
-    which is the state this rebuild exists to remove.
+    which is the state the rebuild exists to remove.
+
+    **The provider is built here rather than taken from the default, and that is the fixture this
+    test needs rather than a preference.** `StubProvider` reports no hourly series at all unless
+    asked — its default forecast carries daily aggregates only — and a scenario adjusts the hourly
+    series and nothing else. A run against the default therefore succeeds, returns 200, and adjusts
+    an empty series, which is exactly what it should do and exactly not what this test is about.
     """
-    async with api_factory() as api:
+    hours = [10.0, 12.0, 14.0, 16.0, 15.0, 13.0]
+    days = [8.0, 11.0]
+    provider = stub_provider(forecast_start=date.today(), daily_values=days, hourly_values=hours)
+
+    async with api_factory(provider=provider) as api:
         response = await api.client.post(
             f"{PREFIX}/weather/scenario",
             json={
                 "location": "Berlin",
-                "days": 2,
+                # Derived from the fixture rather than assumed: the stub's forecast slices its
+                # daily values to the horizon, so asking past what it holds narrows the window
+                # silently.
+                "days": len(days),
                 "assumptions": {"temperature_delta": 2.5, "precipitation_percent": 15},
             },
         )
@@ -1939,22 +1953,47 @@ async def test_the_scenario_endpoint_carries_its_effects_and_its_history(
         body = response.json()
 
         assert body["simulated"] is True
-        assert body["baseline"]["entries"] and body["scenario"]["entries"]
+        assert len(body["baseline"]["entries"]) == len(hours)
+        assert len(body["scenario"]["entries"]) == len(hours)
         assert {measure["measure"] for measure in body["measures"]} == {
             "temperature",
             "precipitation",
         }
 
+        temperature = next(
+            measure for measure in body["measures"] if measure["measure"] == "temperature"
+        )
+        assert temperature["difference"] == pytest.approx(2.5)
+
+        # What the assumptions did past the means: counted hours, peaks, and the two statements
+        # derived from them.
         effects = body["effects"]
-        assert effects["risk"]["kind"] and effects["risk"]["detail"]
-        assert effects["sensitivity"]["kind"]
+        assert effects["risk"]["kind"] == "higher-peak-temperature"
+        assert effects["risk"]["detail"]
+        assert effects["sensitivity"]["kind"] == "most-sensitive"
         assert effects["method"]
 
-        # The archive is a separate retrieval and is allowed to be absent; when it answers, it
-        # answers with the same comparison every other surface uses.
-        if body["history"] is not None:
-            assert body["history"]["comparison"]["measure"] == "temperature_mean"
-            assert body["history"]["scenario_mean"] is not None
+        peak = next(
+            extreme for extreme in effects["extremes"] if extreme["measure"] == "temperature"
+        )
+        assert peak["baseline"] == pytest.approx(max(hours))
+        assert peak["scenario"] == pytest.approx(max(hours) + 2.5)
+        assert peak["occurred_at_local"] is not None
+
+        rain = next(
+            crossing for crossing in effects["crossings"] if crossing["measure"] == "precipitation"
+        )
+        assert rain["baseline_hours"] == rain["scenario_hours"]
+
+        # The archive answered, so the scenario's own mean is placed against it by the same
+        # comparison every other surface uses.
+        history = body["history"]
+        assert history is not None
+        assert history["comparison"]["measure"] == "temperature_mean"
+        assert history["scenario_mean"] == pytest.approx(sum(hours) / len(hours) + 2.5)
+        assert history["comparison"]["characterization"]
+        assert history["nearest_analog"]["year"] > 0
+        assert history["method"]
 
 
 async def test_a_scenario_survives_an_archive_that_cannot_serve_the_window(
@@ -1962,17 +2001,35 @@ async def test_a_scenario_survives_an_archive_that_cannot_serve_the_window(
 ) -> None:
     """The historical section is context on top of a run, not a precondition for one.
 
-    A provider that cannot serve ten Septembers is a reason to omit that section, never a reason to
+    A provider that cannot serve the past years is a reason to omit that section, never a reason to
     refuse arithmetic that has already been done on a forecast that has already been retrieved.
+
+    The archive is made to fail the way `StubProvider` already models failure: its ``today`` is the
+    instant the reporting lag is measured back from, so an archive whose "now" is decades ago holds
+    nothing for the calendar window the baseline asks about and raises for every candidate year. The
+    *forecast* is unaffected by that date, so the run still has real hours to adjust — which is what
+    makes this a test of the degraded section rather than of an empty response.
     """
-    async with api_factory() as api:
+    hours = [9.0, 11.0, 13.0]
+    provider = stub_provider(
+        forecast_start=date.today(),
+        hourly_values=hours,
+        today=date(1990, 1, 1),
+    )
+
+    async with api_factory(provider=provider) as api:
         response = await api.client.post(
             f"{PREFIX}/weather/scenario",
-            # A place the stub archive has nothing for still returns a complete scenario.
             json={"location": "Berlin", "days": 1, "assumptions": {"temperature_delta": 1.0}},
         )
 
         assert response.status_code == 200, response.text
         body = response.json()
-        assert body["scenario"]["entries"]
-        assert body["effects"]["risk"]["kind"]
+
+        # The scenario itself is complete: real hours in, real hours out, real effects counted.
+        assert len(body["scenario"]["entries"]) == len(hours)
+        assert body["measures"][0]["difference"] == pytest.approx(1.0)
+        assert body["effects"]["risk"]["kind"] == "higher-peak-temperature"
+
+        # And the one section the archive feeds is absent rather than empty or wrong.
+        assert body["history"] is None

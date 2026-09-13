@@ -44,6 +44,15 @@ STUB_MEASURES: tuple[Measure, ...] = (
     Measure.WIND_SPEED_MAX,
 )
 
+# What its *hourly* series carries when a caller asks for one — the four instantaneous measures a
+# scenario can adjust, so one stub serves every assumption the lab offers.
+STUB_HOURLY_MEASURES: tuple[Measure, ...] = (
+    Measure.TEMPERATURE,
+    Measure.PRECIPITATION,
+    Measure.RELATIVE_HUMIDITY,
+    Measure.WIND_SPEED,
+)
+
 
 def fixture(name: str) -> dict[str, Any]:
     """A recorded payload, deep-copied so a test that mutates it cannot affect another."""
@@ -91,6 +100,7 @@ class StubProvider:
         capabilities: ProviderCapabilities | None = None,
         current_values: dict[Measure, float | None] | None = None,
         daily_values: Sequence[float | None] = (1.0, 2.0, 3.0),
+        hourly_values: Sequence[float | None] | None = None,
         failure: Exception | None = None,
         today: date | None = None,
         forecast_start: date | None = None,
@@ -101,6 +111,11 @@ class StubProvider:
         self._today = today or datetime.now(UTC).date()
         self._current_values = current_values or {Measure.TEMPERATURE: 7.5}
         self._daily_values = list(daily_values)
+        # None, not (), and the difference is the point: a provider that reports no hourly series
+        # at all is the default this suite has always had, and several tests depend on it. A caller
+        # that needs hourly readings — anything exercising the scenario endpoint, which adjusts the
+        # hourly series and nothing else — asks for them explicitly.
+        self._hourly_values = None if hourly_values is None else list(hourly_values)
         self._failure = failure
         # Where the forecast series begins. Fixed by default, because most of this suite asserts
         # against literal dates and a moving window would make those assertions untestable. A
@@ -149,9 +164,13 @@ class StubProvider:
             from_cache=False,
             period=period_from_local_dates(location, start, start + timedelta(days=days - 1)),
             horizon_days=days,
-            hourly=Series(
-                granularity=Granularity.HOURLY,
-                units=units_map((Measure.TEMPERATURE,), unit_system),
+            hourly=(
+                Series(
+                    granularity=Granularity.HOURLY,
+                    units=units_map((Measure.TEMPERATURE,), unit_system),
+                )
+                if self._hourly_values is None
+                else _hourly_series(location, start, self._hourly_values, unit_system)
             ),
             daily=daily,
         )
@@ -201,6 +220,42 @@ class StubProvider:
             daily=_daily_series(location, start, self._daily_values, unit_system),
             unavailable_note=note,
         )
+
+
+def _hourly_series(
+    location: Location,
+    start: date,
+    values: Sequence[float | None],
+    unit_system: UnitSystem,
+) -> Series:
+    """Consecutive hours from the first local hour of ``start``, one entry per value.
+
+    Every measure a scenario assumption can address, derived deterministically from the one value a
+    caller supplies — the same arrangement ``_daily_series`` uses, for the same reason: one stub
+    serves the temperature, precipitation, humidity and wind paths without each test building its
+    own series. A ``None`` value stays ``None`` in every measure, because an hour the provider did
+    not report is not an hour it reported zeroes for.
+    """
+    zone = location.zoneinfo
+    first, _ = local_day_bounds(location, start)
+    entries = [
+        SeriesEntry(
+            time_utc=first + timedelta(hours=index),
+            time_local=(first + timedelta(hours=index)).astimezone(zone),
+            values={
+                Measure.TEMPERATURE: value,
+                Measure.PRECIPITATION: None if value is None else abs(value) % 3,
+                Measure.RELATIVE_HUMIDITY: None if value is None else 50.0 + abs(value) % 40,
+                Measure.WIND_SPEED: None if value is None else abs(value) + 4.0,
+            },
+        )
+        for index, value in enumerate(values)
+    ]
+    return Series(
+        granularity=Granularity.HOURLY,
+        units=units_map(STUB_HOURLY_MEASURES, unit_system),
+        entries=tuple(entries),
+    )
 
 
 def _daily_series(
