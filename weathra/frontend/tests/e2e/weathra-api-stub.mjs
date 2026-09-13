@@ -1195,6 +1195,54 @@ const FIXTURES = {
    * one whose provider could not be reached, because a card that keeps its place and loses only its
    * weather is the state this screen is most likely to get wrong.
    */
+  /**
+   * `GET /api/v1/ready` — what this deployment is configured with.
+   *
+   * Settings reads it on two tabs, and it is the one place the product names the model. Shaped
+   * exactly as `api/routers/health.py` returns it, including the detail strings, which carry the
+   * provider id and model id and deliberately never a credential.
+   */
+  "/api/v1/ready": {
+    ready: true,
+    version: "1.0.0",
+    environment: "stub",
+    checked_at: "2026-09-13T12:00:00Z",
+    dependencies: [
+      {
+        name: "weather_provider",
+        configured: true,
+        reachable: null,
+        detail:
+          "open-meteo. Not called by this probe: a scheduled readiness fetch would consume the provider's rate limit.",
+      },
+      {
+        name: "database",
+        configured: true,
+        reachable: true,
+        detail: null,
+      },
+      {
+        name: "vector_store",
+        configured: true,
+        reachable: true,
+        detail: "pgvector, 384-dimension index.",
+      },
+      {
+        name: "authentication_provider",
+        configured: true,
+        reachable: null,
+        detail: "Supabase Auth.",
+      },
+      {
+        name: "inference_provider",
+        configured: true,
+        reachable: null,
+        required: false,
+        detail: "openrouter, model nvidia/nemotron-nano-9b-v2.",
+      },
+    ],
+  },
+
   "/api/v1/me/locations/overview": {
     summary: {
       saved_count: 4,

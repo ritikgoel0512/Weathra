@@ -198,7 +198,7 @@ export function sourceOf(view: PreferenceView, field: string): PreferenceSource 
  * the guarantee `specs/memory` asks for is precisely that the two are never confused.
  */
 export const PREFERENCE_SOURCE_RULE =
-  "Each control below holds your own choice unless it says otherwise.";
+  "Each setting below is your own choice unless it says otherwise.";
 
 /**
  * The sentence a field carries so a default is never mistaken for a decision, or `null` where the
@@ -206,8 +206,11 @@ export const PREFERENCE_SOURCE_RULE =
  */
 export function sourceNote(source: PreferenceSource | null): string | null {
   if (source === "chosen") return null;
-  if (source === "default") return "Weathra's documented default — you have not chosen this.";
-  return "Weathra did not report whether this is your choice or its default.";
+  // The distinction is worth keeping and the old wording was not: "documented default — you have
+  // not chosen this" read like a changelog under every field. What a person needs is which of the
+  // two a value is, in as few words as that takes.
+  if (source === "default") return "Weathra's default.";
+  return "Weathra could not tell whether this is your choice or its default.";
 }
 
 /**

@@ -356,3 +356,201 @@
   font-weight: var(--type-card-weight);
   color: var(--color-text-primary);
 }
+
+/* ================================================ AI Intelligence and Transparency */
+
+/*
+ * Both tabs are read-first, so their shape is a definition list rather than a form: a term on the
+ * left at label weight, and what it means beside it. Neither carries a save bar, because neither
+ * has an editable control on it — a Save Preferences button over a page of definitions would be a
+ * control that does nothing.
+ */
+.fact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-1);
+  padding-block: var(--space-2);
+  border-block-end: 1px solid var(--color-border-subtle);
+  min-width: 0;
+}
+
+.fact:last-child {
+  border-block-end: none;
+}
+
+@media (min-width: 640px) {
+  .fact {
+    grid-template-columns: minmax(0, 13rem) minmax(0, 1fr);
+    gap: var(--space-4);
+    align-items: baseline;
+  }
+}
+
+.fact dt {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+}
+
+.fact dd {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  overflow-wrap: anywhere;
+}
+
+/* The longer half of a fact: a sentence rather than a value. */
+.factDetail {
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  max-width: 68ch;
+}
+
+.paragraph {
+  margin: 0;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  max-width: 74ch;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-accent);
+  font-size: var(--type-ui-size);
+  font-weight: var(--type-ui-weight);
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* The five classes, each defined beside its own badge. */
+.classes {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.class {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-1);
+  padding-block: var(--space-3);
+  border-block-end: 1px solid var(--color-border-subtle);
+  min-width: 0;
+}
+
+.class:last-child {
+  border-block-end: none;
+}
+
+@media (min-width: 640px) {
+  .class {
+    grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
+    gap: var(--space-4);
+    align-items: baseline;
+  }
+}
+
+.class dt {
+  margin: 0;
+}
+
+.class dd {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  max-width: 68ch;
+}
+
+/* The grounding summary: which classes come from where, as badges in a row. */
+.classList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.classList li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  min-width: 0;
+}
+
+/* What this deployment is configured with, reported by the service itself. */
+.sourceList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.source {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.sourceHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.sourceName {
+  color: var(--color-text-primary);
+  font-size: var(--type-ui-size);
+  font-weight: var(--type-ui-weight);
+  overflow-wrap: anywhere;
+}
+
+.sourceBlurb {
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  max-width: 72ch;
+}
+
+/* The probe's own sentence. Names the provider and the model; never a credential. */
+.sourceDetail {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}

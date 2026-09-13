@@ -37,10 +37,13 @@ vi.mock("@/lib/supabase/browser", () => ({
   },
 }));
 
+/** What `?tab=` holds for the test currently running. Reset in `beforeEach`. */
+let searchParams = new URLSearchParams();
+
 vi.mock("next/navigation", () => ({
   usePathname: () => "/settings",
   useRouter: () => ({ replace: () => {}, refresh: () => {}, push: () => {} }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => searchParams,
 }));
 
 /** The one sign-out flow, stubbed at the server boundary rather than replaced by another. */
@@ -232,6 +235,46 @@ function backend(routes: Record<string, Handler>) {
 }
 
 /** The routes Settings itself uses, with a PUT that really updates what a later GET returns. */
+/**
+ * `/ready` as the backend reports it: the provider id and the model id, and no credential.
+ *
+ * `_inference` in `api/routers/health.py` is explicit that it reports whether *a* credential is
+ * configured and never whether this one is valid — which is what makes this safe to render.
+ */
+const READINESS = {
+  ready: true,
+  version: "1.0.0",
+  environment: "test",
+  checked_at: "2026-09-13T12:00:00Z",
+  dependencies: [
+    {
+      name: "weather_provider",
+      configured: true,
+      reachable: null,
+      detail: "open-meteo. Not called by this probe: a scheduled readiness fetch would consume the provider's rate limit.",
+    },
+    {
+      name: "inference_provider",
+      configured: true,
+      reachable: null,
+      required: false,
+      detail: "openrouter, model nvidia/nemotron-nano-9b-v2.",
+    },
+    { name: "database", configured: true, reachable: true, detail: null },
+    { name: "vector_store", configured: true, reachable: true, detail: null },
+    { name: "authentication_provider", configured: true, reachable: null, detail: null },
+  ],
+};
+
+const USAGE = {
+  user_id: "u-1",
+  plan_code: "free",
+  plan_name: "Free",
+  internal: false,
+  dimensions: [],
+  recent: { days: 30, calls: 12, failures: 1, total_tokens: 8400, series: [] },
+};
+
 function settingsRoutes(overrides: Record<string, Handler> = {}): Record<string, Handler> {
   return {
     "GET /api/v1/me/preferences": () => jsonResponse(200, stored),
@@ -270,6 +313,10 @@ function settingsRoutes(overrides: Record<string, Handler> = {}): Record<string,
     "GET /api/v1/me/locations": () => jsonResponse(200, SAVED_LOCATIONS),
     "GET /api/v1/me": () => jsonResponse(200, ME),
     "GET /api/v1/threads": () => jsonResponse(200, THREADS),
+    // The readiness probe, which is where AI Intelligence and Transparency get the provider and
+    // model from. Public, and it deliberately never carries a credential.
+    "GET /api/v1/ready": () => jsonResponse(200, READINESS),
+    "GET /api/v1/me/usage": () => jsonResponse(200, USAGE),
     ...overrides,
   };
 }
@@ -300,9 +347,20 @@ function renderSettingsAndDashboard() {
   );
 }
 
-/** Move to the Account tab, where the three account operations live. */
+/** Move to the Account tab, where identity, sign-out and data deletion live. */
 async function openAccountTab(person: ReturnType<typeof userEvent.setup>) {
   await person.click(screen.getByRole("tab", { name: "Account" }));
+}
+
+/**
+ * Move to the AI Intelligence tab, where conversation memory lives.
+ *
+ * It used to sit under Account, which put "what the assistant remembers" in the same place as
+ * "delete everything" — two different questions. Memory is what the AI carries between questions,
+ * so it belongs beside what the AI is and what it may touch.
+ */
+async function openIntelligenceTab(person: ReturnType<typeof userEvent.setup>) {
+  await person.click(screen.getByRole("tab", { name: "AI Intelligence" }));
 }
 
 const originalEnv = { ...process.env };
@@ -312,6 +370,7 @@ beforeEach(() => {
   process.env.NEXT_PUBLIC_API_BASE_URL = "http://backend.test";
   process.env.NEXT_PUBLIC_SUPABASE_URL = "https://project.supabase.co";
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "public-anon-key";
+  searchParams = new URLSearchParams();
   stored = preferences();
   fetchMock = backend(settingsRoutes());
 });
@@ -340,11 +399,11 @@ describe("the preference form", () => {
     // once and only the exceptions are marked, so "Your choice." no longer appears under every
     // control — but the distinction it carried is asserted at both of its new locations.
     expect(
-      within(form).getByText(/Each control below holds your own choice unless it says otherwise\./),
+      within(form).getByText(/Each setting below is your own choice unless it says otherwise\./),
     ).toBeInTheDocument();
     expect(within(form).queryByText("Your choice.")).not.toBeInTheDocument();
     expect(
-      within(form).getByText(/Weathra's documented default — you have not chosen this\./),
+      within(form).getByText(/Weathra's default\./),
     ).toBeInTheDocument();
 
     expect(screen.getByText("No unsaved changes.")).toBeInTheDocument();
@@ -538,7 +597,7 @@ describe("the other preferences", () => {
       ).toBe(true),
     );
     expect(
-      await screen.findByText(/Your preferences are cleared\. Weathra's documented defaults now apply\./),
+      await screen.findByText(/Your preferences are cleared\. Weathra's defaults now apply\./),
     ).toBeInTheDocument();
   });
 
@@ -606,7 +665,7 @@ describe("deleting a conversation's memory", () => {
   it("requires a confirmation step before it will delete anything", async () => {
     const person = userEvent.setup();
     renderSettings();
-    await openAccountTab(person);
+    await openIntelligenceTab(person);
 
     const memory = await screen.findByRole("region", { name: "Conversation memory" });
     expect(within(memory).getByText("Berlin this week")).toBeInTheDocument();
@@ -649,7 +708,7 @@ describe("deleting a conversation's memory", () => {
     );
 
     renderSettings();
-    await openAccountTab(person);
+    await openIntelligenceTab(person);
 
     const memory = await screen.findByRole("region", { name: "Conversation memory" });
     await person.click(within(memory).getByRole("button", { name: "Delete this conversation" }));
@@ -688,7 +747,7 @@ describe("deleting a conversation's memory", () => {
     );
 
     renderSettings();
-    await openAccountTab(person);
+    await openIntelligenceTab(person);
 
     const memory = await screen.findByRole("region", { name: "Conversation memory" });
     await person.click(within(memory).getByRole("button", { name: "Delete this conversation" }));
@@ -795,19 +854,234 @@ describe("deleting the person's Weathra data", () => {
     expect(screen.queryByText("Your Weathra data has been deleted.")).toBeNull();
   });
 
-  it("keeps the three account operations distinct", async () => {
+  it("keeps the three operations distinct, across the two tabs they belong to", async () => {
     const person = userEvent.setup();
     renderSettings();
     await openAccountTab(person);
 
-    // Three separate regions, three separate controls, three different wordings.
+    // Signing out and deleting your data are account operations and sit together.
     expect(await screen.findByRole("region", { name: "Your account" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Conversation memory" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Delete your Weathra data" })).toBeInTheDocument();
-
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Delete this conversation" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delete my Weathra data" })).toBeInTheDocument();
+
+    // Deleting a conversation is neither: it removes what the assistant carries between questions,
+    // so it sits with the rest of what the assistant remembers.
+    await openIntelligenceTab(person);
+    expect(await screen.findByRole("region", { name: "Conversation memory" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete this conversation" })).toBeInTheDocument();
+    // And the two heavier operations are not on this tab at all.
+    expect(screen.queryByRole("button", { name: "Delete my Weathra data" })).not.toBeInTheDocument();
+  });
+});
+
+describe("the four tabs", () => {
+  /*
+   * AI Intelligence and Transparency were drawn and disabled — `unavailable` in the tab table, and
+   * no `TabPanel` behind either, so there was nothing to open even if the tab had been selectable.
+   * These cases exist so that cannot come back silently.
+   */
+  it("opens every one of them, with none marked unavailable", async () => {
+    const person = userEvent.setup();
+    renderSettings();
+
+    const tabs = await screen.findAllByRole("tab");
+    expect(tabs.map((tab) => tab.textContent?.trim())).toEqual([
+      "General",
+      "AI Intelligence",
+      "Account",
+      "Transparency",
+    ]);
+    for (const tab of tabs) {
+      expect(tab, tab.textContent ?? "").not.toHaveAttribute("data-unavailable", "true");
+      expect(tab).not.toBeDisabled();
+    }
+
+    for (const [name, marker] of [
+      ["AI Intelligence", "AI Weather Analyst"],
+      ["Transparency", "How Weathra labels data"],
+      ["Account", "Your account"],
+    ] as const) {
+      await person.click(screen.getByRole("tab", { name }));
+      expect(await screen.findByText(marker), name).toBeInTheDocument();
+    }
+  });
+
+  it("names each panel from the tab that controls it", async () => {
+    const person = userEvent.setup();
+    renderSettings();
+    await person.click(screen.getByRole("tab", { name: "Transparency" }));
+
+    const tab = screen.getByRole("tab", { name: "Transparency" });
+    expect(tab).toHaveAttribute("aria-selected", "true");
+    const panel = screen.getByRole("tabpanel");
+    expect(tab).toHaveAttribute("aria-controls", panel.id);
+  });
+
+  it("opens the tab a link names, so a section can be sent to somebody", async () => {
+    searchParams = new URLSearchParams("tab=transparency");
+    renderSettings();
+
+    expect(await screen.findByText("How Weathra labels data")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Transparency" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
+  it("opens General when the link names a tab that does not exist", async () => {
+    searchParams = new URLSearchParams("tab=nonsense");
+    renderSettings();
+
+    // A mistyped link opens Settings rather than a blank panel.
+    expect(await screen.findByRole("form", { name: "Your Weathra preferences" })).toBeInTheDocument();
+  });
+
+  it("moves between tabs from the keyboard alone", async () => {
+    const person = userEvent.setup();
+    renderSettings();
+    await screen.findAllByRole("tab");
+
+    screen.getByRole("tab", { name: "General" }).focus();
+    await person.keyboard("{ArrowRight}");
+
+    expect(screen.getByRole("tab", { name: "AI Intelligence" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+});
+
+describe("the AI Intelligence tab", () => {
+  it("reports the configured provider and model from the backend, and no credential", async () => {
+    const person = userEvent.setup();
+    renderSettings();
+    await person.click(screen.getByRole("tab", { name: "AI Intelligence" }));
+
+    expect(await screen.findByText("AI Weather Analyst")).toBeInTheDocument();
+    // The probe's own sentence, so this page cannot claim a model the deployment is not using.
+    expect(screen.getByText(/openrouter, model nvidia\/nemotron-nano-9b-v2\./)).toBeInTheDocument();
+    expect(screen.getByText("Available")).toBeInTheDocument();
+
+    // Never a key, a token, or a connection string.
+    const text = screen.getByRole("tabpanel").textContent ?? "";
+    for (const secret of ["OPENROUTER_API_KEY", "sk-", "Bearer ", "postgres", "DATABASE_URL"]) {
+      expect(text, `the page shows ${secret}`).not.toContain(secret);
+    }
+  });
+
+  it("says the analyst is unavailable where no credential is configured, without calling it an error", async () => {
+    const person = userEvent.setup();
+    fetchMock = backend(
+      settingsRoutes({
+        "GET /api/v1/ready": () =>
+          jsonResponse(200, {
+            ...READINESS,
+            dependencies: READINESS.dependencies.map((entry) =>
+              entry.name === "inference_provider"
+                ? { ...entry, configured: false, detail: "No inference credential is configured." }
+                : entry,
+            ),
+          }),
+      }),
+    );
+    renderSettings();
+    await person.click(screen.getByRole("tab", { name: "AI Intelligence" }));
+
+    expect(await screen.findByText("Unavailable")).toBeInTheDocument();
+    expect(screen.getByText(/Every other capability works without it/)).toBeInTheDocument();
+  });
+
+  it("explains both halves of memory and offers the one real control", async () => {
+    const person = userEvent.setup();
+    renderSettings();
+    await person.click(screen.getByRole("tab", { name: "AI Intelligence" }));
+
+    expect(await screen.findByText("Conversation context")).toBeInTheDocument();
+    expect(screen.getByText("Preference memory")).toBeInTheDocument();
+    // Read-only where there is nothing to switch, and a real deletion where there is.
+    expect(screen.getByRole("region", { name: "Conversation memory" })).toBeInTheDocument();
+    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+  });
+
+  it("offers no save bar, because it holds no editable preference", async () => {
+    const person = userEvent.setup();
+    renderSettings();
+    await person.click(screen.getByRole("tab", { name: "AI Intelligence" }));
+    await screen.findByText("AI Weather Analyst");
+
+    expect(screen.queryByRole("button", { name: /Save preferences/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("the Transparency tab", () => {
+  it("defines all five data classes from the same table every badge renders from", async () => {
+    const person = userEvent.setup();
+    renderSettings();
+    await person.click(screen.getByRole("tab", { name: "Transparency" }));
+
+    const panel = await screen.findByRole("tabpanel");
+    for (const label of ["OBSERVED", "FORECAST", "HISTORICAL", "ANALYTICS", "AI INTERPRETATION"]) {
+      expect(within(panel).getAllByText(label).length, label).toBeGreaterThan(0);
+    }
+  });
+
+  it("draws the deterministic-versus-AI boundary and the way to check a run", async () => {
+    const person = userEvent.setup();
+    renderSettings();
+    await person.click(screen.getByRole("tab", { name: "Transparency" }));
+
+    expect(await screen.findByText(/it does not create the underlying observations/)).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Open Agent Evidence" })[0]).toHaveAttribute(
+      "href",
+      "/evidence",
+    );
+  });
+
+  it("names the sources this deployment is configured with, from the probe", async () => {
+    const person = userEvent.setup();
+    renderSettings();
+    await person.click(screen.getByRole("tab", { name: "Transparency" }));
+
+    expect(await screen.findByText("Weather provider")).toBeInTheDocument();
+    expect(screen.getByText(/open-meteo\./)).toBeInTheDocument();
+    expect(screen.getByText("Sign-in provider")).toBeInTheDocument();
+  });
+
+  it("claims no governance Weathra does not have, and states no retention period", async () => {
+    const person = userEvent.setup();
+    renderSettings();
+    await person.click(screen.getByRole("tab", { name: "Transparency" }));
+    await screen.findByText("How Weathra labels data");
+    const text = screen.getByRole("tabpanel").textContent ?? "";
+    expect(text.length, "the panel rendered nothing, so these assertions prove nothing")
+      .toBeGreaterThan(400);
+
+    for (const invented of [
+      "Certification",
+      "certified",
+      "Compliance",
+      "compliance",
+      "Regulatory",
+      "audited",
+      "Enterprise licence",
+      "Enterprise license",
+      "SOC 2",
+      "ISO 27001",
+    ]) {
+      expect(text, `the page claims ${invented}`).not.toContain(invented);
+    }
+    // Weathra does expire some records, but nothing exposes those windows — so no number is stated.
+    expect(text).not.toMatch(/\b\d+\s*(days?|months?|years?)\b/);
+  });
+
+  it("offers no save bar, because there is nothing on it to configure", async () => {
+    const person = userEvent.setup();
+    renderSettings();
+    await person.click(screen.getByRole("tab", { name: "Transparency" }));
+    await screen.findByText("How Weathra labels data");
+
+    expect(screen.queryByRole("button", { name: /Save preferences/i })).not.toBeInTheDocument();
   });
 });
 
@@ -833,7 +1107,7 @@ describe("the session and user isolation", () => {
     await person.click(screen.getByRole("radio", { name: /Imperial/ }));
     await person.click(screen.getByRole("button", { name: "Save preferences" }));
     await screen.findByText("Your preferences are saved.");
-    await openAccountTab(person);
+    await openIntelligenceTab(person);
     await screen.findByRole("region", { name: "Conversation memory" });
 
     for (const [input, init] of fetchMock.mock.calls as [string, RequestInit][]) {

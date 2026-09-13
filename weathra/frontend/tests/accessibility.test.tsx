@@ -361,7 +361,7 @@ describe("Settings", () => {
     expectAccessible(container);
   });
 
-  it("stays accessible on the Account tab, and inside both confirmations", async () => {
+  it("stays accessible on the Account tab, and inside its confirmation", async () => {
     const person = userEvent.setup();
     const { container } = mount(
       <Settings signOutControl={<button type="button">Sign out</button>} />,
@@ -369,15 +369,41 @@ describe("Settings", () => {
     await screen.findByRole("form", { name: "Your Weathra preferences" });
 
     await person.click(screen.getByRole("tab", { name: "Account" }));
-    await screen.findByRole("region", { name: "Conversation memory" });
+    await screen.findByRole("region", { name: "Your account" });
     expectAccessible(container);
 
-    // Both destructive confirmations, which are the screens' only dialog-shaped surfaces.
-    await person.click(screen.getByRole("button", { name: "Delete this conversation" }));
     await person.click(screen.getByRole("button", { name: "Delete my Weathra data" }));
     expect(
       screen.getByRole("group", { name: "Delete every Weathra record belonging to you?" }),
     ).toBeInTheDocument();
+    expectAccessible(container);
+  });
+
+  it("stays accessible on the AI Intelligence tab, and inside its confirmation", async () => {
+    const person = userEvent.setup();
+    const { container } = mount(
+      <Settings signOutControl={<button type="button">Sign out</button>} />,
+    );
+    await screen.findByRole("form", { name: "Your Weathra preferences" });
+
+    // Conversation memory lives here now: it is what the assistant carries between questions.
+    await person.click(screen.getByRole("tab", { name: "AI Intelligence" }));
+    await screen.findByRole("region", { name: "Conversation memory" });
+    expectAccessible(container);
+
+    await person.click(screen.getByRole("button", { name: "Delete this conversation" }));
+    expectAccessible(container);
+  });
+
+  it("stays accessible on the Transparency tab", async () => {
+    const person = userEvent.setup();
+    const { container } = mount(
+      <Settings signOutControl={<button type="button">Sign out</button>} />,
+    );
+    await screen.findByRole("form", { name: "Your Weathra preferences" });
+
+    await person.click(screen.getByRole("tab", { name: "Transparency" }));
+    await screen.findByText("How Weathra labels data");
     expectAccessible(container);
   });
 });
@@ -580,7 +606,12 @@ describe("keyboard-only operation", () => {
     const general = screen.getByRole("tab", { name: "General" });
     general.focus();
     await person.keyboard("{ArrowRight}");
-    expect(screen.getByRole("tab", { name: "Account" })).toHaveAttribute("aria-selected", "true");
+    // Every tab is selectable now, so the arrows step through all four rather than skipping the
+    // two that used to be drawn and disabled.
+    expect(screen.getByRole("tab", { name: "AI Intelligence" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     await person.keyboard("{ArrowLeft}");
     expect(general).toHaveAttribute("aria-selected", "true");
   });

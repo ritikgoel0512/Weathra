@@ -20,13 +20,27 @@
  * nothing durable. Deleting your Weathra data removes your records and does not delete your
  * sign-in. Each has its own control, its own wording, and its own confirmation.
  *
- * Built against `docs/design/screens/07-settings.png`. The artifact's tab row is reproduced with the
- * two sections that have something behind them; its time-format and primary-timezone controls, its
- * station vocabulary and its enterprise-licence footer are recorded in `docs/design/screens.md` §5
- * and §8.
+ * Built against `docs/design/screens/07-settings.png`, and all four of its tabs now open.
+ *
+ * **Two of them used to be drawn and disabled**, on the reasoning that Weathra has no model
+ * *selection* to offer and that transparency is the badge on every figure rather than a page. Both
+ * halves were right about controls and wrong about the tabs: what a person wants under AI
+ * Intelligence is to know what the model is, what it may touch and what is remembered, and what
+ * they want under Transparency is the meaning of the five labels every screen already shows them.
+ * Weathra can answer all of that truthfully and now does, without one dead control on either.
+ *
+ * **The tab is in the URL.** `?tab=` survives a reload and can be linked to, which is what makes
+ * "the Transparency tab says so" a thing anybody can send somebody else.
+ *
+ * Its time-format and primary-timezone controls remain absent, and `docs/design/screens.md` §5
+ * records why: Weathra shows each place in its own local time by design, and a per-account display
+ * timezone would contradict that; time formatting is not centralised, so a 12/24-hour preference
+ * could be stored and then honoured in some places and not others. Its station vocabulary and
+ * enterprise-licence footer stay out for the reasons §8 gives.
  */
 
-import { useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { ErrorState, LoadingState, TabPanel, Tabs } from "@/components/ui";
 import { ViewStateSwitch } from "@/components/view-state";
@@ -36,10 +50,11 @@ import { PREFERENCES_KEY, SAVED_LOCATIONS_KEY } from "@/lib/query/keys";
 
 import {
   AccountIdentity,
-  ConversationMemory,
   DeleteAccountData,
   PreferenceForm,
 } from "./sections";
+import { IntelligenceTab } from "./intelligence";
+import { TransparencyTab } from "./transparency";
 import styles from "./settings.module.css";
 
 import { FixtureSettings } from "./fixture-settings";
@@ -47,33 +62,15 @@ import { usingVisilyFixtures } from "@/lib/fixtures/visily";
 
 const TAB_PREFIX = "settings";
 
-/**
- * The four sections `07-settings.png` draws, in its order.
- *
- * Two of them are drawn and disabled. `docs/design/screens.md` §8 records why neither is
- * implemented — model selection is not caller-selectable (`specs/model-policy`), and transparency
- * is the data-class labelling, attribution and evidence record on every screen rather than a page —
- * and that reasoning has not changed. What changed is the conclusion drawn from it: leaving them
- * out altered the artifact's tab row, and the section is part of the composition even when its
- * content is not this build's to write. Disabled, marked, and unreachable by keyboard, they
- * advertise nothing while keeping the row the artifact's shape.
- */
+/** The four sections `07-settings.png` draws, in its order. Every one of them opens. */
 const TABS = [
   { id: "general", label: "General", icon: "general" },
-  {
-    id: "intelligence",
-    label: "AI Intelligence",
-    icon: "intelligence",
-    unavailable: "not in this release",
-  },
+  { id: "intelligence", label: "AI Intelligence", icon: "intelligence" },
   { id: "account", label: "Account", icon: "account" },
-  {
-    id: "transparency",
-    label: "Transparency",
-    icon: "transparency",
-    unavailable: "not in this release",
-  },
+  { id: "transparency", label: "Transparency", icon: "transparency" },
 ] as const;
+
+const TAB_IDS = TABS.map((tab) => tab.id) as readonly string[];
 
 export interface SettingsProps {
   /**
@@ -127,21 +124,54 @@ export function Settings({ signOutControl }: SettingsProps): ReactNode {
    * production screen keeps every control it actually honours.
    */
   if (usingVisilyFixtures()) return <FixtureSettings />;
-  const [tab, setTab] = useState<string>(TABS[0].id);
+  return <SettingsScreen signOutControl={signOutControl} />;
+}
+
+function SettingsScreen({ signOutControl }: SettingsProps): ReactNode {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+
+  /*
+   * The URL seeds the tab; state renders it; the URL is kept in step.
+   *
+   * `?tab=` is read once on mount, so a reload keeps the section somebody was on and a link to one
+   * of them is a link anybody can send — which is what makes "the Transparency tab says so"
+   * something you can pass to another person. An unknown or absent value falls back to the first
+   * rather than rendering nothing, so a mistyped link opens Settings instead of a blank panel.
+   *
+   * Rendering from state rather than from the query is deliberate: switching a tab is a local
+   * change, and routing one through the router makes a section of one screen depend on a
+   * navigation round trip. The `replace` afterwards is what a reload and a copied link then read.
+   */
+  const initial = params.get("tab") ?? "";
+  const [tab, setTab] = useState(TAB_IDS.includes(initial) ? initial : TABS[0].id);
+
+  const select = useCallback(
+    (next: string) => {
+      setTab(next);
+      const query = new URLSearchParams(params.toString());
+      query.set("tab", next);
+      // Replace: moving between sections of one screen is not a step to press Back through.
+      router.replace(`${pathname}?${query.toString()}`, { scroll: false });
+    },
+    [params, pathname, router],
+  );
 
   return (
     <section className={styles.screen} aria-label="Settings">
       <header className={styles.heading}>
         <h1 className={styles.title}>Settings</h1>
         <p className={styles.subtitle}>
-          Units, defaults, conversation memory and your Weathra data.
+          Configure how Weathra presents weather, uses AI, remembers your preferences, and handles
+          your data.
         </p>
       </header>
 
       <Tabs
         tabs={TABS}
         activeId={tab}
-        onChange={setTab}
+        onChange={select}
         label="Settings sections"
         idPrefix={TAB_PREFIX}
       />
@@ -150,12 +180,19 @@ export function Settings({ signOutControl }: SettingsProps): ReactNode {
         <GeneralTab />
       </TabPanel>
 
+      <TabPanel id="intelligence" activeId={tab} idPrefix={TAB_PREFIX}>
+        <IntelligenceTab />
+      </TabPanel>
+
       <TabPanel id="account" activeId={tab} idPrefix={TAB_PREFIX}>
         <div className={styles.stack}>
           <AccountIdentity signOutControl={signOutControl} />
-          <ConversationMemory />
           <DeleteAccountData signOutControl={signOutControl} />
         </div>
+      </TabPanel>
+
+      <TabPanel id="transparency" activeId={tab} idPrefix={TAB_PREFIX}>
+        <TransparencyTab />
       </TabPanel>
     </section>
   );

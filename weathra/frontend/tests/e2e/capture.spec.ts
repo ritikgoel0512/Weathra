@@ -89,6 +89,11 @@ const ALL_SCREENS = [
   { name: "04-compare", path: "/compare", prepare: "Compare" },
   { name: "06-locations", path: "/locations" },
   { name: "07-settings", path: "/settings" },
+  // Settings is four sections behind one path, and three of them are invisible to a capture of the
+  // default tab. The query is the screen's own deep link, so photographing each is a URL apart.
+  { name: "07-settings-intelligence", path: "/settings?tab=intelligence" },
+  { name: "07-settings-account", path: "/settings?tab=account" },
+  { name: "07-settings-transparency", path: "/settings?tab=transparency" },
   { name: "10-plan", path: "/plan" },
   { name: "11-explorer", path: "/explorer" },
   { name: "12-report", path: "/report" },

@@ -217,8 +217,8 @@ export function PreferenceForm({ view, saved }: PreferenceFormProps): ReactNode 
             onChange={(unitSystem) => setDraft((current) => ({ ...current, unitSystem }))}
           />
           <p className={styles.note}>
-            Applied to every figure Weathra shows, by asking the backend for that unit system — the
-            browser converts nothing. {sourceNote(sourceOf(view, "unit_system")) ?? ""}
+            Used across forecasts, analytics and weather reports.{" "}
+            {sourceNote(sourceOf(view, "unit_system")) ?? ""}
           </p>
         </div>
 
@@ -226,7 +226,7 @@ export function PreferenceForm({ view, saved }: PreferenceFormProps): ReactNode 
           <div className={styles.field}>
             <Select
               label="Default forecast horizon"
-              description="The number of days the Dashboard and the forecast surfaces open on."
+              description="The default time range used when a screen does not ask you to choose one."
               name="forecast_horizon_days"
               value={String(draft.horizonDays)}
               disabled={busy}
@@ -246,13 +246,13 @@ export function PreferenceForm({ view, saved }: PreferenceFormProps): ReactNode 
 
       <SettingGroup
         title="Location preferences"
-        description="The place Weathra opens on when you have not chosen another."
+        description="The place Weathra opens first when a screen needs a location."
       >
         <div className={styles.setting}>
           <div className={styles.field}>
             <Select
               label="Default location"
-              description="Chosen from the places you have saved, so it is never ambiguous."
+              description="Chosen from the places you have saved."
               name="default_location"
               value={draft.defaultLocation ? placeKey(draft.defaultLocation) : ""}
               disabled={busy}
@@ -291,7 +291,7 @@ export function PreferenceForm({ view, saved }: PreferenceFormProps): ReactNode 
             : save.state.kind === "saved"
               ? "Your preferences are saved."
               : reset.state.kind === "saved"
-                ? "Your preferences are cleared. Weathra's documented defaults now apply."
+                ? "Your preferences are cleared. Weathra's defaults now apply."
                 : update === null
                   ? "No unsaved changes."
                   : "You have unsaved changes."}

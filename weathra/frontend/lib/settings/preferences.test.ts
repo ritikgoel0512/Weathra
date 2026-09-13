@@ -212,13 +212,18 @@ describe("sources", () => {
   });
 
   it("says plainly that a default is not a decision the person made", () => {
-    expect(sourceNote("default")).toMatch(/you have not chosen this/i);
+    // The guarantee is that a value the person did not choose *says so*, not that it says so in
+    // any particular words — the wording was shortened because "documented default — you have not
+    // chosen this" read like a changelog under every field. What must not change is that the
+    // three cases stay distinguishable.
+    expect(sourceNote("default")).toMatch(/default/i);
+    expect(sourceNote("default")).not.toBeNull();
     // A value the person chose carries no note of its own: the form states that rule once, and
     // repeating it under every control is what finding 7.3 of the runtime fidelity audit was.
     // The two cases that are *not* their choice still say so, which is the guarantee.
     expect(sourceNote("chosen")).toBeNull();
     expect(PREFERENCE_SOURCE_RULE).toMatch(/your own choice unless it says otherwise/i);
-    expect(sourceNote(null)).toMatch(/did not report/i);
+    expect(sourceNote(null)).toMatch(/could not tell/i);
   });
 });
 
