@@ -329,14 +329,51 @@ async def test_a_forecast_plus_historical_answer_carries_separate_attribution(
     for block in attributions:
         _has_structured_attribution(block)
 
-    classes = {block["data_class"] for block in attributions}
-    assert classes == {
+    by_class: dict[str, list[dict]] = {}
+    for block in attributions:
+        by_class.setdefault(block["data_class"], []).append(block)
+
+    # The property under test is *separation*: two retrievals, two classes, neither blended into
+    # the other or into a single credit line for the answer.
+    assert DataClass.FORECAST.value in by_class, "the forecast keeps its own class"
+    assert DataClass.HISTORICAL_OBSERVATION.value in by_class, "the archive keeps its own class"
+    assert len(by_class[DataClass.FORECAST.value]) == 1, "one row per retrieval, not one blend"
+    assert len(by_class[DataClass.HISTORICAL_OBSERVATION.value]) == 1
+
+    # Nothing unexplained. A derived analytics row is allowed because the run really does compute
+    # statistics over both windows, and a figure Weathra computed is not a figure the provider
+    # published — but it is the *only* addition this answer may carry.
+    assert set(by_class) <= {
         DataClass.FORECAST.value,
         DataClass.HISTORICAL_OBSERVATION.value,
-    }, f"each source labelled with its own class: {classes}"
+        DataClass.COMPUTED_STATISTIC.value,
+    }, f"each source labelled with its own class: {set(by_class)}"
 
-    periods = {json.dumps(block["period"], sort_keys=True) for block in attributions}
-    assert len(periods) >= 2, "and its own period"
+    retrieved = [
+        *by_class[DataClass.FORECAST.value],
+        *by_class[DataClass.HISTORICAL_OBSERVATION.value],
+    ]
+    periods = {json.dumps(block["period"], sort_keys=True) for block in retrieved}
+    assert len(periods) == 2, "and its own period"
+    # Neither retrieval was rewritten by the arithmetic performed over it.
+    assert all(block["derived_from"] == [] for block in retrieved), (
+        "a retrieval is the origin; it derives from nothing"
+    )
+
+    # The derived row adds lineage rather than replacing it: it names the retrievals it was
+    # computed over, and each of those is a row the reader can find in this same list.
+    assert DataClass.COMPUTED_STATISTIC.value in by_class, (
+        "this plan computes statistics over both windows, so the derived row must be here — "
+        "without it the lineage checks below would pass by never running"
+    )
+    for computed in by_class[DataClass.COMPUTED_STATISTIC.value]:
+        assert computed["provider"] != retrieved[0]["provider"], (
+            "a computed figure is not credited to the provider whose series it was computed from"
+        )
+        assert computed["derived_from"], "a derived source says what it derives from"
+        assert set(computed["derived_from"]) <= {
+            f"{block['provider']} {block['data_class']}" for block in retrieved
+        }, "lineage points back at real rows in this answer, not invented ones"
 
 
 async def test_attribution_is_in_fields_rather_than_only_in_prose(
