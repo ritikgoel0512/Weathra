@@ -135,7 +135,9 @@ entirely confident answer about the wrong city.
 | Profile (`profiles`) | Something for Weathra's own tables to hang ownership from | Until the person deletes their data |
 | Preferences | Unit system, forecast horizon, default location — explicitly chosen, non-sensitive | Until deleted or reset |
 | Saved locations | Places the person chose to save, bounded by `SAVED_LOCATIONS_LIMIT` | Until removed |
-| Weather watches | A condition somebody asked Weathra to check at a place, and the result of the last time it was checked | Until removed |
+| Weather watches | A condition somebody asked Weathra to check at a place, and the state the last check concluded in | Until removed |
+| Watch evaluations | One row per scheduled or requested check: the reading, the threshold it was compared against, the provider and the retrieval behind it. No contact detail and no conversation content — it exists so "why is this watch met" is answerable from a specific retrieval rather than from whatever the provider says now | `WATCH_EVALUATION_RETENTION_DAYS` (30 by default) |
+| Watch events | One row per transition — met, cleared, reading lost, reading recovered, forecast moved — with the sentence a person reads. Written by the evaluator rather than derived, so the history does not rewrite itself as the evaluations behind it expire | Until the watch is removed |
 | Threads and checkpoints | Bounded conversational context, so a follow-up can say "there" | `THREAD_RETENTION_DAYS` (30 by default) after last activity |
 | Evidence records (`agent_runs`) | The record behind each answer, which is the product's central promise | Until the person deletes their data |
 | Forecast snapshots | *What changed?* needs the previous snapshot. Location-keyed, no user reference | `SNAPSHOT_RETENTION_DAYS` (90 by default) |

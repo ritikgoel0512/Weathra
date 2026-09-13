@@ -191,6 +191,13 @@ _CLASSIFICATIONS: tuple[EndpointClassification, ...] = (
         "Checks one of the acting user's watches against the current forecast, on request.",
     ),
     EndpointClassification(
+        "/me/watch-dashboard",
+        Access.PROTECTED,
+        "Everything the acting user's Weather Watch screen draws — their own watches, the places "
+        "those cover, the recorded history of their checks, and the transitions between them. No "
+        "other subject's, and it evaluates nothing.",
+    ),
+    EndpointClassification(
         "/me/usage",
         Access.PROTECTED,
         "The acting user's own plan, allowances and consumption. No other subject's, and no "

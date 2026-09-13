@@ -54,6 +54,7 @@ weathra-evaluate = "weathra.evaluation.runner:main"
 weathra-compare = "weathra.evaluation.model_compare:main"
 weathra-ingest-corpus = "weathra.rag.ingest:main"
 weathra-retention = "weathra.memory.retention:main"
+weathra-watch-evaluate = "weathra.weather.watch_schedule:main"
 
 [tool.setuptools.packages.find]
 include = ["weathra*"]

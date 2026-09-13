@@ -96,6 +96,7 @@ PROTECTED_REQUESTS: tuple[tuple[str, str, dict[str, Any]], ...] = (
     # created, because a watch and a saved location are separate records and the boundary questions
     # here are asked per record.
     ("GET", "/me/watches", {}),
+    ("GET", "/me/watch-dashboard", {}),
     (
         "POST",
         "/me/watches",

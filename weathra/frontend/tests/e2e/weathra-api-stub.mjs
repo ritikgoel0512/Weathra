@@ -1179,6 +1179,244 @@ const FIXTURES = {
   },
   },
 
+  /**
+   * The Weather Watch screen's one contract, shaped exactly as `GET /me/watch-dashboard` returns
+   * it — including the parts a monitoring screen is most likely to draw wrongly.
+   *
+   * Three watches across two places, deliberately: one met, one watching, and one whose provider
+   * reported nothing. The third is the case that matters, because a screen that renders a silent
+   * provider the same way it renders a calm one is a screen that lies in exactly the situation
+   * somebody is relying on it.
+   */
+  "/api/v1/me/watch-dashboard": {
+    summary: {
+      active_watch_count: 3,
+      monitored_location_count: 2,
+      changes_detected: 4,
+      changes_window_hours: 24,
+      met_count: 1,
+      last_evaluation_at: "2026-09-13T12:07:00Z",
+      next_evaluation_at: "2026-09-13T13:07:00Z",
+      cadence_minutes: 60,
+    },
+    watched_locations: [
+      {
+        location_id: "52.52,13.40",
+        location: BERLIN,
+        watch_count: 2,
+        met_count: 1,
+        state: "met",
+        conditions: {
+          temperature: 26.3,
+          precipitation: 0,
+          wind_speed: 52.4,
+          relative_humidity: 58,
+        },
+        units: {
+          temperature: "°C",
+          precipitation: "mm",
+          wind_speed: "km/h",
+          relative_humidity: "%",
+        },
+        provider: "open-meteo",
+        last_evaluated_at: "2026-09-13T12:07:00Z",
+      },
+      {
+        location_id: "48.14,11.58",
+        location: MUNICH,
+        watch_count: 1,
+        met_count: 0,
+        state: "no_reading",
+        conditions: { temperature: 14.8, wind_speed: 11.2 },
+        units: { temperature: "°C", wind_speed: "km/h" },
+        provider: "open-meteo",
+        last_evaluated_at: "2026-09-13T12:07:00Z",
+      },
+    ],
+    watches: [
+      {
+        id: "w-wind",
+        location: BERLIN,
+        label: null,
+        measure: "wind_speed",
+        comparison: "above",
+        threshold: 40,
+        enabled: true,
+        state: "met",
+        previous_state: "not_met",
+        last_evaluated_at: "2026-09-13T12:07:00Z",
+        last_value: 52.4,
+        last_unit: "km/h",
+        last_met: true,
+        last_error: null,
+        next_evaluation_at: "2026-09-13T13:07:00Z",
+        created_at: "2026-09-01T00:00:00Z",
+        updated_at: "2026-09-13T12:07:00Z",
+      },
+      {
+        id: "w-heat",
+        location: BERLIN,
+        label: null,
+        measure: "temperature",
+        comparison: "above",
+        threshold: 30,
+        enabled: true,
+        state: "not_met",
+        previous_state: "not_met",
+        last_evaluated_at: "2026-09-13T12:07:00Z",
+        last_value: 26.3,
+        last_unit: "°C",
+        last_met: false,
+        last_error: null,
+        next_evaluation_at: "2026-09-13T13:07:00Z",
+        created_at: "2026-09-02T00:00:00Z",
+        updated_at: "2026-09-13T12:07:00Z",
+      },
+      {
+        id: "w-frost",
+        location: MUNICH,
+        label: "Office",
+        measure: "wind_gust",
+        comparison: "above",
+        threshold: 70,
+        enabled: true,
+        state: "no_reading",
+        previous_state: "not_met",
+        last_evaluated_at: "2026-09-13T12:07:00Z",
+        last_value: null,
+        last_unit: null,
+        last_met: null,
+        last_error: null,
+        next_evaluation_at: "2026-09-13T13:07:00Z",
+        created_at: "2026-09-02T00:00:00Z",
+        updated_at: "2026-09-13T12:07:00Z",
+      },
+    ],
+    selected: {
+      watch: {
+        id: "w-wind",
+        location: BERLIN,
+        label: null,
+        measure: "wind_speed",
+        comparison: "above",
+        threshold: 40,
+        enabled: true,
+        state: "met",
+        previous_state: "not_met",
+        last_evaluated_at: "2026-09-13T12:07:00Z",
+        last_value: 52.4,
+        last_unit: "km/h",
+        last_met: true,
+        last_error: null,
+        next_evaluation_at: "2026-09-13T13:07:00Z",
+        created_at: "2026-09-01T00:00:00Z",
+        updated_at: "2026-09-13T12:07:00Z",
+      },
+      series: {
+        granularity: "hourly",
+        units: { wind_speed: "km/h" },
+        entries: Array.from({ length: 24 }, (_, index) => {
+          const hour = String(index).padStart(2, "0");
+          const stamp = `2026-09-13T${hour}:00:00+02:00`;
+          // A real-shaped day: calm overnight, building through the afternoon, past 40 from 13:00.
+          const curve = [
+            18.4, 17.1, 16.8, 16.2, 17.9, 20.4, 24.1, 27.6, 30.2, 33.5, 36.8, 38.4, 39.6, 43.2,
+            47.8, 52.4, 51.1, 48.6, 44.3, 40.9, 37.2, 32.6, 28.4, 24.1,
+          ];
+          return { time_local: stamp, time_utc: stamp, values: { wind_speed: curve[index] } };
+        }),
+      },
+      outcome: {
+        measure: "wind_speed",
+        comparison: "above",
+        threshold: 40,
+        unit: "km/h",
+        value: 52.4,
+        met: true,
+        margin: 12.4,
+        matched_at_utc: "2026-09-13T15:00:00+02:00",
+        matched_at_local: "2026-09-13T15:00:00+02:00",
+        peak: 52.4,
+        crossing: {
+          at_utc: "2026-09-13T13:00:00+02:00",
+          at_local: "2026-09-13T13:00:00+02:00",
+          value: 43.2,
+        },
+        points_used: 24,
+      },
+      evidence:
+        "The Berlin wind speed watch is met. open-meteo reports 52.4 km/h at 15:00 on 13 September, 12.4 km/h above the 40 km/h threshold.",
+      changes: [
+        {
+          kind: "condition_met",
+          summary: "The Berlin watch changed from not met to met.",
+          previous_state: "not_met",
+          new_state: "met",
+        },
+        {
+          kind: "reading_moved",
+          summary:
+            "The watched wind speed moved +9.8 km/h since the previous evaluation, to 52.4 km/h.",
+          delta: 9.8,
+          unit: "km/h",
+        },
+        {
+          kind: "crossing_moved",
+          summary: "The first threshold crossing moved 2 hours earlier, to 13:00 on 13 September.",
+          delta: -2,
+          unit: "h",
+        },
+      ],
+      provider: "open-meteo",
+      retrieved_at: "2026-09-13T12:05:00Z",
+      evaluated_at: "2026-09-13T12:07:00Z",
+      evaluation_count: 6,
+    },
+    activity: [
+      {
+        id: "ev-4",
+        watch_id: "w-wind",
+        occurred_at: "2026-09-13T12:07:00Z",
+        event_type: "condition_met",
+        previous_state: "not_met",
+        new_state: "met",
+        summary: "The Berlin watch changed from not met to met.",
+      },
+      {
+        id: "ev-3",
+        watch_id: "w-wind",
+        occurred_at: "2026-09-13T12:07:00Z",
+        event_type: "reading_moved",
+        summary:
+          "The watched wind speed moved +9.8 km/h since the previous evaluation, to 52.4 km/h.",
+        delta: 9.8,
+        unit: "km/h",
+      },
+      {
+        id: "ev-2",
+        watch_id: "w-frost",
+        occurred_at: "2026-09-13T11:07:00Z",
+        event_type: "reading_lost",
+        previous_state: "not_met",
+        new_state: "no_reading",
+        summary: "The Office watch changed from not met to without a reading.",
+      },
+      {
+        id: "ev-1",
+        watch_id: "w-wind",
+        occurred_at: "2026-09-01T00:00:00Z",
+        event_type: "watch_created",
+        new_state: "pending",
+        summary: "Watch created: Berlin wind speed above 40 km/h.",
+      },
+    ],
+    watchable: ["precipitation", "relative_humidity", "temperature", "wind_gust", "wind_speed"],
+    monitoring_note:
+      "Checked on a schedule, when a watch is created, and when you press refresh. Weathra does not monitor continuously and sends no alerts.",
+    disclaimer:
+      "Weather Watch is analytical assistance, not an official severe-weather or emergency warning service. Always follow your local meteorological agency.",
+  },
+
   "/api/v1/me/watches": {
     count: 2,
     watchable: ["precipitation", "relative_humidity", "temperature", "wind_gust", "wind_speed"],

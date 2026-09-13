@@ -45,6 +45,11 @@ const PRODUCT_SCREENS = [
   { name: "Agent Evidence", path: "/evidence/run-stub", marker: "Execution flow" },
   { name: "Saved Locations", path: "/locations", marker: "Add a location" },
   { name: "Settings", path: "/settings", marker: "Weather preferences" },
+  // The one Intelligence screen in this list, and it earns the place: it is the densest thing in
+  // the product — four counters, two selectable card grids, a chart, a form and a status strip —
+  // and every state on it is carried by a badge, which is exactly the pattern that fails contrast
+  // and naming checks without anybody noticing.
+  { name: "Weather Watch", path: "/watch", marker: "Watched locations" },
 ] as const;
 
 const AUTH_SCREENS = [

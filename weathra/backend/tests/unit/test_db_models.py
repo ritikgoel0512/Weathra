@@ -25,6 +25,11 @@ DECISION_10: dict[str, tuple[Ownership, tuple[str, ...]]] = {
     "preferences": (Ownership.USER, ("user_id",)),
     "saved_locations": (Ownership.USER, ("id",)),
     "weather_watches": (Ownership.USER, ("id",)),
+    # A watch's history: one row per check, one per transition. Both user-owned, and both carry
+    # `user_id` denormalised from the watch so their policies need no join — a policy that reaches
+    # another table to decide can be defeated by that table's own.
+    "weather_watch_evaluations": (Ownership.USER, ("id",)),
+    "weather_watch_events": (Ownership.USER, ("id",)),
     "threads": (Ownership.USER, ("id",)),
     "agent_runs": (Ownership.USER, ("id",)),
     "forecast_snapshots": (Ownership.SHARED, ("id",)),
@@ -79,6 +84,8 @@ OWNERSHIP_COLUMN: dict[str, tuple[str, bool]] = {
     "preferences": (USER_ID_COLUMN, False),
     "saved_locations": (USER_ID_COLUMN, False),
     "weather_watches": (USER_ID_COLUMN, False),
+    "weather_watch_evaluations": (USER_ID_COLUMN, False),
+    "weather_watch_events": (USER_ID_COLUMN, False),
     "threads": (USER_ID_COLUMN, False),
     "agent_runs": (USER_ID_COLUMN, False),
     "user_plans": (USER_ID_COLUMN, False),

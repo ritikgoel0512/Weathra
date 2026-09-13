@@ -106,6 +106,8 @@ bundle — see [`authentication.md`](authentication.md) for why the split is dra
 | `RAG_CHUNK_MAX_TOKENS` | `320` | behaviour | Chunk size at ingestion |
 | `RAG_CHUNK_OVERLAP_TOKENS` | `48` | behaviour | Overlap between chunks, so a definition split across a boundary is still retrievable |
 | `VECTOR_STORE` | `pgvector` | behaviour | Vector store implementation |
+| `WATCH_CADENCE_MINUTES` | `60` | behaviour | How often the scheduled evaluator is expected to reach a weather watch. Declared here and *kept* by the cron entry in `.github/workflows/weather-watch.yml` — this value is what the Weather Watch screen tells a person about their next check, so the two must agree or the product states a cadence nothing keeps |
+| `WATCH_EVALUATION_RETENTION_DAYS` | `30` | behaviour | How long individual watch evaluations are kept. The transitions derived from them are kept separately and for longer, because those are what a person reads back |
 | `THREAD_RETENTION_DAYS` | `30` | behaviour | How long an inactive thread and its checkpoints are kept |
 | `SNAPSHOT_RETENTION_DAYS` | `90` | behaviour | How long forecast snapshots are kept |
 | `LLM_USAGE_RETENTION_DAYS` | `90` | behaviour | How long raw language model usage events are kept. Metadata only — no prompt, completion or retrieved text — so the window is about storage and relevance |

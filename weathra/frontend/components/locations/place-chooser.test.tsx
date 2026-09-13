@@ -22,7 +22,6 @@ import { ForecastExplorer } from "@/components/explorer/explorer";
 import { WeatherIntelligenceReport } from "@/components/report/report";
 import { WeatherScenarioLab } from "@/components/scenarios/scenarios";
 import { TravelIntelligence } from "@/components/travel/travel";
-import { WeatherWatch } from "@/components/watch/watch";
 import type { ApiClient } from "@/lib/api/client";
 import { ApiProvider } from "@/lib/api/context";
 import { createQueryClient } from "@/lib/query/provider";
@@ -79,8 +78,22 @@ const SCREENS: readonly { name: string; node: React.ReactElement; summary: RegEx
   { name: "Forecast Explorer", node: <ForecastExplorer />, summary: /explore another place/i },
   { name: "Weather Intelligence Report", node: <WeatherIntelligenceReport />, summary: /report on another place/i },
   { name: "Weather Scenario Lab", node: <WeatherScenarioLab />, summary: /experiment on another place/i },
-  { name: "Weather Watch", node: <WeatherWatch />, summary: /watch another place/i },
 ];
+
+/*
+ * **Weather Watch is deliberately not in that list, and its absence is the point.**
+ *
+ * The invariant above is about the screens that open on *one* place: each has a focus location, and
+ * finding 1.7 was that pointing them somewhere else meant a trip to Settings. Weather Watch has no
+ * focus location — it is a monitoring workspace over every place the person watches at once — so
+ * "point this screen at a place" is not a question it has. Its own equivalent is that a place can be
+ * named on the screen without leaving it, in both of its states, which
+ * `components/watch/watch.test.tsx` asserts directly: the chooser is the subject of the first-watch
+ * screen, and reachable behind "Add another watch" once there are watches to add to.
+ *
+ * Putting it back here would not strengthen this suite. It would assert that Weather Watch has a
+ * single focus place, which is the shape the rebuild removed.
+ */
 
 describe("every Intelligence screen can be pointed at a place on the screen itself", () => {
   for (const { name, node, summary } of SCREENS) {

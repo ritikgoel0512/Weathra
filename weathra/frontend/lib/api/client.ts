@@ -75,6 +75,7 @@ import type {
   UsageResponse,
   UsageSeriesResponse,
   UsageSummaryResponse,
+  WatchDashboard,
   WatchEdit,
   WatchRecord,
   WatchRequest,
@@ -299,7 +300,17 @@ export interface ApiClient {
   deleteThread(threadId: string): Promise<void>;
 
   /**
-   * Your weather watches.
+   * Everything the Weather Watch screen draws, from one read.
+   *
+   * It evaluates nothing: what comes back is what the scheduled pass and the explicit refreshes
+   * have already recorded, each figure carrying the moment it was recorded at. Opening the screen
+   * must not cost a provider call per watch, or reading a monitoring page would cost more than the
+   * monitoring does.
+   */
+  watchDashboard(watchId?: string): Promise<WatchDashboard>;
+
+  /**
+   * Your weather watches, as a plain listing.
    *
    * `evaluate` checks each enabled watch against the current forecast before returning, which costs
    * a provider call per watched place — so it is opt-in rather than what a listing does by default.
@@ -603,6 +614,8 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
         false,
       ),
 
+    watchDashboard: (watchId) =>
+      get<WatchDashboard>("/api/v1/me/watch-dashboard", { watch_id: watchId }),
     watches: (evaluate) => get<WatchesResponse>("/api/v1/me/watches", { evaluate }),
     createWatch: (request) =>
       call<WatchRecord>("POST", "/api/v1/me/watches", {}, request, true),

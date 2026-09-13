@@ -44,6 +44,7 @@ EXPECTED_CHAIN = (
     # Repairs the grant 0012 made to the login role instead of the assumed one. A revision of its
     # own rather than an edit, because 0012 was already applied where it matters.
     "0013_weather_watch_grant_repair",
+    "0014_weather_watch_monitoring",
 )
 
 # The two roles migrations may name, and what each is for. `0002` creates the assumed role and

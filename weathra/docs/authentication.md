@@ -230,6 +230,8 @@ migrations that apply the policies, and the tests — all three agree, and a tes
 | `preferences` | user-owned | its owner | its owner |
 | `saved_locations` | user-owned | its owner | its owner |
 | `weather_watches` | user-owned | its owner | its owner |
+| `weather_watch_evaluations` | user-owned | its owner | its owner |
+| `weather_watch_events` | user-owned | its owner | its owner |
 | `threads` | user-owned | its owner | its owner |
 | `agent_runs` | user-owned | its owner | its owner |
 | `forecast_snapshots` | shared | anyone | the request path appends |

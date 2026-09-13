@@ -787,9 +787,18 @@ async def test_the_persisted_tables_are_only_the_declared_categories(
         "preferences",
         "saved_locations",
         # A place, a measure, a direction and a number, plus what the last evaluation found. No
-        # contact detail, because Weathra notifies nobody — there is no scheduler and no address to
-        # send to, and a watch is checked when its owner looks at it.
+        # contact detail, because Weathra notifies nobody: the scheduled evaluator records what it
+        # finds and the screen reads it back, and there is no address to send anything to.
         "weather_watches",
+        # One row per check of any outcome, holding the reading, the threshold it was compared
+        # against, and the retrieval behind it. No contact detail and no content — the reason it
+        # exists is that "why is this watch met" must be answerable from a specific retrieval
+        # rather than from whatever the provider says now.
+        "weather_watch_evaluations",
+        # One row per transition, which is the far smaller set a person reads back. Written by the
+        # evaluator rather than derived, so the history cannot quietly rewrite itself as the
+        # evaluations behind it expire.
+        "weather_watch_events",
         "threads",
         "agent_runs",
         "forecast_snapshots",

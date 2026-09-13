@@ -258,12 +258,13 @@ class SavedLocation(Base):
 class WeatherWatch(Base):
     """A condition somebody asked Weathra to check at a place they saved.
 
-    **Evaluated when it is looked at, and the row says when.** There is no scheduler in this
-    system, so there is nothing that could notice a threshold being crossed at three in the
-    morning. `last_evaluated_at` is therefore not decoration: it is the difference between "the wind
-    is above your threshold" and "the wind was above your threshold when you last looked", and a
+    **Evaluated on a schedule, and the row says when.** The scheduled evaluator reaches it about
+    once an hour; creating it checks it once immediately; a refresh checks it on demand. There is
+    still nothing continuous, so `last_evaluated_at` is not decoration: it is the difference between
+    "the wind is above your threshold" and "the wind was, when the schedule last reached it", and a
     surface that showed the first while meaning the second would be the failure this whole feature
-    has to avoid.
+    has to avoid. `state` carries what the last check concluded and `previous_state` what the one
+    before did, so a transition is readable from the row rather than recomputed from the history.
 
     Unique per (user, location, measure) so the same question about the same place is one row that
     gets updated rather than a list that accumulates duplicates.
@@ -312,6 +313,17 @@ class WeatherWatch(Base):
         doc="Whether the condition was met at the last evaluation. Null before the first one, and "
         "null again where the provider reported nothing — which is not the same as 'not met'.",
     )
+    last_unit: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(
+        String(200), nullable=True, doc="Why the last pass degraded. Null where it did not."
+    )
+    state: Mapped[str | None] = mapped_column(
+        String(16), nullable=True, doc="What the last check concluded. Null until one has happened."
+    )
+    previous_state: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    next_evaluation_at: Mapped[datetime | None] = _timestamp_column(
+        nullable=True, doc="When the schedule is next expected to reach this watch."
+    )
 
     created_at: Mapped[datetime] = _timestamp_column(server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = _timestamp_column(
@@ -319,6 +331,94 @@ class WeatherWatch(Base):
     )
 
     profile: Mapped[Profile] = relationship(back_populates="weather_watches")
+
+
+class WeatherWatchEvaluation(Base):
+    """One check of one watch, of any outcome — including the ones that failed.
+
+    The evidence a screen shows is read from here rather than from the provider: "why is this watch
+    met" is answered by a specific retrieval at a specific moment, and asking the provider again now
+    would answer a different question with a straight face.
+
+    A failed retrieval is a row too, carrying `degraded` and the reason, because "we could not look"
+    and "we looked and it was calm" are different facts about a monitoring product and only one of
+    them is about the weather.
+
+    `user_id` is denormalised from the watch so this table's policy needs no join — a policy that
+    reaches another table to decide can be defeated by that table's own.
+    """
+
+    __tablename__ = "weather_watch_evaluations"
+    __table_args__ = (
+        Index("ix_weather_watch_evaluations_watch", "watch_id", "evaluated_at"),
+        Index("ix_weather_watch_evaluations_user", USER_ID_COLUMN),
+        {"info": {"ownership": Ownership.USER}},
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    watch_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("weather_watches.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("profiles.user_id", ondelete="CASCADE"), nullable=False
+    )
+    evaluated_at: Mapped[datetime] = _timestamp_column(nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    threshold: Mapped[float] = mapped_column(Float, nullable=False)
+    comparison: Mapped[str] = mapped_column(String(8), nullable=False)
+    condition_met: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    retrieved_at: Mapped[datetime | None] = _timestamp_column(nullable=True)
+    matched_at: Mapped[datetime | None] = _timestamp_column(nullable=True)
+    evidence: Mapped[dict[str, Any] | None] = mapped_column(
+        JsonB,
+        nullable=True,
+        doc="The outcome's own arithmetic as the evaluator computed it, plus the headline "
+        "conditions at the same hour. No prompt, completion or retrieved text.",
+    )
+    error: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = _timestamp_column(server_default=func.now(), nullable=False)
+
+
+class WeatherWatchEvent(Base):
+    """One transition of one watch — the far smaller set a person reads down an activity feed.
+
+    Written by the evaluator rather than derived at read time, and deliberately: the evaluator knows
+    what the previous state was at the moment it concluded the new one, and evaluations are subject
+    to retention. A history that quietly rewrote itself as the rows behind it expired would be worse
+    than no history at all.
+    """
+
+    __tablename__ = "weather_watch_events"
+    __table_args__ = (
+        Index("ix_weather_watch_events_watch", "watch_id", "occurred_at"),
+        Index("ix_weather_watch_events_user", USER_ID_COLUMN, "occurred_at"),
+        {"info": {"ownership": Ownership.USER}},
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    watch_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("weather_watches.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("profiles.user_id", ondelete="CASCADE"), nullable=False
+    )
+    occurred_at: Mapped[datetime] = _timestamp_column(nullable=False)
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    previous_state: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    new_state: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    summary: Mapped[str] = mapped_column(
+        String(400), nullable=False, doc="One assembled sentence. Never a model's prose."
+    )
+    delta: Mapped[float | None] = mapped_column(Float, nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    created_at: Mapped[datetime] = _timestamp_column(server_default=func.now(), nullable=False)
 
 
 class Thread(Base):

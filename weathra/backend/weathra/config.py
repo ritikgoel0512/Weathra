@@ -336,6 +336,29 @@ class Settings(BaseSettings):
     )
     vector_store: Literal["pgvector"] = Field(default="pgvector", validation_alias="vector_store")
 
+    # ---------------------------------------------------------------- weather watch monitoring
+
+    watch_cadence_minutes: Annotated[int, Field(ge=5, le=1_440)] = Field(
+        default=60,
+        validation_alias="watch_cadence_minutes",
+        description=(
+            "How often the scheduled evaluator is expected to reach a watch. It is *declared* "
+            "here and enforced by the cron entry in `.github/workflows/weather-watch.yml`: this "
+            "value is what the product tells a person about when their watches are next checked, "
+            "so it must match that schedule or the screen states a cadence nothing keeps. "
+            "Hourly because a watch is a threshold on an hourly forecast series — checking more "
+            "often would re-read the same hour and spend a provider call to learn nothing."
+        ),
+    )
+    watch_evaluation_retention_days: Annotated[int, Field(ge=1, le=3_650)] = Field(
+        default=30,
+        validation_alias="watch_evaluation_retention_days",
+        description=(
+            "How long individual watch evaluations are kept. The transitions derived from them "
+            "are kept separately and for longer, because those are what a person reads back."
+        ),
+    )
+
     # ---------------------------------------------------------------- memory and retention
 
     thread_retention_days: Annotated[int, Field(ge=1, le=3_650)] = Field(

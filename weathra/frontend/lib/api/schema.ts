@@ -1660,12 +1660,74 @@ export interface ValidationError {
   readonly type: string;
 }
 
+/** One difference between an evaluation and the one before it. */
+export interface WatchChange {
+  readonly delta?: number | null;
+  readonly kind: string;
+  readonly new_state?: WatchState | null;
+  readonly previous_state?: WatchState | null;
+  readonly summary: string;
+  readonly unit?: string | null;
+}
+
+/** The first instant in a retrieved window at which a condition holds, if any does. */
+export interface WatchCrossing {
+  readonly at_local: string;
+  readonly at_utc: string;
+  readonly value: number;
+}
+
+/** Everything the Weather Watch screen draws, from one read of one endpoint. */
+export interface WatchDashboard {
+  readonly activity?: WatchEventRecord[];
+  /** What Weather Watch is not. Always present. */
+  readonly disclaimer: string;
+  /** How often watches are checked, in one sentence. */
+  readonly monitoring_note: string;
+  readonly selected?: WatchDetail | null;
+  readonly summary: WatchSummary;
+  readonly watchable?: string[];
+  readonly watched_locations?: WatchedLocation[];
+  readonly watches?: WatchRecord[];
+}
+
+/** One watch in full: its series, its threshold, why it is where it is, and what moved. */
+export interface WatchDetail {
+  /** Deterministic differences from the previous evaluation. */
+  readonly changes?: WatchChange[];
+  readonly evaluated_at?: string | null;
+  readonly evaluation_count?: number;
+  /** One deterministic sentence. No language model is involved. */
+  readonly evidence?: string | null;
+  readonly outcome?: WatchOutcome | null;
+  readonly provider?: string | null;
+  readonly retrieved_at?: string | null;
+  /** The forecast the threshold is drawn against. Absent where retrieval failed. */
+  readonly series?: Series | null;
+  readonly watch: WatchRecord;
+}
+
 /** What may be changed about a watch. The place and the measure are its identity. */
 export interface WatchEdit {
   readonly comparison?: string | null;
   readonly enabled?: boolean | null;
   readonly label?: string | null;
   readonly threshold?: number | null;
+}
+
+/** One place, with what is watched there and what the last retrieval said about it. */
+export interface WatchedLocation {
+  /** The headline measures at the hour the watches were read from. Real, and absent where the provider reported nothing. */
+  readonly conditions?: Record<string, number>;
+  readonly last_evaluated_at?: string | null;
+  readonly location: Location;
+  readonly location_id: string;
+  readonly met_count: number;
+  readonly provider?: string | null;
+  /** The most consequential of its watches' states. */
+  readonly state: WatchState;
+  readonly units?: Record<string, string>;
+  readonly watch_count: number;
 }
 
 /** Your watches, and how they came to be evaluated. */
@@ -1678,6 +1740,37 @@ export interface WatchesResponse {
   readonly watches: WatchRecord[];
 }
 
+/** One transition, as a person reads it. */
+export interface WatchEventRecord {
+  readonly delta?: number | null;
+  readonly event_type: string;
+  readonly id: string;
+  readonly new_state?: WatchState | null;
+  readonly occurred_at: string;
+  readonly previous_state?: WatchState | null;
+  readonly summary: string;
+  readonly unit?: string | null;
+  readonly watch_id: string;
+}
+
+/** One evaluation's arithmetic: what was read, whether it held, and by how much. */
+export interface WatchOutcome {
+  readonly comparison: string;
+  readonly crossing?: WatchCrossing | null;
+  /** Signed towards the condition: positive when the reading satisfies it. */
+  readonly margin?: number | null;
+  readonly matched_at_local?: string | null;
+  readonly matched_at_utc?: string | null;
+  readonly measure: Measure;
+  readonly met?: boolean | null;
+  /** The extreme the window reaches on the watched side. */
+  readonly peak?: number | null;
+  readonly points_used?: number;
+  readonly threshold: number;
+  readonly unit?: string | null;
+  readonly value?: number | null;
+}
+
 /** One watch, as it is read back. */
 export interface WatchRecord {
   readonly comparison: string;
@@ -1685,11 +1778,20 @@ export interface WatchRecord {
   readonly enabled: boolean;
   readonly id: string;
   readonly label?: string | null;
+  /** Why the last pass degraded. Null where it did not. */
+  readonly last_error?: string | null;
   readonly last_evaluated_at?: string | null;
   readonly last_met?: boolean | null;
+  readonly last_unit?: string | null;
   readonly last_value?: number | null;
   readonly location: Location;
   readonly measure: Measure;
+  /** When the schedule is next expected to reach this watch. */
+  readonly next_evaluation_at?: string | null;
+  /** What it concluded the time before, so a transition is readable. */
+  readonly previous_state?: WatchState | null;
+  /** What the last evaluation concluded. `pending` until one has happened. */
+  readonly state?: WatchState;
   readonly threshold: number;
   readonly updated_at: string;
 }
@@ -1704,6 +1806,27 @@ export interface WatchRequest {
   readonly longitude?: number | null;
   readonly measure: Measure;
   readonly threshold: number;
+}
+
+/** What a watch was in at its last evaluation. */
+export type WatchState = "met" | "not_met" | "no_reading" | "degraded" | "paused" | "pending";
+
+/** The four figures across the top of the screen. Each is counted, none is estimated. */
+export interface WatchSummary {
+  /** Enabled watches. A paused one is not one. */
+  readonly active_watch_count: number;
+  /** How often the scheduled evaluator runs. */
+  readonly cadence_minutes: number;
+  /** Recorded transitions in the window below. Not evaluations — transitions. */
+  readonly changes_detected: number;
+  readonly changes_window_hours: number;
+  readonly last_evaluation_at?: string | null;
+  /** Watches whose condition held at their last check. */
+  readonly met_count: number;
+  /** Distinct places those watches are about. */
+  readonly monitored_location_count: number;
+  /** When the schedule is next expected to reach these watches. */
+  readonly next_evaluation_at?: string | null;
 }
 
 /** Where a figure came from, in the structured fields a reader needs. */
@@ -2277,6 +2400,19 @@ export const API_OPERATIONS: readonly ApiOperation[] = [
     successStatus: 200,
     response: "UsageResponse",
     parameters: [],
+  },
+  {
+    operationId: "watch_dashboard_api_v1_me_watch_dashboard_get",
+    method: "GET",
+    path: "/api/v1/me/watch-dashboard",
+    requiresToken: true,
+    administrative: false,
+    request: null,
+    successStatus: 200,
+    response: "WatchDashboard",
+    parameters: [
+      { name: "watch_id", in: "query", required: false },
+    ],
   },
   {
     operationId: "list_watches_api_v1_me_watches_get",

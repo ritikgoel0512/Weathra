@@ -7813,6 +7813,260 @@
         "title": "ValidationError",
         "type": "object"
       },
+      "WatchChange": {
+        "additionalProperties": false,
+        "description": "One difference between an evaluation and the one before it.\n\n`kind` is a stable identifier a screen branches on; `summary` is the sentence a person reads,\nassembled from the two figures it came from. Nothing here is a judgement about the weather.",
+        "properties": {
+          "delta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "new_state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatchState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "previous_state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatchState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "required": [
+          "kind",
+          "summary"
+        ],
+        "title": "WatchChange",
+        "type": "object"
+      },
+      "WatchCrossing": {
+        "additionalProperties": false,
+        "description": "The first instant in a retrieved window at which a condition holds, if any does.",
+        "properties": {
+          "at_local": {
+            "format": "date-time",
+            "title": "At Local",
+            "type": "string"
+          },
+          "at_utc": {
+            "format": "date-time",
+            "title": "At Utc",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "at_utc",
+          "at_local",
+          "value"
+        ],
+        "title": "WatchCrossing",
+        "type": "object"
+      },
+      "WatchDashboard": {
+        "additionalProperties": false,
+        "description": "Everything the Weather Watch screen draws, from one read of one endpoint.",
+        "properties": {
+          "activity": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/WatchEventRecord"
+            },
+            "title": "Activity",
+            "type": "array"
+          },
+          "disclaimer": {
+            "description": "What Weather Watch is not. Always present.",
+            "title": "Disclaimer",
+            "type": "string"
+          },
+          "monitoring_note": {
+            "description": "How often watches are checked, in one sentence.",
+            "title": "Monitoring Note",
+            "type": "string"
+          },
+          "selected": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatchDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary": {
+            "$ref": "#/components/schemas/WatchSummary"
+          },
+          "watchable": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Watchable",
+            "type": "array"
+          },
+          "watched_locations": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/WatchedLocation"
+            },
+            "title": "Watched Locations",
+            "type": "array"
+          },
+          "watches": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/WatchRecord"
+            },
+            "title": "Watches",
+            "type": "array"
+          }
+        },
+        "required": [
+          "summary",
+          "monitoring_note",
+          "disclaimer"
+        ],
+        "title": "WatchDashboard",
+        "type": "object"
+      },
+      "WatchDetail": {
+        "additionalProperties": false,
+        "description": "One watch in full: its series, its threshold, why it is where it is, and what moved.",
+        "properties": {
+          "changes": {
+            "default": [],
+            "description": "Deterministic differences from the previous evaluation.",
+            "items": {
+              "$ref": "#/components/schemas/WatchChange"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "evaluated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluated At"
+          },
+          "evaluation_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Evaluation Count",
+            "type": "integer"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One deterministic sentence. No language model is involved.",
+            "title": "Evidence"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatchOutcome"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "retrieved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retrieved At"
+          },
+          "series": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Series"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The forecast the threshold is drawn against. Absent where retrieval failed."
+          },
+          "watch": {
+            "$ref": "#/components/schemas/WatchRecord"
+          }
+        },
+        "required": [
+          "watch"
+        ],
+        "title": "WatchDetail",
+        "type": "object"
+      },
       "WatchEdit": {
         "additionalProperties": false,
         "description": "What may be changed about a watch. The place and the measure are its identity.",
@@ -7866,6 +8120,205 @@
         "title": "WatchEdit",
         "type": "object"
       },
+      "WatchEventRecord": {
+        "additionalProperties": false,
+        "description": "One transition, as a person reads it.",
+        "properties": {
+          "delta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta"
+          },
+          "event_type": {
+            "title": "Event Type",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "new_state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatchState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "previous_state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatchState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "watch_id": {
+            "title": "Watch Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "watch_id",
+          "occurred_at",
+          "event_type",
+          "summary"
+        ],
+        "title": "WatchEventRecord",
+        "type": "object"
+      },
+      "WatchOutcome": {
+        "additionalProperties": false,
+        "description": "One evaluation's arithmetic: what was read, whether it held, and by how much.\n\n`margin` is signed towards the condition \u2014 positive where the reading is on the watched side of\nthe threshold, negative where it is not \u2014 so \"1.3 above\" and \"1.3 below\" are one number and a\ndirection rather than two fields that can disagree.",
+        "properties": {
+          "comparison": {
+            "title": "Comparison",
+            "type": "string"
+          },
+          "crossing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatchCrossing"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "margin": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Signed towards the condition: positive when the reading satisfies it.",
+            "title": "Margin"
+          },
+          "matched_at_local": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matched At Local"
+          },
+          "matched_at_utc": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matched At Utc"
+          },
+          "measure": {
+            "$ref": "#/components/schemas/Measure"
+          },
+          "met": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Met"
+          },
+          "peak": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The extreme the window reaches on the watched side.",
+            "title": "Peak"
+          },
+          "points_used": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Points Used",
+            "type": "integer"
+          },
+          "threshold": {
+            "title": "Threshold",
+            "type": "number"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "measure",
+          "comparison",
+          "threshold"
+        ],
+        "title": "WatchOutcome",
+        "type": "object"
+      },
       "WatchRecord": {
         "additionalProperties": false,
         "description": "One watch, as it is read back.",
@@ -7898,6 +8351,18 @@
             ],
             "title": "Label"
           },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the last pass degraded. Null where it did not.",
+            "title": "Last Error"
+          },
           "last_evaluated_at": {
             "anyOf": [
               {
@@ -7921,6 +8386,17 @@
             ],
             "title": "Last Met"
           },
+          "last_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Unit"
+          },
           "last_value": {
             "anyOf": [
               {
@@ -7937,6 +8413,35 @@
           },
           "measure": {
             "$ref": "#/components/schemas/Measure"
+          },
+          "next_evaluation_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the schedule is next expected to reach this watch.",
+            "title": "Next Evaluation At"
+          },
+          "previous_state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WatchState"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What it concluded the time before, so a transition is readable."
+          },
+          "state": {
+            "$ref": "#/components/schemas/WatchState",
+            "default": "pending",
+            "description": "What the last evaluation concluded. `pending` until one has happened."
           },
           "threshold": {
             "title": "Threshold",
@@ -8035,6 +8540,175 @@
         "title": "WatchRequest",
         "type": "object"
       },
+      "WatchState": {
+        "description": "What a watch was in at its last evaluation.\n\nSix, because six different things are true of a watch and a screen that showed four of them\nwould have to lie about the other two. `PAUSED` is a property of the watch rather than of a\nreading and therefore outranks everything else; `PENDING` means no evaluation exists yet.",
+        "enum": [
+          "met",
+          "not_met",
+          "no_reading",
+          "degraded",
+          "paused",
+          "pending"
+        ],
+        "title": "WatchState",
+        "type": "string"
+      },
+      "WatchSummary": {
+        "additionalProperties": false,
+        "description": "The four figures across the top of the screen. Each is counted, none is estimated.",
+        "properties": {
+          "active_watch_count": {
+            "description": "Enabled watches. A paused one is not one.",
+            "minimum": 0.0,
+            "title": "Active Watch Count",
+            "type": "integer"
+          },
+          "cadence_minutes": {
+            "description": "How often the scheduled evaluator runs.",
+            "minimum": 1.0,
+            "title": "Cadence Minutes",
+            "type": "integer"
+          },
+          "changes_detected": {
+            "description": "Recorded transitions in the window below. Not evaluations \u2014 transitions.",
+            "minimum": 0.0,
+            "title": "Changes Detected",
+            "type": "integer"
+          },
+          "changes_window_hours": {
+            "minimum": 1.0,
+            "title": "Changes Window Hours",
+            "type": "integer"
+          },
+          "last_evaluation_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Evaluation At"
+          },
+          "met_count": {
+            "description": "Watches whose condition held at their last check.",
+            "minimum": 0.0,
+            "title": "Met Count",
+            "type": "integer"
+          },
+          "monitored_location_count": {
+            "description": "Distinct places those watches are about.",
+            "minimum": 0.0,
+            "title": "Monitored Location Count",
+            "type": "integer"
+          },
+          "next_evaluation_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the schedule is next expected to reach these watches.",
+            "title": "Next Evaluation At"
+          }
+        },
+        "required": [
+          "active_watch_count",
+          "monitored_location_count",
+          "changes_detected",
+          "changes_window_hours",
+          "met_count",
+          "cadence_minutes"
+        ],
+        "title": "WatchSummary",
+        "type": "object"
+      },
+      "WatchedLocation": {
+        "additionalProperties": false,
+        "description": "One place, with what is watched there and what the last retrieval said about it.",
+        "properties": {
+          "conditions": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "The headline measures at the hour the watches were read from. Real, and absent where the provider reported nothing.",
+            "propertyNames": {
+              "$ref": "#/components/schemas/Measure"
+            },
+            "title": "Conditions",
+            "type": "object"
+          },
+          "last_evaluated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Evaluated At"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "location_id": {
+            "title": "Location Id",
+            "type": "string"
+          },
+          "met_count": {
+            "minimum": 0.0,
+            "title": "Met Count",
+            "type": "integer"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "state": {
+            "$ref": "#/components/schemas/WatchState",
+            "description": "The most consequential of its watches' states."
+          },
+          "units": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/Measure"
+            },
+            "title": "Units",
+            "type": "object"
+          },
+          "watch_count": {
+            "minimum": 1.0,
+            "title": "Watch Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "location_id",
+          "location",
+          "watch_count",
+          "met_count",
+          "state"
+        ],
+        "title": "WatchedLocation",
+        "type": "object"
+      },
       "WatchesResponse": {
         "additionalProperties": false,
         "description": "Your watches, and how they came to be evaluated.",
@@ -8050,7 +8724,7 @@
             "type": "string"
           },
           "evaluation_note": {
-            "default": "Checked when you open this screen or press refresh. Weathra does not monitor continuously and sends no alerts.",
+            "default": "Checked on a schedule, when a watch is created, and when you press refresh. Weathra does not monitor continuously and sends no alerts.",
             "title": "Evaluation Note",
             "type": "string"
           },
@@ -10399,6 +11073,66 @@
         ]
       }
     },
+    "/api/v1/me/watch-dashboard": {
+      "get": {
+        "description": "**Protected.** Everything the acting user's Weather Watch screen draws \u2014 their own watches, the places those cover, the recorded history of their checks, and the transitions between them. No other subject's, and it evaluates nothing.\n\nThe whole screen, from the stored history plus one retrieval for the selected watch's plot.\n\n**It does not evaluate.** Reading a dashboard must not cost a provider call per watch, or\nopening the screen twice would cost twice as much as monitoring does. What is returned is what\nthe schedule and the explicit refreshes have already recorded, with each figure's moment\nattached. The one retrieval is the series behind the selected watch's chart, which is the only\nthing on the screen that cannot come from a stored row.",
+        "operationId": "watch_dashboard_api_v1_me_watch_dashboard_get",
+        "parameters": [
+          {
+            "description": "Which watch to detail. Defaults to the most consequential one.",
+            "in": "query",
+            "name": "watch_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Which watch to detail. Defaults to the most consequential one.",
+              "title": "Watch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WatchDashboard"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "No valid access token was presented."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "SupabaseAccessToken": []
+          }
+        ],
+        "summary": "Everything the Weather Watch screen draws",
+        "tags": [
+          "watches"
+        ]
+      }
+    },
     "/api/v1/me/watches": {
       "get": {
         "description": "**Protected.** Lists and creates the acting user's weather watches.\n\nEvery watch you have, optionally checked as it is read.\n\nEvaluation is opt-in rather than automatic because it costs a provider call per watched place,\nand a listing that quietly made ten of them would be a listing nobody could afford to poll.",
@@ -10453,7 +11187,7 @@
         ]
       },
       "post": {
-        "description": "**Protected.** Lists and creates the acting user's weather watches.\n\nAsk Weathra to check a condition at a place. Asking twice updates the threshold.",
+        "description": "**Protected.** Lists and creates the acting user's weather watches.\n\nAsk Weathra to check a condition at a place, and check it once straight away.\n\n**The immediate check is the point.** A watch created into `pending` would sit on the screen\nsaying nothing at all until the schedule next came round, which for an hourly cadence is up to\nan hour of a product that looks broken. So creation resolves the place, persists the watch,\nrecords its first event, and evaluates it \u2014 and what comes back already has a state, a reading\nand its evidence.\n\nAsking twice about the same measure at the same place updates the threshold rather than\nrefusing: that is a person changing their mind, not an error.",
         "operationId": "create_watch_api_v1_me_watches_post",
         "requestBody": {
           "content": {

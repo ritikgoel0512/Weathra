@@ -1,520 +1,458 @@
 "use client";
 
 /**
- * Weather Watch — conditions you asked Weathra to check, and what it found when it last looked.
+ * Weather Watch — `docs/design/screens/14-weather-watch.png`.
  *
- * Built against `docs/design/screens/14-weather-watch.png`: the summary row, the watch list with
- * each one's latest state, the create form, the disclaimer.
+ * A persistent multi-location monitoring workspace: state a condition at a place, and Weathra checks
+ * it on a schedule, records what it found, and shows what changed between checks.
  *
- * **Evaluated on view, and the screen says so where somebody will read it.** Weathra runs nothing on
- * a timer, so every watch here carries the moment it was last checked rather than a live status. The
- * backend states the semantics in `evaluation_note` and this renders that sentence rather than one
- * of its own, so the two cannot drift apart.
+ * **The artifact's macro composition, and it is the composition rather than a resemblance to it.**
  *
- * **A null is not a no.** Before the first check, and where the provider reported nothing for the
- * measure, there is no answer — which is different from the condition being unmet. The three states
- * are drawn as three states.
+ *     1  header, with the engine's own status and CREATE WATCH        full width
+ *     2  four counters                                                full width
+ *     3  watched locations            ·  active watches               70 / 30
+ *     4  temporal watch analysis      ·  what changed?                70 / 30
+ *     5  watch evidence               ·  activity feed                70 / 30
+ *     6  how monitoring works         ·  quick watch config           70 / 30
+ *     7  analytical monitoring notice                                 full width
+ *     8  status strip                                                 full width
  *
- * **What the artifact draws and Weathra does not have:** a watch engine, monitoring nodes, model
- * recalibration, sensor telemetry, push alerts and a live status light. There is no scheduler and no
- * notification of any kind, and claiming otherwise about severe weather would be the most harmful
- * thing this product could do.
+ * **One read feeds every panel.** `GET /me/watch-dashboard` returns the summary, the watched places,
+ * every watch, the selected watch's series and evidence, and the recent activity together, and
+ * `lib/watch/view-model.ts` reads all of it once. Five panels each fetching their own version of the
+ * same data is how two panels come to disagree about whether a condition is met.
+ *
+ * **Reading the screen evaluates nothing.** The dashboard returns what the scheduled pass and the
+ * explicit refreshes have already recorded. Opening a monitoring page must not cost a provider call
+ * per watch, or looking at the monitoring would cost more than the monitoring.
+ *
+ * **It is scheduled and it says so, everywhere.** The word "live" appears nowhere on this screen and
+ * neither does "real-time". A watch was checked at a moment, will be checked again at another, and
+ * both are named. Weathra sends no alerts of any kind, which the notice at the bottom states in the
+ * backend's own sentence rather than in one this file wrote.
+ *
+ * **What the artifact draws and Weathra does not have:** 96.4% inference confidence, 82 anomalies,
+ * 98.4% grounding, model recalibration, a pressure-anomaly tier, 124 active nodes, a compliance
+ * lock, and an emergency alert channel. Each has a real equivalent here or no tile at all.
  */
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
-import { RecordedAgainstBaselineChart } from "@/components/historical/charts";
-import { PlaceChooser } from "@/components/locations/place-chooser";
-import { ScreenPreview } from "@/components/locations/screen-preview";
-
-import {
-  Badge,
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  DataClassBadge,
-  EmptyChart,
-  EmptyState,
-  ErrorState,
-  Input,
-  LoadingState,
-  Select,
-} from "@/components/ui";
-import type {
-  ForecastResponse,
-  Location,
-  Measure,
-  PreferenceView,
-  WatchRecord,
-  WatchesResponse,
-} from "@/lib/api/schema";
-import { briefingLocationFrom, measureLabel } from "@/lib/dashboard/briefing";
-import { hasValues, missingCount, pointsFrom } from "@/lib/historical/analysis";
-import { friendlyName } from "@/lib/locations/place";
+import { ErrorState, LoadingState } from "@/components/ui";
+import type { WatchDashboard, WatchRecord } from "@/lib/api/schema";
+import { measureLabel } from "@/lib/dashboard/briefing";
 import { useApiMutation, useApiQuery } from "@/lib/query/hooks";
-import { PREFERENCES_KEY } from "@/lib/query/keys";
+import {
+  activityFrom,
+  changeCardsFrom,
+  countersFrom,
+  engineStatusFrom,
+  placeCardsFrom,
+  placeOf,
+  plotFiguresFrom,
+  ruleOf,
+  statusStripFrom,
+  thresholdPointsFrom,
+  whenOf,
+} from "@/lib/watch/view-model";
 
+import { TemporalWatchChart } from "./chart";
+import {
+  ActiveWatches,
+  ActivityFeed,
+  CounterRow,
+  MonitoringNotice,
+  PlotFigures,
+  QuickWatchConfig,
+  Quiet,
+  Region,
+  StatusStrip,
+  StateBadge,
+  WatchEvidence,
+  WatchHeader,
+  WatchPlaceChooser,
+  WatchedPlaces,
+  type DraftWatch,
+} from "./sections";
 import styles from "./watch.module.css";
 
-const WATCHES_KEY = ["me", "watches"] as const;
+const DASHBOARD_KEY = ["me", "watch-dashboard"] as const;
 
-function when(value: string | null | undefined): string {
-  if (!value) return "not checked yet";
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime())
-    ? value
-    : parsed.toLocaleString("en-GB", {
-        day: "numeric",
-        month: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-}
+const EMPTY_DRAFT: DraftWatch = {
+  location: null,
+  measure: "temperature",
+  comparison: "above",
+  threshold: "",
+};
 
-function WatchRow({
-  watch,
-  onRefresh,
-  onRemove,
-  busy,
-}: {
-  readonly watch: WatchRecord;
-  readonly onRefresh: (watch: WatchRecord) => void;
-  readonly onRemove: (watch: WatchRecord) => void;
-  readonly busy: boolean;
-}): ReactNode {
-  return (
-    <li className={styles.watch}>
-      <div className={styles.watchHead}>
-        <span className={styles.watchPlace}>
-          {watch.label?.trim() || friendlyName(watch.location)}
-        </span>
-        {/* Three states, drawn as three. A watch never checked and a watch whose provider said
-            nothing are both "no answer", and neither is "not met". */}
-        {watch.last_met === true ? (
-          <Badge tone="warning">Condition met</Badge>
-        ) : watch.last_met === false ? (
-          <Badge tone="ok">Not met</Badge>
-        ) : (
-          <Badge tone="neutral">No reading</Badge>
-        )}
-        {watch.enabled ? null : <Badge tone="neutral">Paused</Badge>}
-      </div>
+export function WeatherWatch(): ReactNode {
+  /** Which watch the detail panels are about. Null means "let the backend choose". */
+  const [selected, setSelected] = useState<string | null>(null);
+  const [draft, setDraft] = useState<DraftWatch>(EMPTY_DRAFT);
+  const [expanded, setExpanded] = useState(false);
 
-      <p className={styles.watchRule}>
-        {measureLabel(watch.measure)} {watch.comparison} {watch.threshold}
-      </p>
-
-      <p className={styles.watchState}>
-        {watch.last_evaluated_at
-          ? `${
-              watch.last_value === null || watch.last_value === undefined
-                ? "No reading at the last check"
-                : `Last reading ${watch.last_value}`
-            }. Checked ${when(watch.last_evaluated_at)}.`
-          : "Not checked yet. It will be, next time you open this screen."}
-      </p>
-
-      <div className={styles.watchActions}>
-        <Button size="sm" busy={busy} onClick={() => onRefresh(watch)}>
-          Check now
-        </Button>
-        <Button size="sm" variant="danger" onClick={() => onRemove(watch)}>
-          Remove
-        </Button>
-      </div>
-    </li>
-  );
-}
-
-/**
- * The forecast the watches are checked against, with their thresholds drawn through it.
- *
- * `14-weather-watch.png`'s largest panel is "Temporal Watch Vector Analysis" — an intra-day plot
- * with a dashed threshold line across it — and the production fidelity review recorded its absence
- * as this screen's remaining gap: "no graphical weather context beside the list". A list of
- * thresholds with a number beside each says whether a condition is met. It does not say how close
- * the rest of the window comes to it, which is the thing a plot answers and a list cannot.
- *
- * # Where the figures come from
- *
- * * **The series** — `GET /weather/forecast` for this screen's location, hourly, the same read the
- *   Forecast Explorer draws. Not a second source and not a cached copy of the watch's own reading.
- * * **The reference line** — the watch's own `threshold`, as stored. Nothing is recomputed here.
- * * **The measure** — whichever measure the watches at this location are actually about, so the
- *   plot is of the quantity being watched rather than of temperature by default.
- *
- * # What it deliberately is not
- *
- * **Not a history.** The artifact's panel has "ANOMALIES LOGGED 02 Detected" and an activity feed
- * of past breaches, and Weathra has no scheduler — nothing evaluates a watch except a person
- * opening this screen or pressing refresh. A history table would therefore record *when somebody
- * pressed a button*, and a chart of that would look like a record of the weather while being a
- * record of visits. That is worse than an absent panel, so it stays absent until there is a
- * scheduler to fill it, and `screens.md` §5 records why.
- *
- * **Not a claim of monitoring.** The plot is the forecast now, drawn when the screen is opened.
- * The note above it already says Weathra does not watch continuously, and this changes nothing
- * about that.
- */
-function WatchContext({
-  location,
-  watches,
-}: {
-  readonly location: Location;
-  readonly watches: readonly WatchRecord[];
-}): ReactNode {
   /*
-   * The measure to plot: the one the watches here are about. An enabled watch outranks a disabled
-   * one, because a disabled watch's threshold is not currently being checked against anything.
-   * With no watch at all the plot is temperature, which is the measure a person is most likely to
-   * be about to watch and gives the panel something to show before the first watch exists.
+   * One clock for the whole screen.
+   *
+   * Every "12 min ago" and every countdown is derived from this, so no two rows can be relative to
+   * different instants — and it ticks rather than being read at render, because a monitoring screen
+   * left open would otherwise keep saying "2 min ago" an hour later.
    */
-  const relevant = watches.filter(
-    (watch) =>
-      watch.location.latitude === location.latitude &&
-      watch.location.longitude === location.longitude,
-  );
-  const leading =
-    relevant.find((watch) => watch.enabled) ?? relevant[0] ?? null;
-  const measure = leading?.measure ?? "temperature";
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
 
-  const forecast = useApiQuery<ForecastResponse>({
-    key: ["watch", "forecast", location.latitude, location.longitude],
-    request: (client) =>
-      client.forecast({
-        latitude: location.latitude,
-        longitude: location.longitude,
-        days: 3,
-      }),
+  const dashboard = useApiQuery<WatchDashboard>({
+    key: [...DASHBOARD_KEY, selected ?? ""],
+    request: (client) => client.watchDashboard(selected ?? undefined),
   });
 
-  const data = forecast.state.kind === "ready" ? forecast.state.data : null;
-  const points = data ? pointsFrom(data.hourly) : [];
-  const drawable = hasValues(points, measure);
-  const unit = data?.hourly?.units?.[measure] ?? null;
-  const label = measureLabel(measure as Measure);
-  const title = `${label} through the forecast window`;
-
-  return (
-    <Card aria-labelledby="watch-context">
-      <CardHeader
-        title="What the watches are checked against"
-        titleId="watch-context"
-        badge={<DataClassBadge dataClass="forecast" />}
-        subtitle={
-          leading === null
-            ? `The forecast for ${friendlyName(location)}. Create a watch and its threshold is drawn through it.`
-            : `${label} for ${friendlyName(location)}, with the ${leading.comparison} ${leading.threshold}${unit ? ` ${unit}` : ""} threshold drawn through it.`
-        }
-      />
-      <CardBody>
-        {forecast.state.kind === "loading" ? (
-          <LoadingState label="Reading the forecast" lines={4} />
-        ) : forecast.state.kind === "error" ? (
-          // Component-level, so a provider failure costs this panel and not the watch list beside
-          // it: the list's own readings came from a different request and are still true.
-          <ErrorState
-            failure={forecast.state.failure}
-            onRetry={forecast.retry}
-          />
-        ) : drawable ? (
-          <RecordedAgainstBaselineChart
-            points={points}
-            measure={measure}
-            unit={unit}
-            seriesLabel={label}
-            title={title}
-            missing={missingCount(points, measure)}
-            baselineValue={leading?.threshold ?? null}
-            baselineLabel={
-              leading === null ? null : `threshold, ${leading.comparison}`
-            }
-            referenceLabel="Threshold"
-            sourceLabel="the provider"
-          />
-        ) : (
-          <EmptyChart
-            title={title}
-            reason={`This provider reported no hourly ${label.toLowerCase()} for this window.`}
-          />
-        )}
-      </CardBody>
-    </Card>
-  );
-}
-
-function WatchList({
-  location,
-  chooser,
-}: {
-  readonly location: ReturnType<typeof briefingLocationFrom>;
-  /** The screen's place control, rendered under its own heading. */
-  readonly chooser: ReactNode;
-}): ReactNode {
-  const [measure, setMeasure] = useState<string>("temperature");
-  const [comparison, setComparison] = useState("above");
-  const [threshold, setThreshold] = useState("25");
-  const [acting, setActing] = useState<string | null>(null);
-
-  const watches = useApiQuery<WatchesResponse>({
-    key: WATCHES_KEY,
-    // Evaluated as it is read: that is the product's semantics, and the response says so too.
-    request: (client) => client.watches(true),
-  });
-
-  const create = useApiMutation<void, WatchRecord>({
-    run: (client) =>
+  const create = useApiMutation<DraftWatch, WatchRecord>({
+    run: (client, input) =>
       client.createWatch({
-        latitude: location!.latitude,
-        longitude: location!.longitude,
-        measure: measure as Measure,
-        comparison,
-        threshold: Number(threshold),
+        latitude: input.location?.latitude,
+        longitude: input.location?.longitude,
+        measure: input.measure as WatchRecord["measure"],
+        comparison: input.comparison,
+        threshold: Number(input.threshold),
       }),
-    invalidates: [WATCHES_KEY],
+    invalidates: [[...DASHBOARD_KEY]],
+    onDone: (record) => {
+      // The new watch is already evaluated — creation checks it once — so selecting it puts real
+      // evidence on screen immediately rather than an empty detail panel.
+      setSelected(record.id);
+      setDraft(EMPTY_DRAFT);
+    },
   });
 
-  const refresh = useApiMutation<WatchRecord, WatchRecord>({
-    run: (client, watch) => client.evaluateWatch(watch.id),
-    invalidates: [WATCHES_KEY],
-    onDone: () => setActing(null),
+  const refresh = useApiMutation<void, unknown>({
+    run: (client) => client.watches(true),
+    invalidates: [[...DASHBOARD_KEY]],
   });
 
-  const remove = useApiMutation<WatchRecord, void>({
-    run: (client, watch) => client.removeWatch(watch.id),
-    invalidates: [WATCHES_KEY],
+  const edit = useApiMutation<{ id: string; enabled: boolean }, WatchRecord>({
+    run: (client, input) => client.updateWatch(input.id, { enabled: input.enabled }),
+    invalidates: [[...DASHBOARD_KEY]],
   });
 
-  const data = watches.state.kind === "ready" ? watches.state.data : null;
-  const met =
-    data?.watches.filter((watch) => watch.last_met === true).length ?? 0;
-  const unread =
-    data?.watches.filter(
-      (watch) => watch.last_met === null || watch.last_met === undefined,
-    ).length ?? 0;
+  const remove = useApiMutation<string, void>({
+    run: (client, id) => client.removeWatch(id),
+    invalidates: [[...DASHBOARD_KEY]],
+    onDone: () => setSelected(null),
+  });
+
+  if (dashboard.state.kind === "loading") {
+    return <LoadingState label="Reading your watches" lines={6} />;
+  }
+  if (dashboard.state.kind === "error") {
+    return <ErrorState failure={dashboard.state.failure} onRetry={dashboard.retry} />;
+  }
+  if (dashboard.state.kind !== "ready") return null;
+
+  const data = dashboard.state.data;
+  const watches = data.watches ?? [];
+  const detail = data.selected ?? null;
+  const engine = engineStatusFrom(data);
+  const places = placeCardsFrom(data);
+  const busy = refresh.busy || edit.busy || remove.busy;
+
+  const chooser = (
+    <WatchPlaceChooser
+      location={draft.location}
+      onChoose={(location) => setDraft((current) => ({ ...current, location }))}
+    />
+  );
+
+  const config = (
+    <QuickWatchConfig
+      draft={draft}
+      watchable={data.watchable ?? []}
+      chooser={chooser}
+      onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
+      onSubmit={() => create.submit(draft)}
+      busy={create.busy}
+      failure={create.state.kind === "error" ? create.state.failure.message : null}
+    />
+  );
+
+  /* With no watch at all, the screen is the one thing there is to do. */
+  if (watches.length === 0) {
+    return (
+      <div className={styles.screen}>
+        <FirstWatch config={config} cadence={data.summary.cadence_minutes} />
+        <MonitoringNotice text={data.disclaimer} />
+      </div>
+    );
+  }
 
   return (
     <div className={styles.screen}>
-      <header className={styles.header}>
-        <h1>Weather Watch</h1>
-        <p className={styles.lede}>
-          Conditions you asked Weathra to check, and what it found when it last
-          looked.
-        </p>
-      </header>
+      {/* ROW 1 */}
+      <WatchHeader
+        engine={engine}
+        lastEvaluation={data.summary.last_evaluation_at ?? null}
+        nextEvaluation={data.summary.next_evaluation_at ?? null}
+        onCreate={() => {
+          document.getElementById("watch-config")?.scrollIntoView({ block: "center" });
+        }}
+        onRefresh={() => refresh.submit(undefined)}
+        busy={refresh.busy}
+      />
 
-      {/* Under the heading, where the artifacts put a screen's own controls. */}
-      {chooser}
-
-      <div className={styles.summary}>
-        <div className={styles.tile}>
-          <p className={styles.tileLabel}>Watches</p>
-          <p className={styles.tileValue}>{data?.count ?? "—"}</p>
-        </div>
-        <div className={styles.tile}>
-          <p className={styles.tileLabel}>Condition met</p>
-          <p className={styles.tileValue}>{data ? met : "—"}</p>
-        </div>
-        <div className={styles.tile}>
-          <p className={styles.tileLabel}>No reading</p>
-          <p className={styles.tileValue}>{data ? unread : "—"}</p>
-        </div>
-      </div>
-
-      {data ? <p className={styles.note}>{data.evaluation_note}</p> : null}
-
-      {/* The artifact's largest panel. See `WatchContext` for every figure's source. */}
-      {location ? (
-        <WatchContext location={location} watches={data?.watches ?? []} />
-      ) : null}
+      {/* ROW 2 */}
+      <CounterRow counters={countersFrom(data, now)} />
 
       <div className={styles.body}>
-        <Card aria-labelledby="watch-list">
-          <CardHeader
-            title="Your watches"
-            titleId="watch-list"
-            badge={<DataClassBadge dataClass="forecast" />}
-          />
-          <CardBody>
-            {watches.state.kind === "loading" ? (
-              <LoadingState label="Checking your watches" lines={3} />
-            ) : watches.state.kind === "error" ? (
-              <ErrorState
-                failure={watches.state.failure}
-                onRetry={watches.retry}
-              />
-            ) : data && data.watches.length > 0 ? (
-              <ul className={styles.watches}>
-                {data.watches.map((watch) => (
-                  <WatchRow
-                    key={watch.id}
-                    watch={watch}
-                    busy={refresh.busy && acting === watch.id}
-                    onRefresh={(entry) => {
-                      setActing(entry.id);
-                      refresh.submit(entry);
-                    }}
-                    onRemove={(entry) => remove.submit(entry)}
-                  />
-                ))}
-              </ul>
-            ) : (
-              <EmptyState title="Nothing watched yet">
-                Add a condition and Weathra will check it each time you open
-                this screen.
-              </EmptyState>
-            )}
-          </CardBody>
-        </Card>
-
-        <div className={styles.side}>
-          <Card aria-labelledby="watch-new">
-            <CardHeader title="Watch a condition" titleId="watch-new" />
-            <CardBody>
-              <div className={styles.form}>
-                <Input
-                  label="Place"
-                  value={location ? friendlyName(location) : ""}
-                  readOnly
-                />
-                <Select
-                  label="Measure"
-                  value={measure}
-                  onChange={(event) => setMeasure(event.target.value)}
-                  options={(data?.watchable ?? ["temperature"]).map((key) => ({
-                    value: key,
-                    label: measureLabel(key),
-                  }))}
-                />
-                <Select
-                  label="When it goes"
-                  value={comparison}
-                  onChange={(event) => setComparison(event.target.value)}
-                  options={[
-                    { value: "above", label: "above" },
-                    { value: "below", label: "below" },
-                  ]}
-                />
-                <Input
-                  label="Threshold"
-                  type="number"
-                  value={threshold}
-                  onChange={(event) => setThreshold(event.target.value)}
-                />
-                <Button
-                  variant="primary"
-                  busy={create.busy}
-                  onClick={() => create.submit()}
-                >
-                  Add this watch
-                </Button>
-              </div>
-              {create.state.kind === "error" ? (
-                <ErrorState
-                  failure={create.state.failure}
-                  title="That watch was not added"
-                />
-              ) : null}
-            </CardBody>
-          </Card>
-
-          <Card aria-labelledby="watch-safety">
-            <CardHeader
-              title="Before you rely on this"
-              titleId="watch-safety"
+        <div className={styles.main}>
+          {/* ROW 3 — the places */}
+          <Region
+            id="watch-places"
+            title="Watched locations"
+            icon="place"
+            level="lead"
+            subtitle="Each place, with what its own last retrieval reported. Select one to detail it."
+            badges={<span className={styles.classBadge}>FORECAST</span>}
+          >
+            <WatchedPlaces
+              places={places}
+              selectedId={
+                places.find((place) => place.watchId === detail?.watch.id)?.id ?? null
+              }
+              onSelect={(id) => {
+                const chosen = places.find((place) => place.id === id)?.watchId;
+                if (chosen) setSelected(chosen);
+              }}
+              now={now}
             />
-            <CardBody>
-              <p className={styles.note}>{data?.disclaimer}</p>
-            </CardBody>
-          </Card>
+          </Region>
+
+          {/* ROW 4 — the plot */}
+          <Region
+            id="watch-analysis"
+            title="Temporal watch analysis"
+            icon="trend"
+            subtitle={
+              detail
+                ? `${placeOf(detail.watch)} · ${ruleOf(detail.watch)}`
+                : "Select a watch to plot it against its threshold."
+            }
+            badges={<span className={styles.classBadge}>FORECAST</span>}
+          >
+            {detail ? (
+              <>
+                <TemporalWatchChart
+                  points={thresholdPointsFrom(detail)}
+                  unit={detail.outcome?.unit ?? null}
+                  comparison={detail.watch.comparison}
+                  measureLabel={measureLabel(detail.watch.measure)}
+                  crossingStamp={detail.outcome?.crossing?.at_local ?? null}
+                />
+                <PlotFigures figures={plotFiguresFrom(detail)} />
+              </>
+            ) : (
+              <Quiet>Nothing is selected.</Quiet>
+            )}
+          </Region>
+
+          {/* ROW 5 — why */}
+          <Region
+            id="watch-evidence"
+            title="Watch evidence"
+            icon="evidence"
+            level="lead"
+            subtitle="Computed by Weathra from the retrieval the check was made against. No language model is involved."
+            badges={<span className={styles.classBadge}>ANALYTICS</span>}
+          >
+            <WatchEvidence
+              sentence={detail?.evidence ?? null}
+              chips={
+                detail === null
+                  ? []
+                  : [
+                      { key: "class", label: "Class", value: "Forecast" },
+                      { key: "provider", label: "Provider", value: detail.provider ?? "Not reported" },
+                      {
+                        key: "retrieved",
+                        label: "Retrieved",
+                        value: whenOf(detail.retrieved_at ?? null),
+                      },
+                      {
+                        key: "evaluated",
+                        label: "Evaluated",
+                        value: whenOf(detail.evaluated_at ?? null),
+                      },
+                    ]
+              }
+            />
+          </Region>
+
+              {/* ROW 6 — how. Last in the column, and it stretches: see `.main` in the stylesheet. */}
+          <Region
+            id="watch-method"
+            title="How monitoring works"
+            icon="schedule"
+            subtitle="Stated plainly, because a monitoring product that overstates itself is dangerous."
+          >
+            <p className={styles.method}>{data.monitoring_note}</p>
+            <ul className={styles.methodList}>
+              <li>
+                Each watch is one comparison against a retrieved forecast: no model, no inference,
+                and no severity judgement.
+              </li>
+              <li>
+                Watches at the same place share one retrieval, so monitoring costs one provider call
+                per place rather than one per watch.
+              </li>
+              <li>
+                A provider that reports nothing, and a retrieval that fails, are recorded as their
+                own states — neither is the condition being unmet.
+              </li>
+            </ul>
+          </Region>
+        </div>
+
+        {/* The right rail, beside all of it. */}
+        <div className={styles.rail}>
+          <Region
+            id="watch-active"
+            title="Active watches"
+            icon="watch"
+            badges={<span className={styles.classBadge}>{watches.length}</span>}
+          >
+            <ActiveWatches
+              watches={watches}
+              selectedId={detail?.watch.id ?? null}
+              onSelect={setSelected}
+              onToggle={(watch) => edit.submit({ id: watch.id, enabled: !watch.enabled })}
+              onRemove={(watch) => remove.submit(watch.id)}
+              expanded={expanded}
+              onExpand={() => setExpanded(true)}
+              now={now}
+            />
+          </Region>
+
+          <Region id="watch-changed" title="What changed?" icon="activity">
+            <WhatChangedPanel detail={detail} />
+          </Region>
+
+          <Region id="watch-activity" title="Activity feed" icon="activity">
+            <ActivityFeed rows={activityFrom(data.activity)} now={now} />
+          </Region>
+
+          {/*
+            Open, not folded. The artifact draws the configuration card with its fields showing, and
+            it is right to: adding a watch is the screen's primary action rather than an aside, and a
+            disclosure here would put the one thing a person came to do behind a click.
+          */}
+          <Region
+            id="watch-config"
+            title="Quick watch config"
+            icon="plus"
+            level="lead"
+            subtitle="A place, a measure, a direction and a number."
+          >
+            {config}
+          </Region>
         </div>
       </div>
+
+      {/* ROW 7 */}
+      <MonitoringNotice text={data.disclaimer} />
+
+      {/* ROW 8 */}
+      <StatusStrip items={statusStripFrom(data, engine)} />
+
+      {busy ? (
+        <p className={styles.busy} role="status">
+          Working…
+        </p>
+      ) : null}
     </div>
   );
 }
 
-export function WeatherWatch(): ReactNode {
-  const preferences = useApiQuery<PreferenceView>({
-    key: PREFERENCES_KEY,
-    request: (client) => client.preferences(),
-  });
-  /** A place named on this screen. Outranks the default while it is set. */
-  const [chosen, setChosen] = useState<Location | null>(null);
-
-  if (preferences.state.kind === "loading") {
-    return <LoadingState label="Reading your preferences" lines={4} />;
-  }
-  if (preferences.state.kind === "error") {
-    return (
-      <ErrorState
-        failure={preferences.state.failure}
-        onRetry={preferences.retry}
-      />
-    );
-  }
-  if (preferences.state.kind !== "ready") return null;
-
-  const saved = briefingLocationFrom(preferences.state.data);
-  const location = chosen ?? saved;
-
-  /*
-   * Declared once and used in both branches. The empty branch needs it most: its own text
-   * says "name one above", and an empty state saying that with nothing above it is the
-   * dead end this control exists to remove.
-   */
-  const chooser = (
-    <PlaceChooser
-      summary="Watch another place"
-      label="Watch a place"
-      description="Weathra resolves the name before it retrieves anything. Leave it empty to use your default location."
-      current={location}
-      usingDefault={chosen === null}
-      hasDefault={saved !== null}
-      onChoose={setChosen}
-    />
-  );
+/** The right rail's change panel, kept out of the composition above so that stays readable. */
+function WhatChangedPanel({
+  detail,
+}: {
+  readonly detail: WatchDashboard["selected"] | null | undefined;
+}): ReactNode {
+  if (!detail) return <Quiet>Nothing is selected.</Quiet>;
 
   return (
     <>
-      {/*
-        The screen's own place control. With no default this used to be an empty state and a link
-        to Settings, which made the feature reachable only by configuring a preference somewhere
-        else first — see `PlaceChooser` for why that is not a substitute for a product.
-      */}
-
-      {location === null ? (
-        <>
-          {chooser}
-          <ScreenPreview
-            title="A watch is about one place"
-            lead="Name a place above, or set a default in Settings and every screen opens on it. Nothing below is filled in yet because no place has been chosen."
-            regions={[
-              {
-                title: "The condition you are watching for",
-                blurb:
-                  "A measure, a threshold and a direction — above 30 °C, below freezing, more than 10 mm of rain.",
-              },
-              {
-                title: "Whether it is met",
-                blurb:
-                  "Checked against the retrieved forecast for the place, with the day and the figure that met it.",
-              },
-              {
-                title: "Your watches",
-                blurb:
-                  "Every watch you have saved, with what each one is looking for and where it stands now.",
-              },
-            ]}
-          />
-        </>
-      ) : (
-        <WatchList
-          key={`${location.latitude},${location.longitude}`}
-          location={location}
-          chooser={chooser}
-        />
-      )}
+      <p className={styles.changeSubject}>
+        <StateBadge state={detail.watch.state ?? "pending"} /> {placeOf(detail.watch)}
+      </p>
+      <WhatChangedList detail={detail} />
     </>
+  );
+}
+
+function WhatChangedList({
+  detail,
+}: {
+  readonly detail: NonNullable<WatchDashboard["selected"]>;
+}): ReactNode {
+  const changes = changeCardsFrom(detail.changes);
+  if (changes.length === 0) {
+    return (
+      <Quiet>
+        No material change since the previous evaluation
+        {detail.evaluation_count !== undefined && detail.evaluation_count < 2
+          ? ". This watch has only been checked once so far"
+          : ""}
+        .
+      </Quiet>
+    );
+  }
+  return (
+    <ul className={styles.changes}>
+      {changes.map((change) => (
+        <li className={styles.change} key={change.key} data-tone={change.tone}>
+          <span className={styles.changeHeading}>{change.heading}</span>
+          <span className={styles.changeSummary}>{change.summary}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * What the screen is before there is anything to monitor.
+ *
+ * One statement of what a watch is and the form that makes one — not three placeholder panels with
+ * nothing in them, and emphatically not a fabricated example watch, which on a monitoring screen
+ * would be indistinguishable from a real one.
+ */
+function FirstWatch({
+  config,
+  cadence,
+}: {
+  readonly config: ReactNode;
+  readonly cadence: number;
+}): ReactNode {
+  return (
+    <section className={styles.first} aria-labelledby="watch-first-title">
+      <div className={styles.firstText}>
+        <h1 className={styles.title} id="watch-first-title">
+          Weather Watch
+        </h1>
+        <p className={styles.lede}>Create your first watch</p>
+        <p className={styles.firstBody}>
+          Choose a place, a weather measure and a threshold. Weathra will evaluate it on the
+          monitoring schedule — about every {cadence} minutes — and record what changes over time.
+          It checks the new watch once straight away, so it has a state before you leave this screen.
+        </p>
+        <p className={styles.firstNote}>
+          Weather Watch sends no alerts and monitors nothing continuously. It is a scheduled check
+          against one provider&rsquo;s forecast, and every state it reports carries the moment it was
+          found.
+        </p>
+      </div>
+      <div className={styles.firstConfig}>{config}</div>
+    </section>
   );
 }

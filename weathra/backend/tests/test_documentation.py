@@ -1264,6 +1264,8 @@ def test_every_persisted_table_is_accounted_for() -> None:
         "admin_roles": "Administrative roles",
         "admin_audit": "Administrative audit",
         "weather_watches": "Weather watches",
+        "weather_watch_evaluations": "Watch evaluations",
+        "weather_watch_events": "Watch events",
     }
     assert set(accounted) == set(Base.metadata.tables), (
         "a table was added or removed; docs/privacy-ethics.md must account for it"

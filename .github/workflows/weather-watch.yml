@@ -1,0 +1,115 @@
+name: weather-watch
+
+# Weathra — the scheduled watch pass.
+#
+# design.md decision 11 puts scheduled work in "a scheduled CI job in the MVP, no in-process
+# scheduler", and the reason is the credential rather than the scheduling: evaluating watches that
+# belong to *other people* is exactly the work the request-serving role must not be able to do. So
+# it runs here, under the privileged connection, and the deployed backend never holds that
+# connection at all (`test_the_render_service_never_holds_the_privileged_database_url`).
+#
+# This is what makes Weather Watch a monitored product rather than a form that answers when you open
+# it. `Settings.watch_cadence_minutes` is what the *screen* tells a person about when their watches
+# are next checked, and the cron entry below is what actually keeps it — the two are asserted equal
+# in `backend/tests/test_watch_schedule_workflow.py`, because a product that states a cadence
+# nothing keeps is worse than one that states none.
+#
+# What it may not do is as much the point as what it does. It holds no Render credential, no
+# service-role key and no request-path connection; it never invokes Alembic, so it cannot migrate;
+# it deletes nothing; and it prints counts rather than anybody's watches.
+
+on:
+  schedule:
+    # Hourly, at 07 past. A watch is a threshold on an hourly forecast series, so a pass more often
+    # than hourly would re-read the same hour and spend a provider call to learn nothing. Off the
+    # hour because every hosted scheduler is busiest there.
+    - cron: "7 * * * *"
+  workflow_dispatch:
+    inputs:
+      # A named mode rather than a checkbox, for the reason `database-retention.yml` records: a
+      # checkbox was misread once and the run looked like a success either way. The default is what
+      # the schedule does, so an untouched dispatch is a real pass.
+      mode:
+        description: "evaluate — the real pass. plan-only — report what would be checked, and check nothing."
+        required: true
+        default: evaluate
+        type: choice
+        options:
+          - evaluate
+          - plan-only
+
+concurrency:
+  # Its own group, never the release's: a watch pass must neither queue behind a deployment nor
+  # delay one. Not cancelled in progress either — the pass is idempotent within a cadence window,
+  # but cancelling one midway leaves some watches evaluated and some not for no benefit.
+  group: weather-watch
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    name: evaluate every enabled watch
+    runs-on: ubuntu-latest
+    # Bounded, because an unattended job that hangs holds the privileged connection until somebody
+    # notices — and this one runs every hour, so a hang would stack.
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: weathra/backend
+
+    env:
+      # `WEATHRA_RUNTIME_MODE` is not a convenience: `weathra-watch-evaluate` refuses to run
+      # without it, because under the request-serving configuration the policies would narrow every
+      # statement to nothing and the job would report success having evaluated nobody's watches.
+      WEATHRA_RUNTIME_MODE: privileged
+      DATABASE_URL_PRIVILEGED: ${{ secrets.DATABASE_URL_PRIVILEGED }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+
+    steps:
+      - name: Refuse without the privileged connection
+        working-directory: .
+        run: |
+          set -euo pipefail
+          if [ -z "${DATABASE_URL_PRIVILEGED}" ] || [ -z "${SUPABASE_URL}" ]; then
+            echo "::error::DATABASE_URL_PRIVILEGED and SUPABASE_URL must be set; refusing to run."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: weathra/backend/constraints.txt
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install --constraint constraints.txt .
+
+      # Read-only, and first, for the same reason retention verifies before it deletes: a schema
+      # that is not the one this code expects is the last state in which to start writing rows
+      # about everybody's watches.
+      - name: Verify the deployed database
+        run: python scripts/verify_database.py
+
+      # One retrieval per watched *place*, not per watch, and a place that cannot be reached is
+      # recorded as degraded rather than skipped. The report is counts and a timestamp — never a
+      # watch, a threshold, or whose it is.
+      - name: Evaluate the watches
+        env:
+          # `inputs` is empty on a schedule, so the fallback is what the unattended pass runs.
+          MODE: ${{ inputs.mode || 'evaluate' }}
+        run: |
+          set -euo pipefail
+          echo "mode: ${MODE}"
+          if [ "${MODE}" = "plan-only" ]; then
+            echo "planning only — nothing will be retrieved or written"
+            weathra-watch-evaluate --dry-run
+          else
+            echo "evaluating every enabled watch"
+            weathra-watch-evaluate
+          fi

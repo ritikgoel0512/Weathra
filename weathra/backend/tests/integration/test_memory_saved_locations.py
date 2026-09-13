@@ -7,6 +7,7 @@ import uuid
 import pytest
 
 from tests.db_support import claims_for, insert_profile, new_user_id, session_as
+from weathra.analytics.watch import WatchOutcome, WatchState
 from weathra.config import Settings
 from weathra.db.engine import Engines
 from weathra.domain.errors import NotFound, RecordNotFound, SavedLocationLimitReached
@@ -14,7 +15,8 @@ from weathra.domain.identity import Principal
 from weathra.domain.location import Location
 from weathra.domain.weather import Measure
 from weathra.memory.locations import SavedLocationStore
-from weathra.memory.watches import WatchEvaluation, WatchStore, now
+from weathra.memory.watch_monitoring import WatchEvidence, record_evaluation
+from weathra.memory.watches import WatchStore, now
 
 pytestmark = pytest.mark.db
 
@@ -438,7 +440,7 @@ async def test_a_watch_cannot_be_changed_or_removed_by_anybody_else(
 async def test_an_evaluation_is_recorded_with_the_moment_it_happened(
     engines: Engines, clean_database: None
 ) -> None:
-    """There is no scheduler, so the row has to say when it was last looked at."""
+    """A scheduled check is a statement about an instant, so the row has to carry that instant."""
     user = new_user_id()
     async with session_as(engines, user) as session:
         await insert_profile(session, user)
@@ -447,14 +449,36 @@ async def test_an_evaluation_is_recorded_with_the_moment_it_happened(
             location=BERLIN, measure=Measure.WIND_SPEED, comparison="above", threshold=20.0
         )
         assert created.last_evaluated_at is None, "nothing is claimed before the first check"
+        assert created.state is WatchState.PENDING
 
-        updated = await store.record_evaluation(
-            created.id, WatchEvaluation(evaluated_at=now(), value=31.0, met=True, unit="km/h")
+        updated, evaluation, _ = await record_evaluation(
+            session,
+            user_id=user,
+            watch=created,
+            evidence=WatchEvidence(
+                outcome=WatchOutcome(
+                    measure=Measure.WIND_SPEED,
+                    comparison="above",
+                    threshold=20.0,
+                    unit="km/h",
+                    value=31.0,
+                    met=True,
+                    margin=11.0,
+                )
+            ),
+            place="Berlin",
+            evaluated_at=now(),
+            provider="open-meteo",
+            retrieved_at=now(),
         )
 
     assert updated.last_evaluated_at is not None
     assert updated.last_value == 31.0
     assert updated.last_met is True
+    assert updated.state is WatchState.MET
+    # The evaluation row is the history the watch's own columns are a reading of.
+    assert evaluation.provider == "open-meteo"
+    assert evaluation.outcome is not None and evaluation.outcome.margin == 11.0
 
 
 async def test_a_reading_the_provider_did_not_send_is_recorded_as_no_answer(
@@ -467,11 +491,21 @@ async def test_a_reading_the_provider_did_not_send_is_recorded_as_no_answer(
         created = await store.create(
             location=BERLIN, measure=Measure.WIND_GUST, comparison="above", threshold=60.0
         )
-        updated = await store.record_evaluation(
-            created.id, WatchEvaluation(evaluated_at=now(), value=None, met=None)
+        updated, _, _ = await record_evaluation(
+            session,
+            user_id=user,
+            watch=created,
+            evidence=WatchEvidence(
+                outcome=WatchOutcome(measure=Measure.WIND_GUST, comparison="above", threshold=60.0)
+            ),
+            place="Berlin",
+            evaluated_at=now(),
+            provider="open-meteo",
+            retrieved_at=now(),
         )
 
-    # Null, not false: a silent provider is not calm weather.
+    # Null, not false: a silent provider is not calm weather, and the state says so in its own word.
     assert updated.last_value is None
     assert updated.last_met is None
     assert updated.last_evaluated_at is not None
+    assert updated.state is WatchState.NO_READING

@@ -104,6 +104,18 @@ MAINTENANCE = ("backend-allowed-origin.yml",)
 # before anything is removed.
 SCHEDULED = ("database-retention.yml",)
 
+# The second unattended workflow, and the only one that writes rows for every user without deleting
+# any.
+#
+# `weather-watch.yml` is design.md decision 11 applied to Weather Watch: evaluating watches that
+# belong to other people is work the request-serving role must not be able to do, so it runs from a
+# scheduled job under the privileged connection and the deployed backend holds no such connection.
+# The compensating controls are the same as retention's — no Alembic, no Render credential, no
+# service-role key, a read-only verification of the schema first — plus one this job needs and
+# retention does not: the cron cadence must match the cadence the product *tells people about*,
+# which `test_watch_schedule_workflow.py` asserts against `Settings.watch_cadence_minutes`.
+MONITORING = ("weather-watch.yml",)
+
 # The workflow that checks the deployed pair rather than the code — tasks 25.3 and 25.4.
 #
 # `live-acceptance.yml` reads production, and in its authenticated tier signs in as two dedicated
@@ -376,6 +388,7 @@ def test_only_the_release_pipeline_reads_a_repository_secret(repo_root: Path) ->
         - set(RELEASE_PIPELINES)
         - set(MAINTENANCE)
         - set(SCHEDULED)
+        - set(MONITORING)
         - set(ACCEPTANCE)
     )
     assert not unclassified, (

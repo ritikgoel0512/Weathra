@@ -1,91 +1,482 @@
 /*
- * Weather Watch — from the task 20.3 tokens against `docs/design/screens/14-weather-watch.png`.
+ * Weather Watch — `docs/design/screens/14-weather-watch.png`.
  *
- * The artifact's watch engine, monitoring nodes, model recalibration, sensor telemetry, push alerts
- * and live status light are absent from the markup. Weathra runs nothing on a timer and sends
- * nothing to anybody, and a status light implying otherwise about severe weather would be the most
- * harmful decoration in the product.
+ * A monitoring control centre: a header band, a row of four counters, then a 70/30 split running
+ * down the page — the places, the plot, the evidence and the method on the left; the watch rail,
+ * what changed, the activity and the configuration on the right.
+ *
+ * Every colour is a role from `app/globals.css`. The accent carries the reading; warning carries
+ * the threshold and the hours past it; `ok` carries a healthy engine. Red appears on exactly one
+ * thing — a watch whose retrieval failed — because on a weather screen red means danger, and a
+ * met threshold is not a danger claim.
  */
 
 .screen {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
   min-width: 0;
 }
 
-.header {
+/* The 70/30 split. One column until there is room for two, so nothing is squeezed on the way. */
+.body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .body {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
+  }
+}
+
+.main,
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+/*
+ * The left column's last panel takes whatever height the right rail has over it.
+ *
+ * The two columns hold different amounts — three panels against four — and in a two-column grid
+ * that difference lands as a void between the shorter column's last card and the page footer. A
+ * card that grows into it is not padding: the content is the same content, and the alternative is
+ * several hundred pixels of nothing beside four cards that are still going.
+ */
+@media (min-width: 1100px) {
+  .main {
+    block-size: 100%;
+  }
+
+  .main > :last-child {
+    flex: 1;
+  }
+}
+
+/* ------------------------------------------------------------------- regions */
+
+.region,
+.header,
+.first {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  min-width: 0;
+}
+
+.region {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The blocks the artifact fills a shade lighter and edges in accent: the ones carrying an
+   instruction or a conclusion rather than a figure. */
+.region[data-level="lead"],
+.header,
+.first {
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-raised);
+}
+
+.region[data-level="lead"]::before,
+.header::before,
+.first::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  block-size: 2px;
+  background: linear-gradient(90deg, var(--color-accent) 0%, transparent 70%);
+}
+
+.regionHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  min-width: 0;
+}
+
+.regionHeadings {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+  min-width: 0;
+}
+
+.regionTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+  overflow-wrap: anywhere;
+}
+
+.regionIcon {
+  display: inline-flex;
+  color: var(--color-accent);
+}
+
+.regionSubtitle {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  max-width: 70ch;
+}
+
+.regionAside {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+
+.regionBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: 0 var(--space-4) var(--space-4);
+  min-width: 0;
+}
+
+/* The compact uppercase technical label the artifact puts on every panel. */
+.classBadge {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-inset);
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  font-weight: var(--type-label-weight);
+  white-space: nowrap;
+}
+
+.quiet {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  max-width: 60ch;
+}
+
+/* -------------------------------------------------------------------- header */
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
+.headerText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: 72ch;
+}
+
+.headerKicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/*
+ * The engine's own state. Never a live indicator: the dot is an enum, and the word beside it is
+ * "Scheduled", "Degraded" or "Idle" — each of which is a statement about Weathra.
+ */
+.engine {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+  white-space: nowrap;
+}
+
+.engineDot {
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: var(--radius-pill);
+  background: var(--color-text-muted);
+}
+
+.engine[data-tone="ok"] {
+  color: var(--color-status-ok);
+  border-color: color-mix(in srgb, var(--color-status-ok) 40%, var(--color-border-subtle));
+}
+.engine[data-tone="ok"] .engineDot {
+  background: var(--color-status-ok);
+}
+
+.engine[data-tone="warning"] {
+  color: var(--color-status-warning);
+  border-color: color-mix(in srgb, var(--color-status-warning) 40%, var(--color-border-subtle));
+}
+.engine[data-tone="warning"] .engineDot {
+  background: var(--color-status-warning);
+}
+
+.title {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-display-size, 1.75rem);
+  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .lede {
   margin: 0;
   color: var(--color-text-secondary);
-  max-width: 72ch;
+  font-size: var(--type-lead-size);
+  line-height: var(--type-lead-line);
 }
 
-.summary {
+.headerMeta {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.headerActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ------------------------------------------------------------------ counters */
+
+.counters {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr));
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
 }
 
-.tile {
+.counter {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  padding: var(--space-3);
+  padding: var(--space-4);
   background: var(--color-surface-raised);
   border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-lg);
+  border-inline-start: 2px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  min-width: 0;
 }
 
-.tileLabel {
-  margin: 0;
+.counterLabel {
   color: var(--color-text-muted);
   font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
   letter-spacing: var(--type-label-tracking);
   text-transform: uppercase;
+  font-weight: var(--type-label-weight);
 }
 
-.tileValue {
-  margin: 0;
+.counterValue {
   color: var(--color-text-primary);
-  font-size: var(--type-display-size);
-  line-height: var(--type-display-line);
+  font-size: var(--type-readout-size, 2rem);
+  line-height: 1.1;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
-.note {
-  margin: 0;
+.counterNote {
   color: var(--color-text-muted);
-  max-width: 78ch;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  overflow-wrap: anywhere;
 }
 
-.body {
+/* ------------------------------------------------------------------- states */
+
+/*
+ * The state badge. Six tones, and red reserved for the one state that is about a failure —
+ * a met threshold is not a danger claim, so it is warning-coloured rather than alarming.
+ */
+.state {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+  white-space: nowrap;
+  flex: none;
+}
+
+.state[data-tone="met"] {
+  color: var(--color-status-warning);
+  background: var(--color-status-warning-surface);
+  border-color: color-mix(in srgb, var(--color-status-warning) 40%, transparent);
+}
+.state[data-tone="watching"] {
+  color: var(--color-status-ok);
+  background: var(--color-status-ok-surface);
+  border-color: color-mix(in srgb, var(--color-status-ok) 35%, transparent);
+}
+.state[data-tone="silent"],
+.state[data-tone="pending"],
+.state[data-tone="paused"] {
+  color: var(--color-text-muted);
+  background: var(--color-surface-inset);
+  border-color: var(--color-border-subtle);
+}
+.state[data-tone="degraded"] {
+  color: var(--color-status-error);
+  background: var(--color-status-error-surface);
+  border-color: color-mix(in srgb, var(--color-status-error) 40%, transparent);
+}
+
+/* ------------------------------------------------------------ watched places */
+
+.places {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
-  gap: var(--space-4);
-  align-items: start;
-  min-width: 0;
-}
-
-.side {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  min-width: 0;
-}
-
-.watches {
-  display: flex;
-  flex-direction: column;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
   gap: var(--space-3);
   margin: 0;
   padding: 0;
   list-style: none;
+  min-width: 0;
+}
+
+.place {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  inline-size: 100%;
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  text-align: start;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.place:hover {
+  border-color: var(--color-border-strong);
+}
+
+.place[data-selected="true"] {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface-inset));
+}
+
+.placeHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.placeName {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-primary);
+  font-size: var(--type-card-size);
+  font-weight: var(--type-card-weight);
+  overflow-wrap: anywhere;
+}
+
+/*
+ * Wide enough for the longest label this can carry.
+ *
+ * At 72px "TEMPERATURE" broke mid-word into "TEMPERATU / RE", because the label is uppercase with
+ * letter-spacing and the cell was narrower than the one word in it. The track is sized to the
+ * widest of the four instead, and the labels wrap at spaces only — a measure name split across a
+ * line break is unreadable in a way a second row of cards is not.
+ */
+.placeConditions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(104px, 100%), 1fr));
+  gap: var(--space-2) var(--space-3);
+}
+
+.placeCondition {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.placeConditionLabel {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+}
+
+.placeConditionValue {
+  color: var(--color-text-secondary);
+  font-size: var(--type-ui-size);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.placeQuiet,
+.placeFoot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+/* ------------------------------------------------------------ active watches */
+
+.watches {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
 }
 
 .watch {
@@ -99,44 +490,583 @@
   min-width: 0;
 }
 
+.watch[data-selected="true"] {
+  border-color: var(--color-accent);
+}
+
+.watchMain {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  inline-size: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  text-align: start;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  min-width: 0;
+}
+
 .watchHead {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
   gap: var(--space-2);
+  min-width: 0;
 }
 
 .watchPlace {
   color: var(--color-text-primary);
-  font-weight: var(--type-card-weight);
+  font-size: var(--type-ui-size);
+  font-weight: var(--type-ui-weight);
+  overflow-wrap: anywhere;
 }
 
 .watchRule {
-  margin: 0;
-  color: var(--color-text-primary);
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+  overflow-wrap: anywhere;
+}
+
+.watchMeta {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
   font-variant-numeric: tabular-nums;
 }
 
-.watchState {
+.watchActions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* ----------------------------------------------------------------- the plot */
+
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  min-width: 0;
+}
+
+.chartCaption {
+  order: -1;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.legendLine {
+  inline-size: 18px;
+  block-size: 2px;
+  border-radius: var(--radius-pill);
+}
+
+.legendLine[data-series="reading"] {
+  background: var(--color-accent);
+}
+
+.legendLine[data-series="threshold"] {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--color-status-warning) 0 5px,
+    transparent 5px 9px
+  );
+}
+
+.legendSwatch {
+  inline-size: 12px;
+  block-size: 12px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--color-status-warning) 34%, transparent);
+}
+
+.chartScroll {
+  min-width: 0;
+}
+
+.chartPlot {
+  block-size: 260px;
+  min-inline-size: 320px;
+}
+
+.chartNote,
+.chartUnavailable {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  max-width: 70ch;
+}
+
+.plotFigures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(130px, 100%), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  min-width: 0;
+}
+
+.plotFigure {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.plotFigure dt {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.plotFigure dd {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-card-size);
+  font-weight: var(--type-card-weight);
+  font-variant-numeric: tabular-nums;
+}
+
+.plotFigureNote {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: 400;
+}
+
+/* ------------------------------------------------------------- what changed */
+
+.changeSubject {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+  overflow-wrap: anywhere;
+}
+
+.changes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.change {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border-radius: var(--radius-md);
+  border-inline-start: 2px solid var(--color-border-strong);
+  min-width: 0;
+}
+
+.change[data-tone="up"] {
+  border-inline-start-color: var(--color-status-warning);
+}
+
+.change[data-tone="down"] {
+  border-inline-start-color: var(--color-class-forecast);
+}
+
+.changeHeading {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+}
+
+.changeSummary {
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------- evidence */
+
+.evidence {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.evidenceSentence {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-lead-size);
+  line-height: var(--type-lead-line);
+  max-width: 78ch;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 2px var(--space-2);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  min-width: 0;
+}
+
+.chipLabel {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+}
+
+.chipValue {
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+  overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------- activity */
+
+.activity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.activityRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-block-end: 1px solid var(--color-border-subtle);
+  min-width: 0;
+}
+
+.activityRow:last-child {
+  border-block-end: none;
+}
+
+.activityIcon {
+  display: inline-flex;
+  color: var(--color-text-muted);
+  margin-block-start: 2px;
+}
+
+.activityIcon[data-kind="met"] {
+  color: var(--color-status-warning);
+}
+.activityIcon[data-kind="cleared"],
+.activityIcon[data-kind="recovered"] {
+  color: var(--color-status-ok);
+}
+.activityIcon[data-kind="lost"] {
+  color: var(--color-status-error);
+}
+.activityIcon[data-kind="created"] {
+  color: var(--color-accent);
+}
+
+.activityBody {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.activityTitle {
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+}
+
+.activityDetail {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  overflow-wrap: anywhere;
+}
+
+.activityWhen {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------- config */
+
+.config {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.configPlace {
+  min-width: 0;
+}
+
+.configFailure {
+  margin: 0;
+  color: var(--color-status-error);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.configNote {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+/* ------------------------------------------------------------- first watch */
+
+.first {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5);
+  padding: var(--space-5);
+}
+
+@media (min-width: 900px) {
+  .first {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 22rem);
+  }
+}
+
+.firstText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 68ch;
+  min-width: 0;
+}
+
+.firstBody {
+  margin: 0;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.firstNote {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.firstConfig {
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------- method */
+
+.method {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  max-width: 78ch;
+}
+
+.methodList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding-inline-start: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  max-width: 78ch;
+}
+
+/* ------------------------------------------------------------------- notice */
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-status-warning-surface);
+  border: 1px solid color-mix(in srgb, var(--color-status-warning) 32%, transparent);
+  border-radius: var(--radius-md);
+  color: var(--color-status-warning);
+  min-width: 0;
+}
+
+.noticeTitle {
+  margin: 0;
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+}
+
+.noticeText {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  max-width: 90ch;
+}
+
+/* ------------------------------------------------------------- status strip */
+
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  list-style: none;
+  min-width: 0;
+}
+
+.statusItem {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.statusLabel {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+}
+
+.statusValue {
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.busy {
   margin: 0;
   color: var(--color-text-muted);
   font-size: var(--type-meta-size);
 }
 
-.watchActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
+/* ------------------------------------------------------------------ figures */
 
-.form {
+.figures {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  align-items: flex-start;
+  min-width: 0;
 }
 
-@media (max-width: 1023px) {
-  .body {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.tableScroll {
+  min-width: 0;
+}
+
+.table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: var(--type-meta-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.tableCaption {
+  color: var(--color-text-muted);
+  text-align: start;
+  padding-block-end: var(--space-2);
+}
+
+.table th,
+.table td {
+  padding: var(--space-2) var(--space-3);
+  border-block-end: 1px solid var(--color-border-subtle);
+  text-align: start;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.table thead th {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+}
+
+/* ----------------------------------------------------------------- tooltip */
+
+.tooltip {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-overlay);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-overlay);
+}
+
+.tooltipStamp {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+}
+
+.tooltipValue {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-ui-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.tooltipNote {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
 }
