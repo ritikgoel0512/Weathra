@@ -691,6 +691,146 @@ def test_agent_steps_must_be_recorded_in_execution_order() -> None:
         f.evidence_record(agents=steps)
 
 
+# =========================================================================== logical stages
+
+
+def _step(sequence: int, agent: AgentName, status: StepStatus = StepStatus.SUCCEEDED) -> AgentStep:
+    return AgentStep(
+        sequence=sequence,
+        agent=agent,
+        status=status,
+        started_at=MOMENT + timedelta(seconds=sequence),
+        duration_ms=float(sequence * 10),
+    )
+
+
+def test_the_retrieval_agents_are_actions_of_one_stage_rather_than_stages_of_their_own() -> None:
+    """A reading of now, a projection and an imagery pass are one part of the pipeline.
+
+    They stay three agents, three tool calls and three source rows, because they are three claims
+    under three data classes. What they are not is three *stages*: a reader asking which parts of
+    the pipeline ran is asking about retrieval, and the record now answers at that altitude.
+    """
+    record = f.evidence_record(
+        agents=(
+            _step(1, AgentName.SUPERVISOR),
+            _step(2, AgentName.CURRENT),
+            _step(3, AgentName.FORECAST),
+            _step(4, AgentName.SATELLITE),
+            _step(5, AgentName.SYNTHESIS),
+        )
+    )
+
+    assert [stage.agent for stage in record.stages] == [
+        AgentName.SUPERVISOR,
+        AgentName.FORECAST,
+        AgentName.SYNTHESIS,
+    ]
+    retrieval = record.stages[1]
+    assert [action.agent for action in retrieval.actions] == [
+        AgentName.CURRENT,
+        AgentName.FORECAST,
+        AgentName.SATELLITE,
+    ]
+    # Nothing is merged: the action log still holds every turn that was taken.
+    assert len(record.agents) == 5
+
+
+def test_an_agent_that_ran_twice_is_one_stage_that_did_two_things() -> None:
+    """Two archive windows are two actions. Counting them as two stages gave the wrong number."""
+    record = f.evidence_record(
+        agents=(
+            _step(1, AgentName.SUPERVISOR),
+            _step(2, AgentName.HISTORICAL),
+            _step(3, AgentName.ANALYTICS),
+            _step(4, AgentName.HISTORICAL),
+            _step(5, AgentName.ANALYTICS),
+            _step(6, AgentName.SYNTHESIS),
+        )
+    )
+
+    assert [stage.agent for stage in record.stages] == [
+        AgentName.SUPERVISOR,
+        AgentName.HISTORICAL,
+        AgentName.ANALYTICS,
+        AgentName.SYNTHESIS,
+    ]
+    # Ordered by when the stage *first* ran, not by when it last did.
+    assert len(record.stages[1].actions) == 2
+    # What the stage cost the run is the sum of what its actions cost.
+    assert record.stages[1].duration_ms == 20.0 + 40.0
+
+
+def test_a_stage_reports_the_worst_of_its_actions_rather_than_the_last() -> None:
+    """A stage with one failed retrieval did not succeed, however the other one went."""
+    record = f.evidence_record(
+        agents=(
+            _step(1, AgentName.SUPERVISOR),
+            _step(2, AgentName.HISTORICAL, StepStatus.FAILED),
+            _step(3, AgentName.HISTORICAL, StepStatus.SUCCEEDED),
+        )
+    )
+
+    assert record.stages[1].status is StepStatus.FAILED
+
+
+def test_the_stage_of_an_action_cannot_be_talked_into_disagreeing_with_its_agent() -> None:
+    """Derived on the way in, so a stored record cannot contradict itself.
+
+    The record is written to JSON and read back, so a supplied `stage` is not a hint — it is a
+    value that would outlive the mapping that should have produced it.
+    """
+    step = AgentStep.model_validate(
+        {
+            "sequence": 1,
+            "agent": AgentName.CURRENT.value,
+            "status": StepStatus.SUCCEEDED.value,
+            "started_at": MOMENT,
+            "duration_ms": 1.0,
+            "stage": AgentName.SYNTHESIS.value,
+        }
+    )
+    assert step.stage is AgentName.FORECAST
+
+
+def test_the_stages_survive_the_round_trip_a_stored_record_actually_makes() -> None:
+    """Persisted as JSON, read back, and still the same record — including its derived parts."""
+    record = f.evidence_record(
+        agents=(
+            _step(1, AgentName.SUPERVISOR),
+            _step(2, AgentName.CURRENT),
+            _step(3, AgentName.FORECAST),
+            _step(4, AgentName.SYNTHESIS),
+        )
+    )
+    restored = round_trips(record)
+    assert isinstance(restored, EvidenceRecord)
+    assert [stage.agent for stage in restored.stages] == [
+        AgentName.SUPERVISOR,
+        AgentName.FORECAST,
+        AgentName.SYNTHESIS,
+    ]
+
+
+def test_a_computed_source_names_the_retrievals_it_was_computed_over() -> None:
+    """The analytics row is a source, and a derived one says what it derives from."""
+    retrieved = f.attribution(data_class=DataClass.HISTORICAL_OBSERVATION)
+    computed = Attribution(
+        **{
+            **retrieved.model_dump(),
+            "provider": "weathra-analytics",
+            "data_class": DataClass.COMPUTED_STATISTIC,
+            "derived_from": ("open-meteo historical_observation",),
+        }
+    )
+    assert computed.derived_from == ("open-meteo historical_observation",)
+    round_trips(computed)
+
+
+def test_a_retrieved_source_derives_from_nothing_because_it_is_the_origin() -> None:
+    assert f.attribution().derived_from == ()
+
+
 def test_a_partial_run_retains_its_evidence_and_names_the_bound() -> None:
     record = f.evidence_record(
         analytics_results=(f.statistic_result(),),

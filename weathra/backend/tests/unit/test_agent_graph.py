@@ -28,7 +28,7 @@ from tests.agent_support import (
 )
 from weathra.agents.graph import RunDependencies, run_agent
 from weathra.agents.llm.fake import FakeLLMClient
-from weathra.agents.nodes.support import current_label
+from weathra.agents.nodes.support import ANALYTICS_PROVIDER, current_label
 from weathra.agents.plan import Capability, PlanStep, RoutingPlan
 from weathra.agents.state import GraphState
 from weathra.domain.evidence import AgentName, DataClass, StepStatus
@@ -456,6 +456,123 @@ async def test_a_mean_temperature_question_retrieves_then_computes_in_order() ->
     assert computed, "the analytics step must produce a computed finding"
     assert all(finding.method for finding in computed), "a statistic states its method"
     assert all(finding.points_used for finding in computed)
+
+
+async def test_the_arithmetic_gets_a_source_row_of_its_own_naming_what_it_read() -> None:
+    """A computed figure is not the provider's claim, and the sources table has to say so.
+
+    A run that retrieved a window and computed a mean over it showed one grounded source — the
+    provider — and nothing at all saying where the computed figure came from, so the class of
+    figure a reader is most likely to challenge was the class with no row to challenge. Crediting
+    it to Open-Meteo instead would put a number Open-Meteo never published under their name.
+    """
+    settings = agent_settings()
+    client = _client(
+        _plan(
+            PlanStep(capability=Capability.FORECAST, reason="r", location="Berlin", days=7),
+            PlanStep(
+                capability=Capability.ANALYTICS,
+                reason="the mean of the week",
+                statistics=("mean",),
+                uses_previous_result=True,
+            ),
+        )
+    )
+
+    async with connected_tools(settings=settings) as tools:
+        result = await run_agent(
+            _state("How warm is next week in Berlin on average?"),
+            RunDependencies(settings=settings, tools=tools, geocoder=StubGeocoder(), llm=client),
+        )
+
+    attributions = result.envelope.evidence.attributions
+    computed = [
+        attribution
+        for attribution in attributions
+        if attribution.data_class is DataClass.COMPUTED_STATISTIC
+    ]
+    assert len(computed) == 1, "one analytics source row, however many figures it computed"
+    assert computed[0].provider == ANALYTICS_PROVIDER
+    # And it is followable: the row names the retrieved sources it was computed over, each as the
+    # provider and data class of a row that appears above it in the same table.
+    assert computed[0].derived_from
+    assert any(name.endswith(" forecast") for name in computed[0].derived_from)
+    retrieved = {
+        f"{attribution.provider} {attribution.data_class.value}"
+        for attribution in attributions
+        if attribution.data_class is not DataClass.COMPUTED_STATISTIC
+    }
+    assert set(computed[0].derived_from) <= retrieved, "lineage names real rows, not invented ones"
+
+
+async def test_the_analytics_source_row_is_recorded_once_however_often_it_computes() -> None:
+    """Three computations are one source doing one job, not three sources."""
+    settings = agent_settings()
+    client = _client(
+        _plan(
+            PlanStep(capability=Capability.FORECAST, reason="r", location="Berlin", days=7),
+            PlanStep(
+                capability=Capability.ANALYTICS,
+                reason="the mean",
+                statistics=("mean",),
+                uses_previous_result=True,
+            ),
+            PlanStep(
+                capability=Capability.ANALYTICS,
+                reason="the extremes",
+                statistics=("minimum", "maximum"),
+                uses_previous_result=True,
+            ),
+        )
+    )
+
+    async with connected_tools(settings=settings) as tools:
+        result = await run_agent(
+            _state("The mean and the extremes for Berlin next week?"),
+            RunDependencies(settings=settings, tools=tools, geocoder=StubGeocoder(), llm=client),
+        )
+
+    computed = [
+        attribution
+        for attribution in result.envelope.evidence.attributions
+        if attribution.data_class is DataClass.COMPUTED_STATISTIC
+    ]
+    assert len(computed) == 1
+
+
+async def test_a_rich_plan_records_one_logical_stage_per_part_of_the_pipeline() -> None:
+    """The execution flow at the altitude the pipeline has, not the altitude the log has.
+
+    Current, forecast and satellite keep their own actions, their own tool calls and their own
+    source rows — they are three claims under three data classes. As *stages* they are one:
+    retrieval, doing three things.
+    """
+    settings = agent_settings()
+    client = _client(
+        _plan(
+            PlanStep(capability=Capability.CURRENT, reason="now", location="Berlin"),
+            PlanStep(capability=Capability.FORECAST, reason="ahead", location="Berlin", days=7),
+            PlanStep(capability=Capability.SATELLITE, reason="imagery", location="Berlin"),
+        )
+    )
+
+    async with connected_tools(settings=settings) as tools:
+        result = await run_agent(
+            _state("Conditions, the week ahead and imagery for Berlin?"),
+            RunDependencies(settings=settings, tools=tools, geocoder=StubGeocoder(), llm=client),
+        )
+
+    record = result.envelope.evidence
+    assert [stage.agent for stage in record.stages] == [
+        AgentName.SUPERVISOR,
+        AgentName.FORECAST,
+        AgentName.SYNTHESIS,
+    ]
+    assert [action.agent for action in record.stages[1].actions] == [
+        AgentName.CURRENT,
+        AgentName.FORECAST,
+        AgentName.SATELLITE,
+    ]
 
 
 async def test_analytics_with_nothing_retrieved_is_skipped_and_says_why() -> None:

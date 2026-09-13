@@ -259,6 +259,29 @@ class GraphState(BaseModel):
             }
         )
 
+    def with_derived_source(self, attribution: Attribution) -> Self:
+        """Record the analytics source row, once, however many times the kernel is asked.
+
+        A rich run computes statistics more than once — the forecast window, the archive window,
+        the difference between them — and each is the same source doing the same job. Five grounded
+        sources with three of them saying "Weathra analytics" would be a table padded by repetition
+        rather than a lineage, so the row is recorded on the first computation and the later ones
+        find it already there. The individual figures keep their own method and point count in the
+        tool payload, which is where a reader following one back will look.
+        """
+        if any(
+            existing.provider == attribution.provider
+            and existing.data_class == attribution.data_class
+            for existing in self.attributions
+        ):
+            return self
+        return self.model_copy(
+            update={
+                "attributions": _appended(self.attributions, attribution),
+                "data_classes": _appended(self.data_classes, attribution.data_class),
+            }
+        )
+
     def with_citations(self, citations: tuple[KnowledgeCitation, ...]) -> Self:
         return self.model_copy(update={"citations": (*self.citations, *citations)})
 

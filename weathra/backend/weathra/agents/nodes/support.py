@@ -20,6 +20,7 @@ zero.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -40,6 +41,8 @@ from weathra.mcp.client import McpToolClient, ToolCallOutcome
 from weathra.mcp.schemas import location_from_payload, period_from_payload
 
 __all__ = [
+    "ANALYTICS_PROVIDER",
+    "analytics_attribution",
     "attribution_from",
     "baseline_for",
     "call_tool",
@@ -368,6 +371,49 @@ def attribution_from(payload: dict[str, Any]) -> Attribution:
         period=period_from_payload(block),
         timestamp_utc=block.get("timestamp_utc"),
         retrieved_at=block["retrieved_at"],
+    )
+
+
+ANALYTICS_PROVIDER = "weathra-analytics"
+"""Who computed a derived figure. Weathra's own kernel, named as itself.
+
+Not a weather provider and never presented as one: Open-Meteo supplied the series, and the mean
+over it came from here. Crediting a computed statistic to the provider of its inputs would put a
+figure no provider published under that provider's name.
+"""
+
+
+def analytics_attribution(
+    source: Retrieval, *, computed_at: datetime, inputs: Sequence[Attribution] = ()
+) -> Attribution | None:
+    """The source row for the arithmetic, or None when the input carries no window to stand on.
+
+    **Why a row of its own.** A run that retrieved three windows and computed a mean, a range and a
+    difference over them showed three grounded sources, all of them external, and nothing at all
+    saying where the computed figures came from — so the one class of figure a reader is most
+    likely to challenge was the one class with no row to challenge. The statistics carry their
+    method and point count in the tool payload already; what was missing was the *source*, beside
+    the retrievals it was computed from.
+
+    ``derived_from`` is the lineage: the retrieved sources this was computed over, so the row can
+    be followed back to the rows above it rather than standing on its own authority.
+    """
+    if source.period is None:
+        return None
+
+    lineage: list[str] = []
+    for attribution in inputs:
+        name = f"{attribution.provider} {attribution.data_class.value}"
+        if name not in lineage:
+            lineage.append(name)
+
+    return Attribution(
+        provider=ANALYTICS_PROVIDER,
+        location=source.location,
+        data_class=DataClass.COMPUTED_STATISTIC,
+        period=source.period,
+        retrieved_at=computed_at,
+        derived_from=tuple(lineage),
     )
 
 

@@ -30,6 +30,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from weathra.agents.nodes.support import (
+    analytics_attribution,
     attribution_from,
     baseline_for,
     call_tool,
@@ -405,18 +406,24 @@ async def _headline_statistics(
         *((computed.get("results") or ()) if isinstance(computed, dict) else ()),
         *(outcome.data.get("differences") or ()),
     ]
-    return (
-        working.with_findings(
-            tuple(
-                finding_from_statistic(
-                    reported, retrieval.attribution, data_class=DataClass.COMPUTED_STATISTIC
-                )
-                for reported in reported_figures
-                if isinstance(reported, dict)
+    working = working.with_findings(
+        tuple(
+            finding_from_statistic(
+                reported, retrieval.attribution, data_class=DataClass.COMPUTED_STATISTIC
             )
-        ),
-        True,
+            for reported in reported_figures
+            if isinstance(reported, dict)
+        )
     )
+
+    # The same source row the explicit analytics step records, for the same reason: these figures
+    # were computed here, not published by the archive that supplied the series.
+    derived = analytics_attribution(
+        retrieval,
+        computed_at=datetime.now(UTC),
+        inputs=[held.attribution for held in working.retrievals],
+    )
+    return (working if derived is None else working.with_derived_source(derived), True)
 
 
 # =========================================================================== shared

@@ -26,6 +26,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from weathra.agents.nodes.support import (
+    analytics_attribution,
     baseline_for,
     call_tool,
     finding_from_statistic,
@@ -263,7 +264,17 @@ def _record_statistics(state: GraphState, payload: dict[str, Any], source: Retri
         for reported in reported_figures
         if isinstance(reported, dict)
     )
-    return state.with_findings(findings).with_analytics("statistics", payload)
+
+    working = state.with_findings(findings).with_analytics("statistics", payload)
+
+    # The source row for the arithmetic, beside the retrievals it was computed over. Recorded once
+    # per run; see `with_derived_source`.
+    derived = analytics_attribution(
+        source,
+        computed_at=datetime.now(UTC),
+        inputs=[retrieval.attribution for retrieval in working.retrievals],
+    )
+    return working if derived is None else working.with_derived_source(derived)
 
 
 def _record_anomalies(state: GraphState, payload: dict[str, Any], source: Retrieval) -> GraphState:

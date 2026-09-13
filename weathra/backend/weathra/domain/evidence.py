@@ -16,10 +16,17 @@ applies to logs and error bodies applies to an evidence record, and it is checke
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from enum import StrEnum
 from typing import Any, Literal, Self
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    model_validator,
+)
 
 from weathra.domain.analytics import AnomalyReport, StatisticResult, TrendReport
 from weathra.domain.location import Location
@@ -216,6 +223,14 @@ class Attribution(BaseModel):
         default=None, description="For a single instant, such as current conditions."
     )
     retrieved_at: AwareDatetime
+    derived_from: tuple[str, ...] = Field(
+        default=(),
+        description=(
+            "For a source Weathra computed rather than retrieved: the retrieved sources it was "
+            "computed over, each named as its provider and data class. Empty for a retrieval, "
+            "which is derived from nothing — it *is* the origin."
+        ),
+    )
 
     @model_validator(mode="after")
     def _covers_a_period_or_an_instant(self) -> Self:
@@ -324,6 +339,22 @@ class ToolResult(BaseModel):
         return self
 
 
+# Agents that are actions *within* another agent's stage rather than stages of their own.
+#
+# A reading of conditions now, a projection of the days ahead and an imagery pass are different
+# claims under different data classes — which is why `AgentName` keeps them apart, and why each
+# keeps its own row in the sources table. But they are one *part of the pipeline*: retrieval,
+# fetching three things. A record that presented them as three peers of the archive and the
+# analytics answered "which parts ran?" with a number nobody could reconcile against the pipeline.
+#
+# Grouping is about the execution record only. No evidence is merged: every action keeps its own
+# step, its own tool call and its own attribution, and `AgentStep.agent` still says which agent ran.
+STAGE_OF: Mapping[AgentName, AgentName] = {
+    AgentName.CURRENT: AgentName.FORECAST,
+    AgentName.SATELLITE: AgentName.FORECAST,
+}
+
+
 class AgentStep(BaseModel):
     """One agent's turn in the run, in order, with what it cost."""
 
@@ -336,6 +367,51 @@ class AgentStep(BaseModel):
     duration_ms: float = Field(ge=0.0)
     reason: str | None = Field(
         default=None, description="Why the supervisor selected it, or why it failed or was skipped."
+    )
+
+    stage: AgentName = Field(
+        default=AgentName.SUPERVISOR,
+        description=(
+            "The logical stage this action belongs to. Always derived from ``agent`` — anything "
+            "supplied is replaced — so a stored record cannot disagree with itself."
+        ),
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _derive_stage(cls, data: Any) -> Any:
+        """Set `stage` from `agent`, overwriting whatever arrived.
+
+        Derived on the way in rather than computed on the way out, because the record is stored as
+        JSON and read back: a computed field would be written into that JSON and then rejected as
+        an unexpected key when the same document was validated again.
+        """
+        if isinstance(data, dict) and data.get("agent") is not None:
+            agent = data["agent"]
+            resolved = agent if isinstance(agent, AgentName) else AgentName(agent)
+            return {**data, "stage": STAGE_OF.get(resolved, resolved)}
+        return data
+
+
+class AgentStage(BaseModel):
+    """One logical stage of the pipeline, with every action it performed.
+
+    The execution record at the altitude the pipeline actually has: one entry per stage, in the
+    order the stages first ran, each holding its own actions rather than standing beside them. An
+    agent asked for two archive windows performed two actions in one stage — it did not become two
+    stages, and a reader counting stages should get the number of stages.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    agent: AgentName
+    status: StepStatus = Field(description="The worst of its actions': one failure is not a pass.")
+    started_at: AwareDatetime
+    duration_ms: float = Field(
+        ge=0.0, description="The sum of its actions', which is what it cost."
+    )
+    actions: tuple[AgentStep, ...] = Field(
+        default=(), description="Every action the stage performed, in order. Never empty."
     )
 
 
@@ -412,6 +488,23 @@ class ResolvedContext(BaseModel):
     )
 
 
+# Worst-first, so a stage reports the least reassuring thing that happened in it.
+_STATUS_PRECEDENCE: tuple[StepStatus, ...] = (
+    StepStatus.FAILED,
+    StepStatus.SKIPPED,
+    StepStatus.SUCCEEDED,
+)
+
+
+def _worst_status(steps: Sequence[AgentStep]) -> StepStatus:
+    """The worst status among a stage's actions. One failed retrieval is not a successful stage."""
+    seen = {step.status for step in steps}
+    for status in _STATUS_PRECEDENCE:
+        if status in seen:
+            return status
+    return StepStatus.SUCCEEDED
+
+
 class EvidenceRecord(BaseModel):
     """Everything the run did, sufficient to check every figure without re-running it."""
 
@@ -458,6 +551,62 @@ class EvidenceRecord(BaseModel):
         default=False, description="True when a budget was exhausted before a complete answer."
     )
     partial_reason: str | None = None
+
+    stages: tuple[AgentStage, ...] = Field(
+        default=(),
+        description=(
+            "The run's execution flow, one entry per logical stage. Always derived from "
+            "``agents`` — anything supplied is replaced."
+        ),
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _derive_stages(cls, data: Any) -> Any:
+        """The run's execution flow, one entry per logical stage, in the order they first ran.
+
+        **Why the record carries this and not only `agents`.** `agents` is the action log — every
+        turn an agent took, in order, which is what an auditor following a single figure needs. It
+        is not the pipeline: a supervisor that routes two archive windows records two historical
+        actions and two analytics actions, and reading that list as the execution flow gives six
+        stages for four. Every consumer that wanted the flow was re-deriving it, which meant the
+        grouping rule lived in the readers rather than in the record, and two readers could
+        disagree about what the run did.
+
+        Nothing is lost and nothing is merged: each stage holds its own actions, each action keeps
+        its agent, its tool call and its attribution, and `agents` is untouched. The stage's
+        duration is the sum of its actions — what that stage cost the run — and its status is the
+        worst of them, because a stage with one failed retrieval did not succeed.
+        """
+        if not isinstance(data, dict):
+            return data
+
+        steps = tuple(
+            step if isinstance(step, AgentStep) else AgentStep.model_validate(step)
+            for step in data.get("agents") or ()
+        )
+
+        order: list[AgentName] = []
+        grouped: dict[AgentName, list[AgentStep]] = {}
+        for step in steps:
+            if step.stage not in grouped:
+                grouped[step.stage] = []
+                order.append(step.stage)
+            grouped[step.stage].append(step)
+
+        return {
+            **data,
+            "stages": tuple(
+                AgentStage(
+                    agent=stage,
+                    status=_worst_status(grouped[stage]),
+                    started_at=min(step.started_at for step in grouped[stage]),
+                    duration_ms=sum(step.duration_ms for step in grouped[stage]),
+                    actions=tuple(grouped[stage]),
+                )
+                for stage in order
+            ),
+        }
 
     @model_validator(mode="after")
     def _record_is_internally_consistent(self) -> Self:
