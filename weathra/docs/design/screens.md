@@ -252,6 +252,38 @@ rather than re-slicing one already fetched.
 | Named third-party feeds with millisecond latencies | The one provider each figure came from, with the period it covers and when it was retrieved. |
 | The synthesis appearing the moment the page opens | A control a person presses. The artifact's version is free; Weathra's is a real model call against a real allowance, and the report is complete and readable without it. |
 
+**The Scenario Lab.** `13` was rebuilt against its artifact on 2026-09-13. The screen it replaced
+was four number inputs, one chart of the scenario against a flat reference line at the forecast's
+mean, and three cards of prose — a form, where the artifact is a workspace. What changed: sliders
+with live signed readouts and a baseline reference, RESET TO BASELINE and RUN SCENARIO in the lab
+header where they belong, a baseline card against a calculated card, the retrieved series and the
+adjusted one plotted over the same hours, four delta tiles, a deterministic interpretation with its
+key movements and two derived signals, and an archive block. The lab also opens *loaded*: a run
+with every assumption at zero is the retrieved forecast, so the baseline, the plot and the archive
+are populated before anything is supposed.
+
+The backend gained two blocks for it, both real. `analytics/scenario.summarise_effects` counts what
+the assumptions did past the means — hours either side of a stated threshold, the highest value of
+each measure before and after — and derives two statements from those counts. The scenario endpoint
+then places the scenario's own mean against the archive for the same calendar window, through the
+same `compare_against_baseline` every other surface uses, and names the archived year whose mean
+sits closest to it. The archive is allowed to fail without taking the run with it.
+
+| In `13-weather-scenario-lab.png` | What is implemented instead |
+|---|---|
+| "SESSION: LAB-X-DELTA-09" | Nothing. Weathra stores no lab session and issues no identifier for one. |
+| "MODEL: DELTA-INFERENCE-V4", "NEURAL SIMULATION ENGINE V8.2" | Nothing. No model is involved at all: the transformation is arithmetic, and the interpretation carries ANALYTICS rather than AI INTERPRETATION because no language model wrote it. |
+| "INFERENCE CONFIDENCE" as a filled bar | Scenario basis: four inputs, each present or not — the hours retrieved, the archived years compared, the hours held at a physical bound, and the hours with nothing to adjust. The transformation is exact, so there is no confidence to report. |
+| "STATION: BER-09" | The provider that answered. There is no station. |
+| "ATM. STABILITY INDEX -12.4%" as the fourth delta | The humidity delta, which is the fourth quantity this lab can actually adjust. |
+| "KEY WHAT-IF DELTA — Evaporation Rate, Thermal Inertia" | The measures an assumption actually moved, ranked by how far each moved relative to its own retrieved mean. Neither of the artifact's two is computed. |
+| "INFRASTRUCTURE SENSITIVITY — Critical (Tier 1 Corridor)" | Nothing. Weathra models no infrastructure. The slot beside the primary signal holds scenario sensitivity, which is which assumption dominated. |
+| "PRIMARY RISK VECTOR — Urban Heat Convection" | The largest *counted* change, named for what was counted — more hours carrying rain, a higher peak wind, a higher peak temperature. Nothing here names a hazard. |
+| "MODEL MATCHING 94.2%", "BASELINE SIGMA 2.84σ" over a 30-year institutional normal | The scenario's own distance from the archive baseline as a z-score, its percentile rank among the archived years, and the single archived year whose mean sits closest to it — with the distance printed so it can be judged. Weathra holds no institutional normal and matches no model. |
+| "Scenario variables are benchmarked against 14 validated meteorological nodes", "Weathra Analysis Kernel" | The archive that answered, the years compared, and the calendar window. There are no nodes and no kernel. |
+| "EXPORT SIMULATION REPORT" | Nothing. There is no export. |
+| "SIMULATION KERNEL: READY · NODES: 124 ACTIVE · SCENARIO_LOCK" | Nothing. |
+
 **What `09` and `10` do carry, and it is the reason they are approved.** Between them they compose
 every element `specs/web-ui` names — the model-status table with its enable and disable actions and
 all seven of its columns; token usage with the model, policy, plan and call-role filters; estimated

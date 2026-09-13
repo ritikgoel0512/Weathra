@@ -5565,6 +5565,44 @@
         "title": "SavedLocationsResponse",
         "type": "object"
       },
+      "ScenarioAnalog": {
+        "additionalProperties": false,
+        "description": "The archive year whose mean for this window sits closest to the scenario's own.",
+        "properties": {
+          "distance": {
+            "description": "Absolute difference between that year's mean and the scenario's.",
+            "minimum": 0.0,
+            "title": "Distance",
+            "type": "number"
+          },
+          "mean": {
+            "title": "Mean",
+            "type": "number"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "year": {
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "year",
+          "mean",
+          "distance"
+        ],
+        "title": "ScenarioAnalog",
+        "type": "object"
+      },
       "ScenarioAssumptions": {
         "additionalProperties": false,
         "description": "What a person supposed. Every field optional; an omitted one changes nothing.",
@@ -5627,6 +5665,203 @@
           }
         },
         "title": "ScenarioAssumptions",
+        "type": "object"
+      },
+      "ScenarioCrossing": {
+        "additionalProperties": false,
+        "description": "How often a series is on the far side of a threshold, before and after.\n\nA count of hours, not a probability and not a risk. The threshold is stated so a reader can see\nwhat is being counted: \"hours with any precipitation reported\" is a different claim from \"hours\nit will rain\", and only the first is something arithmetic can answer.",
+        "properties": {
+          "baseline_hours": {
+            "minimum": 0.0,
+            "title": "Baseline Hours",
+            "type": "integer"
+          },
+          "difference": {
+            "description": "Scenario hours less baseline hours. May be negative.",
+            "title": "Difference",
+            "type": "integer"
+          },
+          "label": {
+            "description": "What crossing the threshold means, in words.",
+            "title": "Label",
+            "type": "string"
+          },
+          "measure": {
+            "$ref": "#/components/schemas/Measure"
+          },
+          "scenario_hours": {
+            "minimum": 0.0,
+            "title": "Scenario Hours",
+            "type": "integer"
+          },
+          "threshold": {
+            "title": "Threshold",
+            "type": "number"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "required": [
+          "measure",
+          "threshold",
+          "label",
+          "baseline_hours",
+          "scenario_hours",
+          "difference"
+        ],
+        "title": "ScenarioCrossing",
+        "type": "object"
+      },
+      "ScenarioEffects": {
+        "additionalProperties": false,
+        "description": "What applying the assumptions did to the series, beyond moving its means.",
+        "properties": {
+          "crossings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ScenarioCrossing"
+            },
+            "title": "Crossings",
+            "type": "array"
+          },
+          "extremes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ScenarioExtreme"
+            },
+            "title": "Extremes",
+            "type": "array"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "risk": {
+            "$ref": "#/components/schemas/ScenarioSignal"
+          },
+          "sensitivity": {
+            "$ref": "#/components/schemas/ScenarioSignal"
+          }
+        },
+        "required": [
+          "risk",
+          "sensitivity",
+          "method"
+        ],
+        "title": "ScenarioEffects",
+        "type": "object"
+      },
+      "ScenarioExtreme": {
+        "additionalProperties": false,
+        "description": "The highest value a measure reaches, before and after, and when the scenario reaches it.",
+        "properties": {
+          "baseline": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline"
+          },
+          "difference": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difference"
+          },
+          "measure": {
+            "$ref": "#/components/schemas/Measure"
+          },
+          "occurred_at_local": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the scenario reaches its highest value.",
+            "title": "Occurred At Local"
+          },
+          "scenario": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scenario"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "required": [
+          "measure"
+        ],
+        "title": "ScenarioExtreme",
+        "type": "object"
+      },
+      "ScenarioHistory": {
+        "additionalProperties": false,
+        "description": "The scenario placed against the archive \u2014 a real comparison, not a correlation score.\n\nThe artifact prints \"MODEL MATCHING 94.2%\" over a thirty-year institutional normal. Weathra\nmatches no model and publishes no normal, and a percentage there would be a number with nothing\nbehind it. What it does have is the archive it already reads: the mean of the same calendar\nwindow across as many past years as the provider can serve, the scenario's own mean placed\nagainst that baseline by the same comparison every other screen uses, and the single year whose\nmean sits closest to the scenario. That last one is the honest version of \"which historical\npattern does this resemble\" \u2014 a nearest neighbour in one dimension, reported with the distance\nso it can be judged rather than trusted.",
+        "properties": {
+          "comparison": {
+            "$ref": "#/components/schemas/BaselineComparison"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "nearest_analog": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScenarioAnalog"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scenario_mean": {
+            "title": "Scenario Mean",
+            "type": "number"
+          }
+        },
+        "required": [
+          "comparison",
+          "scenario_mean",
+          "method"
+        ],
+        "title": "ScenarioHistory",
         "type": "object"
       },
       "ScenarioMeasure": {
@@ -5821,6 +6056,21 @@
             "title": "Disclaimer",
             "type": "string"
           },
+          "effects": {
+            "$ref": "#/components/schemas/ScenarioEffects",
+            "description": "What the assumptions did past the means: threshold counts, peaks, and the two statements derived from them."
+          },
+          "history": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScenarioHistory"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The scenario's own mean placed against the archive baseline for the same calendar window. Null where the archive could not serve the window \u2014 the scenario is complete without it."
+          },
           "horizon_days": {
             "title": "Horizon Days",
             "type": "integer"
@@ -5856,9 +6106,45 @@
           "assumptions",
           "baseline",
           "scenario",
-          "measures"
+          "measures",
+          "effects"
         ],
         "title": "ScenarioResponse",
+        "type": "object"
+      },
+      "ScenarioSignal": {
+        "additionalProperties": false,
+        "description": "One derived statement about the scenario, with the figures it was derived from.\n\n`kind` is a stable identifier a screen can branch on; `label` is what a person reads; `detail`\nis one sentence built from counted or computed figures only. Nothing here names a hazard the\ndata does not measure \u2014 \"more hours with rain\" is a count, \"urban drainage saturation\" is\nmeteorology this system does not do.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "measure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Measure"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "label",
+          "detail"
+        ],
+        "title": "ScenarioSignal",
         "type": "object"
       },
       "SearchResponse": {

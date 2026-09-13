@@ -92,7 +92,15 @@ const ALL_SCREENS = [
   { name: "10-plan", path: "/plan" },
   { name: "11-explorer", path: "/explorer" },
   { name: "12-report", path: "/report" },
-  { name: "13-scenarios", path: "/scenarios", prepare: "Run this scenario" },
+  /*
+   * The Scenario Lab, photographed with a scenario in it.
+   *
+   * `prepare` used to press "Run this scenario", which was the control that filled an otherwise
+   * empty screen. The lab opens on its baseline now — a run with every assumption at zero is the
+   * retrieved forecast — so the press that matters is the one that makes it a *scenario*, and the
+   * button it names is the header's.
+   */
+  { name: "13-scenarios", path: "/scenarios", assume: "Temperature shift", prepare: "Run scenario" },
   { name: "14-watch", path: "/watch" },
   /*
    * Travel Intelligence, which ranks on arrival.
@@ -196,6 +204,22 @@ test.describe("capture", () => {
           await page.reload();
           await expect(page.getByRole("main")).toBeAttached();
           await page.waitForLoadState("networkidle").catch(() => {});
+        }
+
+        /*
+         * A screen with a control that has to hold something before pressing its action means
+         * anything — the Scenario Lab, whose sliders all start at zero.
+         *
+         * A run of zeros is a legitimate thing to draw and is what the lab opens on, but it is the
+         * *baseline*, so photographing it after pressing Run would show a lab that had run nothing.
+         * Moving one slider first is what makes the capture the post-run state.
+         */
+        const assume = "assume" in screen ? (screen as { assume?: string }).assume : undefined;
+        if (assume !== undefined) {
+          const slider = page.getByLabel(assume, { exact: true }).first();
+          if (await slider.isVisible().catch(() => false)) {
+            await slider.fill("2.5");
+          }
         }
 
         // A screen whose content is behind a control is photographed with the control pressed.

@@ -1,328 +1,320 @@
 "use client";
 
 /**
- * Weather Scenario Lab — what the forecast would read if your assumptions held.
+ * Weather Scenario Lab — `docs/design/screens/13-weather-scenario-lab.png`.
  *
- * Built against `docs/design/screens/13-weather-scenario-lab.png`: the assumptions panel, the
- * baseline card, the calculated card, the baseline-against-scenario chart, the delta cards, the
- * interpretation area, the disclaimer.
+ * An atmospheric what-if workspace: state an assumption, apply it to a real retrieved forecast, and
+ * read what it does — hour by hour, as four deltas, as two derived signals, and against the archive
+ * for the same calendar window.
  *
- * **Nothing here calculates anything.** The arithmetic is `POST /weather/scenario`, which applies
- * the stated assumptions to a real forecast in `analytics/scenario.py` and returns both series with
- * the method used per measure. A browser computing the scenario would put a figure on screen that
- * no test in the analytics suite covers.
+ * **The artifact's macro composition, and it is the composition rather than a resemblance to it.**
  *
- * **It is a hypothetical and says so first.** The artifact's own header carries a SIMULATED chip and
- * so does this, because the one misunderstanding worth designing against is somebody reading a
- * scenario as a forecast.
+ *     1  lab header, with RESET TO BASELINE and RUN SCENARIO          full width
+ *     2  assumptions rail  ·  baseline weather data + calculated analytical impact
+ *     3  …the same rail    ·  temporal impact projection
+ *     4  …the same rail    ·  four delta tiles
+ *     5  …the same rail    ·  interpretation, its key deltas and two signals
+ *     6  historical correlation model, with its evidence context     full width
+ *     7  analytical disclaimer                                        full width
  *
- * **What the artifact draws and Weathra does not have:** a session id, `MODEL: DELTA-INFERENCE-V4`,
- * a station id, an atmospheric stability index, an inference-confidence bar, a "neural simulation
- * engine v8.2", evaporation-rate and thermal-inertia what-ifs, a simulation report export, a
- * historical correlation model with a 94.2% match and a 2.84σ figure, "14 validated meteorological
- * nodes", a "Weathra Analysis Kernel", 124 active nodes and a scenario lock. None of it exists.
+ * The rail is one column down the left; everything else is the analysis area beside it.
+ *
+ * **One run feeds every panel.** `POST /weather/scenario` returns the baseline series, the adjusted
+ * series, the per-measure arithmetic, the counted effects and the archive comparison in one
+ * response, and `lib/scenarios/view-model.ts` reads all of it once. No panel re-fetches, and no two
+ * panels can disagree about what the run said.
+ *
+ * **The lab opens loaded.** It used to open on an empty state that asked for a place and then, once
+ * given one, on three more empty cards asking for a button press. A place resolves to a run with
+ * every assumption at zero — which is the retrieved forecast, and a legitimate thing to draw — so
+ * the baseline card, the plot and the archive block are populated before anything is supposed.
+ *
+ * **It is arithmetic and it says so.** No language model is called: the endpoint's own contract
+ * refuses to spend an allowance on a slider movement, so the interpretation carries ANALYTICS
+ * rather than AI INTERPRETATION, and the disclaimer is the backend's own sentence.
+ *
+ * **What the artifact draws and Weathra does not have:** a lab session id, `MODEL:
+ * DELTA-INFERENCE-V4`, a station id, an atmospheric stability index, an inference-confidence bar, a
+ * neural simulation engine, evaporation-rate and thermal-inertia what-ifs, a simulation report
+ * export, 94.2% model matching against an institutional normal, infrastructure sensitivity tiers,
+ * 124 active nodes and a scenario lock. Each has a real equivalent here or no tile at all.
  */
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { PlaceChooser } from "@/components/locations/place-chooser";
 import { ScreenPreview } from "@/components/locations/screen-preview";
-
-import { RecordedAgainstBaselineChart } from "@/components/historical/charts";
-import {
-  Badge,
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  DataClassBadge,
-  EmptyChart,
-  EmptyState,
-  ErrorState,
-  Input,
-  LoadingState,
-} from "@/components/ui";
+import { Badge, DataClassBadge, ErrorState, LoadingState } from "@/components/ui";
 import type {
   Location,
   PreferenceView,
-  ScenarioMeasure,
   ScenarioResponse,
 } from "@/lib/api/schema";
-import { briefingLocationFrom, measureLabel } from "@/lib/dashboard/briefing";
-import { hasValues, missingCount, pointsFrom } from "@/lib/historical/analysis";
-import { friendlyName } from "@/lib/locations/place";
+import { briefingLocationFrom } from "@/lib/dashboard/briefing";
+import { formatMeasured } from "@/lib/format/figures";
 import { useApiMutation, useApiQuery } from "@/lib/query/hooks";
 import { PREFERENCES_KEY } from "@/lib/query/keys";
+import {
+  ASSUMPTION_CONTROLS,
+  BASELINE_ASSUMPTIONS,
+  assumptionsFor,
+  baselineCardFrom,
+  basisFrom,
+  deltaTilesFrom,
+  historicalFrom,
+  impactCardFrom,
+  interpretationFrom,
+  isBaseline,
+  keyDeltasFrom,
+  type AssumptionKey,
+  type AssumptionValues,
+} from "@/lib/scenarios/view-model";
 
+import { TemporalImpactChart, pointsFor } from "./chart";
+import {
+  AnalyticalDisclaimer,
+  AssumptionRail,
+  DeltaStrip,
+  HistoricalCorrelation,
+  HowThisWorks,
+  Interpretation,
+  LabHeader,
+  LabPlaceChooser,
+  Region,
+  ResultCard,
+  ScenarioBasis,
+} from "./sections";
 import styles from "./scenarios.module.css";
 
-/** The four assumptions the backend accepts. Nothing else is offered, because nothing else is applied. */
-const ASSUMPTIONS = [
-  {
-    key: "temperature_delta",
-    label: "Temperature shift",
-    unit: "degrees",
-    step: 0.5,
-    min: -30,
-    max: 30,
-  },
-  {
-    key: "precipitation_percent",
-    label: "Precipitation change",
-    unit: "%",
-    step: 5,
-    min: -100,
-    max: 500,
-  },
-  {
-    key: "relative_humidity_delta",
-    label: "Humidity shift",
-    unit: "points",
-    step: 1,
-    min: -100,
-    max: 100,
-  },
-  {
-    key: "wind_speed_delta",
-    label: "Wind shift",
-    unit: "speed",
-    step: 1,
-    min: -200,
-    max: 200,
-  },
-] as const;
+/** The window the lab runs over. Two days of hours is what the plot can carry legibly. */
+const LAB_DAYS = 2;
 
-type AssumptionKey = (typeof ASSUMPTIONS)[number]["key"];
-
-function DeltaCard({
-  measure,
-}: {
-  readonly measure: ScenarioMeasure;
-}): ReactNode {
-  const difference = measure.difference;
-
-  return (
-    <div className={styles.delta}>
-      <p className={styles.deltaLabel}>{measureLabel(measure.measure)}</p>
-      <p className={styles.deltaValue}>
-        {difference === null || difference === undefined
-          ? "Not computable"
-          : `${difference > 0 ? "+" : ""}${difference.toFixed(2)}${measure.unit ? ` ${measure.unit}` : ""}`}
-      </p>
-      <p className={styles.deltaMethod}>{measure.method}</p>
-      {(measure.clipped ?? 0) > 0 ? (
-        <p className={styles.deltaNote}>
-          {measure.clipped} hour{measure.clipped === 1 ? "" : "s"} reached a
-          physical limit and was held there.
-        </p>
-      ) : null}
-      {(measure.points_excluded ?? 0) > 0 ? (
-        <p className={styles.deltaNote}>
-          {measure.points_excluded} hour
-          {measure.points_excluded === 1 ? "" : "s"} had no reading to adjust.
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function ScenarioFor({
+function LabFor({
   location,
   chooser,
 }: {
   readonly location: Location;
-  /** The screen's place control, rendered under its own heading. */
   readonly chooser: ReactNode;
 }): ReactNode {
-  const [assumptions, setAssumptions] = useState<Record<AssumptionKey, string>>(
-    {
-      temperature_delta: "2.5",
-      precipitation_percent: "15",
-      relative_humidity_delta: "0",
-      wind_speed_delta: "0",
-    },
-  );
+  /** What the sliders hold. Not what was run — that is whatever the last response came back with. */
+  const [values, setValues] = useState<AssumptionValues>(BASELINE_ASSUMPTIONS);
+  /** The assumptions the displayed run was made with, so the header can say when they diverge. */
+  const [ran, setRan] = useState<AssumptionValues>(BASELINE_ASSUMPTIONS);
 
-  const run = useApiMutation<void, ScenarioResponse>({
-    run: (client) =>
+  const run = useApiMutation<AssumptionValues, ScenarioResponse>({
+    run: (client, input) =>
       client.scenario({
         latitude: location.latitude,
         longitude: location.longitude,
-        days: 2,
-        assumptions: Object.fromEntries(
-          ASSUMPTIONS.map((entry) => [
-            entry.key,
-            Number(assumptions[entry.key]),
-          ]).filter(([, value]) => Number.isFinite(value) && value !== 0),
-        ),
+        days: LAB_DAYS,
+        assumptions: assumptionsFor(input),
       }),
   });
 
+  /*
+   * The lab opens loaded.
+   *
+   * A run with every assumption at zero *is* the retrieved forecast — the endpoint says so — so
+   * this is not a wasted call or a placeholder: it is the baseline every panel is drawn from and
+   * the thing the next run will be compared against. Held by a ref and keyed on the place, so a
+   * re-render is not a second retrieval.
+   */
+  const submitRef = useRef(run.submit);
+  useEffect(() => {
+    submitRef.current = run.submit;
+  }, [run.submit]);
+
+  const loaded = useRef<string | null>(null);
+  const placeKey = `${location.latitude},${location.longitude}`;
+  useEffect(() => {
+    if (loaded.current === placeKey) return;
+    loaded.current = placeKey;
+    submitRef.current(BASELINE_ASSUMPTIONS);
+  }, [placeKey]);
+
   const result = run.state.kind === "saved" ? run.state.data : null;
-  const scenarioPoints = result ? pointsFrom(result.scenario) : [];
-  const drawable = result !== null && hasValues(scenarioPoints, "temperature");
+  const dirty = useMemo(
+    () => ASSUMPTION_CONTROLS.some((control) => values[control.key] !== ran[control.key]),
+    [values, ran],
+  );
+
+  const submit = (next: AssumptionValues) => {
+    setRan(next);
+    run.submit(next);
+  };
+
+  const header = (
+    <LabHeader
+      location={location}
+      chooser={chooser}
+      busy={run.busy}
+      dirty={dirty}
+      onRun={() => submit(values)}
+      onReset={() => {
+        setValues(BASELINE_ASSUMPTIONS);
+        submit(BASELINE_ASSUMPTIONS);
+      }}
+    />
+  );
+
+  if (run.state.kind === "error") {
+    return (
+      <div className={styles.screen}>
+        {header}
+        <ErrorState
+          failure={run.state.failure}
+          title="That scenario was not calculated"
+          onRetry={() => submit(values)}
+        />
+      </div>
+    );
+  }
+
+  if (result === null) {
+    return (
+      <div className={styles.screen}>
+        {header}
+        <LoadingState label={`Retrieving the baseline forecast for ${location.display_name}`} lines={6} />
+      </div>
+    );
+  }
+
+  const baselineCard = baselineCardFrom(result);
+  const impactCard = impactCardFrom(result);
+  const historical = historicalFrom(result);
+  const changed = !isBaseline(ran);
+  const points = pointsFor(result.baseline, result.scenario);
+  const units = result.baseline?.units ?? {};
+
+  /** The retrieved mean of each adjustable measure, for the rail's own reference line. */
+  const references = Object.fromEntries(
+    ASSUMPTION_CONTROLS.map((control) => {
+      const row = (result.measures ?? []).find((entry) => entry.measure === control.measure);
+      const mean = row?.baseline_mean;
+      return [
+        control.measure,
+        typeof mean === "number" ? formatMeasured(mean, units[control.measure] ?? null) : null,
+      ];
+    }),
+  );
 
   return (
     <div className={styles.screen}>
-      <header className={styles.header}>
-        <div className={styles.title}>
-          <Badge tone="quota">Simulated</Badge>
-          <h1>Weather Scenario Lab</h1>
-        </div>
-        <p className={styles.lede}>
-          Suppose something about the weather at {friendlyName(location)}, and
-          Weathra applies it to the real forecast. A hypothetical — never a
-          forecast of what will happen.
-        </p>
-      </header>
-
-      {/* Under the heading, where the artifacts put a screen's own controls. */}
-      {chooser}
+      {header}
 
       <div className={styles.body}>
-        <Card aria-labelledby="scenario-assumptions">
-          <CardHeader
-            title="Your assumptions"
-            titleId="scenario-assumptions"
-            badge={<Badge tone="quota">Simulated</Badge>}
-          />
-          <CardBody>
-            <div className={styles.controls}>
-              {ASSUMPTIONS.map((entry) => (
-                <Input
-                  key={entry.key}
-                  label={entry.label}
-                  description={`In ${entry.unit}. Zero leaves it alone.`}
-                  type="number"
-                  step={entry.step}
-                  min={entry.min}
-                  max={entry.max}
-                  value={assumptions[entry.key]}
-                  onChange={(event) =>
-                    setAssumptions((current) => ({
-                      ...current,
-                      [entry.key]: event.target.value,
-                    }))
-                  }
-                />
-              ))}
-            </div>
-            <div className={styles.actions}>
-              <Button
-                variant="primary"
-                busy={run.busy}
-                onClick={() => run.submit()}
+        {/* The rail, down the left of everything. */}
+        <div className={styles.rail}>
+          <Region
+            id="lab-assumptions"
+            title="User-defined assumptions"
+            icon="sliders"
+            level="lead"
+            subtitle="Adjust atmospheric variables to simulate edge cases."
+            badges={<Badge tone="quota">Simulated</Badge>}
+          >
+            <AssumptionRail values={values} onChange={change(setValues)} baseline={references} />
+            <ScenarioBasis rows={basisFrom(result)} />
+          </Region>
+        </div>
+
+        <div className={styles.analysis}>
+          {/* ROW 2 — what it starts from, and what the assumptions make of it. */}
+          <div className={styles.pair}>
+            {baselineCard ? (
+              <Region
+                id="lab-baseline"
+                title="Baseline weather data"
+                icon="baseline"
+                badges={<DataClassBadge dataClass="forecast" />}
               >
-                Run this scenario
-              </Button>
-              <Button
-                onClick={() =>
-                  setAssumptions({
-                    temperature_delta: "0",
-                    precipitation_percent: "0",
-                    relative_humidity_delta: "0",
-                    wind_speed_delta: "0",
-                  })
-                }
+                <ResultCard
+                  card={baselineCard}
+                  variant="baseline"
+                  retrievedAt={result.attribution?.retrieved_at ?? null}
+                />
+              </Region>
+            ) : null}
+
+            {impactCard ? (
+              <Region
+                id="lab-impact"
+                title="Calculated analytical impact"
+                icon="impact"
+                badges={<Badge tone="quota">Simulated</Badge>}
               >
-                Reset to the forecast
-              </Button>
-            </div>
-          </CardBody>
-        </Card>
+                <ResultCard card={impactCard} variant="scenario" />
+              </Region>
+            ) : null}
+          </div>
 
-        <div className={styles.results}>
-          {run.state.kind === "error" ? (
-            <ErrorState
-              failure={run.state.failure}
-              title="That scenario was not calculated"
+          {/* ROW 3 — the plot. */}
+          <Region
+            id="lab-projection"
+            title="Temporal impact projection"
+            icon="projection"
+            subtitle={
+              changed
+                ? "The retrieved forecast against the user-defined scenario, over the same hours."
+                : "The retrieved forecast. Supply an assumption and run to draw the scenario over it."
+            }
+            badges={<Badge tone="quota">Simulated</Badge>}
+          >
+            <TemporalImpactChart
+              points={points}
+              unit={units.temperature ?? null}
+              precipitationUnit={units.precipitation ?? null}
+              changed={changed}
             />
-          ) : null}
+          </Region>
 
-          {result ? (
-            <>
-              <Card aria-labelledby="scenario-chart">
-                <CardHeader
-                  title="The forecast, and your scenario"
-                  titleId="scenario-chart"
-                  badge={<Badge tone="quota">Simulated</Badge>}
-                  subtitle={`Baseline from ${result.attribution?.provider ?? "the provider"}, in ${location.timezone}.`}
-                />
-                <CardBody>
-                  {drawable ? (
-                    <RecordedAgainstBaselineChart
-                      points={scenarioPoints}
-                      measure="temperature"
-                      unit={result.scenario?.units?.temperature ?? null}
-                      seriesLabel="Scenario"
-                      title="Temperature: your scenario against the forecast"
-                      missing={missingCount(scenarioPoints, "temperature")}
-                      baselineValue={
-                        result.measures.find(
-                          (measure) => measure.measure === "temperature",
-                        )?.baseline_mean ?? null
-                      }
-                      baselineLabel="Forecast mean"
-                    />
-                  ) : (
-                    <EmptyChart
-                      title="Temperature: your scenario against the forecast"
-                      reason="This provider reported no hourly temperatures to adjust."
-                    />
-                  )}
-                </CardBody>
-              </Card>
+          {/* ROW 4 — four deltas. */}
+          <DeltaStrip tiles={deltaTilesFrom(result)} />
 
-              <Card aria-labelledby="scenario-deltas">
-                <CardHeader
-                  title="What your assumptions did"
-                  titleId="scenario-deltas"
-                  badge={<DataClassBadge dataClass="analytics" />}
-                  subtitle="Computed by Weathra from the figures above. No model was involved."
-                />
-                <CardBody>
-                  {result.measures.length === 0 ? (
-                    <p className={styles.quiet}>
-                      You supposed nothing, so this is the forecast unchanged —
-                      a fair baseline to start from.
-                    </p>
-                  ) : (
-                    <div className={styles.deltas}>
-                      {result.measures.map((measure) => (
-                        <DeltaCard key={measure.measure} measure={measure} />
-                      ))}
-                    </div>
-                  )}
-                </CardBody>
-              </Card>
-
-              <Card aria-labelledby="scenario-caveat">
-                <CardHeader title="What this is" titleId="scenario-caveat" />
-                <CardBody>
-                  <p className={styles.quiet}>{result.disclaimer}</p>
-                  <p className={styles.quiet}>
-                    Weathra applied your figures to a real forecast. It did not
-                    model the atmosphere: a forecast two degrees warmer is not
-                    the weather that a warmer atmosphere would produce.
-                  </p>
-                </CardBody>
-              </Card>
-            </>
-          ) : run.busy ? (
-            <LoadingState
-              label="Applying your assumptions to the forecast"
-              lines={4}
+          {/* ROW 5 — the reading, its key movements, and the two derived signals. */}
+          <Region
+            id="lab-interpretation"
+            title="Interpretation & insights"
+            icon="insight"
+            level="lead"
+            subtitle="Computed by Weathra from the figures above. No language model is involved."
+            badges={<DataClassBadge dataClass="analytics" />}
+          >
+            <Interpretation
+              sentences={interpretationFrom(result, location)}
+              keyDeltas={keyDeltasFrom(result)}
+              risk={result.effects?.risk ?? null}
+              sensitivity={result.effects?.sensitivity ?? null}
             />
-          ) : (
-            <EmptyState title="Suppose something">
-              Set your assumptions and run them against the real forecast for
-              this place. Nothing is sent anywhere until you do.
-            </EmptyState>
-          )}
+          </Region>
         </div>
       </div>
+
+      {/* ROW 6 — the archive, full width. Absent when it could not serve the window. */}
+      {historical ? (
+        <Region
+          id="lab-historical"
+          title="Historical correlation model"
+          icon="archive"
+          subtitle="The scenario's own mean placed against the archived years for this calendar window."
+          badges={<DataClassBadge dataClass="historical" />}
+        >
+          <HistoricalCorrelation view={historical} />
+        </Region>
+      ) : null}
+
+      <HowThisWorks methods={(result.measures ?? []).map((measure) => measure.method)} />
+
+      {/* ROW 7 — what this is and is not, in the backend's own sentence. */}
+      <AnalyticalDisclaimer text={result.disclaimer} />
     </div>
   );
+}
+
+/** One slider's change, applied to the rail's state. */
+function change(
+  set: (update: (current: AssumptionValues) => AssumptionValues) => void,
+): (key: AssumptionKey, value: number) => void {
+  return (key, value) => set((current) => ({ ...current, [key]: value }));
 }
 
 export function WeatherScenarioLab(): ReactNode {
@@ -337,29 +329,16 @@ export function WeatherScenarioLab(): ReactNode {
     return <LoadingState label="Reading your preferences" lines={4} />;
   }
   if (preferences.state.kind === "error") {
-    return (
-      <ErrorState
-        failure={preferences.state.failure}
-        onRetry={preferences.retry}
-      />
-    );
+    return <ErrorState failure={preferences.state.failure} onRetry={preferences.retry} />;
   }
   if (preferences.state.kind !== "ready") return null;
 
   const saved = briefingLocationFrom(preferences.state.data);
   const location = chosen ?? saved;
 
-  /*
-   * Declared once and used in both branches. The empty branch needs it most: its own text
-   * says "name one above", and an empty state saying that with nothing above it is the
-   * dead end this control exists to remove.
-   */
   const chooser = (
-    <PlaceChooser
-      summary="Experiment on another place"
-      label="Experiment on a place"
-      description="Weathra resolves the name before it retrieves anything. Leave it empty to use your default location."
-      current={location}
+    <LabPlaceChooser
+      location={location}
       usingDefault={chosen === null}
       hasDefault={saved !== null}
       onChoose={setChosen}
@@ -369,40 +348,39 @@ export function WeatherScenarioLab(): ReactNode {
   return (
     <>
       {/*
-        The screen's own place control. With no default this used to be an empty state and a link
-        to Settings, which made the feature reachable only by configuring a preference somewhere
-        else first — see `PlaceChooser` for why that is not a substitute for a product.
+        With no place there is nothing to retrieve and nothing to adjust, so the screen is the one
+        control that resolves that — not a shell of empty panels around it. Everything below fills
+        in the moment a place does.
       */}
-
       {location === null ? (
         <>
           {chooser}
           <ScreenPreview
             title="The lab experiments on one place"
-            lead="Name a place above, or set a default in Settings and every screen opens on it. Nothing below is filled in yet because no place has been chosen."
+            lead="Name a place above, or set a default in Settings and every screen opens on it. The moment one resolves, Weathra retrieves its forecast and the lab opens on that baseline."
             regions={[
               {
-                title: "The forecast it starts from",
+                title: "User-defined assumptions",
                 blurb:
-                  "The retrieved forecast for the place, which is the baseline every assumption is applied to.",
+                  "Suppose it were warmer, wetter, more humid or windier — stated as an adjustment rather than as a prediction.",
+              },
+              {
+                title: "Temporal impact projection",
+                blurb:
+                  "The retrieved forecast and your scenario over the same hours, so what was measured and what was supposed never merge.",
                 chart: 150,
               },
               {
-                title: "Your assumptions",
+                title: "Historical correlation model",
                 blurb:
-                  "Suppose it were warmer, or wetter, or windier — stated as an adjustment rather than as a prediction.",
-              },
-              {
-                title: "What that would mean",
-                blurb:
-                  "The adjusted figures beside the retrieved ones, so what Weathra measured and what you supposed never merge.",
+                  "Where the scenario sits among the archived years for the same calendar window, and which year it most resembles.",
                 chart: 150,
               },
             ]}
           />
         </>
       ) : (
-        <ScenarioFor
+        <LabFor
           key={`${location.latitude},${location.longitude}`}
           location={location}
           chooser={chooser}

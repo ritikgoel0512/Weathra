@@ -1177,6 +1177,15 @@ export interface SavedLocationsResponse {
   readonly locations: SavedLocationRecord[];
 }
 
+/** The archive year whose mean for this window sits closest to the scenario's own. */
+export interface ScenarioAnalog {
+  /** Absolute difference between that year's mean and the scenario's. */
+  readonly distance: number;
+  readonly mean: number;
+  readonly unit?: string | null;
+  readonly year: number;
+}
+
 /** What a person supposed. Every field optional; an omitted one changes nothing. */
 export interface ScenarioAssumptions {
   /** Scales every reported precipitation figure. -100 removes it entirely. */
@@ -1187,6 +1196,47 @@ export interface ScenarioAssumptions {
   readonly temperature_delta?: number | null;
   /** Added to every reported wind speed. */
   readonly wind_speed_delta?: number | null;
+}
+
+/** How often a series is on the far side of a threshold, before and after. */
+export interface ScenarioCrossing {
+  readonly baseline_hours: number;
+  /** Scenario hours less baseline hours. May be negative. */
+  readonly difference: number;
+  /** What crossing the threshold means, in words. */
+  readonly label: string;
+  readonly measure: Measure;
+  readonly scenario_hours: number;
+  readonly threshold: number;
+  readonly unit?: string | null;
+}
+
+/** What applying the assumptions did to the series, beyond moving its means. */
+export interface ScenarioEffects {
+  readonly crossings?: ScenarioCrossing[];
+  readonly extremes?: ScenarioExtreme[];
+  readonly method: string;
+  readonly risk: ScenarioSignal;
+  readonly sensitivity: ScenarioSignal;
+}
+
+/** The highest value a measure reaches, before and after, and when the scenario reaches it. */
+export interface ScenarioExtreme {
+  readonly baseline?: number | null;
+  readonly difference?: number | null;
+  readonly measure: Measure;
+  /** When the scenario reaches its highest value. */
+  readonly occurred_at_local?: string | null;
+  readonly scenario?: number | null;
+  readonly unit?: string | null;
+}
+
+/** The scenario placed against the archive — a real comparison, not a correlation score. */
+export interface ScenarioHistory {
+  readonly comparison: BaselineComparison;
+  readonly method: string;
+  readonly nearest_analog?: ScenarioAnalog | null;
+  readonly scenario_mean: number;
 }
 
 /** One measure, before and after, with the arithmetic that produced the after. */
@@ -1227,6 +1277,10 @@ export interface ScenarioResponse {
   readonly baseline: Series;
   /** What the result is and is not, in one sentence, for any surface that shows it. */
   readonly disclaimer: string;
+  /** What the assumptions did past the means: threshold counts, peaks, and the two statements derived from them. */
+  readonly effects: ScenarioEffects;
+  /** The scenario's own mean placed against the archive baseline for the same calendar window. Null where the archive could not serve the window — the scenario is complete without it. */
+  readonly history?: ScenarioHistory | null;
   readonly horizon_days: number;
   /** Per adjusted measure: the arithmetic used, the means either side, and the hours excluded or clipped. */
   readonly measures: ScenarioMeasure[];
@@ -1235,6 +1289,14 @@ export interface ScenarioResponse {
   readonly scenario: Series;
   /** Always true. This is a hypothetical, not a forecast and not an observation. */
   readonly simulated?: true;
+}
+
+/** One derived statement about the scenario, with the figures it was derived from. */
+export interface ScenarioSignal {
+  readonly detail: string;
+  readonly kind: string;
+  readonly label: string;
+  readonly measure?: Measure | null;
 }
 
 /** Ranked candidates for a partial query. An empty list is a real answer. */

@@ -26,15 +26,23 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from weathra.analytics.scenario import ScenarioAssumptions, ScenarioMeasure, apply_assumptions
+from weathra.analytics.scenario import (
+    ScenarioAssumptions,
+    ScenarioEffects,
+    ScenarioMeasure,
+    apply_assumptions,
+    summarise_effects,
+)
 from weathra.api.dependencies import Configuration, CurrentSession, Places, WeatherFor
 from weathra.api.middleware import annotate
 from weathra.api.routers.support import horizon_for, provider_for, resolve_one, units_for
 from weathra.auth.deps import OptionalPrincipal
+from weathra.domain.errors import WeathraError
 from weathra.domain.location import Location
 from weathra.domain.weather import (
     DataClass,
     Forecast,
+    Measure,
     Period,
     Series,
     UncertaintyStatement,
@@ -42,6 +50,7 @@ from weathra.domain.weather import (
 )
 from weathra.memory.preferences import PreferenceStore
 from weathra.weather.forecast_service import ForecastService
+from weathra.weather.history_service import Baseline, BaselineComparison, HistoryService
 from weathra.weather.uncertainty import describe_uncertainty
 
 __all__ = ["router"]
@@ -205,6 +214,40 @@ class ScenarioRequest(BaseModel):
     )
 
 
+class ScenarioAnalog(BaseModel):
+    """The archive year whose mean for this window sits closest to the scenario's own."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    year: int
+    mean: float
+    distance: float = Field(
+        ge=0.0, description="Absolute difference between that year's mean and the scenario's."
+    )
+    unit: str | None = None
+
+
+class ScenarioHistory(BaseModel):
+    """The scenario placed against the archive — a real comparison, not a correlation score.
+
+    The artifact prints "MODEL MATCHING 94.2%" over a thirty-year institutional normal. Weathra
+    matches no model and publishes no normal, and a percentage there would be a number with nothing
+    behind it. What it does have is the archive it already reads: the mean of the same calendar
+    window across as many past years as the provider can serve, the scenario's own mean placed
+    against that baseline by the same comparison every other screen uses, and the single year whose
+    mean sits closest to the scenario. That last one is the honest version of "which historical
+    pattern does this resemble" — a nearest neighbour in one dimension, reported with the distance
+    so it can be judged rather than trusted.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    comparison: BaselineComparison
+    nearest_analog: ScenarioAnalog | None = None
+    scenario_mean: float
+    method: str
+
+
 class ScenarioResponse(BaseModel):
     """A stated assumption applied to a real forecast, and the arithmetic that did it.
 
@@ -234,6 +277,16 @@ class ScenarioResponse(BaseModel):
     measures: tuple[ScenarioMeasure, ...] = Field(
         description="Per adjusted measure: the arithmetic used, the means either side, and the "
         "hours excluded or clipped."
+    )
+    effects: ScenarioEffects = Field(
+        description="What the assumptions did past the means: threshold counts, peaks, and the two "
+        "statements derived from them."
+    )
+    history: ScenarioHistory | None = Field(
+        default=None,
+        description="The scenario's own mean placed against the archive baseline for the same "
+        "calendar window. Null where the archive could not serve the window — the scenario is "
+        "complete without it.",
     )
 
 
@@ -382,6 +435,7 @@ async def scenario(
     )
 
     adjusted, measures = apply_assumptions(retrieved.hourly, body.assumptions)
+    effects = summarise_effects(retrieved.hourly, adjusted, measures)
 
     return ScenarioResponse(
         disclaimer=SCENARIO_DISCLAIMER,
@@ -400,4 +454,100 @@ async def scenario(
         baseline=retrieved.hourly,
         scenario=adjusted,
         measures=measures,
+        effects=effects,
+        history=await _scenario_history(
+            request,
+            weather=weather,
+            settings=settings,
+            provider=body.provider,
+            location=retrieved.location,
+            period=retrieved.period,
+            scenario=adjusted,
+            unit_system=unit_system,
+        ),
     )
+
+
+async def _scenario_history(
+    request: Request,
+    *,
+    weather: WeatherFor,
+    settings: Configuration,
+    provider: str | None,
+    location: Location,
+    period: Period,
+    scenario: Series,
+    unit_system: UnitSystem,
+) -> ScenarioHistory | None:
+    """The scenario's temperature mean, placed against the archive for the same calendar window.
+
+    **The archive is allowed to fail without taking the scenario with it.** A lab run is arithmetic
+    on a forecast that has already been retrieved; the historical comparison is context on top of
+    it, and a provider that cannot serve ten Septembers is a reason to omit that context rather than
+    to refuse the run. So a retrieval error here returns ``None`` and the endpoint answers with
+    everything else, which is what the screen draws — the section is absent rather than broken.
+
+    The comparison itself is `HistoryService.compare_against_baseline`, unchanged and shared with
+    every other surface that places a value against the record. Nothing new computes a statistic
+    here; this only chooses the value to compare.
+    """
+    values = [
+        value
+        for entry in scenario.entries
+        if (value := entry.values.get(Measure.TEMPERATURE)) is not None
+    ]
+    if not values:
+        return None
+    scenario_mean = sum(values) / len(values)
+
+    service = HistoryService(
+        provider=provider_for(request, weather, provider, settings), settings=settings
+    )
+    try:
+        baseline = await service.baseline(
+            location,
+            start=period.start_local.date(),
+            end=period.end_local.date(),
+            years=_SCENARIO_BASELINE_YEARS,
+            measure=Measure.TEMPERATURE_MEAN,
+            unit_system=unit_system,
+        )
+        comparison = service.compare_against_baseline(
+            baseline=baseline,
+            value=scenario_mean,
+            # Not a forecast and not an observation: the value is a computed mean of a series that
+            # had a person's assumption applied to it, and the class has to say so.
+            value_data_class=DataClass.COMPUTED_STATISTIC,
+        )
+    except WeathraError:
+        logger.info("scenario history unavailable", exc_info=True)
+        return None
+
+    return ScenarioHistory(
+        comparison=comparison,
+        nearest_analog=_nearest_analog(baseline, scenario_mean),
+        scenario_mean=scenario_mean,
+        method=(
+            "The scenario's mean temperature across the window, placed against the mean of the "
+            "same calendar window in each archived year. The nearest analog is the single year "
+            "whose mean sits closest to it."
+        ),
+    )
+
+
+def _nearest_analog(baseline: Baseline, scenario_mean: float) -> ScenarioAnalog | None:
+    """The archived year whose own mean sits closest to the scenario's. One dimension, stated."""
+    if not baseline.yearly_means:
+        return None
+    closest = min(baseline.yearly_means, key=lambda entry: abs(entry.value - scenario_mean))
+    return ScenarioAnalog(
+        year=closest.year,
+        mean=closest.value,
+        distance=abs(closest.value - scenario_mean),
+        unit=baseline.mean.unit,
+    )
+
+
+# Ten, matching the baseline endpoint's own default, so the lab and the Historical screen describe
+# the same record rather than two differently-sized ones.
+_SCENARIO_BASELINE_YEARS = 10

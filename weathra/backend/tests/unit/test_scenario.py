@@ -11,7 +11,11 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from weathra.analytics.scenario import ScenarioAssumptions, apply_assumptions
+from weathra.analytics.scenario import (
+    ScenarioAssumptions,
+    apply_assumptions,
+    summarise_effects,
+)
 from weathra.domain.weather import Granularity, Measure, Series, SeriesEntry
 
 
@@ -133,3 +137,125 @@ def test_the_scenario_keeps_the_instants_and_units_of_its_baseline() -> None:
     assert [entry.time_utc for entry in scenario.entries] == [
         entry.time_utc for entry in baseline.entries
     ]
+
+
+# ------------------------------------------------------------- what it did
+
+
+def test_a_crossing_counts_hours_either_side_of_a_stated_threshold() -> None:
+    baseline = series(
+        {Measure.PRECIPITATION: 0.0},
+        {Measure.PRECIPITATION: 0.0},
+        {Measure.PRECIPITATION: 1.0},
+    )
+
+    scenario, measures = apply_assumptions(
+        baseline, ScenarioAssumptions(precipitation_percent=100.0)
+    )
+    effects = summarise_effects(baseline, scenario, measures)
+
+    rain = next(c for c in effects.crossings if c.measure is Measure.PRECIPITATION)
+    # Scaling cannot make a dry hour wet — zero times anything is zero — so the count holds, and
+    # that is the honest answer rather than a risk that grew because a percentage was applied.
+    assert (rain.baseline_hours, rain.scenario_hours, rain.difference) == (1, 1, 0)
+
+
+def test_a_crossing_is_not_counted_for_a_measure_the_provider_never_reported() -> None:
+    baseline = series({Measure.TEMPERATURE: 10.0}, {Measure.TEMPERATURE: 12.0})
+
+    scenario, measures = apply_assumptions(baseline, ScenarioAssumptions(temperature_delta=1.0))
+    effects = summarise_effects(baseline, scenario, measures)
+
+    assert effects.crossings == ()
+
+
+def test_a_peak_is_the_highest_reported_value_and_when_the_scenario_reaches_it() -> None:
+    baseline = series(
+        {Measure.TEMPERATURE: 10.0},
+        {Measure.TEMPERATURE: 18.0},
+        {Measure.TEMPERATURE: 12.0},
+    )
+
+    scenario, measures = apply_assumptions(baseline, ScenarioAssumptions(temperature_delta=2.0))
+    effects = summarise_effects(baseline, scenario, measures)
+
+    peak = next(e for e in effects.extremes if e.measure is Measure.TEMPERATURE)
+    assert (peak.baseline, peak.scenario, peak.difference) == (18.0, 20.0, 2.0)
+    assert peak.occurred_at_local is not None
+    assert peak.occurred_at_local.startswith("2026-09-10T01:00")
+
+
+def test_the_risk_signal_leads_with_hours_that_gained_rain() -> None:
+    baseline = series(
+        {Measure.PRECIPITATION: 0.0, Measure.TEMPERATURE: 10.0},
+        {Measure.PRECIPITATION: 1.0, Measure.TEMPERATURE: 10.0},
+    )
+
+    # An offset on precipitation is not offered, so a wetter window is produced the way the product
+    # actually produces one: scaling a window that already carries rain.
+    scenario, measures = apply_assumptions(
+        baseline, ScenarioAssumptions(precipitation_percent=50.0, temperature_delta=5.0)
+    )
+    effects = summarise_effects(baseline, scenario, measures)
+
+    # No hour gained rain, so the signal falls through to the peak that did move.
+    assert effects.risk.kind == "higher-peak-temperature"
+    assert "15.0 °C" in effects.risk.detail
+
+
+def test_the_risk_signal_says_so_when_no_assumption_was_made() -> None:
+    baseline = series({Measure.TEMPERATURE: 10.0})
+
+    scenario, measures = apply_assumptions(baseline, ScenarioAssumptions())
+    effects = summarise_effects(baseline, scenario, measures)
+
+    assert effects.risk.kind == "none"
+    assert effects.risk.label == "No assumption applied"
+
+
+def test_sensitivity_ranks_assumptions_by_share_of_their_own_baseline() -> None:
+    baseline = series(
+        {Measure.TEMPERATURE: 20.0, Measure.WIND_SPEED: 10.0},
+        {Measure.TEMPERATURE: 20.0, Measure.WIND_SPEED: 10.0},
+    )
+
+    # +2 on a mean of 20 is a tenth; +5 on a mean of 10 is a half. The larger *share* wins, which
+    # is the only way two quantities in two units can be ranked at all.
+    scenario, measures = apply_assumptions(
+        baseline, ScenarioAssumptions(temperature_delta=2.0, wind_speed_delta=5.0)
+    )
+    effects = summarise_effects(baseline, scenario, measures)
+
+    assert effects.sensitivity.measure is Measure.WIND_SPEED
+    assert "50.0%" in effects.sensitivity.detail
+
+
+def test_sensitivity_ranks_on_the_movement_itself_where_a_baseline_mean_is_zero() -> None:
+    baseline = series({Measure.PRECIPITATION: 0.0}, {Measure.PRECIPITATION: 0.0})
+
+    scenario, measures = apply_assumptions(
+        baseline, ScenarioAssumptions(precipitation_percent=200.0)
+    )
+    effects = summarise_effects(baseline, scenario, measures)
+
+    # The ratio is undefined against a zero mean rather than infinite, and the rank still resolves.
+    assert effects.sensitivity.kind == "most-sensitive"
+    assert effects.sensitivity.measure is Measure.PRECIPITATION
+
+
+def test_an_absent_value_is_counted_in_neither_crossing_nor_peak() -> None:
+    baseline = series(
+        {Measure.TEMPERATURE: 10.0, Measure.PRECIPITATION: None},
+        {Measure.TEMPERATURE: None, Measure.PRECIPITATION: 2.0},
+    )
+
+    scenario, measures = apply_assumptions(
+        baseline, ScenarioAssumptions(temperature_delta=1.0, precipitation_percent=10.0)
+    )
+    effects = summarise_effects(baseline, scenario, measures)
+
+    peak = next(e for e in effects.extremes if e.measure is Measure.TEMPERATURE)
+    assert peak.scenario == 11.0
+
+    rain = next(c for c in effects.crossings if c.measure is Measure.PRECIPITATION)
+    assert (rain.baseline_hours, rain.scenario_hours) == (1, 1)

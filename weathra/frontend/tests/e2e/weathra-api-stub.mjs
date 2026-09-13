@@ -672,11 +672,17 @@ const FIXTURES = {
     attribution: ATTRIBUTION,
     period: PERIOD,
     horizon_days: 3,
+    /*
+     * The contract's own field names.
+     *
+     * These read `temperature_offset` and `precipitation_scale` until the Lab was rebuilt against
+     * the real response — names `ScenarioAssumptions` has never had. Nothing noticed, because the
+     * screen that consumed this only ever read `measures`; the moment a panel read the assumptions
+     * themselves it rendered "no assumption applied" over a result that plainly had two.
+     */
     assumptions: {
-      temperature_offset: 2.5,
-      precipitation_scale: 1.15,
-      relative_humidity_offset: null,
-      wind_speed_offset: null,
+      temperature_delta: 2.5,
+      precipitation_percent: 15,
     },
     baseline: {
       granularity: "hourly",
@@ -717,8 +723,8 @@ const FIXTURES = {
       },
       {
         measure: "precipitation",
-        assumption: 1.15,
-        method: "Each reported hour scaled by 1.15, floored at zero.",
+        assumption: 15,
+        method: "each reported value scaled by +15.0%",
         baseline_mean: 0.62,
         scenario_mean: 0.71,
         difference: 0.09,
@@ -728,6 +734,88 @@ const FIXTURES = {
         clipped: 0,
       },
     ],
+    /*
+     * What the assumptions did past the means — `analytics/scenario.summarise_effects`. Counted
+     * from the two series above, so the figures here and the figures there agree.
+     */
+    effects: {
+      risk: {
+        kind: "higher-peak-temperature",
+        label: "Higher peak temperature",
+        detail: "The highest temperature in the window rises to 21.1 °C, from 18.6 °C.",
+        measure: "temperature",
+      },
+      sensitivity: {
+        kind: "most-sensitive",
+        label: "Most sensitive to precipitation",
+        detail:
+          "That assumption moved its own mean by 14.5% of the retrieved mean, the largest share of the four.",
+        measure: "precipitation",
+      },
+      crossings: [
+        {
+          measure: "precipitation",
+          unit: "mm",
+          threshold: 0,
+          label: "hours with precipitation reported",
+          baseline_hours: 3,
+          scenario_hours: 3,
+          difference: 0,
+        },
+      ],
+      extremes: [
+        {
+          measure: "temperature",
+          unit: "°C",
+          baseline: 18.6,
+          scenario: 21.1,
+          difference: 2.5,
+          occurred_at_local: "2026-09-05T12:00:00+02:00",
+        },
+      ],
+      method:
+        "Counted from the two series directly: hours past each stated threshold, and the highest reported value of each measure.",
+    },
+    /*
+     * The archive block. The comparison is the same shape every other surface gets from
+     * `HistoryService.compare_against_baseline`, and the nearest analog is the archived year whose
+     * own mean for this window sits closest to the scenario's.
+     */
+    history: {
+      scenario_mean: 17.9,
+      method:
+        "The scenario's mean temperature across the window, placed against the mean of the same calendar window in each archived year. The nearest analog is the single year whose mean sits closest to it.",
+      nearest_analog: { year: 2022, mean: 17.4, distance: 0.5, unit: "°C" },
+      comparison: {
+        location: BERLIN,
+        measure: "temperature_mean",
+        observed_or_forecast_value: 17.9,
+        observed_data_class: "computed_statistic",
+        characterization:
+          "17.9 °C is 2.2 °C above the 3-year baseline temperature mean of 15.7 °C (+1.83 standard deviations).",
+        difference: statistic("delta", "temperature_mean", 2.2, "°C", "m"),
+        z_score: statistic("z_score", "temperature_mean", 1.8333333333333333, "", "m"),
+        percentile_rank: statistic("percentile_rank", "temperature_mean", 100, "%", "m"),
+        baseline: {
+          labelling: "Baseline for 4-6 September",
+          measure: "temperature_mean",
+          calendar_period: PERIOD,
+          location: BERLIN,
+          provider: "stub-provider",
+          mean: statistic("mean", "temperature_mean", 15.7, "°C", "m"),
+          minimum: statistic("minimum", "temperature_mean", 14.1, "°C", "m"),
+          maximum: statistic("maximum", "temperature_mean", 17.4, "°C", "m"),
+          standard_deviation: statistic("standard_deviation", "temperature_mean", 1.2, "°C", "m"),
+          years_requested: 10,
+          years_used: [2021, 2022, 2023],
+          yearly_means: [
+            { year: 2021, value: 14.1, points_used: 3 },
+            { year: 2022, value: 17.4, points_used: 3 },
+            { year: 2023, value: 15.6, points_used: 3 },
+          ],
+        },
+      },
+    },
   },
 
   "/api/v1/weather/forecast": {

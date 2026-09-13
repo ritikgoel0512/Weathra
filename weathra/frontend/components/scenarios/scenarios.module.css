@@ -1,15 +1,17 @@
 /*
- * Weather Scenario Lab — from the task 20.3 tokens against
- * `docs/design/screens/13-weather-scenario-lab.png`.
+ * Weather Scenario Lab — against `docs/design/screens/13-weather-scenario-lab.png`.
  *
- * The artifact's layout: assumptions in a narrow left column, results in the wide right one, delta
- * cards beneath the chart, the disclaimer last. Its session id, inference model, station id,
- * stability index, simulation engine, report export, correlation model and node counts are absent
- * from the markup rather than styled away.
+ * The artifact is a workspace: a header carrying the run controls, a narrow assumptions rail down
+ * the left, and an analysis area beside it that fills with results. Its visual system is the one
+ * this product already has — navy surfaces, accent for anything simulated, the quota tone for the
+ * SIMULATED chip, muted for anything retrieved — and its hierarchy is carried by uppercase tracked
+ * region titles over sentence-case readouts.
  *
- * `quota` is the badge tone the design system reserves for a state that is not a data class —
- * SIMULATED is exactly that: not observed, not forecast, not historical, not computed from the
- * record, but supposed.
+ * **The rail is a column, not a card in a grid.** `grid-template-columns: minmax(0, 20rem)
+ * minmax(0, 1fr)` at desk width is the artifact's 28/72; below it the two stack and the rail goes
+ * first, which is the order somebody works in.
+ *
+ * No colour, size or spacing is written here that is not a token.
  */
 
 .screen {
@@ -19,60 +21,647 @@
   min-width: 0;
 }
 
-.header {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+/* ------------------------------------------------------------------ the body */
+
+/*
+ * `stretch`, not `start`: the artifact draws the rail to the full height of the analysis area
+ * beside it, and `start` left a column of page background under a rail that is always shorter than
+ * the results it drives. The rail's own card grows; what is inside it keeps its natural height.
+ */
+.body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: var(--space-4);
+  min-width: 0;
 }
 
-.title {
+/* The artifact's 28/72. Below this the rail stacks above the analysis it drives. */
+@media (min-width: 1080px) {
+  .body {
+    grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+  }
+}
+
+.rail,
+.analysis {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* The rail holds one card, and that card is the column. */
+.rail > .region {
+  flex: 1;
+}
+
+/* Its controls sit at the top of it rather than spreading down its new height. */
+.rail > .region > .regionBody {
+  justify-content: flex-start;
+}
+
+/* The two headline cards, side by side wherever there is room for both. */
+.pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  align-items: stretch;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------- the regions */
+
+.region,
+.header {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  min-width: 0;
+}
+
+.region {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The blocks the artifact fills a shade lighter and edges in accent: the header, the rail, the
+   interpretation. Each carries an instruction or a conclusion rather than a figure. */
+.region[data-level="lead"],
+.header {
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-raised);
+}
+
+.region[data-level="lead"]::before,
+.header::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  block-size: 2px;
+  background: linear-gradient(90deg, var(--color-accent) 0%, transparent 70%);
+}
+
+.regionHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  min-width: 0;
+}
+
+.regionHeadings {
+  min-width: 0;
+}
+
+/*
+ * The artifact's region titles: uppercase, tracked, small, with the subject's glyph in front.
+ *
+ * The transform is CSS rather than copy, so the accessible name stays "Baseline weather data" — a
+ * heading written in capitals is read letter by letter by some screen readers.
+ */
+.regionTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.regionIcon {
+  display: inline-flex;
+  color: var(--color-accent);
+}
+
+.regionSubtitle {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  max-width: 64ch;
+}
+
+.regionAside {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
+}
+
+.regionBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: 0 var(--space-4) var(--space-4);
+  min-width: 0;
+}
+
+/* --------------------------------------------------------------------- header */
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+}
+
+.headerText {
+  min-width: 0;
+  flex: 1 1 24rem;
+}
+
+.headerKicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-block-end: var(--space-2);
+}
+
+.headerPlace {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line);
+  font-weight: var(--type-display-weight);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-text-primary);
 }
 
 .lede {
-  margin: 0;
-  color: var(--color-text-secondary);
-  max-width: 74ch;
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  max-width: 66ch;
 }
 
-.body {
-  display: grid;
-  grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr);
-  gap: var(--space-4);
-  align-items: start;
+.headerControls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
   min-width: 0;
 }
 
-.controls {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.actions {
+.headerActions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  margin-top: var(--space-4);
 }
 
-.results {
+.headerHint {
+  margin: 0;
+  color: var(--color-accent);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+}
+
+.placeControl {
+  min-width: 0;
+}
+
+.placeSummary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+  cursor: pointer;
+  min-width: 0;
+}
+
+.placeName {
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.placeHint {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.placeControl > :not(summary) {
+  margin-block-start: var(--space-3);
+}
+
+/* --------------------------------------------------------------- the sliders */
+
+.control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 5rem;
+  gap: var(--space-2);
+  padding-block-end: var(--space-4);
+  border-block-end: 1px solid var(--color-border-subtle);
+  min-width: 0;
+}
+
+.rail .region .regionBody > div > .control:last-of-type {
+  border-block-end: none;
+  padding-block-end: 0;
+}
+
+.controlHead {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.controlLabel {
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+  overflow-wrap: anywhere;
+}
+
+/* The live readout. Accent once something has actually been supposed, muted at zero. */
+.controlValue {
+  color: var(--color-text-muted);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.controlValue[data-tone="set"] {
+  color: var(--color-accent);
+}
+
+.slider {
+  grid-column: 1 / -1;
+  inline-size: 100%;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+.slider:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+  border-radius: var(--radius-pill);
+}
+
+.controlFoot {
+  grid-column: 1 / 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
+}
+
+.controlBaseline {
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.controlNumber {
+  grid-column: 2 / 3;
+  inline-size: 100%;
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--type-meta-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.controlNumber:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+/* ---------------------------------------------------------------- the basis */
+
+.basis {
   display: flex;
   flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.basisTitle {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+}
+
+.basisList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.basisRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  min-width: 0;
+}
+
+.basisRow[data-complete="true"] {
+  color: var(--color-status-ok);
+}
+
+.basisRow[data-complete="false"] {
+  color: var(--color-status-warning);
+}
+
+.basisLabel {
+  color: var(--color-text-secondary);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.basisValue {
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------- baseline / impact cards */
+
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.resultHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.resultReadout {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-1);
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-readout-size);
+  line-height: var(--type-readout-line);
+  font-weight: var(--type-readout-weight);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The simulated side is the accent one. The retrieved side never is. */
+.result[data-variant="scenario"] .resultReadout {
+  color: var(--color-accent);
+}
+
+.resultUnit {
+  color: var(--color-text-muted);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+}
+
+.resultDelta {
+  font-size: var(--type-card-size);
+  font-weight: var(--type-card-weight);
+  font-variant-numeric: tabular-nums;
+}
+
+.resultDelta[data-tone="up"] {
+  color: var(--color-status-warning);
+}
+
+.resultDelta[data-tone="down"] {
+  color: var(--color-class-forecast);
+}
+
+.resultDelta[data-tone="flat"] {
+  color: var(--color-text-muted);
+}
+
+.resultCaption {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+}
+
+.resultFigures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(110px, 100%), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--color-border-subtle);
+  min-width: 0;
+}
+
+.resultFigure {
+  min-width: 0;
+}
+
+.resultFigure dt {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.resultFigure dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1);
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-card-weight);
+  font-variant-numeric: tabular-nums;
+}
+
+.resultFigureNote {
+  font-size: var(--type-meta-size);
+  font-weight: var(--type-body-weight);
+  color: var(--color-text-muted);
+}
+
+.resultFigureNote[data-tone="up"] {
+  color: var(--color-status-warning);
+}
+
+.resultFigureNote[data-tone="down"] {
+  color: var(--color-class-forecast);
+}
+
+.resultSource {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  overflow-wrap: anywhere;
+}
+
+/* --------------------------------------------------------------- the deltas */
+
+.deltas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.delta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.deltaLabel {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.deltaValue {
+  color: var(--color-text-primary);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  font-variant-numeric: tabular-nums;
+}
+
+.deltaValue[data-tone="up"] {
+  color: var(--color-status-warning);
+}
+
+.deltaValue[data-tone="down"] {
+  color: var(--color-class-forecast);
+}
+
+.deltaValue[data-tone="flat"] {
+  color: var(--color-text-muted);
+}
+
+.deltaNote {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  overflow-wrap: anywhere;
+}
+
+/* -------------------------------------------------------- the interpretation */
+
+.interpretation {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
   gap: var(--space-4);
   min-width: 0;
 }
 
-.deltas {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--space-3);
+@media (min-width: 900px) {
+  .interpretation {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
 }
 
-.delta {
+.interpretationMain {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.interpretationLine {
+  margin: 0;
+  color: var(--color-text-primary);
+  max-width: 78ch;
+}
+
+.interpretationLine:last-of-type {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.signals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.signal {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -83,16 +672,161 @@
   min-width: 0;
 }
 
-.deltaLabel {
-  margin: 0;
+.signal[data-kind="risk"] {
+  border-inline-start: 2px solid var(--color-status-warning);
+}
+
+.signal[data-kind="sensitivity"] {
+  border-inline-start: 2px solid var(--color-accent);
+}
+
+.signalLabel {
   color: var(--color-text-muted);
   font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
   letter-spacing: var(--type-label-tracking);
   text-transform: uppercase;
 }
 
-.deltaValue {
+.signalValue {
+  color: var(--color-text-primary);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+}
+
+.signalDetail {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  overflow-wrap: anywhere;
+}
+
+/* The artifact's key what-if bars, as the movements this run actually produced. */
+.keyDeltas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+  align-self: start;
+}
+
+.keyDeltasTitle {
   margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+}
+
+.keyDelta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.keyDeltaLabel {
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.keyDeltaValue {
+  color: var(--color-text-primary);
+  font-size: var(--type-meta-size);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.keyDeltaValue[data-tone="up"] {
+  color: var(--color-status-warning);
+}
+
+.keyDeltaValue[data-tone="down"] {
+  color: var(--color-class-forecast);
+}
+
+.keyDeltaTrack {
+  grid-column: 1 / -1;
+  display: block;
+  block-size: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-overlay);
+  overflow: hidden;
+}
+
+.keyDeltaFill {
+  display: block;
+  block-size: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+}
+
+.keyDeltaNote {
+  grid-column: 1 / -1;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+}
+
+/* ------------------------------------------------------------- the archive */
+
+.historical {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .historical {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+}
+
+.historicalMain {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.historicalHeadline {
+  margin: 0;
+  color: var(--color-text-primary);
+  max-width: 78ch;
+}
+
+.historicalFigures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  min-width: 0;
+}
+
+.historicalFigure {
+  min-width: 0;
+}
+
+.historicalFigure dt {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.historicalFigure dd {
+  margin: var(--space-1) 0 0;
   color: var(--color-text-primary);
   font-size: var(--type-heading-size);
   line-height: var(--type-heading-line);
@@ -100,21 +834,336 @@
   font-variant-numeric: tabular-nums;
 }
 
-.deltaMethod,
-.deltaNote {
-  margin: 0;
+.historicalFigure dd[data-tone="up"] {
+  color: var(--color-status-warning);
+}
+
+.historicalNote {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.analog {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.analogLabel {
+  color: var(--color-text-secondary);
+  font-size: var(--type-ui-size);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.analogValue {
+  color: var(--color-class-historical);
+  font-size: var(--type-card-size);
+  font-weight: var(--type-card-weight);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.analogNote {
+  grid-column: 1 / -1;
   color: var(--color-text-muted);
   font-size: var(--type-meta-size);
 }
 
-.quiet {
-  margin: 0 0 var(--space-2);
-  color: var(--color-text-muted);
-  max-width: 74ch;
+.evidence {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+  align-self: start;
 }
 
-@media (max-width: 1023px) {
-  .body {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.evidenceTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-class-historical);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+}
+
+.evidenceList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.evidenceList li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-block: var(--space-1);
+  border-block-start: 1px solid var(--color-border-subtle);
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  min-width: 0;
+}
+
+.evidenceList li:first-child {
+  border-block-start: none;
+}
+
+.evidenceList li > span:last-child {
+  color: var(--color-text-primary);
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+
+.evidenceMethod {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+/* ------------------------------------------------------------ the disclaimer */
+
+.disclaimer {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-status-warning);
+  border-radius: var(--radius-lg);
+  background: var(--color-status-warning-surface);
+  color: var(--color-status-warning);
+  min-width: 0;
+}
+
+.disclaimerTitle {
+  margin: 0;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+}
+
+.disclaimerText {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  max-width: 96ch;
+}
+
+/* ---------------------------------------------------------- how this works */
+
+.howItWorks {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  min-width: 0;
+}
+
+.howItWorksSummary {
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text-primary);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+  cursor: pointer;
+}
+
+.howItWorksBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0 var(--space-4) var(--space-4);
+  min-width: 0;
+}
+
+.methodList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding-inline-start: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+}
+
+/* ------------------------------------------------------------------- charts */
+
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  min-width: 0;
+}
+
+.chartCaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.legendLine {
+  inline-size: 18px;
+  block-size: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--color-border-strong);
+}
+
+.legendLine[data-series="baseline"] {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--color-text-muted) 0 5px,
+    transparent 5px 9px
+  );
+}
+
+.legendLine[data-series="scenario"] {
+  background: var(--color-accent);
+}
+
+.legendSwatch {
+  inline-size: 10px;
+  block-size: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--color-class-observed);
+}
+
+/*
+ * The plot's own box. A height is set here rather than left to the content: `ResponsiveContainer`
+ * measures its parent, and a parent sized by its children collapses to nothing.
+ */
+.chartScroll {
+  min-width: 0;
+}
+
+.chartPlot {
+  block-size: 300px;
+  min-inline-size: 320px;
+}
+
+.chartNote {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.tooltip {
+  padding: var(--space-2);
+  background: var(--color-surface-overlay);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-overlay);
+}
+
+.tooltipStamp {
+  margin: 0 0 var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+}
+
+.tooltipValue {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-meta-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.figures {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.tableScroll {
+  inline-size: 100%;
+  min-width: 0;
+}
+
+.table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: var(--type-meta-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.tableCaption {
+  text-align: start;
+  color: var(--color-text-muted);
+  padding-block-end: var(--space-2);
+}
+
+.table th,
+.table td {
+  padding: var(--space-1) var(--space-2);
+  border-block-end: 1px solid var(--color-border-subtle);
+  text-align: start;
+  white-space: nowrap;
+}
+
+.table thead th {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+}
+
+.table tbody th {
+  color: var(--color-text-secondary);
+  font-weight: var(--type-body-weight);
+}
+
+.table tbody td {
+  color: var(--color-text-primary);
+}
+
+/* -------------------------------------------------------------------- prose */
+
+.quiet {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  max-width: 84ch;
 }

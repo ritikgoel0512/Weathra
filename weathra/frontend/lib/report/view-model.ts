@@ -60,7 +60,16 @@ import { conditionFor, type Condition } from "@/lib/weather/condition";
 
 import type { ReportIconName } from "@/components/report/icons";
 
-import { formatFigureFor, formatMeasured } from "./figures";
+import {
+  formatFigureFor,
+  formatMeasured,
+  formatSigma,
+  roundTo,
+  signedOf,
+  toneOf,
+} from "@/lib/format/figures";
+
+export { formatSigma, roundTo, signedOf, toneOf };
 
 /* --------------------------------------------------------------- the limits */
 
@@ -88,36 +97,6 @@ export function isReportHorizon(value: string): value is ReportHorizon {
 }
 
 /* ------------------------------------------------------------ the precision */
-
-/**
- * A figure at the precision it is *read* at, not the precision it was computed at.
- *
- * Rounding down the number of digits is presentation; rounding up would be invention, and nothing
- * here ever adds one. Trailing zeros are dropped because "0.70" and "0.7" are the same claim and
- * the shorter one reads.
- */
-export function roundTo(value: number, places: number): string {
-  if (!Number.isFinite(value)) return "—";
-  const factor = 10 ** places;
-  return String(Math.round(value * factor) / factor);
-}
-
-/** A standard-deviation figure, at the two places a z-score is meaningful to. */
-export function formatSigma(value: number): string {
-  return `${roundTo(value, 2)}σ`;
-}
-
-/** A signed figure, so a delta reads as a direction before it reads as a number. */
-export function signedOf(value: number, unit: string | null | undefined): string {
-  return `${value > 0 ? "+" : ""}${formatMeasured(value, unit)}`;
-}
-
-/** Which way a figure points, for a tone. Never the only carrier — the sign leads. */
-export function toneOf(value: number): "up" | "down" | "flat" {
-  if (value > 0) return "up";
-  if (value < 0) return "down";
-  return "flat";
-}
 
 /** A statistic's figure with its unit, or null where the backend could not compute it. */
 export function figureOf(result: StatisticResult | null | undefined): string | null {

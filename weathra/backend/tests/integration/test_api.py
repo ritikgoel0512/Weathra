@@ -1914,3 +1914,65 @@ async def test_every_public_capability_serves_with_no_credential_while_the_agent
         assert not CONFIGURATION_SHAPED.search(message), message
         assert refused.json()["error"]["details"]["missing"] == "inference_credential"
         assert not api.app.state.inference.built, "no client was ever constructed"
+
+
+async def test_the_scenario_endpoint_carries_its_effects_and_its_history(
+    api_factory: ApiFactory,
+) -> None:
+    """A lab run answers with the arithmetic, what it did, and where it sits against the archive.
+
+    The three blocks are asserted together because the screen draws them together: a response
+    carrying the adjusted series but no counted effects would render a lab with empty result cards,
+    which is the state this rebuild exists to remove.
+    """
+    async with api_factory() as api:
+        response = await api.client.post(
+            f"{PREFIX}/weather/scenario",
+            json={
+                "location": "Berlin",
+                "days": 2,
+                "assumptions": {"temperature_delta": 2.5, "precipitation_percent": 15},
+            },
+        )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+
+        assert body["simulated"] is True
+        assert body["baseline"]["entries"] and body["scenario"]["entries"]
+        assert {measure["measure"] for measure in body["measures"]} == {
+            "temperature",
+            "precipitation",
+        }
+
+        effects = body["effects"]
+        assert effects["risk"]["kind"] and effects["risk"]["detail"]
+        assert effects["sensitivity"]["kind"]
+        assert effects["method"]
+
+        # The archive is a separate retrieval and is allowed to be absent; when it answers, it
+        # answers with the same comparison every other surface uses.
+        if body["history"] is not None:
+            assert body["history"]["comparison"]["measure"] == "temperature_mean"
+            assert body["history"]["scenario_mean"] is not None
+
+
+async def test_a_scenario_survives_an_archive_that_cannot_serve_the_window(
+    api_factory: ApiFactory,
+) -> None:
+    """The historical section is context on top of a run, not a precondition for one.
+
+    A provider that cannot serve ten Septembers is a reason to omit that section, never a reason to
+    refuse arithmetic that has already been done on a forecast that has already been retrieved.
+    """
+    async with api_factory() as api:
+        response = await api.client.post(
+            f"{PREFIX}/weather/scenario",
+            # A place the stub archive has nothing for still returns a complete scenario.
+            json={"location": "Berlin", "days": 1, "assumptions": {"temperature_delta": 1.0}},
+        )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["scenario"]["entries"]
+        assert body["effects"]["risk"]["kind"]
