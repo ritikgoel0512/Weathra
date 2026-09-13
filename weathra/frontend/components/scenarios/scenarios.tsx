@@ -28,6 +28,15 @@
  * given one, on three more empty cards asking for a button press. A place resolves to a run with
  * every assumption at zero — which is the retrieved forecast, and a legitimate thing to draw — so
  * the baseline card, the plot and the archive block are populated before anything is supposed.
+ * Before a place resolves the screen is an introduction and a chooser, not a frame of blank panels.
+ *
+ * **A baseline run says it is a baseline, in every panel at once.** `changed` is read off the
+ * *displayed response* rather than off the sliders, and everything below branches on it: the
+ * calculated card reads UNCHANGED over "Matches retrieved baseline", the four tiles read Unchanged,
+ * the plot says the two series overlap, the reading is one sentence with `Baseline` and `Not
+ * evaluated` beside it, and the archive block is titled BASELINE HISTORICAL CONTEXT because what it
+ * is placing against the archive is the retrieved forecast. An unchanged figure under a SIMULATED
+ * badge claims an adjustment nobody made, which is the same class of falsehood as an invented tile.
  *
  * **It is arithmetic and it says so.** No language model is called: the endpoint's own contract
  * refuses to spend an allowance on a slider movement, so the interpretation carries ANALYTICS
@@ -42,7 +51,6 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { ScreenPreview } from "@/components/locations/screen-preview";
 import { Badge, DataClassBadge, ErrorState, LoadingState } from "@/components/ui";
 import type {
   Location,
@@ -50,7 +58,6 @@ import type {
   ScenarioResponse,
 } from "@/lib/api/schema";
 import { briefingLocationFrom } from "@/lib/dashboard/briefing";
-import { formatMeasured } from "@/lib/format/figures";
 import { useApiMutation, useApiQuery } from "@/lib/query/hooks";
 import { PREFERENCES_KEY } from "@/lib/query/keys";
 import {
@@ -58,13 +65,15 @@ import {
   BASELINE_ASSUMPTIONS,
   assumptionsFor,
   baselineCardFrom,
+  baselineReferencesFrom,
   basisFrom,
   deltaTilesFrom,
   historicalFrom,
   impactCardFrom,
   interpretationFrom,
-  isBaseline,
+  isChangedRun,
   keyDeltasFrom,
+  signalsFrom,
   type AssumptionKey,
   type AssumptionValues,
 } from "@/lib/scenarios/view-model";
@@ -73,11 +82,13 @@ import { TemporalImpactChart, pointsFor } from "./chart";
 import {
   AnalyticalDisclaimer,
   AssumptionRail,
+  BaselineNotice,
   DeltaStrip,
   HistoricalCorrelation,
   HowThisWorks,
   Interpretation,
   LabHeader,
+  LabIntroduction,
   LabPlaceChooser,
   Region,
   ResultCard,
@@ -181,25 +192,25 @@ function LabFor({
   const baselineCard = baselineCardFrom(result);
   const impactCard = impactCardFrom(result);
   const historical = historicalFrom(result);
-  const changed = !isBaseline(ran);
+  /*
+   * Read off the *displayed run*, not off the sliders.
+   *
+   * The controls can hold a figure nobody has pressed Run on yet, and a panel branching on them
+   * would describe a scenario that was never calculated. Every panel below branches on this one
+   * value, so the badge, the plot, the tiles, the reading and the archive title cannot disagree
+   * about which state the screen is in.
+   */
+  const changed = isChangedRun(result);
   const points = pointsFor(result.baseline, result.scenario);
   const units = result.baseline?.units ?? {};
-
-  /** The retrieved mean of each adjustable measure, for the rail's own reference line. */
-  const references = Object.fromEntries(
-    ASSUMPTION_CONTROLS.map((control) => {
-      const row = (result.measures ?? []).find((entry) => entry.measure === control.measure);
-      const mean = row?.baseline_mean;
-      return [
-        control.measure,
-        typeof mean === "number" ? formatMeasured(mean, units[control.measure] ?? null) : null,
-      ];
-    }),
-  );
+  const references = baselineReferencesFrom(result);
 
   return (
     <div className={styles.screen}>
       {header}
+
+      {/* With nothing supposed, say so once, at the top, rather than leaving it to be inferred. */}
+      {changed ? null : <BaselineNotice location={location} />}
 
       <div className={styles.body}>
         {/* The rail, down the left of everything. */}
@@ -240,7 +251,9 @@ function LabFor({
                 id="lab-impact"
                 title="Calculated analytical impact"
                 icon="impact"
-                badges={<Badge tone="quota">Simulated</Badge>}
+                badges={
+                  changed ? <Badge tone="quota">Simulated</Badge> : <Badge>Unchanged</Badge>
+                }
               >
                 <ResultCard card={impactCard} variant="scenario" />
               </Region>
@@ -255,9 +268,9 @@ function LabFor({
             subtitle={
               changed
                 ? "The retrieved forecast against the user-defined scenario, over the same hours."
-                : "The retrieved forecast. Supply an assumption and run to draw the scenario over it."
+                : "Baseline and scenario over the same hours. With nothing supposed they are the same series."
             }
-            badges={<Badge tone="quota">Simulated</Badge>}
+            badges={changed ? <Badge tone="quota">Simulated</Badge> : <Badge>Baseline</Badge>}
           >
             <TemporalImpactChart
               points={points}
@@ -280,10 +293,9 @@ function LabFor({
             badges={<DataClassBadge dataClass="analytics" />}
           >
             <Interpretation
-              sentences={interpretationFrom(result, location)}
+              reading={interpretationFrom(result, location)}
               keyDeltas={keyDeltasFrom(result)}
-              risk={result.effects?.risk ?? null}
-              sensitivity={result.effects?.sensitivity ?? null}
+              signals={signalsFrom(result)}
             />
           </Region>
         </div>
@@ -293,9 +305,9 @@ function LabFor({
       {historical ? (
         <Region
           id="lab-historical"
-          title="Historical correlation model"
+          title={historical.title}
           icon="archive"
-          subtitle="The scenario's own mean placed against the archived years for this calendar window."
+          subtitle={historical.subtitle}
           badges={<DataClassBadge dataClass="historical" />}
         >
           <HistoricalCorrelation view={historical} />
@@ -348,37 +360,14 @@ export function WeatherScenarioLab(): ReactNode {
   return (
     <>
       {/*
-        With no place there is nothing to retrieve and nothing to adjust, so the screen is the one
-        control that resolves that — not a shell of empty panels around it. Everything below fills
-        in the moment a place does.
+        With no place there is nothing to retrieve and nothing to adjust, so the screen is a short
+        statement of what the lab does and the one control that resolves that. It used to draw three
+        full-size empty panels underneath — an assumptions card, a plot frame and an archive frame,
+        all blank — which is a screen pretending to be loaded rather than a screen that is waiting.
+        Everything fills in the moment a place resolves.
       */}
       {location === null ? (
-        <>
-          {chooser}
-          <ScreenPreview
-            title="The lab experiments on one place"
-            lead="Name a place above, or set a default in Settings and every screen opens on it. The moment one resolves, Weathra retrieves its forecast and the lab opens on that baseline."
-            regions={[
-              {
-                title: "User-defined assumptions",
-                blurb:
-                  "Suppose it were warmer, wetter, more humid or windier — stated as an adjustment rather than as a prediction.",
-              },
-              {
-                title: "Temporal impact projection",
-                blurb:
-                  "The retrieved forecast and your scenario over the same hours, so what was measured and what was supposed never merge.",
-                chart: 150,
-              },
-              {
-                title: "Historical correlation model",
-                blurb:
-                  "Where the scenario sits among the archived years for the same calendar window, and which year it most resembles.",
-                chart: 150,
-              },
-            ]}
-          />
-        </>
+        <LabIntroduction chooser={chooser} />
       ) : (
         <LabFor
           key={`${location.latitude},${location.longitude}`}

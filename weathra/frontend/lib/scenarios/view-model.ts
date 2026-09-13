@@ -56,6 +56,8 @@ export const ASSUMPTION_CONTROLS = [
   {
     key: "temperature_delta",
     label: "Temperature shift",
+    /** How the retrieved figure under this slider is named. A shift is read against something. */
+    baselineLabel: "Baseline mean",
     unit: "°C",
     min: -10,
     max: 10,
@@ -65,6 +67,7 @@ export const ASSUMPTION_CONTROLS = [
   {
     key: "precipitation_percent",
     label: "Precipitation change",
+    baselineLabel: "Baseline precipitation",
     unit: "%",
     min: -100,
     max: 200,
@@ -74,6 +77,7 @@ export const ASSUMPTION_CONTROLS = [
   {
     key: "relative_humidity_delta",
     label: "Humidity shift",
+    baselineLabel: "Baseline humidity",
     unit: "pts",
     min: -30,
     max: 30,
@@ -83,6 +87,7 @@ export const ASSUMPTION_CONTROLS = [
   {
     key: "wind_speed_delta",
     label: "Wind speed shift",
+    baselineLabel: "Baseline wind",
     unit: "km/h",
     min: -30,
     max: 50,
@@ -122,6 +127,23 @@ export function formatAssumption(key: AssumptionKey, value: number): string {
   return `${value > 0 ? "+" : ""}${figure} ${control.unit}`;
 }
 
+/**
+ * Whether the run being *displayed* actually had an assumption applied to it.
+ *
+ * Read off the response rather than off the sliders. The controls can hold a figure nobody has run
+ * yet, and a panel that branched on them would describe a scenario that was never calculated. The
+ * response carries the assumptions it was calculated with, so every panel branching on this reads
+ * the same run.
+ */
+export function isChangedRun(result: ScenarioResponse | null): boolean {
+  if (!result) return false;
+  const stated = (result.assumptions ?? {}) as Record<string, number | null | undefined>;
+  return ASSUMPTION_CONTROLS.some((control) => {
+    const value = stated[control.key];
+    return typeof value === "number" && value !== 0;
+  });
+}
+
 /* --------------------------------------------------------------- the figures */
 
 export interface LabFigure {
@@ -143,6 +165,45 @@ function meanOf(series: Series | undefined, measure: string): number | null {
     .map((entry) => entry.values?.[measure])
     .filter((value): value is number => typeof value === "number");
   return values.length === 0 ? null : values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+/** What sits under one slider: the retrieved figure that slider's shift is read against. */
+export interface BaselineReference {
+  readonly label: string;
+  readonly value: string;
+}
+
+/**
+ * The retrieved figure behind each slider, taken from the baseline series itself.
+ *
+ * It used to be read off `measures[]`, and `measures[]` carries a row only for a measure an
+ * assumption *addressed* — so on the opening run, where nothing has been supposed, every row was
+ * missing and all four sliders read "No baseline reported" over a baseline that was sitting right
+ * there in the response. The series is the honest source: it is present whether or not anything was
+ * assumed, and it is the same series the cards and the plot are drawn from.
+ *
+ * A measure the provider genuinely reported nothing for returns null, and the caller draws no line
+ * at all rather than a sentence about an absence.
+ */
+export function baselineReferencesFrom(
+  result: ScenarioResponse | null,
+): Readonly<Record<string, BaselineReference | null>> {
+  const units = result?.baseline?.units ?? {};
+
+  return Object.fromEntries(
+    ASSUMPTION_CONTROLS.map((control) => {
+      const mean = meanOf(result?.baseline, control.measure);
+      return [
+        control.measure,
+        mean === null
+          ? null
+          : {
+              label: control.baselineLabel,
+              value: formatMeasured(mean, units[control.measure] ?? null),
+            },
+      ];
+    }),
+  );
 }
 
 /* --------------------------------------------------------------- the cards */
@@ -196,20 +257,30 @@ export interface ImpactCard extends BaselineCard {
   /** The signed movement of the headline figure, where an assumption moved it. */
   readonly delta: string | null;
   readonly tone: "up" | "down" | "flat";
+  /** Whether an assumption actually produced this figure, or it is still the retrieved one. */
+  readonly simulated: boolean;
 }
 
-/** What the assumptions make of it — the same three measures, after. */
+/**
+ * What the assumptions make of it — the same three measures, after.
+ *
+ * With nothing supposed, this card holds the baseline's own figures, and it says so: a SIMULATED
+ * badge over an unchanged number claims an adjustment that never happened. `simulated` is what the
+ * screen branches its badge and its caption on.
+ */
 export function impactCardFrom(result: ScenarioResponse | null): ImpactCard | null {
   if (!result) return null;
   const units = result.scenario?.units ?? {};
   const mean = meanOf(result.scenario, "temperature");
   const temperature = measureFor(result, "temperature");
   const difference = temperature?.difference ?? null;
+  const simulated = isChangedRun(result);
 
   return {
+    simulated,
     headline: mean === null ? null : roundTo(mean, 1),
     headlineUnit: units.temperature ?? null,
-    caption: "Mean under the stated assumptions",
+    caption: simulated ? "Mean under the stated assumptions" : "Matches retrieved baseline",
     delta:
       typeof difference === "number" && difference !== 0
         ? signedOf(difference, units.temperature ?? null)
@@ -321,6 +392,13 @@ export function keyDeltasFrom(result: ScenarioResponse | null): KeyDelta[] {
 
 /* ------------------------------------------------------ the interpretation */
 
+export interface Reading {
+  /** The paragraphs of the reading itself. One at baseline, the full account after a run. */
+  readonly sentences: readonly string[];
+  /** What this is not — kept as secondary copy rather than as another paragraph. */
+  readonly footnote: string;
+}
+
 /**
  * The lab's reading of its own run — deterministic, and labelled as such.
  *
@@ -329,15 +407,23 @@ export function keyDeltasFrom(result: ScenarioResponse | null): KeyDelta[] {
  * arithmetic, the endpoint's own docstring refuses to spend somebody's allowance on a slider
  * movement, and a badge claiming a model wrote this would be false. It carries ANALYTICS.
  *
- * Every sentence is either assembled from figures the backend returned or is one of the backend's
- * own statements, in this order: what was applied, what that counted through to, which assumption
- * dominated, and what the result is not.
+ * **After a run**, every sentence is either assembled from figures the backend returned or is one
+ * of the backend's own statements, in this order: what was applied, what that counted through to,
+ * and which assumption dominated.
+ *
+ * **At baseline there is one sentence.** The backend answers all three of those questions with a
+ * variation on "nothing was supposed", and printing all three produced a paragraph that said the
+ * same thing three times over. Where nothing has been assumed the honest reading is short: this is
+ * the retrieved forecast, and it is what the next run will be measured against.
  */
 export function interpretationFrom(
   result: ScenarioResponse | null,
   location: Location,
-): readonly string[] {
-  if (!result) return [];
+): Reading {
+  const footnote =
+    "It is a transformation of a retrieved forecast, not a physical model of the atmosphere: a series two degrees warmer is not the weather a warmer atmosphere would produce.";
+
+  if (!result) return { sentences: [], footnote };
 
   const applied = ASSUMPTION_CONTROLS.map((control) => {
     const value = (result.assumptions as Record<string, number | null | undefined>)[control.key];
@@ -346,22 +432,71 @@ export function interpretationFrom(
       : null;
   }).filter((clause): clause is string => clause !== null);
 
-  const lead =
-    applied.length === 0
-      ? `No assumption is applied, so this is the retrieved ${result.horizon_days}-day forecast for ${friendlyName(location)}, unchanged.`
-      : `Applied to the retrieved ${result.horizon_days}-day forecast for ${friendlyName(location)}: ${applied.join(", ")}.`;
+  if (applied.length === 0) {
+    return {
+      sentences: [
+        `No assumptions are applied. This is the retrieved ${result.horizon_days}-day baseline forecast for ${friendlyName(location)}, and it establishes the starting point for the scenario.`,
+      ],
+      footnote,
+    };
+  }
 
-  const closing =
-    "It is a transformation of a retrieved forecast, not a physical model of the atmosphere: a series two degrees warmer is not the weather a warmer atmosphere would produce.";
+  return {
+    sentences: [
+      `Applied to the retrieved ${result.horizon_days}-day forecast for ${friendlyName(location)}: ${applied.join(", ")}.`,
+      result.effects?.risk?.detail,
+      result.effects?.sensitivity?.detail,
+    ].filter((sentence): sentence is string => Boolean(sentence)),
+    footnote,
+  };
+}
 
-  return [lead, result.effects?.risk?.detail, result.effects?.sensitivity?.detail, closing].filter(
-    (sentence): sentence is string => Boolean(sentence),
-  );
+export interface LabSignal {
+  readonly label: string;
+  /** The figures behind the label. Absent at baseline, where there are none to give. */
+  readonly detail: string | null;
+}
+
+export interface LabSignals {
+  readonly risk: LabSignal | null;
+  readonly sensitivity: LabSignal | null;
+}
+
+/**
+ * The two derived signals, in the state the displayed run is actually in.
+ *
+ * After a run these are the backend's own, verbatim. At baseline the backend says "No assumption
+ * applied" and "Not ranked" with a sentence apiece explaining that nothing moved — which is the
+ * same fact the reading above already states, so the labels are named for the state instead
+ * (`Baseline`, `Not evaluated`) and the details are dropped rather than repeated.
+ */
+export function signalsFrom(result: ScenarioResponse | null): LabSignals {
+  if (!result) return { risk: null, sensitivity: null };
+
+  if (!isChangedRun(result)) {
+    return {
+      risk: { label: "Baseline", detail: null },
+      sensitivity: { label: "Not evaluated", detail: null },
+    };
+  }
+
+  const risk = result.effects?.risk ?? null;
+  const sensitivity = result.effects?.sensitivity ?? null;
+
+  return {
+    risk: risk ? { label: risk.label, detail: risk.detail } : null,
+    sensitivity: sensitivity ? { label: sensitivity.label, detail: sensitivity.detail } : null,
+  };
 }
 
 /* --------------------------------------------------------- the archive block */
 
 export interface HistoricalView {
+  /** What this block is called in the state the run is in. */
+  readonly title: string;
+  readonly subtitle: string;
+  /** The placement in one sentence, named for what is being placed. Null where neither figure came back. */
+  readonly lead: string | null;
   readonly headline: string;
   readonly figures: readonly LabFigure[];
   readonly analog: LabFigure | null;
@@ -385,6 +520,7 @@ export function historicalFrom(result: ScenarioResponse | null): HistoricalView 
   const history = result?.history;
   if (!history) return null;
 
+  const changed = isChangedRun(result);
   const comparison = history.comparison;
   const baseline = comparison.baseline;
   const figures: LabFigure[] = [];
@@ -419,7 +555,29 @@ export function historicalFrom(result: ScenarioResponse | null): HistoricalView 
     });
   }
 
+  /*
+   * The one sentence that says *what* was placed.
+   *
+   * At baseline the thing being compared against the archive is the retrieved forecast, and calling
+   * it a scenario would describe an adjustment nobody made. The figures are identical either way —
+   * the same comparison, on the same window — so only the subject changes.
+   */
+  const parts = [
+    typeof difference === "number"
+      ? signedOf(difference, comparison.difference.unit ?? null)
+      : null,
+    typeof zScore === "number" ? `${zScore > 0 ? "+" : ""}${formatSigma(zScore)}` : null,
+  ].filter((part): part is string => part !== null);
+
   return {
+    title: changed ? "Historical correlation model" : "Baseline historical context",
+    subtitle: changed
+      ? "The simulated scenario's own mean placed against the archived years for this calendar window."
+      : "The retrieved baseline's own mean placed against the archived years for this calendar window.",
+    lead:
+      parts.length === 0
+        ? null
+        : `${changed ? "The simulated scenario" : "This baseline forecast"} is ${parts.join(" / ")} relative to the archived comparison window.`,
     headline: comparison.characterization,
     figures: figures.slice(0, 3),
     analog: history.nearest_analog
@@ -427,7 +585,7 @@ export function historicalFrom(result: ScenarioResponse | null): HistoricalView 
           key: "analog",
           label: `Nearest archived year · ${history.nearest_analog.year}`,
           value: formatMeasured(history.nearest_analog.mean, history.nearest_analog.unit ?? null),
-          note: `${formatMeasured(history.nearest_analog.distance, history.nearest_analog.unit ?? null)} from this scenario's mean`,
+          note: `${formatMeasured(history.nearest_analog.distance, history.nearest_analog.unit ?? null)} from ${changed ? "this scenario's mean" : "the baseline mean"}`,
         }
       : null,
     method: history.method,

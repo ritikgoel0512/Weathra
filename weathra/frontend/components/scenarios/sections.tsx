@@ -17,8 +17,12 @@
  * to spend an allowance on a slider movement.
  *
  * **The sliders are the interaction and the numbers follow them.** Each carries a range input, a
- * live signed readout and a baseline reference; typing is still available through the number field
- * beside it for anybody who wants an exact figure.
+ * signed readout that is itself the precision field, and the retrieved figure the shift is read
+ * against — so an exact value is still typeable without a second form field appearing beside it.
+ *
+ * **A baseline run says it is one.** With nothing supposed, the calculated card, the plot, the four
+ * tiles, the reading and the archive block all describe the retrieved forecast; each of them names
+ * that state rather than dressing an unchanged figure as a simulated one.
  *
  * **A region the run did not produce is not drawn.** The archive block is absent where the archive
  * could not serve the window; the key-delta bars are absent where nothing was supposed.
@@ -36,11 +40,14 @@ import {
   type AssumptionKey,
   type AssumptionValues,
   type BaselineCard,
+  type BaselineReference,
   type BasisRow,
   type HistoricalView,
   type ImpactCard,
   type KeyDelta,
   type LabFigure,
+  type LabSignals,
+  type Reading,
 } from "@/lib/scenarios/view-model";
 
 import { LabIcon, type LabIconName } from "./icons";
@@ -160,9 +167,19 @@ export function LabHeader({
  *
  * A slider rather than a text field because the question this screen asks is "what if it were a bit
  * warmer" and a number input makes a person answer it in exact decimals before they can see
- * anything. The number field stays beside each slider — same value, same bounds — so an exact
- * figure is still typeable, and the range input carries the keyboard interaction a slider is
- * supposed to have.
+ * anything. The range input carries the keyboard interaction a slider is supposed to have.
+ *
+ * **The readout is the precision control.** The exact figure used to be typed into a bordered
+ * number field parked under the slider, which read as an unrelated form field stapled to the
+ * control — two places showing one value, and the prominent one not the editable one. The signed
+ * readout in the head row *is* the input now: the sign and the unit sit in the same chip beside it,
+ * so `+2.5 °C` is both what a person reads and what a person types into. The slider keeps its own
+ * label; the field carries its own, naming the unit it wants.
+ *
+ * **Under the track sits what the shift is measured against** — the range at each end and the
+ * retrieved figure between them. Where the provider reported nothing for a measure the line is
+ * simply absent: "No baseline reported" over a baseline that arrived is worse than no line at all,
+ * and that is exactly what this rail used to print on every opening run.
  */
 export function AssumptionRail({
   values,
@@ -171,8 +188,8 @@ export function AssumptionRail({
 }: {
   readonly values: AssumptionValues;
   readonly onChange: (key: AssumptionKey, value: number) => void;
-  /** The retrieved mean of each measure, so a shift is read against something. */
-  readonly baseline: Readonly<Record<string, string | null>>;
+  /** The retrieved figure behind each measure, so a shift is read against something. */
+  readonly baseline: Readonly<Record<string, BaselineReference | null>>;
 }): ReactNode {
   const change = (key: AssumptionKey) => (event: ChangeEvent<HTMLInputElement>) => {
     const next = Number(event.target.value);
@@ -184,6 +201,7 @@ export function AssumptionRail({
       {ASSUMPTION_CONTROLS.map((control) => {
         const value = values[control.key];
         const reference = baseline[control.measure];
+        const tone = value === 0 ? "flat" : "set";
 
         return (
           <div className={styles.control} key={control.key}>
@@ -191,11 +209,34 @@ export function AssumptionRail({
               <label className={styles.controlLabel} htmlFor={`assumption-${control.key}`}>
                 {control.label}
               </label>
-              <output className={styles.controlValue} data-tone={value === 0 ? "flat" : "set"}>
-                {formatAssumption(control.key, value)}
-              </output>
+
+              {/* The signed value, and the field that sets it, as one thing rather than two. */}
+              <span className={styles.controlField} data-tone={tone}>
+                <span className={styles.controlSign} aria-hidden="true">
+                  {value > 0 ? "+" : ""}
+                </span>
+                <input
+                  className={styles.controlNumber}
+                  type="number"
+                  aria-label={`${control.label}, exact value in ${control.unit}`}
+                  min={control.min}
+                  max={control.max}
+                  step={control.step}
+                  value={value}
+                  onChange={change(control.key)}
+                />
+                <span className={styles.controlUnit} aria-hidden="true">
+                  {control.unit}
+                </span>
+              </span>
             </div>
 
+            {/*
+              `aria-valuetext` rather than a second live readout beside the field: a slider
+              announcing "2.5" is announcing a number without a unit or a sign, and an `<output>`
+              carrying the signed string would be a live region duplicating what the field beside
+              it already announces on every keystroke.
+            */}
             <input
               className={styles.slider}
               id={`assumption-${control.key}`}
@@ -204,6 +245,7 @@ export function AssumptionRail({
               max={control.max}
               step={control.step}
               value={value}
+              aria-valuetext={formatAssumption(control.key, value)}
               onChange={change(control.key)}
             />
 
@@ -212,26 +254,17 @@ export function AssumptionRail({
                 {control.min}
                 {control.unit}
               </span>
-              <span className={styles.controlBaseline}>
-                {reference ? `Baseline ${reference}` : "No baseline reported"}
-              </span>
+              {/* No line at all where the provider reported nothing — never a claim of absence. */}
+              {reference ? (
+                <span className={styles.controlBaseline}>
+                  {reference.label} {reference.value}
+                </span>
+              ) : null}
               <span>
                 +{control.max}
                 {control.unit}
               </span>
             </div>
-
-            {/* The exact figure, for anybody who wants one. Same bounds, same state. */}
-            <input
-              className={styles.controlNumber}
-              type="number"
-              aria-label={`${control.label}, exact value in ${control.unit}`}
-              min={control.min}
-              max={control.max}
-              step={control.step}
-              value={value}
-              onChange={change(control.key)}
-            />
           </div>
         );
       })}
@@ -348,43 +381,57 @@ export function DeltaStrip({ tiles }: { readonly tiles: readonly LabFigure[] }):
 
 /* ----------------------------------------------------------- interpretation */
 
-/** The lab's reading of its own run, with the movements it was read from beside it. */
+/**
+ * The lab's reading of its own run, with the movements it was read from beside it.
+ *
+ * The two signals are always drawn, because "which signal" and "how sensitive" are questions the
+ * screen answers in both states — `Baseline` and `Not evaluated` at rest, the backend's own labels
+ * after a run. A signal with no figures behind it carries no detail line rather than a sentence
+ * restating the paragraph above it.
+ *
+ * The footnote is what a scenario is *not*. It is secondary copy and sits as secondary copy: at
+ * baseline it would otherwise be half the block.
+ */
 export function Interpretation({
-  sentences,
+  reading,
   keyDeltas,
-  risk,
-  sensitivity,
+  signals,
 }: {
-  readonly sentences: readonly string[];
+  readonly reading: Reading;
   readonly keyDeltas: readonly KeyDelta[];
-  readonly risk: { readonly label: string; readonly detail: string } | null;
-  readonly sensitivity: { readonly label: string; readonly detail: string } | null;
+  readonly signals: LabSignals;
 }): ReactNode {
   return (
     <div className={styles.interpretation}>
       <div className={styles.interpretationMain}>
-        {sentences.map((sentence) => (
+        {reading.sentences.map((sentence) => (
           <p className={styles.interpretationLine} key={sentence}>
             {sentence}
           </p>
         ))}
 
         <div className={styles.signals}>
-          {risk ? (
+          {signals.risk ? (
             <div className={styles.signal} data-kind="risk">
               <span className={styles.signalLabel}>Primary signal</span>
-              <span className={styles.signalValue}>{risk.label}</span>
-              <span className={styles.signalDetail}>{risk.detail}</span>
+              <span className={styles.signalValue}>{signals.risk.label}</span>
+              {signals.risk.detail ? (
+                <span className={styles.signalDetail}>{signals.risk.detail}</span>
+              ) : null}
             </div>
           ) : null}
-          {sensitivity ? (
+          {signals.sensitivity ? (
             <div className={styles.signal} data-kind="sensitivity">
               <span className={styles.signalLabel}>Scenario sensitivity</span>
-              <span className={styles.signalValue}>{sensitivity.label}</span>
-              <span className={styles.signalDetail}>{sensitivity.detail}</span>
+              <span className={styles.signalValue}>{signals.sensitivity.label}</span>
+              {signals.sensitivity.detail ? (
+                <span className={styles.signalDetail}>{signals.sensitivity.detail}</span>
+              ) : null}
             </div>
           ) : null}
         </div>
+
+        <p className={styles.interpretationFootnote}>{reading.footnote}</p>
       </div>
 
       {keyDeltas.length > 0 ? (
@@ -415,6 +462,58 @@ export function Interpretation({
   );
 }
 
+/**
+ * What the screen says when nothing has been supposed: the scenario *is* the baseline.
+ *
+ * Without it, a person landing on the lab reads four panels of real figures under a SIMULATED
+ * header and has to work out for themselves whether the scenario failed to draw or simply has
+ * nothing to draw yet. One line settles it, and it is the line every panel below then elaborates.
+ */
+export function BaselineNotice({ location }: { readonly location: Location }): ReactNode {
+  return (
+    <p className={styles.baselineNotice} role="status">
+      <LabIcon name="check" size={15} />
+      <span>
+        <strong className={styles.baselineNoticeLead}>Scenario = baseline.</strong> No assumptions
+        are applied, so every panel below is the retrieved forecast for {friendlyName(location)}.
+        Move an assumption and run the scenario to make the two diverge.
+      </span>
+    </p>
+  );
+}
+
+/**
+ * The compact intro the lab opens on before it has a place.
+ *
+ * It used to draw three full-size empty panels under the chooser — an assumptions card, a plot
+ * frame and an archive frame, all of them blank — which is a screen pretending to be loaded. What a
+ * person needs here is one sentence about what the lab does and the control that starts it.
+ */
+export function LabIntroduction({ chooser }: { readonly chooser: ReactNode }): ReactNode {
+  return (
+    <section className={styles.intro} aria-labelledby="lab-intro-title">
+      <div className={styles.introText}>
+        <div className={styles.headerKicker}>
+          <Badge tone="quota">Simulated</Badge>
+        </div>
+        <h1 className={styles.title} id="lab-intro-title">
+          Weather Scenario Lab
+        </h1>
+        <p className={styles.lede}>
+          Suppose it were warmer, wetter, more humid or windier. The lab applies your assumption to
+          a real retrieved forecast for one place and reads what it does — hour by hour, as four
+          deltas, and against the archived years for the same calendar window.
+        </p>
+        <p className={styles.introNote}>
+          Name a place to begin, or set a default in Settings and every screen opens on it. Nothing
+          is retrieved until one resolves.
+        </p>
+      </div>
+      <div className={styles.introChooser}>{chooser}</div>
+    </section>
+  );
+}
+
 /* --------------------------------------------------------------- the archive */
 
 /** The archive block: the scenario placed against the years behind this calendar window. */
@@ -426,6 +525,8 @@ export function HistoricalCorrelation({
   return (
     <div className={styles.historical}>
       <div className={styles.historicalMain}>
+        {/* What was placed, named for the state the run is in, then the backend's own sentence. */}
+        {view.lead ? <p className={styles.historicalLead}>{view.lead}</p> : null}
         <p className={styles.historicalHeadline}>{view.headline}</p>
 
         <dl className={styles.historicalFigures}>

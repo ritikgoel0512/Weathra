@@ -277,11 +277,94 @@
   margin-block-start: var(--space-3);
 }
 
+/* ------------------------------------------------------- the baseline state */
+
+/*
+ * The one line that says the scenario *is* the baseline.
+ *
+ * Deliberately a strip rather than a card: it is a state announcement above four panels that are
+ * each already saying their own part of it, and a card here would compete with the header.
+ */
+.baselineNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-inline-start: 2px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  min-width: 0;
+}
+
+.baselineNotice > svg {
+  flex: none;
+  color: var(--color-accent);
+  margin-block-start: 1px;
+}
+
+.baselineNoticeLead {
+  color: var(--color-accent);
+  font-weight: var(--type-card-weight);
+}
+
+/* --------------------------------------------------- the lab without a place */
+
+/*
+ * What the screen is before a place resolves: a statement of what the lab does, and the control
+ * that starts it. Nothing else — three blank panels under this is a screen pretending to be loaded.
+ */
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-5);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-raised);
+  min-width: 0;
+}
+
+.intro::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  block-size: 2px;
+  background: linear-gradient(90deg, var(--color-accent) 0%, transparent 70%);
+}
+
+.introText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 72ch;
+  min-width: 0;
+}
+
+.introNote {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+}
+
+.introChooser {
+  min-width: 0;
+}
+
 /* --------------------------------------------------------------- the sliders */
 
 .control {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 5rem;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-2);
   padding-block-end: var(--space-4);
   border-block-end: 1px solid var(--color-border-subtle);
@@ -294,7 +377,6 @@
 }
 
 .controlHead {
-  grid-column: 1 / -1;
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -312,22 +394,83 @@
   overflow-wrap: anywhere;
 }
 
-/* The live readout. Accent once something has actually been supposed, muted at zero. */
-.controlValue {
+/*
+ * The live readout, which is also the precision field.
+ *
+ * It reads as one chip — sign, figure, unit — rather than as a number input with a label glued to
+ * it. The border only resolves on hover and focus, so at rest the control is a readout and under a
+ * pointer it is obviously editable. Accent once something has actually been supposed, muted at
+ * zero, and the whole chip takes the tone so the sign and the unit move with the figure.
+ */
+.controlField {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1px;
+  padding: 2px var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   color: var(--color-text-muted);
   font-size: var(--type-card-size);
   line-height: var(--type-card-line);
   font-weight: var(--type-card-weight);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  transition: border-color 120ms ease, background-color 120ms ease;
 }
 
-.controlValue[data-tone="set"] {
+.controlField[data-tone="set"] {
   color: var(--color-accent);
 }
 
+.controlField:hover,
+.controlField:focus-within {
+  background: var(--color-surface-inset);
+  border-color: var(--color-border-subtle);
+}
+
+.controlField:focus-within {
+  box-shadow: var(--shadow-focus);
+}
+
+.controlSign {
+  color: inherit;
+}
+
+.controlUnit {
+  color: inherit;
+  font-size: var(--type-meta-size);
+  padding-inline-start: 2px;
+}
+
+/*
+ * The field itself, sized to its own content so the chip does not reserve a form field's width.
+ * The spinners go: this is a readout a person can type into, not a stepper.
+ */
+.controlNumber {
+  inline-size: 5ch;
+  padding: 0;
+  margin: 0;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.controlNumber::-webkit-outer-spin-button,
+.controlNumber::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.controlNumber:focus {
+  outline: none;
+}
+
 .slider {
-  grid-column: 1 / -1;
   inline-size: 100%;
   accent-color: var(--color-accent);
   cursor: pointer;
@@ -340,7 +483,6 @@
 }
 
 .controlFoot {
-  grid-column: 1 / 2;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -355,23 +497,6 @@
 .controlBaseline {
   color: var(--color-text-secondary);
   overflow-wrap: anywhere;
-}
-
-.controlNumber {
-  grid-column: 2 / 3;
-  inline-size: 100%;
-  padding: var(--space-1) var(--space-2);
-  background: var(--color-surface-inset);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-primary);
-  font-size: var(--type-meta-size);
-  font-variant-numeric: tabular-nums;
-}
-
-.controlNumber:focus-visible {
-  outline: none;
-  box-shadow: var(--shadow-focus);
 }
 
 /* ---------------------------------------------------------------- the basis */
@@ -438,11 +563,36 @@
 
 /* --------------------------------------------------- baseline / impact cards */
 
+/*
+ * The two headline cards, told apart by treatment as well as by badge.
+ *
+ * Retrieved is the recessive side: inset, neutral, edged in nothing. Calculated is the emphatic
+ * one, edged and tinted in the single accent. The distinction is presentational only — both cards
+ * carry the figures the same run returned, and neither treatment changes a number.
+ */
 .result {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border-inline-start: 2px solid var(--color-border-strong);
   min-width: 0;
+}
+
+/* Retrieved is the recessive side: inset, neutral, edged in nothing but the border colour. */
+.result[data-variant="baseline"] {
+  background: var(--color-surface-inset);
+}
+
+/* Calculated is the emphatic one, in the single accent. Same figures, different weight. */
+.result[data-variant="scenario"] {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-accent) 10%, transparent) 0%,
+    transparent 70%
+  );
+  border-inline-start-color: var(--color-accent);
 }
 
 .resultHead {
@@ -648,10 +798,13 @@
   max-width: 78ch;
 }
 
-.interpretationLine:last-of-type {
+/* What a scenario is not. Secondary copy, and it sits as secondary copy in both states. */
+.interpretationFootnote {
+  margin: 0;
   color: var(--color-text-muted);
   font-size: var(--type-meta-size);
   line-height: var(--type-meta-line);
+  max-width: 78ch;
 }
 
 .signals {
@@ -798,9 +951,20 @@
   min-width: 0;
 }
 
-.historicalHeadline {
+/* What was placed against the archive, named for the state the run is in. */
+.historicalLead {
   margin: 0;
   color: var(--color-text-primary);
+  font-size: var(--type-lead-size);
+  line-height: var(--type-lead-line);
+  max-width: 78ch;
+}
+
+.historicalHeadline {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
   max-width: 78ch;
 }
 

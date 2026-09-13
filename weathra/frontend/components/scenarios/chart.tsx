@@ -189,7 +189,7 @@ export function TemporalImpactChart({
   readonly points: readonly ScenarioPoint[];
   readonly unit: string | null;
   readonly precipitationUnit: string | null;
-  /** Whether an assumption actually moved the series. A baseline run draws one line, not two. */
+  /** Whether an assumption actually moved the series. Both lines are drawn either way. */
   readonly changed: boolean;
 }): ReactNode {
   const described = useId();
@@ -203,11 +203,10 @@ export function TemporalImpactChart({
           <span className={styles.legendItem}>
             <span className={styles.legendLine} data-series="baseline" /> Baseline
           </span>
-          {changed ? (
-            <span className={styles.legendItem}>
-              <span className={styles.legendLine} data-series="scenario" /> Scenario
-            </span>
-          ) : null}
+          <span className={styles.legendItem}>
+            <span className={styles.legendLine} data-series="scenario" />{" "}
+            {changed ? "Scenario" : "Scenario (overlapping)"}
+          </span>
           {hasPrecipitation ? (
             <span className={styles.legendItem}>
               <span className={styles.legendSwatch} data-series="precipitation" /> Precipitation
@@ -221,7 +220,9 @@ export function TemporalImpactChart({
           className={styles.chartPlot}
           role="img"
           aria-label={`Temperature through the window${unit ? ` in ${unit}` : ""}: the retrieved forecast${
-            changed ? " and the scenario it was adjusted into" : ", with no assumption applied"
+            changed
+              ? " and the scenario it was adjusted into"
+              : " and the scenario, which overlaps it exactly because no assumption is applied"
           }${hasPrecipitation ? ", with precipitation per reported hour" : ""}. The figures are in the table below.`}
           aria-describedby={described}
         >
@@ -270,46 +271,58 @@ export function TemporalImpactChart({
                   isAnimationActive={false}
                 />
               ) : null}
-              {/* The retrieved series, drawn muted and dashed so the scenario reads over it. */}
+              {/*
+                Both series are always drawn, and the two states differ only in which one is dashed.
+                After a run the retrieved series is the muted dashed one and the scenario reads solid
+                over it. With nothing supposed the two are the *same numbers*, so drawing one line
+                and calling it Baseline leaves a reader wondering whether the scenario failed: the
+                baseline goes solid underneath and the scenario rides it as an accented dash, which
+                is what an exact overlap looks like when it is deliberate.
+              */}
               <Line
                 yAxisId="temperature"
                 type="monotone"
                 dataKey="baseline"
                 name="Baseline"
                 stroke="var(--color-text-muted)"
-                strokeWidth={1.6}
-                strokeDasharray="5 4"
+                strokeWidth={changed ? 1.6 : 2.4}
+                strokeDasharray={changed ? "5 4" : "0"}
                 dot={false}
                 connectNulls={false}
                 isAnimationActive={false}
               />
-              {changed ? (
-                <Line
-                  yAxisId="temperature"
-                  type="monotone"
-                  dataKey="scenario"
-                  name="Scenario"
-                  stroke="var(--color-accent)"
-                  strokeWidth={2.4}
-                  dot={false}
-                  activeDot={{ r: 4 }}
-                  connectNulls={false}
-                  isAnimationActive={false}
-                />
-              ) : null}
+              <Line
+                yAxisId="temperature"
+                type="monotone"
+                dataKey="scenario"
+                name="Scenario"
+                stroke="var(--color-accent)"
+                strokeWidth={changed ? 2.4 : 1.8}
+                strokeDasharray={changed ? "0" : "5 6"}
+                dot={false}
+                activeDot={{ r: 4 }}
+                connectNulls={false}
+                isAnimationActive={false}
+              />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
       </ScrollRegion>
 
       <p className={styles.chartNote} id={described}>
-        {missing === 0
-          ? changed
+        {changed
+          ? missing === 0
             ? "Every hour in the retrieved window carried a temperature to adjust."
-            : "No assumption is applied, so the scenario is the retrieved forecast."
-          : `${missing} ${missing === 1 ? "hour" : "hours"} in this window had no temperature to adjust and ${
-              missing === 1 ? "is" : "are"
-            } left as a gap.`}
+            : `${missing} ${missing === 1 ? "hour" : "hours"} in this window had no temperature to adjust and ${
+                missing === 1 ? "is" : "are"
+              } left as a gap.`
+          : `Scenario overlaps baseline — no adjustments applied.${
+              missing === 0
+                ? ""
+                : ` ${missing} ${missing === 1 ? "hour" : "hours"} in this window carried no temperature and ${
+                    missing === 1 ? "is" : "are"
+                  } left as a gap.`
+            }`}
       </p>
 
       <ScenarioFigures points={points} unit={unit} precipitationUnit={precipitationUnit} />
