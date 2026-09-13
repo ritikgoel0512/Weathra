@@ -1106,7 +1106,8 @@ describe("the AI Intelligence tab's composition", () => {
 
     const panel = await screen.findByRole("tabpanel");
     expect(within(panel).getByText("OpenRouter")).toBeInTheDocument();
-    expect(within(panel).getByText("NVIDIA Nemotron Nano 9B v2")).toBeInTheDocument();
+    // Derived from the identifier generically: the namespace and the tier are not part of a name.
+    expect(within(panel).getByText("Nemotron Nano 9B v2")).toBeInTheDocument();
 
     // The raw identifier is not hidden — it is one disclosure away, verbatim.
     expect(within(panel).queryByText(/nvidia\/nemotron-nano-9b-v2/)).not.toBeVisible();
