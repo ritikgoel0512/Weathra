@@ -23,7 +23,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from weathra.agents.state import GraphState
+from weathra.agents.state import GraphState, Retrieval
 from weathra.domain.errors import WeathraError
 from weathra.domain.evidence import (
     AgentName,
@@ -41,6 +41,7 @@ from weathra.mcp.schemas import location_from_payload, period_from_payload
 
 __all__ = [
     "attribution_from",
+    "baseline_for",
     "call_tool",
     "current_label",
     "finding_from_statistic",
@@ -53,6 +54,7 @@ __all__ = [
     "points_for",
     "record_step",
     "series_from",
+    "window_label",
 ]
 
 logger = logging.getLogger("weathra.agents.nodes")
@@ -378,6 +380,40 @@ _HEADLINE_ORDER = (
     Measure.PRECIPITATION,
     Measure.WIND_SPEED,
 )
+
+
+def baseline_for(state: GraphState, source: Retrieval, measure: Measure) -> Retrieval | None:
+    """An earlier retrieval of the same measure over a *different* window, or None.
+
+    The most recent qualifying one, because a run that retrieved three windows is comparing the
+    latest against the one before it. A retrieval over the same period is the same window read
+    twice and is not a comparison; a retrieval carrying no period cannot be shown to be a different
+    window and is not treated as one.
+    """
+    if source.period is None:
+        return None
+
+    for retrieval in reversed(state.retrievals):
+        if retrieval is source or retrieval.period is None:
+            continue
+        if retrieval.period.start_utc == source.period.start_utc:
+            continue
+        series = retrieval.series
+        if series is None or measure not in measures_in(series):
+            continue
+        return retrieval
+    return None
+
+
+def window_label(retrieval: Retrieval) -> str:
+    """What a comparison's other window is, in the words a difference's parameters carry."""
+    period = retrieval.period
+    if period is None:  # pragma: no cover - callers check first
+        return retrieval.location.qualified_name
+    return (
+        f"{retrieval.location.qualified_name}, "
+        f"{period.start_local.date().isoformat()} to {period.end_local.date().isoformat()}"
+    )
 
 
 def measures_in(series: Series) -> set[Measure]:

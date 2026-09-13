@@ -25,11 +25,13 @@ recorded failure and a named unanswered part.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
 from weathra.agents.nodes.support import (
     attribution_from,
+    baseline_for,
     call_tool,
     finding_from_statistic,
     findings_from_current,
@@ -38,6 +40,7 @@ from weathra.agents.nodes.support import (
     record_step,
     series_from,
     unit_system_from,
+    window_label,
 )
 from weathra.agents.plan import Capability, PlanStep
 from weathra.agents.state import GraphState, Retrieval
@@ -222,7 +225,7 @@ async def run_historical(state: GraphState, step: PlanStep, *, client: McpToolCl
         )
 
     working = state
-    succeeded = 0
+    retrieved: list[tuple[Location, Retrieval]] = []
 
     for location in locations:
         working, outcome = await call_tool(
@@ -252,75 +255,167 @@ async def run_historical(state: GraphState, step: PlanStep, *, client: McpToolCl
         working = _record_retrieval(
             working, outcome.data, capability=Capability.HISTORICAL, step=step, location=location
         )
-        working = await _headline_statistics(working, location, client=client)
-        succeeded += 1
+        # Held rather than re-read later: ``retrieval_for`` answers with the *most recent* result,
+        # so a two-location step computing after the loop would compute both sets of statistics
+        # over the second location's series.
+        just_retrieved = working.retrieval_for(Capability.HISTORICAL)
+        if just_retrieved is not None:
+            retrieved.append((location, just_retrieved))
 
-    status = StepStatus.SUCCEEDED if succeeded else StepStatus.FAILED
+    status = StepStatus.SUCCEEDED if retrieved else StepStatus.FAILED
     reason = (
-        step.reason if succeeded else "The archive could not be read for any location in this step."
+        step.reason if retrieved else "The archive could not be read for any location in this step."
     )
-    return record_step(
+    working = record_step(
         working, agent=AgentName.HISTORICAL, started_at=started, status=status, reason=reason
+    )
+
+    return await _analytics_turn(working, retrieved, client=client)
+
+
+async def _analytics_turn(
+    state: GraphState,
+    retrieved: Sequence[tuple[Location, Retrieval]],
+    *,
+    client: McpToolClient,
+) -> GraphState:
+    """The analytics layer's turn over the series the archive just returned.
+
+    **Why this is a step of its own.** The archive retrieves and does not compute; the figures a
+    reader sees under "how warm was it" come out of the analytics kernel, through
+    ``weather_statistics``, under the ``computed_statistic`` data class. Recording that work under
+    ``historical`` — which is what this node did — left a run whose evidence carried a mean, a
+    minimum, a maximum and a range with no analytics stage anywhere in its execution record, and an
+    evidence screen that could only recover the figures by rummaging in a retrieval's tool result.
+    The capability is in the catalog and the enum, the tool call is real, and the class of the
+    result is not the class of the series it was computed over, so the step is real too.
+
+    It runs *after* the historical step is recorded rather than inside it, so neither duration
+    contains the other: the archive's step is what retrieval cost, and this one is what the
+    arithmetic cost.
+    """
+    if not retrieved:
+        return state
+
+    started = datetime.now(UTC)
+    working = state
+    computed = 0
+
+    for location, retrieval in retrieved:
+        working, succeeded = await _headline_statistics(
+            working, location, retrieval=retrieval, client=client
+        )
+        computed += 1 if succeeded else 0
+
+    return record_step(
+        working,
+        agent=AgentName.ANALYTICS,
+        started_at=started,
+        status=StepStatus.SUCCEEDED if computed else StepStatus.FAILED,
+        reason=(
+            "Computed the headline statistics over the archived series. Every figure carries the "
+            "method that produced it and the number of points it used."
+            if computed
+            else "No statistic could be computed over the series the archive returned."
+        ),
     )
 
 
 async def _headline_statistics(
-    state: GraphState, location: Location, *, client: McpToolClient
-) -> GraphState:
+    state: GraphState,
+    location: Location,
+    *,
+    retrieval: Retrieval,
+    client: McpToolClient,
+) -> tuple[GraphState, bool]:
     """Compute the headline statistics over the observations just retrieved.
 
     Through the analytics tool, not here: the arithmetic stays in one place, the call is recorded
     in the evidence, and every figure carries the method that produced it. A plan that goes on to
     ask for something specific adds its own analytics step; this is what "how warm was it?" needs.
-    """
-    retrieval = state.retrieval_for(Capability.HISTORICAL)
-    if retrieval is None:  # pragma: no cover - called straight after recording one
-        return state
 
+    The call is attributed to the analytics agent, because that is which agent made it. It read a
+    series the archive retrieved, which is the ordinary shape of an analytics step, and crediting
+    the arithmetic to the retrieval that supplied its input is what left a run's computed figures
+    with no analytics anywhere in its execution record.
+    """
     measure = headline_measure(retrieval)
     if measure is None:
-        return state.with_failure(
-            f"The archive returned no measured values for {location.qualified_name}, so no "
-            "statistic could be computed over them."
+        return (
+            state.with_failure(
+                f"The archive returned no measured values for {location.qualified_name}, so no "
+                "statistic could be computed over them."
+            ),
+            False,
         )
 
     points, unit = points_for(retrieval, measure)
     if not points:
-        return state.with_failure(
-            f"The archive returned no {measure.value.replace('_', ' ')} values for "
-            f"{location.qualified_name}, so no statistic could be computed over them."
+        return (
+            state.with_failure(
+                f"The archive returned no {measure.value.replace('_', ' ')} values for "
+                f"{location.qualified_name}, so no statistic could be computed over them."
+            ),
+            False,
         )
+
+    arguments: dict[str, Any] = {
+        "measure": measure.value,
+        "unit": unit,
+        "points": points,
+        "statistics": list(HEADLINE_STATISTICS),
+        "location": location.qualified_name,
+        "timezone": location.timezone,
+        "provider": retrieval.provider,
+    }
+
+    # The window this one is being compared against, when the run retrieved one.
+    #
+    # A question that asks the archive twice — this week and the same week a year ago — is a
+    # comparison, and the figure it turns on is the difference. Without this the run summarised
+    # each window and left the subtraction to whoever read the two sets of figures, so the answer's
+    # headline number was the one number with no method and no place in the evidence record.
+    baseline = baseline_for(state, retrieval, measure)
+    if baseline is not None:
+        baseline_points, _ = points_for(baseline, measure)
+        if baseline_points:
+            arguments["baseline_points"] = baseline_points
+            arguments["baseline_label"] = window_label(baseline)
 
     working, outcome = await call_tool(
         state,
         client,
-        agent=AgentName.HISTORICAL,
+        agent=AgentName.ANALYTICS,
         tool=_STATISTICS_TOOL,
-        arguments={
-            "measure": measure.value,
-            "unit": unit,
-            "points": points,
-            "statistics": list(HEADLINE_STATISTICS),
-            "location": location.qualified_name,
-            "timezone": location.timezone,
-            "provider": retrieval.provider,
-        },
+        arguments=arguments,
     )
 
     if outcome.failed:
-        return working.with_failure(
-            f"The observations for {location.qualified_name} were retrieved, but no statistic "
-            f"could be computed over them ({outcome.error_code})."
+        return (
+            working.with_failure(
+                f"The observations for {location.qualified_name} were retrieved, but no statistic "
+                f"could be computed over them ({outcome.error_code})."
+            ),
+            False,
         )
 
-    return working.with_findings(
-        tuple(
-            finding_from_statistic(
-                reported, retrieval.attribution, data_class=DataClass.COMPUTED_STATISTIC
+    computed = outcome.data.get("baseline")
+    reported_figures = [
+        *(outcome.data.get("results") or ()),
+        *((computed.get("results") or ()) if isinstance(computed, dict) else ()),
+        *(outcome.data.get("differences") or ()),
+    ]
+    return (
+        working.with_findings(
+            tuple(
+                finding_from_statistic(
+                    reported, retrieval.attribution, data_class=DataClass.COMPUTED_STATISTIC
+                )
+                for reported in reported_figures
+                if isinstance(reported, dict)
             )
-            for reported in outcome.data.get("results") or ()
-            if isinstance(reported, dict)
-        )
+        ),
+        True,
     )
 
 

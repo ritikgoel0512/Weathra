@@ -472,7 +472,9 @@ function deduplicate<T>(figures: readonly T[]): T[] {
  * question. Ranking by kind alone put the delta first and then two means a reader could not tell
  * apart.
  */
-function comparisonFigures<T>(figures: readonly T[]): T[] | null {
+function comparisonFigures<T extends { readonly statistic?: string }>(
+  figures: readonly T[],
+): T[] | null {
   const byKind = new Map<string, T[]>();
   for (const figure of figures) {
     const record: Record<string, unknown> = isObject(figure) ? figure : {};
@@ -480,25 +482,57 @@ function comparisonFigures<T>(figures: readonly T[]): T[] | null {
     byKind.set(kind, [...(byKind.get(kind) ?? []), figure]);
   }
 
-  // The statistic computed over more than one window is the comparison's two sides.
-  const sides = [...byKind.entries()].find(
+  // The statistic computed over more than one window is the comparison's two sides. A mean is
+  // preferred over an extreme where both qualify: a comparison of two windows is a comparison of
+  // what they were typically like, and "the coldest hour of each" is the answer to a question
+  // nobody asked here.
+  const candidates = [...byKind.entries()].filter(
     ([kind, group]) =>
       group.length === 2 &&
       !kind.startsWith("delta") &&
+      !kind.startsWith("difference") &&
       new Set(group.map(periodKeyOf)).size === 2,
+  );
+  const sides = (
+    candidates.find(([kind]) => kind.startsWith("mean")) ?? candidates[0]
   )?.[1];
   if (sides === undefined) return null;
+
+  // Later window first: "this period, that period, the difference" is how the question is asked.
+  const ordered = [...sides].sort((left, right) => periodKeyOf(right).localeCompare(periodKeyOf(left)));
 
   const difference = figures.find((figure) => {
     const held: Record<string, unknown> = isObject(figure) ? figure : {};
     const statistic = String(held.statistic ?? "");
     return statistic === "delta" || statistic === "difference";
   });
-  if (difference === undefined) return null;
+  if (difference !== undefined) return [...ordered, difference];
 
-  // Later window first: "this period, that period, the difference" is how the question is asked.
-  const ordered = [...sides].sort((left, right) => periodKeyOf(right).localeCompare(periodKeyOf(left)));
-  return [...ordered, difference];
+  /*
+   * Two sides and no stored difference.
+   *
+   * A comparison the *analytics agent* performed records a `delta`, and that is the third card. A
+   * run that compared two windows by retrieving each of them separately — the archive for last
+   * year, the forecast for this week — computed no delta, and Weathra does not compute one here:
+   * an evidence screen that does its own arithmetic is no longer showing evidence. So the third
+   * card is the highest-ranked figure the run actually computed over either window, which is the
+   * anomaly or the trend where there is one. Two sides and a real third beats two sides and a
+   * number this screen made up.
+   */
+  const chosen = new Set(ordered);
+  const third = ranked(figures.filter((figure) => !chosen.has(figure)))[0];
+  return third === undefined ? [...ordered] : [...ordered, third];
+}
+
+/** The figures in the order the band leads with them: by what a decision turns on, then by run. */
+function ranked<T extends { readonly statistic?: string }>(figures: readonly T[]): T[] {
+  return figures
+    .map((figure, index) => {
+      const rank = FIGURE_PRIORITY.indexOf(String(figure.statistic ?? ""));
+      return { figure, index, rank: rank === -1 ? FIGURE_PRIORITY.length : rank };
+    })
+    .sort((left, right) => left.rank - right.rank || left.index - right.index)
+    .map((entry) => entry.figure);
 }
 
 export function leadingFigures<T extends { readonly statistic?: string }>(
@@ -512,16 +546,11 @@ export function leadingFigures<T extends { readonly statistic?: string }>(
     return { primary: comparison, rest: unique.filter((figure) => !chosen.has(figure)) };
   }
 
-  const ranked = unique
-    .map((figure, index) => {
-      const rank = FIGURE_PRIORITY.indexOf(String(figure.statistic ?? ""));
-      return { figure, index, rank: rank === -1 ? FIGURE_PRIORITY.length : rank };
-    })
-    .sort((left, right) => left.rank - right.rank || left.index - right.index);
+  const ordered = ranked(unique);
 
   return {
-    primary: ranked.slice(0, PRIMARY_FIGURES).map((entry) => entry.figure),
-    rest: ranked.slice(PRIMARY_FIGURES).map((entry) => entry.figure),
+    primary: ordered.slice(0, PRIMARY_FIGURES),
+    rest: ordered.slice(PRIMARY_FIGURES),
   };
 }
 
@@ -604,64 +633,181 @@ function worstStatus(actions: readonly AgentStep[]): string {
 }
 
 /**
- * Statistics the run recorded inside a *tool result* rather than in its analytics list.
+ * The deterministic analytics a run recorded inside its *tool results* rather than in its
+ * analytics list.
  *
- * A run can reach the analytics kernel through the tool boundary — `weather_statistics`,
- * `weather_baseline_comparison` — and when it does, what it computed comes back nested in that
- * call's payload. `analytics_results` is filled by the analytics *agent*, so a run that computed
- * through tools alone left the deterministic band reading "no statistics" while its own results
- * held the means and differences the synthesis above quoted.
+ * **Why this has to exist.** `analytics_results` on the stored record is deliberately empty:
+ * `weathra/agents/evidence.py` leaves the statistic, anomaly and trend objects inside the tool
+ * payloads they arrived in, because duplicating them into typed tuples would mean two copies that
+ * can disagree. So *every* run's computed figures are in here, and a band that read only
+ * `record.statistics` would say "no statistics" on a screen whose synthesis above quotes them.
  *
- * **This looks for statistics, not for fields.** The first version of this walked the payload and
- * printed every key it found, which turned the band into `ok`, `unit`, `period`, `provider`,
- * `data_class` — the envelope, not the analysis. The figures are nested one level down, under
- * `results`, shaped exactly like the analytics list's own entries. Only objects carrying a
- * statistic, a measure and a value are taken, so an envelope can never reach the screen as a card;
- * where none is found the caller shows the honest empty state instead.
+ * **It looks for figures, not for fields.** The first version walked each payload and printed
+ * every key it found, which turned the band into `ok`, `unit`, `period`, `provider`, `data_class`
+ * — the envelope, not the analysis. Only objects that are *shaped* like a result of the analytics
+ * kernel and that carry `data_class: "computed_statistic"` — the kernel's own label, which a
+ * retrieval envelope never has — are taken. An envelope can therefore never reach the screen as a
+ * card, whatever tool returned it.
  *
- * Nothing is recomputed and nothing is requested: this reads what the run already stored.
+ * **Four places, because there are four.** A tool that was asked for statistics returns them under
+ * `results`; a retrieval tool that computes its own returns them under `findings` with its
+ * anomaly scan under `anomalies` and its trend under `trend`. A run that asked the archive and
+ * then the forecast has its two windows' figures in two differently-shaped payloads, and a band
+ * that read only the first could not show a comparison that the run actually performed.
+ *
+ * **The window is attached where the figure does not carry one.** A statistic from
+ * `weather_statistics` has no `provenance`; the period it covers is on the payload around it, and
+ * a retrieval's figures take the period from the retrieval's own attribution. Without that, two
+ * means over two different years are indistinguishable — which is exactly the distinction a
+ * comparison is about. Nothing is computed here: the period is read off the record and moved next
+ * to the figure it already belonged to.
  */
-export function statisticsFromTools(record: RunRecord): StatisticResult[] {
-  const found: StatisticResult[] = [];
+export interface RecoveredAnalytics {
+  readonly statistics: readonly StatisticResult[];
+  readonly anomalies: readonly AnomalyReport[];
+  readonly trends: readonly TrendReport[];
+}
+
+export function analyticsFromTools(record: RunRecord): RecoveredAnalytics {
+  const statistics: StatisticResult[] = [];
+  const anomalies: AnomalyReport[] = [];
+  const trends: TrendReport[] = [];
 
   for (const activity of record.tools) {
-    if (activity.result?.ok === false) continue;
-    // Only results the backend itself labelled as computed. A retrieval is data, not a statistic.
-    if (activity.result?.data_class !== "computed_statistic") continue;
+    const result = activity.result;
+    if (result === null || result.ok === false) continue;
 
-    const payload = activity.result?.payload;
+    const payload = result.payload;
     if (!isObject(payload)) continue;
 
-    for (const candidate of statisticCandidates(payload)) {
-      found.push(candidate);
+    const period = periodAround(payload, result);
+
+    for (const [figure, covering] of statisticCandidates(payload, period)) {
+      statistics.push(withPeriod(figure, covering) as unknown as StatisticResult);
+    }
+
+    const scan = anomalyReportIn(payload);
+    if (scan !== null) anomalies.push(withPeriod(scan, period) as unknown as AnomalyReport);
+
+    const trend = trendReportIn(payload);
+    if (trend !== null) trends.push(withPeriod(trend, period) as unknown as TrendReport);
+  }
+
+  return { statistics, anomalies, trends };
+}
+
+/** Kept as its own name: the statistics half is what most callers want. */
+export function statisticsFromTools(record: RunRecord): StatisticResult[] {
+  return [...analyticsFromTools(record).statistics];
+}
+
+/** The window a payload says its figures cover, or the one the retrieval was attributed to. */
+function periodAround(
+  payload: Record<string, unknown>,
+  result: ToolResult | null,
+): Record<string, unknown> | null {
+  if (isObject(payload.period)) return payload.period;
+  const attribution: unknown = result?.attribution;
+  if (isObject(attribution) && isObject(attribution.period)) return attribution.period;
+  return null;
+}
+
+/** The same figure with the window it covers beside it, where it did not already carry one. */
+function withPeriod(
+  figure: Record<string, unknown>,
+  period: Record<string, unknown> | null,
+): Record<string, unknown> {
+  if (period === null) return figure;
+  const provenance = isObject(figure.provenance) ? figure.provenance : null;
+  if (provenance !== null && isObject(provenance.period)) return figure;
+  return { ...figure, provenance: { ...(provenance ?? {}), period } };
+}
+
+/**
+ * The statistic-shaped objects inside one payload, each with the window it covers.
+ *
+ * **The baseline is a different window, and that is the point of it.** A comparison call returns
+ * this window's aggregates under `results` and the window it was compared against under
+ * `baseline`, which carries its own period. Reading both out under the payload's single period
+ * would make two means over two years look like one figure recorded twice — and a comparison whose
+ * two sides cannot be told apart is not a comparison.
+ */
+function statisticCandidates(
+  payload: Record<string, unknown>,
+  period: Record<string, unknown> | null,
+): [Record<string, unknown>, Record<string, unknown> | null][] {
+  const here = [payload.results, payload.statistics, payload.analytics_results, payload.findings]
+    .filter(Array.isArray)
+    .flat();
+  const roots = isStatisticShaped(payload) ? [payload] : [];
+  const differences = Array.isArray(payload.differences) ? payload.differences : [];
+
+  const found: [Record<string, unknown>, Record<string, unknown> | null][] = [
+    ...roots, ...here, ...differences,
+  ]
+    .filter(isStatisticShaped)
+    .map((figure): [Record<string, unknown>, Record<string, unknown> | null] => [figure, period]);
+
+  const baseline = payload.baseline;
+  if (isObject(baseline)) {
+    const covering = isObject(baseline.period) ? baseline.period : null;
+    for (const figure of (Array.isArray(baseline.results) ? baseline.results : []).filter(
+      isStatisticShaped,
+    )) {
+      found.push([figure, covering]);
     }
   }
 
   return found;
 }
 
-/** The statistic-shaped objects inside one payload, nested or at its root. */
-function statisticCandidates(payload: Record<string, unknown>): StatisticResult[] {
-  const nested = [payload.results, payload.statistics, payload.analytics_results]
-    .filter(Array.isArray)
-    .flat();
-  const roots = isStatisticShaped(payload) ? [payload] : [];
-  return [...roots, ...nested].filter(isStatisticShaped) as unknown as StatisticResult[];
-}
-
 /**
- * Whether a stored object is a statistic rather than an envelope around one.
+ * Whether a stored object is a statistic the analytics kernel produced.
  *
- * Three fields, all of which the analytics layer puts on every result it produces. An envelope has
- * a provider and a data class; a statistic has a measure and a value.
+ * Four fields: the statistic, the measure, a value, and the kernel's own data class. An envelope
+ * carries a provider and a data class of its own and fails the first two; a *retrieved* reading
+ * carries a value and no statistic and fails the rest.
  */
 function isStatisticShaped(value: unknown): value is Record<string, unknown> {
   if (!isObject(value)) return false;
   return (
     typeof value.statistic === "string" &&
     typeof value.measure === "string" &&
-    ("value" in value || "values" in value)
+    ("value" in value || "values" in value) &&
+    value.data_class === "computed_statistic"
   );
+}
+
+/** The anomaly scan inside a payload — its own result, or one nested under `anomalies`. */
+function anomalyReportIn(payload: Record<string, unknown>): Record<string, unknown> | null {
+  const nested = isObject(payload.anomalies) ? payload.anomalies : null;
+  for (const candidate of [payload, nested]) {
+    if (
+      isObject(candidate) &&
+      candidate.data_class === "computed_statistic" &&
+      typeof candidate.measure === "string" &&
+      Array.isArray(candidate.anomalies) &&
+      "median_absolute_deviation" in candidate
+    ) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+/** The trend inside a payload, where the tool computed one. */
+function trendReportIn(payload: Record<string, unknown>): Record<string, unknown> | null {
+  const trend = payload.trend;
+  if (
+    isObject(trend) &&
+    trend.data_class === "computed_statistic" &&
+    typeof trend.measure === "string" &&
+    typeof trend.direction === "string" &&
+    "slope_per_day" in trend
+  ) {
+    return trend;
+  }
+  return null;
 }
 
 export function hasAnalytics(record: RunRecord): boolean {

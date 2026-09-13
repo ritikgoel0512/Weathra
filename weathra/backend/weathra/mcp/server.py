@@ -36,7 +36,7 @@ from pydantic import BaseModel, ValidationError
 from weathra.analytics import descriptive, precipitation
 from weathra.analytics.anomaly import DEFAULT_THRESHOLD, detect_anomalies
 from weathra.analytics.distribution import percentile
-from weathra.analytics.rolling import rolling_mean
+from weathra.analytics.rolling import delta, rolling_mean
 from weathra.analytics.trend import analyse_trend
 from weathra.config import Settings
 from weathra.domain.analytics import Provenance, Statistic, StatisticResult
@@ -296,6 +296,137 @@ def _statistic_payload(result: StatisticResult) -> dict[str, Any]:
         "tied": result.tied,
         "data_class": result.data_class.value,
     }
+
+
+def _aggregates(
+    series: Any,
+    measure: Measure,
+    provenance: Provenance,
+    arguments: StatisticsInput,
+) -> list[StatisticResult]:
+    """Every statistic the caller asked for, over one window.
+
+    Extracted so a baseline window is computed by exactly the same code as the window it is being
+    compared against — two windows summarised by two code paths is how a comparison acquires a
+    difference nobody can check.
+    """
+    results: list[StatisticResult] = []
+    for name in arguments.statistics:
+        if name == "minimum":
+            results.append(descriptive.minimum(series, measure, provenance))
+        elif name == "maximum":
+            results.append(descriptive.maximum(series, measure, provenance))
+        elif name == "mean":
+            results.append(descriptive.mean(series, measure, provenance))
+        elif name == "range":
+            results.append(descriptive.value_range(series, measure, provenance))
+        elif name == "standard_deviation":
+            results.append(descriptive.standard_deviation(series, measure, provenance))
+        elif name == "total":
+            results.append(precipitation.total(series, provenance, measure=measure))
+        elif name == "percentile":
+            results.append(
+                percentile(series, measure, provenance, level=float(arguments.percentile or 0.0))
+            )
+        elif name == "rolling_mean":
+            results.append(
+                rolling_mean(series, measure, provenance, window=int(arguments.rolling_window or 1))
+            )
+        elif name == "trend":
+            trend = analyse_trend(series, measure, provenance)
+            results.append(
+                StatisticResult(
+                    statistic=Statistic.TREND,
+                    measure=measure,
+                    value=trend.slope_per_day,
+                    unit=f"{trend.unit}/day",
+                    method=trend.method,
+                    parameters={
+                        "direction": trend.direction.value,
+                        "magnitude": trend.magnitude,
+                        "materiality_margin_per_day": trend.insignificance_margin_per_day,
+                    },
+                    points_used=trend.points_used,
+                    points_excluded=trend.points_excluded,
+                    minimum_points=trend.minimum_points,
+                    provenance=provenance,
+                )
+            )
+        else:
+            raise ValidationFailed(
+                f"{name!r} is not a statistic this tool computes.",
+                details={
+                    "field": "statistics",
+                    "requested": name,
+                    "supported": [
+                        "minimum",
+                        "maximum",
+                        "mean",
+                        "range",
+                        "total",
+                        "percentile",
+                        "rolling_mean",
+                        "trend",
+                        "standard_deviation",
+                    ],
+                },
+            )
+    return results
+
+
+# Aggregates whose difference between two windows is a figure worth reporting. A range or a trend
+# slope differenced against another window answers no question anybody asks, and a difference of
+# differences is noise; the four below are the ones a comparison is actually about.
+_DIFFERENCEABLE: frozenset[Statistic] = frozenset(
+    {Statistic.MEAN, Statistic.MINIMUM, Statistic.MAXIMUM, Statistic.TOTAL}
+)
+
+
+def _differences(
+    *,
+    later: Sequence[StatisticResult],
+    earlier: Sequence[StatisticResult],
+    unit: str,
+    measure: Measure,
+    provenance: Provenance,
+    earlier_label: str,
+    later_label: str,
+) -> list[StatisticResult]:
+    """The signed difference between each pair of aggregates the two windows share.
+
+    **Why the tool computes this rather than the reader.** "This week averaged 21.5 °C and the same
+    week last year averaged 19.9 °C" is two figures; "+1.5 °C" is the answer to the question that
+    was asked, and until this existed nothing in Weathra computed it — a comparison run returned
+    both sides and left the subtraction to whoever read them, so the one figure the question turned
+    on was the one figure with no method, no provenance and no place in the evidence record.
+
+    Only aggregates both windows actually produced are differenced, and a statistic either window
+    could not compute is skipped rather than differenced against a stand-in.
+    """
+    by_statistic = {
+        result.statistic: result
+        for result in earlier
+        if result.statistic in _DIFFERENCEABLE and result.value is not None
+    }
+
+    differences: list[StatisticResult] = []
+    for result in later:
+        if result.statistic not in _DIFFERENCEABLE or result.value is None:
+            continue
+        counterpart = by_statistic.get(result.statistic)
+        if counterpart is None or counterpart.value is None:
+            continue
+        difference = delta(
+            measure=measure,
+            unit=unit,
+            earlier=counterpart.value,
+            later=result.value,
+            earlier_label=f"{result.statistic.value} over {earlier_label}",
+            later_label=f"{result.statistic.value} over {later_label}",
+            provenance=provenance,
+        )
+        differences.append(difference)
+    return differences
 
 
 def build_server(context: ToolContext) -> MCPServer:
@@ -686,83 +817,68 @@ def build_server(context: ToolContext) -> MCPServer:
         provenance = _provenance_for_points(series, arguments, arguments.location)
         measure = arguments.measure
 
-        results: list[StatisticResult] = []
-        for name in arguments.statistics:
-            if name == "minimum":
-                results.append(descriptive.minimum(series, measure, provenance))
-            elif name == "maximum":
-                results.append(descriptive.maximum(series, measure, provenance))
-            elif name == "mean":
-                results.append(descriptive.mean(series, measure, provenance))
-            elif name == "range":
-                results.append(descriptive.value_range(series, measure, provenance))
-            elif name == "standard_deviation":
-                results.append(descriptive.standard_deviation(series, measure, provenance))
-            elif name == "total":
-                results.append(precipitation.total(series, provenance, measure=measure))
-            elif name == "percentile":
-                results.append(
-                    percentile(
-                        series, measure, provenance, level=float(arguments.percentile or 0.0)
-                    )
-                )
-            elif name == "rolling_mean":
-                results.append(
-                    rolling_mean(
-                        series, measure, provenance, window=int(arguments.rolling_window or 1)
-                    )
-                )
-            elif name == "trend":
-                trend = analyse_trend(series, measure, provenance)
-                results.append(
-                    StatisticResult(
-                        statistic=Statistic.TREND,
-                        measure=measure,
-                        value=trend.slope_per_day,
-                        unit=f"{trend.unit}/day",
-                        method=trend.method,
-                        parameters={
-                            "direction": trend.direction.value,
-                            "magnitude": trend.magnitude,
-                            "materiality_margin_per_day": trend.insignificance_margin_per_day,
-                        },
-                        points_used=trend.points_used,
-                        points_excluded=trend.points_excluded,
-                        minimum_points=trend.minimum_points,
-                        provenance=provenance,
-                    )
-                )
-            else:
-                raise ValidationFailed(
-                    f"{name!r} is not a statistic this tool computes.",
-                    details={
-                        "field": "statistics",
-                        "requested": name,
-                        "supported": [
-                            "minimum",
-                            "maximum",
-                            "mean",
-                            "range",
-                            "total",
-                            "percentile",
-                            "rolling_mean",
-                            "trend",
-                            "standard_deviation",
-                        ],
-                    },
-                )
+        results = _aggregates(series, measure, provenance, arguments)
 
-        return _ok(
-            {
-                "measure": measure.value,
-                "unit": arguments.unit,
-                "data_class": DataClass.COMPUTED_STATISTIC.value,
-                "period": ToolPeriod.of(provenance.period).model_dump(mode="json"),
-                "provider": arguments.provider,
-                "points_supplied": len(arguments.points),
-                "results": [_statistic_payload(result) for result in results],
+        payload: dict[str, Any] = {
+            "measure": measure.value,
+            "unit": arguments.unit,
+            "data_class": DataClass.COMPUTED_STATISTIC.value,
+            "period": ToolPeriod.of(provenance.period).model_dump(mode="json"),
+            "provider": arguments.provider,
+            "points_supplied": len(arguments.points),
+            "results": [_statistic_payload(result) for result in results],
+        }
+
+        # The comparison half, when the caller supplied a window to compare against. Kept in its
+        # own key with its own period rather than merged into `results`: two aggregates over two
+        # windows are two different claims, and a reader who cannot tell which window a figure
+        # covers cannot check either of them.
+        if arguments.baseline_points is not None:
+            baseline_series = _series_from_points(
+                arguments.baseline_points,
+                measure=arguments.measure,
+                unit=arguments.unit,
+                timezone=arguments.timezone,
+            )
+            baseline_provenance = _provenance_for_points(
+                baseline_series, arguments, arguments.location
+            )
+            baseline = _aggregates(baseline_series, measure, baseline_provenance, arguments)
+
+            payload["baseline"] = {
+                "label": arguments.baseline_label,
+                "period": ToolPeriod.of(baseline_provenance.period).model_dump(mode="json"),
+                "points_supplied": len(arguments.baseline_points),
+                "results": [_statistic_payload(result) for result in baseline],
             }
-        )
+            # Which window is "later" is decided by the windows, not by which one the caller
+            # happened to pass as the baseline. `delta` is documented as later-minus-earlier so
+            # that a positive figure always means "went up", and a comparison whose sign depends on
+            # argument order is a figure a reader cannot interpret.
+            this_window = provenance.period
+            other_window = baseline_provenance.period
+            baseline_is_later = (
+                this_window is not None
+                and other_window is not None
+                and other_window.start_utc > this_window.start_utc
+            )
+            this_label = arguments.location or "this window"
+            other_label = arguments.baseline_label or "the baseline window"
+
+            payload["differences"] = [
+                _statistic_payload(difference)
+                for difference in _differences(
+                    later=baseline if baseline_is_later else results,
+                    earlier=results if baseline_is_later else baseline,
+                    unit=arguments.unit,
+                    measure=measure,
+                    provenance=baseline_provenance if baseline_is_later else provenance,
+                    earlier_label=this_label if baseline_is_later else other_label,
+                    later_label=other_label if baseline_is_later else this_label,
+                )
+            ]
+
+        return _ok(payload)
 
     # ---------------------------------------------------------------- weather_anomaly
 

@@ -117,15 +117,22 @@ function RecordView({ response }: { readonly response: EvidenceResponse }): Reac
       <RunHeader record={record} />
 
       <div className={styles.body}>
+        {/*
+          The artifact's two columns, in its own order: the pipeline and the tool layer down the
+          narrow left rail, the evidence the run produced down the wide right one. Forecast
+          uncertainty moved to the left column — it is a small supporting reading about one
+          retrieval, and between the analytics and the knowledge it broke the right column's
+          sequence of four primary panels in half.
+        */}
         <div className={styles.column}>
           <ExecutionFlow record={record} />
           <ToolActivityPanel record={record} />
+          <UncertaintyPanel record={record} />
         </div>
 
         <div className={styles.column}>
           <GroundedSources sources={record.sources} citations={record.citations} />
           <DeterministicAnalytics record={record} />
-          <UncertaintyPanel record={record} />
           <KnowledgeEvidence citations={record.citations} />
           <FinalSynthesis record={record} />
         </div>

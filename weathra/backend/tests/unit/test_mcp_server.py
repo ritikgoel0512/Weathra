@@ -425,6 +425,129 @@ POINTS = [
 ]
 
 
+# The same week a year earlier, for the comparison half of the statistics tool. Cooler throughout,
+# so every difference against POINTS above is positive and a sign error cannot pass unnoticed.
+EARLIER_POINTS = [
+    {"time_utc": "2025-03-02T00:00:00Z", "value": 9.0},
+    {"time_utc": "2025-03-03T00:00:00Z", "value": 10.0},
+    {"time_utc": "2025-03-04T00:00:00Z", "value": 9.5},
+    {"time_utc": "2025-03-05T00:00:00Z", "value": 24.5},
+    {"time_utc": "2025-03-06T00:00:00Z", "value": 10.0},
+    {"time_utc": "2025-03-07T00:00:00Z", "value": 9.0},
+    {"time_utc": "2025-03-08T00:00:00Z", "value": 10.5},
+]
+
+
+async def test_a_baseline_window_is_summarised_and_differenced() -> None:
+    """A comparison's answer is the difference, and something has to compute it.
+
+    Before this, a run that retrieved two windows summarised each of them and left the subtraction
+    to whoever read the two sets of figures — so the one figure the question turned on was the one
+    figure with no method, no point count and no provenance. Both windows come back with their own
+    period, and the difference comes back beside them.
+    """
+    async with Connected() as session:
+        result = await session.call_tool(
+            "weather_statistics",
+            {
+                "measure": "temperature_max",
+                "unit": "°C",
+                "points": POINTS,
+                "statistics": ["mean", "range"],
+                "baseline_points": EARLIER_POINTS,
+                "baseline_label": "the same week last year",
+            },
+        )
+        payload = structured(result)
+
+        assert failed(result) is False
+
+        # Each window keeps its own period, because two aggregates over two windows are two claims.
+        assert payload["period"]["start_utc"].startswith("2026-03-02")
+        assert payload["baseline"]["period"]["start_utc"].startswith("2025-03-02")
+        assert payload["baseline"]["label"] == "the same week last year"
+        assert payload["baseline"]["points_supplied"] == 7
+
+        this_year = {item["statistic"]: item for item in payload["results"]}
+        last_year = {item["statistic"]: item for item in payload["baseline"]["results"]}
+        assert this_year["mean"]["value"] == pytest.approx(13.928571, abs=1e-5)
+        assert last_year["mean"]["value"] == pytest.approx(11.785714, abs=1e-5)
+
+        differences = {item["statistic"]: item for item in payload["differences"]}
+        difference = differences["delta"]
+        assert difference["data_class"] == "computed_statistic"
+        assert difference["value"] == pytest.approx(2.142857, abs=1e-5)
+        # Both operands travel with the figure: a difference without them cannot be checked.
+        assert difference["parameters"]["earlier"] == pytest.approx(11.785714, abs=1e-5)
+        assert difference["parameters"]["later"] == pytest.approx(13.928571, abs=1e-5)
+
+
+async def test_a_difference_is_later_minus_earlier_whichever_window_was_the_baseline() -> None:
+    """The sign is decided by the windows, not by which one the caller passed as the baseline.
+
+    ``delta`` is documented as later minus earlier so that a positive figure always means "went
+    up". A run comparing an archive window against a forecast passes the *newer* window as the
+    baseline, and a difference whose sign depended on argument order would be uninterpretable.
+    """
+    async with Connected() as session:
+        result = await session.call_tool(
+            "weather_statistics",
+            {
+                "measure": "temperature_max",
+                "unit": "°C",
+                # This time the *earlier* window is the primary one and the later is the baseline.
+                "points": EARLIER_POINTS,
+                "statistics": ["mean"],
+                "baseline_points": POINTS,
+                "baseline_label": "this week",
+            },
+        )
+        payload = structured(result)
+
+        difference = payload["differences"][0]
+        assert difference["value"] == pytest.approx(2.142857, abs=1e-5), (
+            "still later minus earlier, so the warmer later window reads as a rise"
+        )
+        assert difference["parameters"]["later_label"] == "mean over this week"
+
+
+async def test_an_aggregate_only_one_window_produced_is_not_differenced() -> None:
+    """A range is not differenced against another window's range, and nothing is invented.
+
+    Only the aggregates a comparison is actually about — the mean, the extremes and the total — are
+    differenced. A difference of ranges answers no question anybody asks, and differencing against
+    a stand-in for a statistic the other window could not compute would be the invention this
+    screen exists to make impossible.
+    """
+    async with Connected() as session:
+        result = await session.call_tool(
+            "weather_statistics",
+            {
+                "measure": "temperature_max",
+                "unit": "°C",
+                "points": POINTS,
+                "statistics": ["mean", "range"],
+                "baseline_points": EARLIER_POINTS,
+            },
+        )
+        payload = structured(result)
+
+        assert [item["statistic"] for item in payload["differences"]] == ["delta"]
+
+
+async def test_no_baseline_means_no_comparison_keys_at_all() -> None:
+    """A single-window call is unchanged: no baseline, no differences, nothing to explain away."""
+    async with Connected() as session:
+        result = await session.call_tool(
+            "weather_statistics",
+            {"measure": "temperature_max", "unit": "°C", "points": POINTS, "statistics": ["mean"]},
+        )
+        payload = structured(result)
+
+        assert "baseline" not in payload
+        assert "differences" not in payload
+
+
 async def test_statistics_reports_method_parameters_and_point_count() -> None:
     async with Connected() as session:
         result = await session.call_tool(

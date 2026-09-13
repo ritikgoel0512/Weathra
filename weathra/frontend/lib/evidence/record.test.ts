@@ -67,8 +67,20 @@ describe("statistics a run recorded through its tools", () => {
               measure: "temperature_mean",
               points_supplied: 7,
               results: [
-                { statistic: "mean", measure: "temperature_mean", value: 21.5, unit: "°C" },
-                { statistic: "delta", measure: "temperature_mean", value: 2.2, unit: "°C" },
+                {
+                  statistic: "mean",
+                  measure: "temperature_mean",
+                  value: 21.5,
+                  unit: "°C",
+                  data_class: "computed_statistic",
+                },
+                {
+                  statistic: "delta",
+                  measure: "temperature_mean",
+                  value: 2.2,
+                  unit: "°C",
+                  data_class: "computed_statistic",
+                },
               ],
             },
           },

@@ -98,6 +98,24 @@ describe("the evidence log", () => {
     ).toHaveAttribute("href", "/evidence/run-1");
   });
 
+  it("opens on the newest run by its timestamp, not on whichever row arrived first", async () => {
+    /*
+     * The backend orders newest first and this screen orders again, because "which run does the
+     * evidence log open on" must not be a property of a row order decided at the other end of the
+     * system. A listing that arrived oldest-first would otherwise pin the page to an old record —
+     * the exact complaint that sent this screen back for a rebuild.
+     */
+    const evidence = vi.fn().mockResolvedValue(RECORD);
+    const oldestFirst = {
+      ...RECORDS,
+      records: [...RECORDS.records].reverse(),
+    };
+    mount(client({ evidence, evidenceRecords: vi.fn().mockResolvedValue(oldestFirst) }));
+
+    await vi.waitFor(() => expect(evidence).toHaveBeenCalledWith("run-1"));
+    expect(evidence).not.toHaveBeenCalledWith("run-2");
+  });
+
   it("offers every run as a switch, and shows the one selected", async () => {
     const evidence = vi.fn().mockResolvedValue(RECORD);
     mount(client({ evidence }));

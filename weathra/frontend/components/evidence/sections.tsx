@@ -38,6 +38,7 @@ import {
   DataClassBadge,
   InterpretationPanel,
   MethodNote,
+  ModelAttribution,
   NOT_REPORTED,
   ProvenanceSection,
   ScrollRegion,
@@ -58,11 +59,11 @@ import { measureLabel } from "@/lib/dashboard/briefing";
 import { dataClassFor } from "@/lib/design/data-class";
 import {
   agentStages,
+  analyticsFromTools,
   leadingFigures,
-  statisticsFromTools,
+  PRIMARY_FIGURES,
   formatDurationMs,
   readableProse,
-  hasAnalytics,
   runStatusOf,
   type EvidenceField,
   type RunRecord,
@@ -187,65 +188,70 @@ export function RunHeader({ record }: { readonly record: RunRecord }): ReactNode
   const status = runStatusOf(record);
   const duration = formatDurationMs(record.timing.totalDurationMs);
   const started = formatInstant(record.timing.startedAt);
-  const involved = [...new Set(record.agents.map((step) => agentLabel(step.agent)))];
+  const audit = auditOf(record);
 
   return (
     /*
      * The artifact's header band: who this run was, on the left; what it did, on the right.
      *
-     * These were stacked — a title, the question, a three-line paragraph explaining what an
-     * evidence record is, and then a full-width strip of figures — so the band alone took a third
-     * of the first screen before the trace began. The explanation is the page's least useful line
-     * for someone who navigated here on purpose; it goes, and the two halves sit side by side.
+     * Four readings on the right, not six. The agent list and the step count were both here, and
+     * both are the execution column's subject — a header that lists the agents makes a reader read
+     * the same six names twice before reaching the first piece of evidence. What replaces them is
+     * the one reading the artifact's own header carries that Weathra can compute honestly: how
+     * complete the record is, as the share of `auditOf`'s checks that passed. Not a model's
+     * confidence in its answer, which is what a percentage in this slot usually is.
      */
     <header className={styles.header} data-run-header="true">
       <div className={styles.headerGrid}>
         <div className={styles.heading}>
           <p className={styles.identifiers}>
+            <span className={styles.headerMark}>Audit</span>
             <span className={styles.auditId}>Evidence {record.id}</span>
-            {record.timing.storedAt ? (
-              <span>Stored {formatInstant(record.timing.storedAt)}</span>
-            ) : null}
           </p>
           <h1 className={styles.title}>Agent evidence log</h1>
           <p className={styles.question}>{record.question}</p>
         </div>
 
         <dl className={styles.summary}>
-        <div className={styles.summaryItem}>
-          <dt className={styles.summaryTerm}>Status</dt>
-          <dd className={styles.summaryValue} data-run-status={status.label.toLowerCase()}>
-            <Badge tone={status.tone}>{status.label}</Badge>
-          </dd>
-        </div>
-        <div className={styles.summaryItem}>
-          <dt className={styles.summaryTerm}>Timestamp</dt>
-          <dd className={styles.summaryValue}>
-            {started && record.timing.startedAt ? (
-              <time dateTime={record.timing.startedAt}>{started}</time>
-            ) : (
-              NOT_REPORTED
-            )}
-          </dd>
-        </div>
-        <div className={styles.summaryItem}>
-          <dt className={styles.summaryTerm}>Execution</dt>
-          <dd className={styles.summaryValue} data-run-duration="true">
-            {duration ?? NOT_REPORTED}
-          </dd>
-        </div>
-        <div className={styles.summaryItem}>
-          <dt className={styles.summaryTerm}>Steps</dt>
-          <dd className={styles.summaryValue} data-run-steps="true">
-            {record.timing.stepsUsed ?? NOT_REPORTED}
-          </dd>
-        </div>
-        <div className={styles.summaryItem}>
-          <dt className={styles.summaryTerm}>Agents</dt>
-          <dd className={styles.summaryValue} data-agents-involved="true">
-            {involved.length > 0 ? involved.join(", ") : "None recorded"}
-          </dd>
-        </div>
+          <div className={styles.summaryItem}>
+            <dt className={styles.summaryTerm}>Status</dt>
+            <dd className={styles.summaryValue} data-run-status={status.label.toLowerCase()}>
+              <Badge tone={status.tone}>{status.label}</Badge>
+            </dd>
+          </div>
+          <div className={styles.summaryItem}>
+            <dt className={styles.summaryTerm}>Execution</dt>
+            <dd className={styles.summaryValue} data-run-duration="true">
+              {duration ?? NOT_REPORTED}
+            </dd>
+          </div>
+          <div className={styles.summaryItem}>
+            <dt className={styles.summaryTerm}>Timestamp</dt>
+            <dd className={styles.summaryValue}>
+              {started && record.timing.startedAt ? (
+                <time dateTime={record.timing.startedAt}>{started}</time>
+              ) : (
+                NOT_REPORTED
+              )}
+            </dd>
+          </div>
+          {/*
+            The artifact's confidence figure, replaced by the one this record can support: the
+            share of the completeness checks in "Record and traceability" that passed. Its working
+            is on the page, a press away, which is the whole difference between this and a 98.4%.
+          */}
+          <div className={styles.summaryItem}>
+            <dt className={styles.summaryTerm}>Evidence completeness</dt>
+            <dd
+              className={styles.summaryValue}
+              data-evidence-completeness={String(audit.completeness)}
+            >
+              <span className={styles.completeness}>{audit.completeness}%</span>
+              <span className={styles.completenessNote}>
+                {audit.passed} of {audit.total} checks
+              </span>
+            </dd>
+          </div>
         </dl>
       </div>
 
@@ -267,15 +273,46 @@ export function RunHeader({ record }: { readonly record: RunRecord }): ReactNode
  * selecting it — or for failing or skipping it — which is what makes the sequence checkable rather
  * than decorative.
  */
+/**
+ * What each stage of the pipeline *is*, in three or four words.
+ *
+ * The artifact labels every node with its kind — the agent's name over a compact type line — and
+ * that line is the difference between a column of names and a column a reader can follow. Nothing
+ * here is data: it describes the agent, which is a fixed part of Weathra rather than anything one
+ * run recorded, so it cannot disagree with a record. An agent with no entry gets no line at all.
+ */
+const STAGE_KINDS: Readonly<Record<string, string>> = {
+  supervisor: "Routing · plan selection",
+  forecast: "Retrieval · provider tools",
+  current: "Retrieval · provider tools",
+  satellite: "Retrieval · imagery",
+  historical: "Retrieval · archive",
+  analytics: "Deterministic · analytics kernel",
+  rag: "Retrieval · knowledge corpus",
+  synthesis: "Inference · grounded prose",
+};
+
+/** How a completed stage is announced. The artifact's word, not the record's enum. */
+const STAGE_STATE_LABELS: Readonly<Record<string, string>> = {
+  succeeded: "Completed",
+  failed: "Failed",
+  skipped: "Skipped",
+};
+
+/**
+ * The agents that ran, in the order they ran.
+ *
+ * The artifact's connected timeline: a tick on the rail, the agent's name, what kind of stage it
+ * is, what it cost, and the state it ended in. One card per *logical* agent — a supervisor routing
+ * two archive windows records two historical actions, and two cards headed "Historical agent"
+ * makes a reader counting agents get the wrong number.
+ *
+ * **One line, not a paragraph.** Each stage carries the reason the supervisor recorded for it,
+ * clamped to two lines; a stage that did several things says how many and keeps the list behind
+ * its own disclosure. The reasons are model-written and run long, and six of them at full length
+ * turned the column the page opens on into an essay.
+ */
 export function ExecutionFlow({ record }: { readonly record: RunRecord }): ReactNode {
-  /*
-   * One card per agent, not one per action.
-   *
-   * A supervisor routing two archive windows records two historical steps, and this drew two cards
-   * headed "Historical agent" and then two more for the analytics over them — six cards for four
-   * stages, so a reader counting agents got the wrong number. What an agent did more than once is
-   * inside its card now.
-   */
   const stages = agentStages(record);
 
   /** The slowest stage, which is what every bar below is a share of. */
@@ -292,6 +329,9 @@ export function ExecutionFlow({ record }: { readonly record: RunRecord }): React
     <section className={styles.panel} aria-label="Execution flow" data-evidence-section="execution">
       <header className={styles.panelHeader}>
         <h2 className={styles.panelTitle}>Execution flow</h2>
+        <span className={styles.panelCount}>
+          {stages.length} {stages.length === 1 ? "stage" : "stages"}
+        </span>
       </header>
 
       {record.routingReason ? (
@@ -304,7 +344,7 @@ export function ExecutionFlow({ record }: { readonly record: RunRecord }): React
       ) : null}
 
       {stages.length === 0 ? (
-        <p className={styles.note}>This run recorded no agent steps.</p>
+        <p className={styles.emptyNote}>This run recorded no agent steps.</p>
       ) : (
         <ol className={styles.steps} data-agent-sequence="true">
           {stages.map((stage, index) => {
@@ -312,6 +352,8 @@ export function ExecutionFlow({ record }: { readonly record: RunRecord }): React
               longest > 0 && typeof stage.durationMs === "number"
                 ? Math.max((stage.durationMs / longest) * 100, 2)
                 : null;
+            const kind = STAGE_KINDS[stage.agent] ?? null;
+            const state = STAGE_STATE_LABELS[stage.status] ?? stepStatusLabel(stage.status);
 
             return (
               <li
@@ -324,30 +366,49 @@ export function ExecutionFlow({ record }: { readonly record: RunRecord }): React
                   <span className={styles.stepName}>
                     {index + 1}. {agentLabel(stage.agent)}
                   </span>
-                  <span className={styles.stepMeta}>{stepStatusLabel(stage.status)}</span>
+                  <span className={styles.stepState} data-status={stage.status}>
+                    {state}
+                  </span>
                 </span>
-                <span className={styles.stepMeta}>
-                  {formatDurationMs(stage.durationMs) ?? NOT_REPORTED}
-                  {stage.actions.length > 1 ? ` \u00b7 ${stage.actions.length} actions` : null}
-                  {stage.startedAt ? ` \u00b7 started ${formatInstant(stage.startedAt)}` : null}
+
+                <span className={styles.stepFacts}>
+                  {kind ? <span className={styles.stepKind}>{kind}</span> : null}
+                  <span className={styles.stepDuration}>
+                    {formatDurationMs(stage.durationMs) ?? NOT_REPORTED}
+                  </span>
+                  {stage.actions.length > 1 ? (
+                    <span className={styles.stepActionCount}>
+                      {stage.actions.length} actions
+                    </span>
+                  ) : null}
                 </span>
+
                 {share === null ? null : (
                   <span className={styles.stepBar} aria-hidden="true">
                     <span className={styles.stepBarFill} style={{ inlineSize: `${share}%` }} />
                   </span>
                 )}
+
                 {/*
-                  What the agent did. One line for one action; a list when it did several, which is
-                  the detail the duplicate cards used to carry and the reason they existed.
+                  One reason, clamped. What an agent did more than once is counted above and listed
+                  behind the disclosure — six stages of full model-written prose is the dump this
+                  column was rebuilt to stop being.
                 */}
-                {stage.reasons.length === 1 ? (
-                  <span className={styles.stepReason}>{stage.reasons[0]}</span>
-                ) : stage.reasons.length > 1 ? (
-                  <ul className={styles.stepActions}>
-                    {stage.reasons.map((reason, position) => (
-                      <li key={`${stage.agent}-${position}`}>{reason}</li>
-                    ))}
-                  </ul>
+                {stage.reasons.length > 0 ? (
+                  <span className={styles.stepReason} data-clamped="true">
+                    {stage.reasons[0]}
+                  </span>
+                ) : null}
+
+                {stage.reasons.length > 1 ? (
+                  <details className={styles.stepActionsDetail}>
+                    <summary>What this agent did ({stage.reasons.length})</summary>
+                    <ul className={styles.stepActions}>
+                      {stage.reasons.map((reason, position) => (
+                        <li key={`${stage.agent}-${position}`}>{reason}</li>
+                      ))}
+                    </ul>
+                  </details>
                 ) : null}
               </li>
             );
@@ -458,7 +519,13 @@ function ToolEntry({ activity }: { readonly activity: ToolActivity }): ReactNode
  * opens it. What changes is that the default screen answers "which tools did this use" instead of
  * making a reader assemble that answer from six cards.
  */
-function ToolSummary({ tools }: { readonly tools: readonly ToolActivity[] }): ReactNode {
+function ToolSummary({
+  tools,
+  sources,
+}: {
+  readonly tools: readonly ToolActivity[];
+  readonly sources: readonly EvidenceAttribution[];
+}): ReactNode {
   const byTool = new Map<string, { calls: number; failed: number; totalMs: number }>();
   for (const activity of tools) {
     const seen = byTool.get(activity.tool) ?? { calls: 0, failed: 0, totalMs: 0 };
@@ -473,23 +540,51 @@ function ToolSummary({ tools }: { readonly tools: readonly ToolActivity[] }): Re
     (sum, activity) => sum + (typeof activity.durationMs === "number" ? activity.durationMs : 0),
     0,
   );
+  /** The providers reached *through* the tool layer, which is what the layer connected to. */
+  const providers = [...new Set(sources.map((source) => source.provider))];
 
   return (
     <>
-      <p className={styles.toolTotals}>
-        <span>
-          {tools.length} {tools.length === 1 ? "call" : "calls"}
-        </span>
-        <span>
-          {byTool.size} {byTool.size === 1 ? "tool" : "tools"}
-        </span>
-        {total > 0 ? <span>{formatDurationMs(total)}</span> : null}
+      {/*
+        The artifact's active-tool card: one block saying what the layer is, what it reached, how
+        much it did and how it went. The trace was a list of six bordered cards, each with its own
+        arguments and results disclosures, and the rail ran to twice the height of the evidence
+        beside it — a reader had to assemble "which tools did this use" from the calls themselves.
+      */}
+      <div className={styles.mcpCard} data-mcp-state={failures > 0 ? "degraded" : "complete"}>
+        <p className={styles.mcpState}>
+          <span className={styles.mcpStateMark} aria-hidden="true" />
+          Active tool layer
+          <span className={styles.mcpStateWord}>{failures > 0 ? "Degraded" : "Complete"}</span>
+        </p>
+
+        <dl className={styles.mcpFacts}>
+          <div className={styles.mcpFact}>
+            <dt>Interface</dt>
+            <dd>Model Context Protocol</dd>
+          </div>
+          <div className={styles.mcpFact}>
+            <dt>Connected sources</dt>
+            <dd>{providers.length > 0 ? providers.join(", ") : NOT_REPORTED}</dd>
+          </div>
+          <div className={styles.mcpFact}>
+            <dt>Calls</dt>
+            <dd>
+              {tools.length} across {byTool.size} {byTool.size === 1 ? "tool" : "tools"}
+            </dd>
+          </div>
+          <div className={styles.mcpFact}>
+            <dt>Total latency</dt>
+            <dd>{total > 0 ? formatDurationMs(total) : NOT_REPORTED}</dd>
+          </div>
+        </dl>
+
         {failures > 0 ? (
-          <span className={styles.toolFailed}>
-            {failures} failed
-          </span>
+          <p className={styles.toolFailed}>
+            {failures} {failures === 1 ? "call" : "calls"} failed — listed in the trace below.
+          </p>
         ) : null}
-      </p>
+      </div>
 
       <ul className={styles.toolTally}>
         {[...byTool.entries()].map(([tool, seen]) => (
@@ -522,14 +617,6 @@ export function ToolActivityPanel({ record }: { readonly record: RunRecord }): R
       className={styles.panel}
       aria-label="MCP evidence"
       data-evidence-section="tools"
-      /*
-       * The space a section takes is the space its data earns.
-       *
-       * A run that called no tools was given the same full panel as one that called six — a heading,
-       * a paragraph about the tool interface, and a sentence saying nothing happened, for three
-       * lines of meaning. On a conceptual knowledge run three such panels stacked up and the page
-       * read as mostly absence. Empty sections now state themselves in one line.
-       */
       data-empty={record.tools.length === 0 ? "true" : undefined}
     >
       <header className={styles.panelHeader}>
@@ -539,7 +626,7 @@ export function ToolActivityPanel({ record }: { readonly record: RunRecord }): R
       {record.tools.length === 0 ? (
         <p className={styles.emptyNote}>No tool calls — this run retrieved nothing through a tool.</p>
       ) : (
-        <ToolSummary tools={record.tools} />
+        <ToolSummary tools={record.tools} sources={record.sources} />
       )}
     </section>
   );
@@ -581,6 +668,9 @@ export function GroundedSources({
     >
       <header className={styles.panelHeader}>
         <h2 className={styles.panelTitle}>Grounded data sources</h2>
+        <span className={styles.panelCount}>
+          {sources.length + (documents.length > 0 ? 1 : 0)} sources
+        </span>
       </header>
 
       {sources.length === 0 && documents.length === 0 ? (
@@ -588,6 +678,11 @@ export function GroundedSources({
           No provider data — this run answered from knowledge rather than from a weather retrieval.
         </p>
       ) : (
+        <>
+        <p className={styles.panelLead}>
+          Every source this run read, with the place and window it covers and the class of claim it
+          supports. Each row is a recorded retrieval, not a catalogue entry.
+        </p>
         <ScrollRegion label="Grounded data sources table" className={styles.tableScroll}>
           <table className={styles.table}>
             <caption className="weathra-visually-hidden">
@@ -610,7 +705,7 @@ export function GroundedSources({
                     key={`${source.provider}-${source.retrieved_at}-${index}`}
                     data-source-class={source.data_class}
                   >
-                    <td>{source.provider}</td>
+                    <td className={styles.sourceProvider}>{source.provider}</td>
                     <td>{placeLabel(source.location) ?? NOT_REPORTED}</td>
                     <td title={exactCoverageOf(source)}>{coverageOf(source)}</td>
                     <td>{dataClass ? <DataClassBadge dataClass={dataClass} /> : NOT_REPORTED}</td>
@@ -621,7 +716,7 @@ export function GroundedSources({
               {/* The corpus, where the run cited it. Derived from real citations, never invented. */}
               {documents.length > 0 ? (
                 <tr data-source-class="knowledge">
-                  <td>Weathra knowledge corpus</td>
+                  <td className={styles.sourceProvider}>Weathra knowledge corpus</td>
                   <td>&mdash;</td>
                   <td>
                     {documents.length} {documents.length === 1 ? "document" : "documents"},{" "}
@@ -635,6 +730,7 @@ export function GroundedSources({
             </tbody>
           </table>
         </ScrollRegion>
+        </>
       )}
     </section>
   );
@@ -721,36 +817,20 @@ function TrendFigure({ report }: { readonly report: TrendReport }): ReactNode {
  */
 export function DeterministicAnalytics({ record }: { readonly record: RunRecord }): ReactNode {
   /*
-   * A run that computed through the tool boundary rather than through the analytics agent records
-   * its figures in the tool's own result. Recovering them is not inventing a statistic — it is
-   * reading one the record already holds, and it stops the band from saying "no statistics" on a
-   * screen whose synthesis above quotes them.
+   * Everything the run computed, from wherever it recorded it.
+   *
+   * `analytics_results` on a stored record is empty by design — the backend leaves the figures
+   * inside the tool payloads they arrived in rather than keeping a second copy that can disagree —
+   * so recovering them is reading what the record already holds, not inventing a statistic. A run
+   * that computed through the analytics *agent* and one that computed through the tool boundary
+   * present identically here, which is what they are.
    */
-  const recovered = hasAnalytics(record) ? [] : statisticsFromTools(record);
+  const recovered = analyticsFromTools(record);
+  const statistics = [...record.statistics, ...recovered.statistics];
+  const anomalies = [...record.anomalies, ...recovered.anomalies];
+  const trends = [...record.trends, ...recovered.trends];
 
-  if (!hasAnalytics(record) && recovered.length > 0) {
-    return (
-      <div data-evidence-section="analytics">
-        <ProvenanceSection dataClass="analytics" title="Deterministic analytics">
-          {/*
-            Rendered by the same component the analytics list uses, so a figure the run recorded
-            through a tool is presented exactly as one recorded by the agent — label, value, unit
-            and the method that produced it. The band never shows a payload's envelope.
-          */}
-          <ul className={styles.figures}>
-            {leadingFigures(recovered).primary.map((result, index) => (
-              <StatisticFigure key={`${result.statistic}-${result.measure}-${index}`} result={result} />
-            ))}
-          </ul>
-          <p className={styles.note}>
-            Computed by Weathra during this run and recorded in its tool results.
-          </p>
-        </ProvenanceSection>
-      </div>
-    );
-  }
-
-  if (!hasAnalytics(record)) {
+  if (statistics.length === 0 && anomalies.length === 0 && trends.length === 0) {
     return (
       <section
         className={styles.panel}
@@ -768,67 +848,67 @@ export function DeterministicAnalytics({ record }: { readonly record: RunRecord 
     );
   }
 
-  const leading = leadingFigures(record.statistics);
+  /*
+   * Three figures lead, chosen by what a decision turns on rather than by storage order.
+   *
+   * A comparison run records a mean, a minimum, a maximum and a range for each window and then the
+   * differences between them; rendering those as stored puts "minimum of the first window" where
+   * the artifact puts the finding. `leadingFigures` leads a comparison with its two sides and the
+   * difference, and everything else with the figures that answer "is this unusual" before the ones
+   * that answer "how much". Nothing is dropped: the rest is one press away.
+   */
+  const leading = leadingFigures(statistics);
+  const secondary = [...leading.rest];
+
+  /*
+   * The anomaly scan and the trend are findings in their own right, so they compete for the third
+   * card rather than waiting behind every descriptive statistic the kernel happened to compute.
+   * A run with a real anomaly and four means should lead with the anomaly.
+   */
+  const spare = PRIMARY_FIGURES - leading.primary.length;
+  const promotedAnomalies = anomalies.slice(0, Math.max(0, spare));
+  const promotedTrends = trends.slice(0, Math.max(0, spare - promotedAnomalies.length));
+  const remainingAnomalies = anomalies.slice(promotedAnomalies.length);
+  const remainingTrends = trends.slice(promotedTrends.length);
+
+  const total = statistics.length + anomalies.length + trends.length;
+  const held = secondary.length + remainingAnomalies.length + remainingTrends.length;
 
   return (
     <div data-evidence-section="analytics">
-      {/*
-        A second-level heading, because this panel is a *sibling* of "Grounded data sources" and
-        "Forecast uncertainty" in the same column — not a subsection of either. It was a third-level
-        heading, which put it under whichever h2 preceded it in the heading list and claimed a
-        containment the screen does not have; the same panel's no-statistics branch above has always
-        been an h2, so the level also changed with the data.
-      */}
       <ProvenanceSection dataClass="analytics" title="Deterministic analytics">
-        {/*
-          The band shows the figures worth leading with; the rest are a press away.
-          
-          A run that computed a mean, a minimum, a maximum and a range for two windows recorded ten
-          results, and ten cards is a dump whatever each one says. `05-agent-evidence.png` leads
-          with three. The ordering is the analytics layer's own — the order the run computed them —
-          so "the first four" is not this screen ranking evidence, it is the run's own sequence.
-        */}
-        {/*
-          Three figures lead, chosen by what a decision turns on rather than by storage order.
-          
-          A comparison run records ten results — a mean, a minimum, a maximum and a range for each
-          window, then the differences — so rendering them as stored puts "minimum of the first
-          window" where the artifact puts the anomaly. Everything past the third is behind the
-          band's own disclosure; nothing is dropped.
-        */}
-        <ul className={styles.figures}>
+        <p className={styles.panelLead}>
+          Computed by Weathra from the retrieved series, never by a language model. Every figure
+          carries the method that produced it and the points it used.
+        </p>
+
+        <ul className={styles.figures} data-primary-figures="true">
           {leading.primary.map((result, index) => (
             <StatisticFigure key={`${result.statistic}-${result.measure}-${index}`} result={result} />
           ))}
-          {leading.rest.length === 0
-            ? record.anomalies.map((report, index) => (
-                <AnomalyFigure key={`anomaly-${report.measure}-${index}`} report={report} />
-              ))
-            : null}
-          {leading.rest.length === 0
-            ? record.trends.map((report, index) => (
-                <TrendFigure key={`trend-${report.measure}-${index}`} report={report} />
-              ))
-            : null}
+          {promotedAnomalies.map((report, index) => (
+            <AnomalyFigure key={`anomaly-${report.measure}-${index}`} report={report} />
+          ))}
+          {promotedTrends.map((report, index) => (
+            <TrendFigure key={`trend-${report.measure}-${index}`} report={report} />
+          ))}
         </ul>
 
-        {leading.rest.length > 0 ? (
+        {held > 0 ? (
           <details className={styles.moreFigures}>
-            <summary>
-              Every figure this run computed ({record.statistics.length})
-            </summary>
+            <summary>Every figure this run computed ({total})</summary>
             <ul className={styles.figures}>
-              {leading.rest.map((result, index) => (
+              {secondary.map((result, index) => (
                 <StatisticFigure
                   key={`rest-${result.statistic}-${result.measure}-${index}`}
                   result={result}
                 />
               ))}
-              {record.anomalies.map((report, index) => (
-                <AnomalyFigure key={`anomaly-${report.measure}-${index}`} report={report} />
+              {remainingAnomalies.map((report, index) => (
+                <AnomalyFigure key={`rest-anomaly-${report.measure}-${index}`} report={report} />
               ))}
-              {record.trends.map((report, index) => (
-                <TrendFigure key={`trend-${report.measure}-${index}`} report={report} />
+              {remainingTrends.map((report, index) => (
+                <TrendFigure key={`rest-trend-${report.measure}-${index}`} report={report} />
               ))}
             </ul>
           </details>
@@ -848,114 +928,133 @@ export function DeterministicAnalytics({ record }: { readonly record: RunRecord 
  * `specs/safety-grounding` forbids. Each fragment carries its document, its position in that
  * document, and the relevance score the retriever recorded — enough to find it again.
  */
+/** One retrieved passage, as the artifact's reference card draws it. */
+function CitationCard({
+  citation,
+  clamped,
+}: {
+  readonly citation: KnowledgeCitation;
+  readonly clamped: boolean;
+}): ReactNode {
+  return (
+    <li className={styles.citation} data-document={citation.document_id}>
+      <span className={styles.citationHead}>
+        <span className={styles.citationRef}>
+          {citation.document_id}
+          {citation.chunk_position === null || citation.chunk_position === undefined
+            ? ""
+            : ` · ${citation.chunk_position}`}
+        </span>
+        {typeof citation.score === "number" ? (
+          <span className={styles.citationScore}>
+            relevance {Math.round(citation.score * 100) / 100}
+          </span>
+        ) : null}
+      </span>
+
+      <span className={styles.citationTitle}>{citation.title}</span>
+
+      <blockquote className={styles.citationText} data-clamped={clamped ? "true" : undefined}>
+        {citation.text}
+      </blockquote>
+
+      <span className={styles.citationSource}>
+        Weathra knowledge corpus
+        {citation.topic ? ` · ${citation.topic}` : null}
+      </span>
+
+      {clamped ? (
+        <details className={styles.citationMore}>
+          <summary>View full passage</summary>
+          <blockquote className={styles.citationFull}>{citation.text}</blockquote>
+        </details>
+      ) : null}
+    </li>
+  );
+}
+
+/**
+ * The knowledge chunks the run retrieved and cited.
+ *
+ * Its own region, and deliberately not one of the five data classes: a corpus passage is
+ * documentation, not a measurement, and badging it as one would be the conflation
+ * `specs/safety-grounding` forbids. Each fragment carries its document, its position in that
+ * document, and the relevance score the retriever recorded — enough to find it again.
+ *
+ * **Two cards, and a line when there are none.** The artifact leads with two passages and puts the
+ * rest behind "explore all", because a reader scanning for why a conclusion holds needs the
+ * passages that most supported it. A run that cited nothing gets one muted line: a full panel
+ * explaining what a corpus is, on a run that did not use one, was the largest empty region on the
+ * narrow record and it said nothing.
+ */
 export function KnowledgeEvidence({
   citations,
 }: {
   readonly citations: readonly KnowledgeCitation[];
 }): ReactNode {
   /** Strongest first, so "the top two" is by relevance rather than by retrieval order. */
-  const ranked = [...citations].sort(
-    (left, right) => (right.score ?? 0) - (left.score ?? 0),
-  );
+  const ranked = [...citations].sort((left, right) => (right.score ?? 0) - (left.score ?? 0));
   const leadingCitations = ranked.slice(0, PRIMARY_CITATIONS);
   const remainingCitations = ranked.slice(PRIMARY_CITATIONS);
+
+  if (citations.length === 0) {
+    return (
+      <section
+        className={styles.panel}
+        aria-label="RAG knowledge evidence"
+        data-evidence-section="knowledge"
+        data-tier="knowledge"
+        data-empty="true"
+      >
+        <header className={styles.panelHeader}>
+          <h2 className={styles.panelTitle}>RAG knowledge evidence</h2>
+        </header>
+        <p className={styles.emptyNote}>
+          No knowledge cited — this run answered from retrieved data alone.
+        </p>
+      </section>
+    );
+  }
+
   return (
     <section
       className={styles.panel}
-      aria-label="Retrieved knowledge"
+      aria-label="RAG knowledge evidence"
       data-evidence-section="knowledge"
       data-tier="knowledge"
     >
       <header className={styles.panelHeader}>
-        <h2 className={styles.panelTitle}>Retrieved knowledge</h2>
+        <h2 className={styles.panelTitle}>RAG knowledge evidence</h2>
+        <span className={styles.panelCount}>
+          {citations.length} {citations.length === 1 ? "passage" : "passages"}
+        </span>
       </header>
 
-      <p className={styles.note}>
-        Passages retrieved from Weathra&rsquo;s weather-knowledge corpus. Explanatory documentation,
-        not measurement, and not a weather source.
+      <p className={styles.panelLead}>
+        Retrieved from Weathra&rsquo;s weather-knowledge corpus. Explanatory documentation, not
+        measurement, and not a weather source.
       </p>
 
-      {citations.length === 0 ? (
-        <p className={styles.emptyNote}>
-          No knowledge cited — this run answered from retrieved data alone.
-        </p>
-      ) : (
-        <ul className={styles.citations} data-citations="true">
-          {/*
-            The two strongest lead. The artifact shows two and an "explore all" beside them, and a
-            reader scanning for why a conclusion holds needs the passages that most supported it —
-            not every passage the retriever returned.
-          */}
-          {leadingCitations.map((citation, index) => (
-            <li
-              className={styles.citation}
-              key={`${citation.document_id}-${citation.chunk_position}-${index}`}
-              data-document={citation.document_id}
-            >
-              {/*
-                The artifact's own reference card: an identifier, a title, and the similarity, on
-                one row. The passage below it is *clamped* rather than printed in full — a run that
-                cited three chunks printed three paragraphs and pushed the synthesis off the screen
-                the evidence exists to support. The whole passage is one press away, which is where
-                a quotation belongs on a page that is summarising why it was retrieved.
-              */}
-              <span className={styles.citationHead}>
-                <span className={styles.citationRef}>
-                  {citation.document_id}
-                  {citation.chunk_position === null || citation.chunk_position === undefined
-                    ? ""
-                    : ` · ${citation.chunk_position}`}
-                </span>
-                <span className={styles.citationTitle}>{citation.title}</span>
-                {typeof citation.score === "number" ? (
-                  <span className={styles.citationScore}>
-                    relevance {Math.round(citation.score * 100) / 100}
-                  </span>
-                ) : null}
-              </span>
-
-              <blockquote className={styles.citationText} data-clamped="true">
-                {citation.text}
-              </blockquote>
-
-              <details className={styles.citationMore}>
-                <summary>View full passage</summary>
-                <blockquote className={styles.citationFull}>{citation.text}</blockquote>
-                {citation.topic ? (
-                  <p className={styles.fieldName}>Topic: {citation.topic}</p>
-                ) : null}
-              </details>
-            </li>
-          ))}
-        </ul>
-      )}
+      <ul className={styles.citations} data-citations="true">
+        {leadingCitations.map((citation, index) => (
+          <CitationCard
+            key={`${citation.document_id}-${citation.chunk_position}-${index}`}
+            citation={citation}
+            clamped
+          />
+        ))}
+      </ul>
 
       {remainingCitations.length > 0 ? (
         <details className={styles.moreFigures}>
           <summary>Explore all knowledge fragments ({citations.length})</summary>
           <ul className={styles.citations}>
             {remainingCitations.map((citation, index) => (
-              <li
-                className={styles.citation}
+              <CitationCard
                 key={`rest-${citation.document_id}-${citation.chunk_position}-${index}`}
-                data-document={citation.document_id}
-              >
-                <span className={styles.citationHead}>
-                  <span className={styles.citationRef}>
-                    {citation.document_id}
-                    {citation.chunk_position === null || citation.chunk_position === undefined
-                      ? ""
-                      : ` · ${citation.chunk_position}`}
-                  </span>
-                  <span className={styles.citationTitle}>{citation.title}</span>
-                  {typeof citation.score === "number" ? (
-                    <span className={styles.citationScore}>
-                      relevance {Math.round(citation.score * 100) / 100}
-                    </span>
-                  ) : null}
-                </span>
-                <blockquote className={styles.citationFull}>{citation.text}</blockquote>
-              </li>
+                citation={citation}
+                clamped={false}
+              />
             ))}
           </ul>
         </details>
@@ -974,10 +1073,50 @@ export function KnowledgeEvidence({
  * resolved to, the units it used, and whether each came from the request, the conversation, or the
  * person's saved preferences — so "you used my saved default" is distinguishable from "you guessed".
  */
+/** One named field of the context panel. Renders `not reported` rather than disappearing. */
+function ContextField({
+  name,
+  value,
+  attribute,
+}: {
+  readonly name: string;
+  readonly value: ReactNode;
+  readonly attribute?: Record<string, string>;
+}): ReactNode {
+  return (
+    <div className={styles.contextField} {...attribute}>
+      <dt className={styles.contextName}>{name}</dt>
+      <dd className={styles.contextValue}>{value}</dd>
+    </div>
+  );
+}
+
+/** Where a resolved value came from, as the artifact labels it. */
+function sourceWords(source: string | null | undefined): string | null {
+  if (typeof source !== "string" || source === "") return null;
+  return humanize(source);
+}
+
+/**
+ * What the run decided the question was about, and where each part came from.
+ *
+ * The artifact's "Context used (agent memory)" panel, in two columns: what the *conversation*
+ * established, and what the analysis was actually run with. Its own shows a chat excerpt and a
+ * preference profile; what Weathra can honestly show is the request, the thread it belonged to,
+ * the place and window the run resolved to, and whether each came from the request, the
+ * conversation or the person's saved preferences — so "you used my saved default" is
+ * distinguishable from "you guessed".
+ *
+ * **Field groups, not a sentence.** The backend writes a context statement — "Using London … in
+ * metric units" — and it was the first thing in this panel, which made the designed fields under
+ * it read as a restatement of a sentence a reader had already read. The statement is still here,
+ * under the fields it summarises, where it explains rather than pre-empts.
+ */
 export function ResolvedContextPanel({ record }: { readonly record: RunRecord }): ReactNode {
   const resolved = record.answer?.resolved ?? null;
   const locations = resolved?.locations ?? [];
   const period = resolved?.period ?? null;
+  const places = locations.map((place) => placeLabel(place)).filter(Boolean);
 
   return (
     <section
@@ -996,40 +1135,76 @@ export function ResolvedContextPanel({ record }: { readonly record: RunRecord })
         </p>
       ) : (
         <>
-          {resolved.statement ? <p className={styles.stateBody}>{resolved.statement}</p> : null}
-          <dl className={styles.fieldList}>
-            <div className={styles.fieldRow}>
-              <dt className={styles.fieldName}>Resolved location</dt>
-              <dd className={styles.fieldValue} data-resolved-location="true">
-                {locations.length > 0
-                  ? locations.map((place) => placeLabel(place)).join(", ")
-                  : NOT_REPORTED}
-                {resolved.location_source ? ` (from the ${resolved.location_source})` : null}
-              </dd>
+          <div className={styles.contextColumns}>
+            <div className={styles.contextColumn}>
+              <h3 className={styles.contextHeading}>Conversation context</h3>
+              <dl className={styles.contextList}>
+                <ContextField name="Request" value={record.question} />
+                <ContextField
+                  name="Focus location"
+                  value={places.length > 0 ? places.join(", ") : NOT_REPORTED}
+                />
+                <ContextField
+                  name="Prior context"
+                  value={
+                    record.threadId
+                      ? `Continued in conversation ${record.threadId}`
+                      : "None — this run opened its own conversation"
+                  }
+                />
+              </dl>
             </div>
-            <div className={styles.fieldRow}>
-              <dt className={styles.fieldName}>Analysis period</dt>
-              <dd className={styles.fieldValue} data-resolved-period="true">
-                {period
-                  ? `${formatLocalStamp(period.start_local)} to ${formatLocalStamp(period.end_local)}` +
-                    (period.timezone ? ` (${period.timezone})` : "")
-                  : NOT_REPORTED}
-              </dd>
+
+            <div className={styles.contextColumn}>
+              <h3 className={styles.contextHeading}>Analyst context</h3>
+              <dl className={styles.contextList}>
+                <ContextField
+                  name="Resolved location"
+                  attribute={{ "data-resolved-location": "true" }}
+                  value={
+                    <>
+                      {places.length > 0 ? places.join(", ") : NOT_REPORTED}
+                      {sourceWords(resolved.location_source) ? (
+                        <span className={styles.contextOrigin}>
+                          from the {resolved.location_source}
+                        </span>
+                      ) : null}
+                    </>
+                  }
+                />
+                <ContextField
+                  name="Analysis period"
+                  attribute={{ "data-resolved-period": "true" }}
+                  value={
+                    period
+                      ? `${formatLocalStamp(period.start_local)} to ${formatLocalStamp(period.end_local)}` +
+                        (period.timezone ? ` (${period.timezone})` : "")
+                      : NOT_REPORTED
+                  }
+                />
+                <ContextField
+                  name="Units"
+                  value={
+                    <>
+                      {resolved.unit_system ?? NOT_REPORTED}
+                      {sourceWords(resolved.units_source) ? (
+                        <span className={styles.contextOrigin}>
+                          from the {resolved.units_source}
+                        </span>
+                      ) : null}
+                    </>
+                  }
+                />
+                {resolved.criterion ? (
+                  <ContextField name="Criterion" value={humanize(resolved.criterion)} />
+                ) : null}
+              </dl>
             </div>
-            <div className={styles.fieldRow}>
-              <dt className={styles.fieldName}>Units</dt>
-              <dd className={styles.fieldValue}>
-                {resolved.unit_system ?? NOT_REPORTED}
-                {resolved.units_source ? ` (from the ${resolved.units_source})` : null}
-              </dd>
-            </div>
-            {resolved.criterion ? (
-              <div className={styles.fieldRow}>
-                <dt className={styles.fieldName}>Criterion</dt>
-                <dd className={styles.fieldValue}>{resolved.criterion}</dd>
-              </div>
-            ) : null}
-          </dl>
+          </div>
+
+          {resolved.statement ? (
+            <p className={styles.contextStatement}>{resolved.statement}</p>
+          ) : null}
         </>
       )}
     </section>
@@ -1088,6 +1263,29 @@ export function FinalSynthesis({ record }: { readonly record: RunRecord }): Reac
     model: record.llmModel,
   });
 
+  /*
+   * What the conclusion rests on, as chips.
+   *
+   * The artifact puts a row of evidence references under its conclusion, and the honest version is
+   * the run's own: which data classes reached the writer, and how many sources and passages were
+   * behind them. Every chip is a count of something on this page, so a reader can follow each one
+   * up rather than take it.
+   */
+  const chips: string[] = [];
+  if (record.sources.length > 0) {
+    chips.push(`${record.sources.length} ${record.sources.length === 1 ? "source" : "sources"}`);
+  }
+  if (record.citations.length > 0) {
+    chips.push(
+      `${record.citations.length} ${record.citations.length === 1 ? "passage" : "passages"}`,
+    );
+  }
+  if (grounding?.figures_checked) chips.push(`${grounding.figures_checked} figures checked`);
+  for (const value of record.dataClasses) {
+    const dataClass = dataClassFor(value);
+    if (dataClass !== null) chips.push(humanize(value));
+  }
+
   return (
     <div data-evidence-section="synthesis">
       <InterpretationPanel
@@ -1096,9 +1294,7 @@ export function FinalSynthesis({ record }: { readonly record: RunRecord }): Reac
          * What actually served the run — task 33.6, from the stored attempts.
          *
          * The record holds both accounts: `llm_provider` and `llm_model` are the configured client,
-         * and the attempts are what ran, with the policy that resolved each. An evidence record is
-         * read precisely to check claims, so the weaker account is used only where the record holds
-         * no attempt, and is labelled as configured when it is.
+         * and the attempts are what ran, with the policy that resolved each.
          */
         provider={inference?.provider ?? null}
         model={inference?.model ?? null}
@@ -1106,33 +1302,26 @@ export function FinalSynthesis({ record }: { readonly record: RunRecord }): Reac
         policy={inference?.policyId ?? null}
         resolution={inference?.resolutionReason ?? null}
         served={inference?.served ?? true}
+        /*
+         * The model, the policy and the resolver move into the disclosure below.
+         *
+         * They were four lines set at the same weight as the conclusion, directly under it, so the
+         * panel read as a debug envelope with a paragraph inside — which is exactly what the
+         * artifact's synthesis is not. `placement="detail"` is the hook the primitive already has
+         * for this: the same component renders the same strings, one press away.
+         */
+        placement="detail"
         footer={
           <>
             {/*
-              The verdict on one line; the method behind it one press away.
-              
-              "Grounding verified: every figure matched the evidence above. 6 checked by figures
-              extracted from the prose and matched within 0.05" is two facts — one a reader needs at
-              a glance, one they need only when checking the checker. Printing both under every
-              conclusion made the synthesis read as a diagnostic dump. A failure is *not* folded
-              away: an ungrounded figure stays in full, because that is the case a reader must not
-              have to open anything to see.
+              The verdict on one line; the method behind it one press away. A *failure* is never
+              folded away: an ungrounded figure stays in full, because that is the case a reader
+              must not have to open anything to see.
             */}
             {grounding === null ? (
               <p className={styles.note}>This run recorded no grounding report.</p>
             ) : grounding.verified ? (
-              <>
-                <p className={styles.groundingVerified}>Grounding verified</p>
-                <p className={styles.note}>
-                  Every figure in this interpretation matched the evidence above.
-                </p>
-                <details className={styles.groundingDetail}>
-                  <summary>Grounding details</summary>
-                  <p className={styles.note}>
-                    {grounding.figures_checked} figures checked by {grounding.method}.
-                  </p>
-                </details>
-              </>
+              <p className={styles.groundingVerified}>Grounding verified</p>
             ) : (
               <p className={styles.noteStrong}>
                 {grounding.prose_discarded
@@ -1145,6 +1334,16 @@ export function FinalSynthesis({ record }: { readonly record: RunRecord }): Reac
               </p>
             )}
 
+            {chips.length > 0 ? (
+              <p className={styles.evidenceChips} data-evidence-chips="true">
+                {chips.map((chip) => (
+                  <span className={styles.evidenceChip} key={chip}>
+                    {chip}
+                  </span>
+                ))}
+              </p>
+            ) : null}
+
             {unanswered.length > 0 ? (
               <>
                 <p className={styles.noteStrong}>Not answered:</p>
@@ -1155,6 +1354,31 @@ export function FinalSynthesis({ record }: { readonly record: RunRecord }): Reac
                 </ul>
               </>
             ) : null}
+
+            {/*
+              Everything about *how* the conclusion was produced, in one place: which model, under
+              which policy, and how the grounding check was performed. None of it is the answer,
+              and all of it is what a reader checking the answer eventually wants.
+            */}
+            <details className={styles.groundingDetail}>
+              <summary>Grounding details</summary>
+              <div className={styles.groundingBody}>
+                {grounding !== null && grounding.verified ? (
+                  <p className={styles.note}>
+                    Every figure in this interpretation matched the evidence above.{" "}
+                    {grounding.figures_checked} figures checked by {grounding.method}.
+                  </p>
+                ) : null}
+                <ModelAttribution
+                  provider={inference?.provider ?? null}
+                  model={inference?.model ?? null}
+                  policy={inference?.policyId ?? null}
+                  resolution={inference?.resolutionReason ?? null}
+                  requestedModel={inference?.requestedModel ?? null}
+                  served={inference?.served ?? true}
+                />
+              </div>
+            </details>
           </>
         }
       >

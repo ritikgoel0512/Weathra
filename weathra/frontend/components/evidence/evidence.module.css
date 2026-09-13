@@ -132,7 +132,7 @@
 
 @media (min-width: 1024px) {
   .body {
-    grid-template-columns: minmax(260px, 5fr) minmax(0, 8fr);
+    grid-template-columns: minmax(260px, 3fr) minmax(0, 7fr);
     /*
      * `stretch` rather than `start`, which is finding 5.5 of the runtime fidelity audit of
      * 2026-09-08: with `start` the timeline column ended wherever its steps did and left a
@@ -1563,4 +1563,400 @@
   font-family: var(--family-mono, monospace);
   color: var(--color-text-muted);
   white-space: nowrap;
+}
+
+/* ================= the Visily rebuild: the console's own register ================= */
+
+/*
+ * The header band, as `05-agent-evidence.png` sets it.
+ *
+ * A small mark, the record's identifier in mono, the title, and one line of what was asked — then
+ * four readings on the right. What was here before was the same information with two extra
+ * readings (the agents, the step count) that the execution column beside it already answers, and
+ * it is the column a reader looks at next.
+ */
+.headerMark {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-accent) 16%, transparent);
+  color: var(--color-accent);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+}
+
+.identifiers {
+  align-items: center;
+}
+
+/* The question reads as the run's subject, not as a caption. */
+.question {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: var(--type-ui-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-secondary);
+}
+
+/* The completeness figure, and the arithmetic under it. */
+.completeness {
+  display: block;
+  font-family: var(--family-display);
+  font-size: var(--type-heading-size);
+  line-height: 1.1;
+  font-weight: var(--type-heading-weight);
+  color: var(--color-status-ok);
+}
+
+.completenessNote {
+  display: block;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+}
+
+/* A count beside a section's name, the way the artifact tallies each region. */
+.panelCount {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* One line under a section heading, saying what the region holds. */
+.panelLead {
+  margin: 0;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+  max-width: 88ch;
+}
+
+/* -------------------------------------------------- the execution flow, per stage */
+
+/* The stage's state, as a word on the card rather than a colour on the node alone. */
+.stepState {
+  margin-left: auto;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-status-ok);
+  white-space: nowrap;
+}
+
+.stepState[data-status="failed"] {
+  color: var(--color-status-error);
+}
+
+.stepState[data-status="skipped"] {
+  color: var(--color-status-warning);
+}
+
+/* What kind of stage it was, what it cost, and how many things it did. */
+.stepFacts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+}
+
+.stepKind {
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.stepDuration {
+  font-family: var(--family-mono, monospace);
+  color: var(--color-text-secondary);
+}
+
+.stepActionCount {
+  padding: 1px var(--space-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-pill);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+}
+
+/* One reason, two lines. The rest is behind the stage's own disclosure. */
+.stepReason[data-clamped="true"] {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.stepActionsDetail summary {
+  cursor: pointer;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+/* ------------------------------------------------------- MCP, as one active card */
+
+.mcpCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-left: 2px solid var(--color-status-ok);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.mcpCard[data-mcp-state="degraded"] {
+  border-left-color: var(--color-status-error);
+}
+
+.mcpState {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.mcpStateMark {
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-status-ok);
+}
+
+.mcpCard[data-mcp-state="degraded"] .mcpStateMark {
+  background: var(--color-status-error);
+}
+
+.mcpStateWord {
+  margin-left: auto;
+  color: var(--color-status-ok);
+}
+
+.mcpCard[data-mcp-state="degraded"] .mcpStateWord {
+  color: var(--color-status-error);
+}
+
+.mcpFacts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.mcpFact dt {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.mcpFact dd {
+  margin: 1px 0 0;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* ----------------------------------------------- the sources table, given weight */
+
+/*
+ * The primary evidence table reads as one, rather than as a caption-sized grid.
+ *
+ * Its rows were at metadata size with hairline separators and 4px of vertical padding, which is
+ * the density of a footnote. The artifact gives this panel the same weight as the analytics band
+ * beside it: a header rule, rows a reader can scan, and the provider as the row's subject.
+ */
+.table th {
+  padding-block: var(--space-2);
+  border-bottom: 1px solid var(--color-border-strong);
+  color: var(--color-text-secondary);
+}
+
+.table td {
+  padding-block: var(--space-2);
+  font-size: var(--type-meta-size);
+}
+
+.sourceProvider {
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+}
+
+/* ------------------------------------------------- the knowledge reference cards */
+
+.citationTitle {
+  display: block;
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+}
+
+.citationSource {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.citation {
+  border-left-color: var(--color-accent);
+}
+
+/* ------------------------------------------------------- the synthesis, in order */
+
+/* What the conclusion rests on: counts of things elsewhere on this page. */
+.evidenceChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  margin: var(--space-2) 0 0;
+}
+
+.evidenceChip {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-inset);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.groundingBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+/* --------------------------------------------------------- context, in two columns */
+
+.contextColumns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3) var(--space-5);
+  min-width: 0;
+}
+
+@media (min-width: 640px) {
+  .contextColumns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.contextColumn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.contextHeading {
+  margin: 0;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.contextList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  min-width: 0;
+}
+
+.contextField {
+  min-width: 0;
+}
+
+.contextName {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.contextValue {
+  margin: 2px 0 0;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* Where a resolved value came from — the thing "you guessed" and "you remembered" differ by. */
+.contextOrigin {
+  display: block;
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  color: var(--color-text-muted);
+}
+
+.contextStatement {
+  margin: 0;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  color: var(--color-text-muted);
+}
+
+/* --------------------------------------------------- the figures, given their size */
+
+/*
+ * Three cards across, and the figure is the card.
+ *
+ * At `minmax(200px, 1fr)` the band wrapped to two rows on a 70%-wide column and the third finding
+ * sat alone under the first two. The artifact sets three across a row, with the value as the
+ * largest thing in the panel.
+ */
+.figures {
+  grid-template-columns: repeat(auto-fit, minmax(min(13rem, 100%), 1fr));
+  gap: var(--space-2);
+}
+
+.figure {
+  gap: 2px;
+  padding: var(--space-3);
+  border-left: 2px solid var(--color-class-analytics);
+}
+
+.figureValue {
+  font-size: var(--type-display-size);
+  line-height: 1.1;
 }

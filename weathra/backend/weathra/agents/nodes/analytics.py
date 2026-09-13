@@ -26,12 +26,14 @@ from datetime import UTC, datetime
 from typing import Any
 
 from weathra.agents.nodes.support import (
+    baseline_for,
     call_tool,
     finding_from_statistic,
     headline_measure,
     measures_in,
     points_for,
     record_step,
+    window_label,
 )
 from weathra.agents.plan import PlanStep
 from weathra.agents.state import GraphState, Retrieval
@@ -155,6 +157,20 @@ async def run_analytics(state: GraphState, step: PlanStep, *, client: McpToolCli
         if "rolling_mean" in arguments["statistics"]:
             arguments["rolling_window"] = min(3, len(points))
 
+        # The window this one is being compared against, when the run retrieved one.
+        #
+        # A comparison question — "how does this week compare with the same week last year" — is
+        # answered by a *difference*, and until this was here nothing computed one: the run
+        # retrieved two windows, summarised each of them, and left the subtraction to whoever read
+        # the two sets of figures. So the one figure the question turned on was the one figure with
+        # no method, no point count and no place in the evidence record.
+        baseline = baseline_for(working, source, measure)
+        if baseline is not None:
+            baseline_points, _ = points_for(baseline, measure)
+            if baseline_points:
+                arguments["baseline_points"] = baseline_points
+                arguments["baseline_label"] = window_label(baseline)
+
         working, outcome = await call_tool(
             working,
             client,
@@ -232,11 +248,19 @@ def _record_statistics(state: GraphState, payload: dict[str, Any], source: Retri
     and the analytics payload is what the evidence record carries so the method and the point count
     survive into the audit trail.
     """
+    baseline = payload.get("baseline")
+    reported_figures = [
+        *(payload.get("results") or ()),
+        *((baseline.get("results") or ()) if isinstance(baseline, dict) else ()),
+        # The differences last, so a reader of the findings meets both sides before the figure
+        # that subtracts them — and so a comparison's answer carries the figure it turns on.
+        *(payload.get("differences") or ()),
+    ]
     findings = tuple(
         finding_from_statistic(
             reported, source.attribution, data_class=DataClass.COMPUTED_STATISTIC
         )
-        for reported in payload.get("results") or ()
+        for reported in reported_figures
         if isinstance(reported, dict)
     )
     return state.with_findings(findings).with_analytics("statistics", payload)

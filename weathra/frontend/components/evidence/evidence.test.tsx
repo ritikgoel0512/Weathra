@@ -458,7 +458,13 @@ describe("a populated evidence record", () => {
 
     const heading = await screen.findByRole("heading", { name: "Agent evidence log", level: 1 });
     expect(heading).toBeInTheDocument();
-    expect(screen.getByText(STORED_EVIDENCE.question)).toBeInTheDocument();
+    /*
+     * Twice on the screen, and both are the record's: the header states what this run was, and
+     * "Context used" states what the agents were working from. The header's is the one asserted
+     * here.
+     */
+    const header = document.querySelector('[data-run-header="true"]') as HTMLElement;
+    expect(within(header).getByText(STORED_EVIDENCE.question)).toBeInTheDocument();
     /*
      * The header carries the record's own identifier; the request and conversation identifiers moved
      * to the audit panel that closes the page, where a person tracing a run looks for them. All
@@ -471,14 +477,27 @@ describe("a populated evidence record", () => {
     expect(within(audit).getByText("thread-3")).toBeInTheDocument();
   });
 
-  it("names every agent the run involved", async () => {
+  /*
+   * The header answers how *complete the record is*, not which agents ran.
+   *
+   * The agent list and the step count were both in this strip, and the execution column directly
+   * beneath answers both — a reader met the same six names twice before reaching any evidence.
+   * What replaces them is the artifact's confidence slot, filled by the one figure this record can
+   * support: the share of the completeness checks in "Record and traceability" that passed. Its
+   * working is on the page, which is the whole difference between it and a 98.4%.
+   */
+  it("states how complete the record is, from checks whose working is on the page", async () => {
     renderScreen();
     await screen.findByRole("region", { name: "Execution flow" });
 
-    const involved = document.querySelector('[data-agents-involved="true"]');
-    expect(involved?.textContent).toBe(
-      "Supervisor, Forecast agent, Historical agent, Analytics agent, Knowledge agent, Synthesis",
-    );
+    const completeness = document.querySelector("[data-evidence-completeness]") as HTMLElement;
+    // This record has a failed stage and a failed tool call, so two of the six checks fail.
+    expect(completeness.getAttribute("data-evidence-completeness")).toBe("67");
+    expect(completeness).toHaveTextContent("67%");
+    expect(completeness).toHaveTextContent("4 of 6 checks");
+
+    const audit = screen.getByRole("region", { name: "Record and traceability" });
+    expect(within(audit).getByText(/4 of 6 checks/)).toBeInTheDocument();
   });
 });
 
@@ -499,7 +518,9 @@ describe("the agent execution sequence", () => {
     ]);
 
     expect(at(steps, 0)).toHaveTextContent("1. Supervisor");
-    expect(at(steps, 0)).toHaveTextContent("Succeeded");
+    expect(at(steps, 0)).toHaveTextContent("Completed");
+    // What kind of stage it was, beside what it cost — the artifact's own second line.
+    expect(at(steps, 0)).toHaveTextContent("Routing · plan selection");
     expect(at(steps, 0)).toHaveTextContent(
       "Planned forecast retrieval, archive retrieval, then deterministic comparison.",
     );
@@ -621,7 +642,7 @@ describe("the deterministic analytics", () => {
 describe("the retrieved knowledge", () => {
   it("shows each cited chunk with its document, position, score and text", async () => {
     renderScreen();
-    const knowledge = await screen.findByRole("region", { name: "Retrieved knowledge" });
+    const knowledge = await screen.findByRole("region", { name: "RAG knowledge evidence" });
 
     const cited = within(knowledge).getAllByRole("listitem");
     expect(cited).toHaveLength(2);
@@ -638,7 +659,7 @@ describe("the retrieved knowledge", () => {
 
   it("says plainly that a corpus passage is documentation and not a weather source", async () => {
     renderScreen();
-    const knowledge = await screen.findByRole("region", { name: "Retrieved knowledge" });
+    const knowledge = await screen.findByRole("region", { name: "RAG knowledge evidence" });
 
     expect(
       within(knowledge).getByText(/Explanatory documentation, not measurement, and not a weather source/),
@@ -654,7 +675,6 @@ describe("the timings", () => {
     await screen.findByRole("region", { name: "Execution flow" });
 
     expect(document.querySelector('[data-run-duration="true"]')?.textContent).toBe("4.2 s");
-    expect(document.querySelector('[data-run-steps="true"]')?.textContent).toBe("6");
 
     /*
      * One timestamp, not two. The header strip carries the run's start beside its duration — the
@@ -741,9 +761,21 @@ describe("provenance and the data classes", () => {
     renderScreen();
     const context = await screen.findByRole("region", { name: "Context used (agent memory)" });
 
-    expect(context).toHaveTextContent("Berlin, Germany (from the preferences)");
+    /*
+     * Two columns: what the conversation established, and what the analysis ran with. The
+     * backend's context sentence is still here, under the fields it summarises rather than above
+     * them — it was the first thing in the panel, which made the designed fields beneath read as a
+     * restatement of a line already read.
+     */
+    expect(within(context).getByText("Conversation context")).toBeInTheDocument();
+    expect(within(context).getByText("Analyst context")).toBeInTheDocument();
+    expect(within(context).getByText(STORED_EVIDENCE.question)).toBeInTheDocument();
+
+    const resolvedLocation = within(context).getByText("Resolved location").closest("div");
+    expect(resolvedLocation).toHaveTextContent("Berlin, Germany");
+    expect(resolvedLocation).toHaveTextContent("from the preferences");
+
     expect(context).toHaveTextContent("2026-09-05 00:00 to 2026-09-05 23:00 (Europe/Berlin)");
-    expect(context).toHaveTextContent("metric (from the preferences)");
     expect(context).toHaveTextContent(
       "Berlin, Germany, for tomorrow, from your saved default location.",
     );
@@ -920,7 +952,7 @@ describe("nothing on the screen came from anywhere but the record", () => {
       within(screen.getByRole("region", { name: "Grounded data sources" })).getAllByRole("row"),
     ).toHaveLength(STORED_EVIDENCE.attributions.length + 2);
     expect(
-      within(screen.getByRole("region", { name: "Retrieved knowledge" })).getAllByRole("listitem"),
+      within(screen.getByRole("region", { name: "RAG knowledge evidence" })).getAllByRole("listitem"),
     ).toHaveLength(CITATIONS.length);
 
     // One request, to the documented endpoint. The browser retrieved nothing else and computed
@@ -999,7 +1031,7 @@ describe("the panel headings do not claim panels contain one another", () => {
       "Grounded data sources",
       "Deterministic analytics",
       "Forecast uncertainty",
-      "Retrieved knowledge",
+      "RAG knowledge evidence",
       "Final grounded synthesis",
     ]) {
       expect(

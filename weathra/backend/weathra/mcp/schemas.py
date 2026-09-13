@@ -293,6 +293,21 @@ class StatisticsInput(_Input):
         default="caller-supplied",
         description="Where the series came from, recorded in the result's provenance.",
     )
+    baseline_points: tuple[SeriesPoint, ...] | None = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "A second series over a different window, to compare this one against. When it is "
+            "given, every aggregate that can be differenced is also computed over it and the "
+            "signed difference — later minus earlier — is returned alongside. The difference is "
+            "the answer to a comparison question, and without this a run that retrieved two "
+            "windows returned two sets of figures and left the subtraction to whoever read them."
+        ),
+    )
+    baseline_label: str | None = Field(
+        default=None,
+        description="What the baseline window is, for the difference's own parameters.",
+    )
 
     @model_validator(mode="after")
     def _parameters_match_the_requests(self) -> Self:

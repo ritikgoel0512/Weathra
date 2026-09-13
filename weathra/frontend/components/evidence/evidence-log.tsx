@@ -128,8 +128,28 @@ function NoRecords(): ReactNode {
   );
 }
 
+/**
+ * The runs a person has, newest first.
+ *
+ * `GET /evidence` orders by `created_at` descending and this repeats the ordering rather than
+ * trusting it. The page opens on whichever run this puts first, so "the newest run" being a
+ * property of the *response's row order* would mean a change at the other end of the system
+ * silently pinning this screen to an old record — which is exactly the failure that made the
+ * console look, for several passes, like it could only ever show one run.
+ */
+function newestFirst(records: readonly EvidenceSummary[]): EvidenceSummary[] {
+  return [...records].sort((left, right) => {
+    const at = (record: EvidenceSummary): number => {
+      const stamp = Date.parse(record.created_at ?? "");
+      return Number.isNaN(stamp) ? 0 : stamp;
+    };
+    return at(right) - at(left);
+  });
+}
+
 /** The switcher and the record it selects. */
-function Log({ records }: { readonly records: readonly EvidenceSummary[] }): ReactNode {
+function Log({ records: listed }: { readonly records: readonly EvidenceSummary[] }): ReactNode {
+  const records = newestFirst(listed);
   const newest = records[0] as EvidenceSummary;
   const [selected, setSelected] = useState<string>(newest.id);
   const current = records.find((record) => record.id === selected) ?? newest;
