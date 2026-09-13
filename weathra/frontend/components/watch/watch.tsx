@@ -36,9 +36,11 @@
  * lock, and an emergency alert channel. Each has a real equivalent here or no tile at all.
  */
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { ErrorState, LoadingState } from "@/components/ui";
+import { useLocationResolution } from "@/hooks/use-location-resolution";
 import type { WatchDashboard, WatchRecord } from "@/lib/api/schema";
 import { measureLabel } from "@/lib/dashboard/briefing";
 import { useApiMutation, useApiQuery } from "@/lib/query/hooks";
@@ -90,6 +92,34 @@ export function WeatherWatch(): ReactNode {
   const [selected, setSelected] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftWatch>(EMPTY_DRAFT);
   const [expanded, setExpanded] = useState(false);
+
+  /*
+   * A place named in the URL.
+   *
+   * `?place=London` has to work on a cold load — a bookmark, a shared link, a reload — so it is
+   * resolved here rather than carried in React state from wherever it was typed. It goes through
+   * the same resolver the chooser uses and adopts only a *canonical* answer: an ambiguous or
+   * unfound name leaves the chooser exactly as it would be if nobody had typed anything, rather
+   * than silently becoming some other city.
+   *
+   * Once only, keyed on the parameter. Re-resolving on every render would spend a request per
+   * keystroke elsewhere on the screen, and re-resolving after somebody pressed *Change place* would
+   * drag them back to the place in the URL.
+   */
+  const named = useSearchParams().get("place")?.trim() ?? "";
+  const lookup = useLocationResolution(null);
+  const hydrated = useRef<string | null>(null);
+  const adopt = lookup.resolve;
+
+  useEffect(() => {
+    if (named === "" || hydrated.current === named) return;
+    hydrated.current = named;
+    void adopt(named).then((settled) => {
+      if (settled.kind === "resolved") {
+        setDraft((current) => ({ ...current, location: settled.location }));
+      }
+    });
+  }, [named, adopt]);
 
   /*
    * One clock for the whole screen.

@@ -30,6 +30,7 @@ import { PlaceChooser } from "@/components/locations/place-chooser";
 import { Badge, Button, DataClassBadge, Input, Select } from "@/components/ui";
 import type { Location, WatchRecord, WatchState } from "@/lib/api/schema";
 import { measureLabel } from "@/lib/dashboard/briefing";
+import { friendlyName } from "@/lib/locations/place";
 import {
   MEASURE_UNITS,
   agoOf,
@@ -481,9 +482,22 @@ export interface DraftWatch {
 /**
  * The compact card that adds a watch: a place, a measure, a direction and a number.
  *
- * The measures offered are the ones the *backend* says it can evaluate — `watchable` comes down with
- * the dashboard rather than being listed here — so a measure this build cannot check can never be
- * offered. A watch that could only ever stay null is worse than one that cannot be created.
+ * **The place control is a sibling of the form, never inside it, and that is load-bearing.** It was
+ * inside once: `QuickWatchConfig` wrapped the chooser in its own `<form>`, and the chooser renders
+ * one of its own. HTML has no nested form — the parser drops the inner element, the field inside it
+ * ends up owned by no form at all (`input.form === null`), and pressing *Show this place* performed
+ * a **native GET submit** instead of running the resolver. The browser navigated to
+ * `/watch?place=London`, the page remounted, and the typed name was gone. Everything about the
+ * defect was invisible to a jsdom test, because React builds that DOM with `createElement` rather
+ * than through the parser, so both forms exist there and the association is fine.
+ *
+ * So: once a place is resolved the chooser is replaced by a summary of it, and until then the
+ * chooser stands beside the form as its own element. Two sibling forms are valid; one inside
+ * another is not.
+ *
+ * The measures offered are the ones the *backend* says it can evaluate — `watchable` comes down
+ * with the dashboard rather than being listed here — so a measure this build cannot check can never
+ * be offered. A watch that could only ever stay null is worse than one that cannot be created.
  */
 export function QuickWatchConfig({
   draft,
@@ -516,55 +530,73 @@ export function QuickWatchConfig({
       onChange({ [key]: event.target.value } as Partial<DraftWatch>);
 
   return (
-    <form className={styles.config} onSubmit={submit} aria-label="Quick watch configuration">
-      <div className={styles.configPlace}>{chooser}</div>
+    <div className={styles.config}>
+      {/* Outside the form below. See the note above — this is not a style choice. */}
+      {draft.location === null ? (
+        <div className={styles.configPlace}>{chooser}</div>
+      ) : (
+        <div className={styles.chosen}>
+          <span className={styles.chosenLabel}>Place</span>
+          <span className={styles.chosenName}>
+            <WatchIcon name="place" size={14} />
+            {friendlyName(draft.location)}
+          </span>
+          <Button size="sm" onClick={() => onChange({ location: null })}>
+            Change place
+          </Button>
+        </div>
+      )}
 
-      <Select
-        label="Measure"
-        name="measure"
-        value={draft.measure}
-        onChange={set("measure")}
-        options={watchable.map((measure) => ({
-          value: measure,
-          label: measureLabel(measure),
-        }))}
-      />
+      <form className={styles.configForm} onSubmit={submit} aria-label="Quick watch configuration">
+        <Select
+          label="Measure"
+          name="measure"
+          value={draft.measure}
+          onChange={set("measure")}
+          options={watchable.map((measure) => ({
+            value: measure,
+            label: measureLabel(measure),
+          }))}
+        />
 
-      <Select
-        label="Direction"
-        name="comparison"
-        value={draft.comparison}
-        onChange={set("comparison")}
-        options={[
-          { value: "above", label: "Above" },
-          { value: "below", label: "Below" },
-        ]}
-      />
+        <Select
+          label="Direction"
+          name="comparison"
+          value={draft.comparison}
+          onChange={set("comparison")}
+          options={[
+            { value: "above", label: "Above" },
+            { value: "below", label: "Below" },
+          ]}
+        />
 
-      <Input
-        label={unit ? `Threshold (${unit})` : "Threshold"}
-        name="threshold"
-        type="number"
-        step="0.1"
-        inputMode="decimal"
-        value={draft.threshold}
-        onChange={set("threshold")}
-        description="Weathra checks whether the retrieved forecast is past this number."
-      />
+        <Input
+          label={unit ? `Threshold (${unit})` : "Threshold"}
+          name="threshold"
+          type="number"
+          step="0.1"
+          inputMode="decimal"
+          value={draft.threshold}
+          onChange={set("threshold")}
+          description="Weathra checks whether the retrieved forecast is past this number."
+        />
 
-      {failure ? (
-        <p className={styles.configFailure} role="alert">
-          {failure}
+        {failure ? (
+          <p className={styles.configFailure} role="alert">
+            {failure}
+          </p>
+        ) : null}
+
+        <Button type="submit" variant="primary" busy={busy} disabled={!ready}>
+          {busy ? "Creating…" : "Create watch"}
+        </Button>
+        <p className={styles.configNote}>
+          {draft.location === null
+            ? "Name a place above, then Weathra checks it once straight away and afterwards on the monitoring schedule."
+            : "This watch is evaluated once straight away, then on the monitoring schedule."}
         </p>
-      ) : null}
-
-      <Button type="submit" variant="primary" busy={busy} disabled={!ready}>
-        {busy ? "Creating…" : "Create watch"}
-      </Button>
-      <p className={styles.configNote}>
-        A new watch is evaluated once straight away, then on the monitoring schedule.
-      </p>
-    </form>
+      </form>
+    </div>
   );
 }
 

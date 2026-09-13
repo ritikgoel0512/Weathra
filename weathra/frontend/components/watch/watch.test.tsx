@@ -18,13 +18,26 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { type ApiClient } from "@/lib/api/client";
 import { ApiProvider } from "@/lib/api/context";
 import { createQueryClient } from "@/lib/query/provider";
 
 import { WeatherWatch } from "./watch";
+
+/** What `?place=` holds for the test currently running. Reset in `beforeEach`. */
+let searchParams = new URLSearchParams();
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/watch",
+  useRouter: () => ({ replace: () => {}, refresh: () => {}, push: () => {} }),
+  useSearchParams: () => searchParams,
+}));
+
+beforeEach(() => {
+  searchParams = new URLSearchParams();
+});
 
 const LONDON = {
   display_name: "London",
@@ -215,9 +228,24 @@ function client(overrides: Partial<ApiClient> = {}, data = dashboard()): ApiClie
     createWatch: vi.fn(),
     updateWatch: vi.fn(),
     removeWatch: vi.fn(),
-    resolveLocation: vi.fn(),
+    // The canonical answer the backend gives for "London" — the same one both the typed flow and
+    // the `?place=` flow must end up holding.
+    resolveLocation: vi.fn().mockResolvedValue({ kind: "resolved", query: "London", location: LONDON }),
     ...overrides,
   } as unknown as ApiClient;
+}
+
+/** A dashboard with nothing watched yet, which is the state the first-watch flow starts in. */
+function empty() {
+  const data = dashboard();
+  return {
+    ...data,
+    watches: [],
+    watched_locations: [],
+    selected: null,
+    activity: [],
+    summary: { ...(data.summary as Record<string, unknown>), active_watch_count: 0 },
+  };
 }
 
 function mount(api: ApiClient) {
@@ -450,6 +478,135 @@ describe("naming a place, in both of the screen's states", () => {
     expect(within(panel).getByRole("form", { name: "Quick watch configuration" })).toBeInTheDocument();
     expect(within(panel).getByRole("textbox")).toBeInTheDocument();
     expect(within(panel).getByLabelText("Measure")).toBeInTheDocument();
+  });
+});
+
+describe("the first-watch place, from typing it and from the URL", () => {
+  /*
+   * This suite exists because of a defect that reached production, and the shape of the defect is
+   * the reason the suite is written against the *DOM* rather than only against behaviour.
+   *
+   * `QuickWatchConfig` wrapped the place chooser inside its own `<form>`, and the chooser renders a
+   * `<form>` of its own. HTML has no nested form: the parser drops the inner element, the field
+   * inside it ends up owned by no form at all, and pressing *Show this place* performed a native
+   * GET submit instead of running the resolver. The browser navigated to `/watch?place=London`, the
+   * component remounted, and the typed name was gone — so a person could type a place, watch the
+   * URL change, and still have nothing selected.
+   *
+   * None of that was visible to a jsdom test, because React builds that DOM with `createElement`
+   * rather than through the HTML parser, so both forms exist and the association is fine. Hence the
+   * first case below: it asserts the *structure* that made the browser behave differently from the
+   * test, which is the only thing that would have caught it here.
+   */
+  it("keeps the place control out of the configuration form, so neither is nested in the other", async () => {
+    const { container } = mount(client({}, empty()));
+    await screen.findByText("Create your first watch");
+
+    expect(container.querySelectorAll("form form")).toHaveLength(0);
+    // And the field belongs to the chooser's own form rather than to the configuration one.
+    const field = screen.getByRole("textbox") as HTMLInputElement;
+    expect(field.closest("form")?.getAttribute("aria-label")).toBe("Watch a place");
+  });
+
+  it("keeps the resolved place after it is named, without asking for it twice", async () => {
+    const api = client({}, empty());
+    mount(api);
+    await screen.findByText("Create your first watch");
+
+    await userEvent.type(screen.getByRole("textbox"), "London");
+    await userEvent.click(screen.getByRole("button", { name: "Show this place" }));
+
+    // The canonical name the resolver returned, not the typed string and not coordinates.
+    expect(await screen.findByText("London, England, United Kingdom")).toBeInTheDocument();
+    expect(screen.getByText("Place")).toBeInTheDocument();
+    // The field is gone, because the place is chosen: nobody types it a second time.
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Change place" })).toBeInTheDocument();
+  });
+
+  it("hydrates the place from the URL on a cold load, through the same resolver", async () => {
+    searchParams = new URLSearchParams("place=London");
+    const api = client({}, empty());
+    mount(api);
+
+    expect(await screen.findByText("London, England, United Kingdom")).toBeInTheDocument();
+    expect(api.resolveLocation).toHaveBeenCalledWith(expect.objectContaining({ query: "London" }));
+    // Resolved once, not once per render.
+    expect(api.resolveLocation).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the chooser alone when the URL names something that cannot be resolved", async () => {
+    searchParams = new URLSearchParams("place=Nowhereville");
+    const api = client(
+      {
+        resolveLocation: vi.fn().mockResolvedValue({
+          kind: "ambiguous",
+          query: "Nowhereville",
+          candidates: [],
+        }),
+      },
+      empty(),
+    );
+    mount(api);
+    await screen.findByText("Create your first watch");
+
+    // No silent fallback to another city: the chooser is exactly as it would be if nobody typed.
+    expect(screen.getByRole("textbox")).toBeInTheDocument();
+    expect(screen.queryByText("Place")).not.toBeInTheDocument();
+  });
+
+  it("creates the watch with the resolved place, not with the typed string", async () => {
+    const created = { ...watch(), id: "w-new" };
+    const api = client({ createWatch: vi.fn().mockResolvedValue(created) }, empty());
+    mount(api);
+    await screen.findByText("Create your first watch");
+
+    await userEvent.type(screen.getByRole("textbox"), "London");
+    await userEvent.click(screen.getByRole("button", { name: "Show this place" }));
+    await screen.findByText("London, England, United Kingdom");
+
+    await userEvent.selectOptions(screen.getByLabelText("Measure"), "temperature");
+    await userEvent.selectOptions(screen.getByLabelText("Direction"), "above");
+    await userEvent.type(screen.getByLabelText(/Threshold/), "25");
+    await userEvent.click(screen.getByRole("button", { name: "Create watch" }));
+
+    // The canonical coordinates the resolver returned — never a name for the backend to re-resolve.
+    await waitFor(() =>
+      expect(api.createWatch).toHaveBeenCalledWith({
+        latitude: LONDON.latitude,
+        longitude: LONDON.longitude,
+        measure: "temperature",
+        comparison: "above",
+        threshold: 25,
+      }),
+    );
+  });
+
+  it("leaves onboarding for the full dashboard once the first watch exists", async () => {
+    const created = { ...watch(), id: "w-new" };
+    // The first read has nothing; the read after creation has the watch the backend just evaluated.
+    const watchDashboard = vi
+      .fn()
+      .mockResolvedValueOnce(empty())
+      .mockResolvedValue(dashboard());
+    const api = client({ watchDashboard, createWatch: vi.fn().mockResolvedValue(created) }, empty());
+    mount(api);
+    await screen.findByText("Create your first watch");
+
+    await userEvent.type(screen.getByRole("textbox"), "London");
+    await userEvent.click(screen.getByRole("button", { name: "Show this place" }));
+    await screen.findByText("London, England, United Kingdom");
+    await userEvent.type(screen.getByLabelText(/Threshold/), "25");
+    await userEvent.click(screen.getByRole("button", { name: "Create watch" }));
+
+    // No manual reload: the mutation invalidates the dashboard read and the screen re-renders.
+    expect(
+      await screen.findByRole("heading", { name: "Watched locations" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Create your first watch")).not.toBeInTheDocument();
+    for (const region of ["Active watches", "Temporal watch analysis", "Watch evidence", "Activity feed"]) {
+      expect(screen.getByRole("heading", { name: region })).toBeInTheDocument();
+    }
   });
 });
 

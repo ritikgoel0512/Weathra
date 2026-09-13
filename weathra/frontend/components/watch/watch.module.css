@@ -846,7 +846,57 @@
   min-width: 0;
 }
 
+.configForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
 .configPlace {
+  min-width: 0;
+}
+
+/*
+ * The resolved place, once there is one.
+ *
+ * It replaces the chooser rather than sitting beside it: two ways to name a place on one card is
+ * two things to press with no way to tell which the Create button will use. The name is the
+ * canonical one the resolver returned — never the typed string, never coordinates.
+ */
+.chosen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-inline-start: 2px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.chosenLabel {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  font-weight: var(--type-label-weight);
+  flex-basis: 100%;
+}
+
+.chosenName {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  color: var(--color-text-primary);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  overflow-wrap: anywhere;
   min-width: 0;
 }
 
