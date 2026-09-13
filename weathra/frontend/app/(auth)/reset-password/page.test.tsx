@@ -17,7 +17,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { COMPLETED_PARAMETER, COMPLETED_RECOVERY, FORGOT_PASSWORD_PATH, SIGN_IN_PATH } from "@/lib/routes";
+import { COMPLETED_PARAMETER, COMPLETED_RECOVERY, SIGN_IN_PATH } from "@/lib/routes";
 
 const currentUser = vi.fn<() => Promise<User | null>>();
 const updateUser = vi.fn();
@@ -104,22 +104,37 @@ describe("with a recovery session Supabase confirms", () => {
 });
 
 describe("without one", () => {
-  it("renders no form when there is no session at all", async () => {
+  /*
+   * No session is no longer a dead end.
+   *
+   * Supabase's recovery template decides whether the email carries a link or a six-digit code, and
+   * under a code-only template no link ever arrives to create a session — so insisting on one made
+   * recovery impossible to finish. The password form still requires the session; what changed is
+   * that the screen now offers the other door to it rather than closing.
+   */
+  it("offers the code entry rather than the password form when there is no session", async () => {
     await renderPage(RECOVERED);
 
     expect(screen.queryByLabelText("New password")).not.toBeInTheDocument();
-    expect(screen.getByRole("alert")).toHaveTextContent(/needs an active reset link/i);
-    expect(screen.getByRole("link", { name: "Request a new reset link" })).toHaveAttribute(
-      "href",
-      FORGOT_PASSWORD_PATH,
-    );
+    expect(screen.getByLabelText("Reset code")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
   });
 
-  it("renders no form for a bare visit carrying nothing", async () => {
+  it("offers the code entry for a bare visit carrying nothing", async () => {
     await renderPage();
 
     expect(screen.queryByLabelText("New password")).not.toBeInTheDocument();
-    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByLabelText("Reset code")).toBeInTheDocument();
+    // Nothing to send a new code to, so it says which address it needs rather than echoing one.
+    expect(screen.getByText(/which account to reset/i)).toBeInTheDocument();
+  });
+
+  it("still states a refused link, above the code entry rather than instead of it", async () => {
+    // A link that expired and a code that still works arrive in the same email.
+    await renderPage({ error: "access_denied", error_code: "otp_expired" });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/expired/i);
+    expect(screen.getByLabelText("Reset code")).toBeInTheDocument();
   });
 
   it("does not take a marker as authorization", async () => {

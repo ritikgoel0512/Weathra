@@ -21,11 +21,12 @@
  * Nothing here logs, and nothing is written to storage.
  */
 
+import Link from "next/link";
 import { useCallback, useState, type FormEvent, type ReactNode } from "react";
 
 import { Button, Input } from "@/components/ui";
 import { looksLikeAnAddress } from "@/lib/auth/email";
-import { AUTH_CONFIRM_PATH } from "@/lib/routes";
+import { AUTH_CONFIRM_PATH, RESET_PASSWORD_PATH } from "@/lib/routes";
 import { supabaseBrowserClient } from "@/lib/supabase/browser";
 
 import styles from "./auth.module.css";
@@ -108,6 +109,26 @@ export function ForgotPasswordForm(): ReactNode {
           <p className={styles.successTitle}>Check your email</p>
           <p>{RESET_REQUEST_SENT}</p>
         </div>
+
+        {/*
+          The way on for the half of the flow that is not a link.
+          
+          Supabase's recovery template may send a six-digit code, a link, or both. Following a link
+          lands on Reset Password by itself; a code needs somewhere to be typed, and without this
+          there was no route to that screen at all — the person held a working code and the product
+          offered them only "use a different address". The address travels so the screen can name
+          the inbox and hand it to the provider with the code.
+        */}
+        {/*
+          A link, not a button: the way forward is a navigation, and the rest of these screens say
+          so the same way (`recovery-unavailable.tsx`).
+        */}
+        <Link
+          className={styles.actionLink}
+          href={`${RESET_PASSWORD_PATH}?email=${encodeURIComponent(email.trim())}`}
+        >
+          Enter the code instead
+        </Link>
 
         <Button
           variant="secondary"

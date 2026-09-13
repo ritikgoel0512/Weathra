@@ -101,15 +101,24 @@ function RunChip({
  *
  * Nothing has gone wrong when there are no runs: nobody has asked a question yet. It says where a
  * run comes from rather than leaving the reader to guess which of Weathra's screens produces one.
+ *
+ * **It says "this account", because that is what emptiness here means.** Evidence is owner-scoped
+ * twice over — `GET /api/v1/evidence` filters on the caller's own id, and `agent_runs` carries a
+ * forced `FOR ALL` row-level policy on top of it — so one account's records are never the other's
+ * to see. Somebody signed in to a second account was reading an unqualified "no evidence records"
+ * as Weathra having lost the runs they had just watched it make on the first. The scope is a fact
+ * about the screen, so the screen states it.
  */
 function NoRecords(): ReactNode {
   return (
     <div className={styles.state} role="status" data-evidence-state="empty">
-      <p className={styles.stateTitle}>No evidence records yet</p>
+      <p className={styles.stateTitle}>No evidence records yet for this account</p>
       <p className={styles.stateBody}>
-        Weathra stores a record every time it answers a question through its agents — what ran, what
-        each step retrieved, the analytics it computed and the knowledge it cited. Ask one and its
-        record will appear here.
+        Evidence appears here after this account runs the AI Weather Analyst or a Weather
+        Intelligence Report. Weathra stores a record every time it answers a question through its
+        agents — what ran, what each step retrieved, the analytics it computed and the knowledge it
+        cited. Records belong to the account that made them, so signing in as somebody else shows
+        theirs rather than these.
       </p>
       <p className={styles.stateBody}>
         The screens that compute their answers directly — Travel Intelligence, Forecast Explorer,

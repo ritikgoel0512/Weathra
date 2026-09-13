@@ -169,7 +169,26 @@ export function resendRateLimitedMessage(seconds: number | null): string {
  * nothing about an address it will not confirm the existence of.
  */
 export const RESET_REQUEST_SENT =
-  "If that address has a Weathra account, a reset link is on its way. Check your email.";
+  "If that address has a Weathra account, a reset code is on its way. Check your email.";
+
+/**
+ * What Reset Password says when it has no recovery session and is asking for the code instead.
+ *
+ * Supabase's recovery template decides which of the two a person actually receives — a six-digit
+ * `{{ .Token }}` or a `{{ .ConfirmationURL }}` link — and a deployment may be configured either
+ * way. The screen accepts both, so its wording names both rather than promising the one this
+ * project happens to be sending today.
+ */
+export const RECOVERY_CODE_PROMPT =
+  "Enter the code from your reset email, or follow the link in the same email.";
+
+/** No address to send a new code to: the screen was reached without one. */
+export const RECOVERY_ADDRESS_UNKNOWN =
+  "We don\u2019t know which account to reset. Enter the address you asked us to reset.";
+
+/** The resend confirmation, conditional for the same reason `RESET_REQUEST_SENT` is. */
+export const RECOVERY_RESEND_CONFIRMED =
+  "If that address has a Weathra account, a new reset code is on its way.";
 
 /** The one thing a failed reset request says, when the cause is not a rate limit. */
 export const RESET_REQUEST_FAILED = "We could not send a reset link just now. Try again in a moment.";

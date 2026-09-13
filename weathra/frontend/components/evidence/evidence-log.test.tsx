@@ -158,8 +158,16 @@ describe("the evidence log", () => {
       }),
     );
 
-    expect(await screen.findByText("No evidence records yet")).toBeInTheDocument();
+    expect(
+      await screen.findByText("No evidence records yet for this account"),
+    ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /AI Weather Analyst/ })).toBeInTheDocument();
+    /*
+     * Scoped, not global. Evidence is owner-scoped by the API filter and by a forced row-level
+     * policy, so an empty list means "this account has none" and never "Weathra lost them" — which
+     * is exactly how somebody signed in to a second account was reading the unqualified wording.
+     */
+    expect(screen.getByText(/after this account runs/i)).toBeInTheDocument();
     /*
      * And it is honest about which surfaces produce one. Only a question through the orchestrator
      * stores a run; the deterministic screens show their workings on their own pages. Implying
