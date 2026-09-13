@@ -422,14 +422,16 @@
   color: var(--color-accent);
 }
 
+/*
+ * Hover and focus resolve the chip's own edge. The *ring* is not drawn here: `:focus-within` fires
+ * on a pointer click as readily as on a tab, and the field inside already takes the one focus
+ * treatment this system has — `globals.css`'s `:focus-visible` outline. A second ring on the
+ * wrapper would both double the indicator and put one there for the mouse.
+ */
 .controlField:hover,
 .controlField:focus-within {
   background: var(--color-surface-inset);
   border-color: var(--color-border-subtle);
-}
-
-.controlField:focus-within {
-  box-shadow: var(--shadow-focus);
 }
 
 .controlSign {
@@ -466,9 +468,14 @@
   margin: 0;
 }
 
-.controlNumber:focus {
-  outline: none;
-}
+/*
+ * No `outline: none` here, deliberately.
+ *
+ * The field is a bare input inside a readout chip — no border, no background of its own — so
+ * suppressing its outline leaves a keyboard user with nothing at all on the control they are
+ * actually editing. `globals.css` puts a `:focus-visible` outline on everything focusable, and that
+ * is the ring this field uses like every other input in the product.
+ */
 
 .slider {
   inline-size: 100%;
