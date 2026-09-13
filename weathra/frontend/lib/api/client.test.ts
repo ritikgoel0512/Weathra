@@ -454,6 +454,10 @@ async function invoke(client: ApiClient, operation: ApiOperation): Promise<unkno
     save_location_api_v1_me_locations_post: () => client.saveLocation({ location: "Berlin" }),
     remove_location_api_v1_me_locations__saved_id__delete: () =>
       client.removeSavedLocation(identifier),
+    // Invoked with a watch id rather than bare, because that is the form the screen uses the
+    // moment anything is selected, and it is the form that carries a query parameter — the one a
+    // token could plausibly be dropped from without the bare read noticing.
+    watch_dashboard_api_v1_me_watch_dashboard_get: () => client.watchDashboard(identifier),
     list_watches_api_v1_me_watches_get: () => client.watches(),
     create_watch_api_v1_me_watches_post: () =>
       client.createWatch({ location: "Berlin", measure: "temperature", comparison: "above", threshold: 20 }),
