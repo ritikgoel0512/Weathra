@@ -10,6 +10,13 @@
  * fidelity review of 2026-09-10 graded NOT CLOSE for exactly that reason. These are the plots that
  * close it.
  *
+ * **One of the two is on the page and one is behind a control, and that is deliberate.** The
+ * artifact draws exactly one chart in its analytical band, so `ForecastTimelineChart` is the
+ * report's chart; `DeviationChart` answers "which entries stood out, and by how much" — a question
+ * somebody asks *after* the attention card has told them some did — and lives under *Deep dive*
+ * with the rest of the working. Neither plot changed to make that move; only where they are drawn
+ * did.
+ *
  * **Every series here is retrieved or deterministically computed, and nothing is drawn that was not
  * returned.** A measure the provider did not supply has no axis, no bar and no line: the caller
  * omits the chart rather than passing zeros, and `EmptyChart` keeps the geometry when a region is

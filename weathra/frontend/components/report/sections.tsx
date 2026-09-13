@@ -1,107 +1,179 @@
 "use client";
 
 /**
- * The Weather Intelligence Report's non-plot regions — the tiles, strips and panels that carry the
- * artifact's graphical weight between the charts in `./charts.tsx`.
+ * The Weather Intelligence Report's regions — the header bar, the hero, the tiles, the day strip,
+ * the side cards and the grounding panel that carry the report between the charts in
+ * `./charts.tsx`.
  *
- * `docs/design/screens/12-weather-intelligence-report.png` is a two-column intelligence report: a
- * hero over the location with three figure tiles under it, a column of observed metric tiles beside
- * it, a day strip, a "what changed" panel, a historical-context panel, an anomaly panel, and a
- * grounding footer. Production had the same *sections* rendered as description lists and
- * paragraphs, which the fidelity review of 2026-09-10 graded NOT CLOSE. These are the same
- * sections with the artifact's hierarchy:
+ * `docs/design/screens/12-weather-intelligence-report.png` is a *curated* report: one headline with
+ * three figures under it, six observed tiles beside it, a week of day cards, three "what changed"
+ * notes, one chart with four stats, one historical side card, one attention card, one synthesis and
+ * a short grounding list. The build before this one rendered the same endpoints exhaustively —
+ * every computed finding as a tile, every horizon band as a bar, every flagged entry as a row, a
+ * paragraph of provenance under every source — which is the data dump this pass exists to remove.
  *
- *     VISUALISATION or METRIC  →  SHORT LABEL  →  ONE SHORT INTERPRETATION
+ * Every region here obeys the same hierarchy, and every count it shows is a constant in
+ * `lib/report/view-model.ts` rather than "however many came back":
  *
- * Nothing below composes a sentence about the weather. Every interpretation line is either a
- * figure the backend computed, a phrase the backend wrote (`characterization`, `summary`,
- * `labelling`, a `DayChange.statement`), or a statement of method. Where a field is absent the
- * region is omitted — never drawn with a zero, an estimate or a filled-in bar.
+ *     THE FIGURE or THE VISUALISATION  →  A SHORT LABEL  →  ONE SHORT LINE
+ *
+ * Nothing composes a sentence about the weather; each line is a backend figure, a backend phrase,
+ * or a statement of method. What overflowed a cap is not lost — it is behind the report's own
+ * disclosure, which is the last region in this file.
  */
 
+import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { PlaceChooser } from "@/components/locations/place-chooser";
 import {
   Badge,
+  Button,
   DataClassBadge,
   LocationImage,
   Metric,
   Meter,
   UncertaintyIndicator,
+  WeatherIcon,
+  formatInstant,
 } from "@/components/ui";
 import type {
-  Baseline,
-  BaselineComparison,
-  CurrentResponse,
-  DayChange,
+  AnalysisResponse,
+  AnswerEnvelope,
   ForecastResponse,
   Location,
   StatisticResult,
-  TrendReport,
-  WhatChanged,
 } from "@/lib/api/schema";
-import { formatReading, measureLabel, readingsFrom } from "@/lib/dashboard/briefing";
+import { formatFigure, formatReading, measureLabel, statisticPhrase } from "@/lib/dashboard/briefing";
 import { friendlyName } from "@/lib/locations/place";
+import {
+  REPORT_HORIZONS,
+  figureOf,
+  type AnomalyAttention,
+  type ChangedView,
+  type CurrentTiles,
+  type GroundingRow,
+  type HistoricalContextView,
+  type OutlookDay,
+  type ReportFigure,
+  type ReportSynthesis,
+} from "@/lib/report/view-model";
 
+import { DeviationChart, type DeviationPoint } from "./charts";
 import styles from "./report.module.css";
 
-/** A statistic's figure with its unit, or the backend's reason there is none. */
-export function figureOf(result: StatisticResult | null | undefined): string | null {
-  if (!result) return null;
-  if (result.value === null || result.value === undefined) return null;
-  return formatReading({ value: result.value, unit: result.unit ?? null });
-}
-
-/** A signed figure, so a delta reads as a direction before it reads as a number. */
-function signedOf(value: number, unit: string | null | undefined): string {
-  return `${value > 0 ? "+" : ""}${formatReading({ value, unit: unit ?? null })}`;
-}
-
-/** Which way a delta points, for the tile's tone. Never a colour on its own — the sign leads. */
-function toneOf(value: number): "up" | "down" | "flat" {
-  if (value > 0) return "up";
-  if (value < 0) return "down";
-  return "flat";
-}
-
-/* ------------------------------------------------------------------- the hero */
-
-export interface ReportHeroProps {
-  readonly location: Location;
-  readonly current: CurrentResponse | null;
-  /** The deterministic reading of the window, written by code from the findings only. */
-  readonly summary: string | null;
-  readonly comparison: BaselineComparison | null;
-  readonly trend: TrendReport | null;
-  readonly forecast: ForecastResponse | null;
-}
+/* ------------------------------------------------------------------- header */
 
 /**
- * The artifact's opening band: the place, photographed, with the window's headline under it.
+ * The report's own header: what it is, where, over what window, and when it was read.
  *
- * The artifact titles this "Immediate Convective Alert: Localized Thermal Drift" and attributes it
- * to a neural agent. Weathra's headline is `AnalysisResponse.summary` — written by code from the
- * computed findings, with no model involved — and it is labelled as computed rather than as an
- * alert, because nothing here decides that a condition is urgent.
+ * The artifact gives this one compact band — a report identifier, the title, a one-line scope, four
+ * horizon buttons, a sync stamp and an export control. Production spent four stacked rows on it and
+ * then opened a full-width place disclosure underneath before the first figure. This is the
+ * artifact's band, with the two controls Weathra genuinely has: the horizon, which the forecast
+ * endpoint takes, and the place, folded into the bar rather than sitting open beneath it.
  *
- * The three tiles beneath are the artifact's CONFIDENCE / EVIDENCE NODES / DRIFT VARIANCE row.
- * Weathra has a real figure for two of them and refuses the third: the forecast's own confidence
- * band with the horizon it applies at, and the signed distance from the baseline with its z-score.
- * There is no node count, so there is no node tile.
+ * **No export and no report identifier.** There is no report export, and nothing issues a report an
+ * id — `docs/design/screens.md` §5 refuses both, and a disabled button labelled "Export PDF" would
+ * advertise the capability in order to deny it.
+ */
+export function ReportHeader({
+  location,
+  scope,
+  horizon,
+  onHorizon,
+  retrievedAt,
+  chooser,
+}: {
+  readonly location: Location;
+  /** One line naming what the report covers. Fixed copy about the report, not about the weather. */
+  readonly scope: string;
+  readonly horizon: string;
+  readonly onHorizon: (value: string) => void;
+  readonly retrievedAt: string | null;
+  readonly chooser: ReactNode;
+}): ReactNode {
+  return (
+    <header className={styles.header}>
+      <div className={styles.headerText}>
+        <div className={styles.headerBadges}>
+          <DataClassBadge dataClass="analytics" />
+          <span className={styles.headerPeriod}>{location.timezone}</span>
+        </div>
+        <h1 className={styles.title}>Weather Intelligence Report</h1>
+        <p className={styles.lede}>
+          <span className={styles.ledePlace}>{friendlyName(location)}</span>
+          {" — "}
+          {scope}
+        </p>
+      </div>
+
+      <div className={styles.headerControls}>
+        <details className={styles.placeControl}>
+          <summary className={styles.placeSummary}>
+            <span className={styles.placeName}>{friendlyName(location)}</span>
+            <span className={styles.placeHint}>Change place</span>
+          </summary>
+          {chooser}
+        </details>
+
+        {/*
+          A radio group rather than four buttons: the four are one choice, and a keyboard reaches
+          the group once and then moves inside it — which is what a segmented control is for. Same
+          control, same markup, as the Forecast Explorer's.
+        */}
+        <fieldset className={styles.horizon}>
+          <legend className="weathra-visually-hidden">Report window</legend>
+          {REPORT_HORIZONS.map((entry) => (
+            <label className={styles.horizonOption} key={entry.value}>
+              <input
+                type="radio"
+                name="report-horizon"
+                value={entry.value}
+                checked={horizon === entry.value}
+                onChange={() => onHorizon(entry.value)}
+              />
+              <span aria-hidden="true">{entry.label}</span>
+              <span className="weathra-visually-hidden">{entry.name}</span>
+            </label>
+          ))}
+        </fieldset>
+
+        {retrievedAt ? (
+          <p className={styles.headerStamp}>Retrieved {formatInstant(retrievedAt)}</p>
+        ) : null}
+      </div>
+    </header>
+  );
+}
+
+/* --------------------------------------------------------------------- hero */
+
+/**
+ * The report's opening block: the place, the headline, one paragraph, three figures.
+ *
+ * The artifact's hero is a dark photographic panel with an alert-weight statement across it, a
+ * short grounded paragraph, and a row of three figure cards at its foot. This is that composition
+ * with Weathra's own statements in it — the headline and the paragraph come from
+ * `synthesisFrom`, which only ever promotes something the backend wrote, and the three cards come
+ * from `heroFiguresFrom`, which refuses the artifact's evidence-node count outright.
+ *
+ * A hero with nothing to say still draws: the place, its reading, and whichever figures exist.
  */
 export function ReportHero({
   location,
-  current,
-  summary,
-  comparison,
-  trend,
-  forecast,
-}: ReportHeroProps): ReactNode {
-  const nearest = forecast?.uncertainty?.horizon?.[0] ?? null;
-  const temperature = current?.values?.temperature;
-  const difference = comparison?.difference;
-  const zScore = comparison?.z_score;
-
+  synthesis,
+  figures,
+  reading,
+  observedAt,
+}: {
+  readonly location: Location;
+  readonly synthesis: ReportSynthesis;
+  readonly figures: readonly ReportFigure[];
+  /** The current temperature, already formatted, or null where none was reported. */
+  readonly reading: { readonly figure: string; readonly unit: string | null } | null;
+  readonly observedAt: string | null;
+}): ReactNode {
   return (
     <section className={styles.hero} aria-labelledby="report-hero-title">
       <LocationImage
@@ -112,407 +184,507 @@ export function ReportHero({
         scrim="strong"
       >
         <div className={styles.heroOverlay}>
-          <p className={styles.heroPlace}>{friendlyName(location)}</p>
-          {typeof temperature === "number" ? (
+          <div className={styles.heroOverlayText}>
+            <p className={styles.heroPlace}>{friendlyName(location)}</p>
+            {observedAt ? (
+              <p className={styles.heroStamp}>Observed {formatInstant(observedAt)}</p>
+            ) : null}
+          </div>
+          {reading ? (
             <p className={styles.heroReadout}>
-              {formatReading({ value: temperature, unit: current?.units?.temperature ?? null })}
+              {reading.figure}
+              {reading.unit ? <span className={styles.heroUnit}>{reading.unit}</span> : null}
             </p>
           ) : null}
-          {current ? <DataClassBadge dataClass="observed" /> : null}
         </div>
       </LocationImage>
 
       <div className={styles.heroBody}>
         <div className={styles.heroHeading}>
           <DataClassBadge dataClass="analytics" />
-          <h2 className={styles.heroTitle} id="report-hero-title">
-            Computed reading of this window
-          </h2>
+          <span className={styles.heroKicker}>Computed synthesis</span>
         </div>
-        {summary ? <p className={styles.heroSummary}>{summary}</p> : null}
 
-        <div className={styles.heroTiles}>
-          {nearest ? (
-            <Metric
-              label="Nearest-horizon confidence"
-              value={nearest.confidence}
-              dataClass="forecast"
-              note={`At ${nearest.hours_ahead} h into the horizon.`}
-            />
-          ) : null}
+        <h2 className={styles.heroTitle} id="report-hero-title">
+          {synthesis.headline ?? "Computed reading of this window"}
+        </h2>
+        {synthesis.lead ? <p className={styles.heroSummary}>{synthesis.lead}</p> : null}
 
-          {difference && typeof difference.value === "number" ? (
-            <Metric
-              label="Against the baseline"
-              value={signedOf(difference.value, difference.unit)}
-              dataClass="analytics"
-              delta={
-                zScore && typeof zScore.value === "number"
-                  ? { text: `${zScore.value} standard deviations`, tone: toneOf(zScore.value) }
-                  : undefined
-              }
-              note={comparison?.characterization ?? undefined}
-            />
-          ) : null}
-
-          {trend && typeof trend.magnitude === "number" ? (
-            <Metric
-              label="Trend across the window"
-              value={signedOf(trend.magnitude, trend.unit)}
-              dataClass="analytics"
-              delta={{ text: trend.direction, tone: toneOf(trend.slope_per_day) }}
-              note={trend.method}
-            />
-          ) : null}
-        </div>
+        {figures.length > 0 ? (
+          <div className={styles.heroTiles}>
+            {figures.map((figure) => (
+              <FigureTile key={figure.key} figure={figure} />
+            ))}
+          </div>
+        ) : null}
       </div>
     </section>
   );
 }
 
-/* ---------------------------------------------------------- the observed tiles */
+/** One curated figure, wherever the report shows one. */
+function FigureTile({ figure }: { readonly figure: ReportFigure }): ReactNode {
+  return (
+    <Metric
+      label={figure.label}
+      value={figure.value}
+      dataClass={figure.dataClass}
+      delta={figure.delta}
+      note={figure.note}
+    />
+  );
+}
+
+/* -------------------------------------------------------- conditions now */
 
 /**
- * Every measure the provider reported now, one tile each.
+ * The artifact's tile column: six observed measures, compact, each with its class.
  *
- * The artifact draws six. Weathra draws as many as came back and no placeholder for the rest: a
- * tile for a measure the provider did not supply would be a labelled empty box, which reads as a
- * failure rather than as an absence. The grid is `auto-fit`/`minmax` so two tiles fill the column
- * as honestly as six do — the thin-data rule of `docs/design/design-system.md` §13.
+ * Six is the cap, not the count — `currentTilesFrom` orders the provider's measures the way the
+ * artifact orders its tiles and hands back whatever exceeded six, which goes behind the disclosure
+ * at the foot of this panel. Nothing the provider reported is dropped, and nothing it did not
+ * report is drawn as an empty box.
  */
-export function ObservedNow({ current }: { readonly current: CurrentResponse }): ReactNode {
-  const readings = readingsFrom(current.values, current.units);
-  if (readings.length === 0) return null;
+export function ConditionTiles({ tiles }: { readonly tiles: CurrentTiles }): ReactNode {
+  if (tiles.shown.length === 0) return null;
 
   return (
-    <div className={styles.observedGrid} data-observed-count={readings.length}>
-      {readings.map((reading) => (
-        <Metric
-          key={reading.key}
-          label={measureLabel(reading.key)}
-          value={formatReading(reading)}
-          dataClass="observed"
-        />
-      ))}
+    <div className={styles.conditions}>
+      <ul className={styles.conditionGrid}>
+        {tiles.shown.map((reading) => (
+          <li className={styles.conditionTile} key={reading.key}>
+            <span className={styles.conditionLabel}>{measureLabel(reading.key)}</span>
+            <span className={styles.conditionValue}>
+              {formatFigure(reading)}
+              {reading.unit ? <span className={styles.conditionUnit}>{reading.unit}</span> : null}
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      {tiles.rest.length > 0 ? (
+        <details className={styles.disclosure}>
+          <summary className={styles.disclosureSummary}>
+            {tiles.rest.length} more measure{tiles.rest.length === 1 ? "" : "s"} reported
+          </summary>
+          <ul className={styles.disclosureList}>
+            {tiles.rest.map((reading) => (
+              <li key={reading.key}>
+                <span>{measureLabel(reading.key)}</span>
+                <span className={styles.disclosureValue}>{formatReading(reading)}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </div>
   );
 }
 
-/* -------------------------------------------------------------- the day strip */
-
-/** One day of the outlook, as the artifact's card: the day, its range, its bar. */
-interface OutlookDay {
-  readonly date: string;
-  readonly weekday: string;
-  readonly maximum: number | null;
-  readonly minimum: number | null;
-  readonly precipitation: number | null;
-}
+/* --------------------------------------------------------------- day strip */
 
 /**
- * The weekday of a local calendar date.
+ * The outlook as the artifact's row of day cards: the day, the sky, the high, the rain cue.
  *
- * Read as a UTC instant of the *already-local* date, which is calendar arithmetic on a date string
- * rather than a timezone conversion — `2026-09-04` is Friday in every zone that calls it that.
+ * The glyph is the provider's *own* dominant condition code translated through the product's one
+ * condition vocabulary — never a sky inferred from a figure. A day the provider gave no code for
+ * gets no glyph, and a day it gave no range for keeps its card and says so rather than being
+ * dropped, which would silently shorten the week.
  */
-function weekdayOf(date: string): string {
-  const parsed = new Date(`${date}T00:00:00Z`);
-  if (Number.isNaN(parsed.getTime())) return "";
-  return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][parsed.getUTCDay()] ?? "";
-}
-
-function numberOr(value: number | null | undefined): number | null {
-  return typeof value === "number" ? value : null;
-}
-
-export function outlookDaysFrom(forecast: ForecastResponse | null): OutlookDay[] {
-  return (forecast?.daily?.entries ?? []).map((entry) => {
-    const date = /^(\d{4}-\d{2}-\d{2})/.exec(entry.time_local)?.[1] ?? entry.time_local;
-    const values = entry.values ?? {};
-    return {
-      date,
-      weekday: weekdayOf(date),
-      maximum: numberOr(values.temperature_max),
-      minimum: numberOr(values.temperature_min),
-      precipitation:
-        numberOr(values.precipitation_sum) ?? numberOr(values.precipitation_probability_max),
-    };
-  });
-}
-
-/**
- * The outlook as the artifact's row of day cards.
- *
- * Each card carries a range bar drawn from that day's own minimum and maximum against the window's
- * span — geometry from two retrieved figures and nothing else. A day the provider reported neither
- * for gets the card, the date, and the reason there is no bar, because dropping it would silently
- * shorten the week.
- */
-export function OutlookStrip({
-  days,
-  unit,
-  precipitationUnit,
-}: {
-  readonly days: readonly OutlookDay[];
-  readonly unit: string | null;
-  readonly precipitationUnit: string | null;
-}): ReactNode {
-  const values = days.flatMap((day) =>
-    [day.minimum, day.maximum].filter((value): value is number => value !== null),
-  );
-  const floor = values.length > 0 ? Math.min(...values) : 0;
-  const ceiling = values.length > 0 ? Math.max(...values) : 1;
-  const span = ceiling - floor || 1;
-
+export function OutlookStrip({ days }: { readonly days: readonly OutlookDay[] }): ReactNode {
   return (
     <ol className={styles.days}>
-      {days.map((day) => {
-        const { minimum, maximum } = day;
-        // Both, or neither: a bar drawn from one end and an assumed other end is a fabricated span.
-        const drawable = minimum !== null && maximum !== null;
-        const offset = drawable ? ((minimum - floor) / span) * 100 : 0;
-        const length = drawable ? Math.max(((maximum - minimum) / span) * 100, 4) : 0;
+      {days.map((day) => (
+        <li className={styles.day} key={day.date}>
+          <span className={styles.dayName}>{day.weekday}</span>
+          <span className={styles.dayDate}>{day.date.slice(5)}</span>
 
-        return (
-          <li className={styles.day} key={day.date}>
-            <span className={styles.dayName}>{day.weekday}</span>
-            <span className={styles.dayDate}>{day.date.slice(5)}</span>
-            {drawable ? (
-              <>
-                <span className={styles.dayHigh}>{formatReading({ value: maximum, unit })}</span>
-                <span
-                  className={styles.dayRange}
-                  role="img"
-                  aria-label={`${formatReading({ value: minimum, unit })} to ${formatReading({ value: maximum, unit })}`}
-                >
-                  <span
-                    className={styles.dayRangeFill}
-                    style={{ insetInlineStart: `${offset}%`, inlineSize: `${length}%` }}
-                  />
-                </span>
-                <span className={styles.dayLow}>{formatReading({ value: minimum, unit })}</span>
-              </>
-            ) : (
-              <span className={styles.dayUnreported}>Not reported</span>
-            )}
-            {day.precipitation === null ? null : (
-              <span className={styles.dayPrecipitation}>
-                {formatReading({ value: day.precipitation, unit: precipitationUnit })}
-              </span>
-            )}
-          </li>
-        );
-      })}
+          <span className={styles.dayIcon}>
+            <WeatherIcon condition={day.condition} size={26} />
+          </span>
+
+          {/*
+            The high leads by size, and the low sits under it unlabelled — which only reads as a
+            low while there is a larger figure above it. A day the provider gave no high for used
+            to print "Not reported" with a bare figure beneath it, so the one number on the card
+            was the one a reader would take for the day's temperature. The low is named in that
+            case, and only in that case.
+          */}
+          {day.high ? (
+            <>
+              <span className={styles.dayHigh}>{formatReading(day.high)}</span>
+              {day.low ? <span className={styles.dayLow}>{formatReading(day.low)}</span> : null}
+            </>
+          ) : (
+            <>
+              <span className={styles.dayUnreported}>No high reported</span>
+              {day.low ? (
+                <span className={styles.dayLow}>Low {formatReading(day.low)}</span>
+              ) : null}
+            </>
+          )}
+
+          {day.condition ? (
+            <span className={styles.dayCondition}>{day.condition.label}</span>
+          ) : null}
+          {day.precipitation ? (
+            <span className={styles.dayPrecipitation} data-level={day.precipitation.level}>
+              {day.precipitation.caption}
+            </span>
+          ) : null}
+        </li>
+      ))}
     </ol>
   );
 }
 
-/* ------------------------------------------------------------- what has moved */
+/* ------------------------------------------------------------ what changed */
 
 /**
- * The artifact's "What changed?" column, from `GET /weather/changes`.
+ * The artifact's "What changed?" column: the backend's statement, then up to three movements.
  *
- * It listed only the backend's one-line statement. The endpoint also returns a `DayChange` per day
- * — both retrievals, the signed movement, its unit, and whether the movement cleared the measure's
- * materiality margin — and that is the panel the artifact draws. An immaterial movement is shown as
- * one, rather than being dropped or promoted.
+ * The endpoint returns one row per day per measure — dozens across a fortnight, and production
+ * listed every one of them beside a week of cards. Three is what the artifact draws and three is
+ * what this draws, material movements first, with the number not shown stated rather than
+ * implied.
  */
-export function WhatMoved({ changes }: { readonly changes: WhatChanged }): ReactNode {
-  const moved = (changes.changes ?? []).filter(
-    (change): change is DayChange & { change: number } => typeof change.change === "number",
-  );
-
+export function WhatChangedNotes({ changed }: { readonly changed: ChangedView }): ReactNode {
   return (
     <div className={styles.moved}>
-      <p className={styles.movedStatement}>{changes.statement}</p>
-      {moved.length === 0 ? null : (
+      <p className={styles.movedStatement}>{changed.statement}</p>
+
+      {changed.notes.length > 0 ? (
         <ul className={styles.movedList}>
-          {moved.map((change) => (
-            <li className={styles.movedRow} key={`${change.local_date}-${change.measure}`}>
-              <span className={styles.movedDate}>{change.local_date}</span>
-              <span className={styles.movedValue} data-tone={toneOf(change.change)}>
-                {signedOf(change.change, change.unit)}
+          {changed.notes.map((note) => (
+            <li className={styles.movedNote} key={note.key}>
+              <span className={styles.movedValue} data-tone={note.tone}>
+                {note.value}
               </span>
-              <span className={styles.movedMeasure}>
-                {measureLabel(change.measure)}
-                {change.material ? "" : " · inside the margin"}
+              <span className={styles.movedMeasure}>{note.label}</span>
+              <span className={styles.movedDate}>
+                {note.date}
+                {note.material ? "" : " · inside the margin"}
               </span>
             </li>
           ))}
         </ul>
-      )}
+      ) : null}
+
+      {changed.hidden > 0 ? (
+        <p className={styles.quiet}>
+          {changed.hidden} further movement{changed.hidden === 1 ? "" : "s"} in this window{" "}
+          {changed.hidden === 1 ? "is" : "are"} not shown.
+        </p>
+      ) : null}
     </div>
   );
 }
 
-/* ------------------------------------------------------------------- findings */
+/* ---------------------------------------------------------- the chart stats */
 
-/**
- * The computed findings as tiles rather than as a description list.
- *
- * Figure first, label under it, method under that — one short line each. The method *is* the
- * interpretation: `specs/analytics` requires a computed figure to travel with how it was computed,
- * and the artifact's tiles carry a caption in exactly that position. A statistic the engine could
- * not compute keeps its tile and states the backend's reason, which is a different fact from a
- * figure of zero.
- */
-export function StatisticTiles({
-  results,
-}: {
-  readonly results: readonly StatisticResult[];
-}): ReactNode {
-  if (results.length === 0) return null;
+/** The three or four figures the artifact prints under its chart. */
+export function ChartStats({ stats }: { readonly stats: readonly ReportFigure[] }): ReactNode {
+  if (stats.length === 0) return null;
 
   return (
-    <div className={styles.findings}>
-      {results.map((result, index) => {
-        const value = figureOf(result);
-        return (
-          <Metric
-            key={`${result.measure}-${result.statistic}-${index}`}
-            label={`${measureLabel(result.measure)} · ${result.statistic.replace(/_/g, " ")}`}
-            value={value ?? "Not computable"}
-            dataClass="analytics"
-            note={value === null ? (result.reason ?? undefined) : result.method}
-          />
-        );
-      })}
-    </div>
+    <dl className={styles.chartStats}>
+      {stats.map((stat) => (
+        <div className={styles.chartStat} key={stat.key}>
+          <dt className={styles.chartStatLabel}>{stat.label}</dt>
+          <dd className={styles.chartStatValue}>{stat.value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
-/* --------------------------------------------------------- historical context */
+/* -------------------------------------------------------- historical context */
 
 /**
- * The artifact's "Historical Context" column: the record this window is being read against.
+ * The artifact's "Historical Context" card: three figures, one paragraph, one coverage bar.
  *
- * Its decadal stability index and model-alignment bars are refused — no endpoint produces either.
- * What is drawn instead is the one proportion the baseline genuinely supports: how much of the
- * requested archive was actually available, which is the figure `coverage_note` states in words.
- * A meter over a figure the backend gave in words is the same claim, not a new one.
+ * Its decadal stability index and model-alignment score are refused — neither is computed and both
+ * name a capability in order to display it. The one proportion the baseline genuinely supports is
+ * drawn instead: how much of the requested archive was actually available, which is the figure
+ * `coverage_note` states in words.
  */
-export function HistoricalContext({
-  baseline,
-  comparison,
+export function HistoricalContextCard({
+  context,
 }: {
-  readonly baseline: Baseline;
-  readonly comparison: BaselineComparison | null;
+  readonly context: HistoricalContextView;
 }): ReactNode {
-  const years = baseline.years_used?.length ?? 0;
-  const requested = baseline.years_requested ?? 0;
-  const coverage = requested > 0 ? years / requested : null;
-  const spread = figureOf(baseline.standard_deviation);
-
   return (
     <div className={styles.historical}>
-      <p className={styles.historicalLabelling}>{baseline.labelling}</p>
-
-      <div className={styles.historicalTiles}>
-        <Metric
-          label="Baseline mean"
-          value={figureOf(baseline.mean) ?? "Not computable"}
-          dataClass="historical"
-          note={`${measureLabel(baseline.measure)} over ${years} year${years === 1 ? "" : "s"}.`}
-        />
-        <Metric
-          label="Baseline range"
-          value={`${figureOf(baseline.minimum) ?? "—"} – ${figureOf(baseline.maximum) ?? "—"}`}
-          dataClass="historical"
-          note={spread ? `Standard deviation ${spread}.` : undefined}
-        />
-      </div>
-
-      {comparison?.characterization ? (
-        <p className={styles.historicalCharacterization}>{comparison.characterization}</p>
+      {context.paragraph ? (
+        <p className={styles.historicalParagraph}>{context.paragraph}</p>
       ) : null}
+
+      <dl className={styles.chartStats}>
+        {context.figures.map((figure) => (
+          <div className={styles.chartStat} key={figure.key}>
+            <dt className={styles.chartStatLabel}>{figure.label}</dt>
+            <dd className={styles.chartStatValue}>{figure.value}</dd>
+          </div>
+        ))}
+      </dl>
 
       <Meter
         label="Archive coverage"
-        value={coverage}
+        value={context.coverage}
         unavailable="Not stated"
-        note={
-          baseline.coverage_note ??
-          `${years} of the ${requested} requested year${requested === 1 ? "" : "s"} were available.`
-        }
+        note={context.coverageNote}
       />
     </div>
   );
 }
 
-/* ------------------------------------------------------- confidence by horizon */
+/* --------------------------------------------------------- anomaly attention */
 
 /**
- * Confidence across the horizon, as the bands the backend actually returned.
+ * The artifact's "Anomaly Attention" card, drawn only when the backend flagged something.
  *
- * `specs/web-ui` requires a forecast figure's confidence to be shown with its basis, and the
- * artifact prints a percentage nobody computes. `UncertaintyStatement.horizon` is a list of bands
- * at measured distances, so that is what is drawn: one chip per horizon point, and the basis under
- * them through the shared indicator, which is where the disclosure belongs.
+ * One count, one method, and the entry that stood out furthest. The plot of every flagged entry and
+ * its per-entry list are behind the report's disclosure, where a reader who wants the arithmetic
+ * finds them and a reader who wants the report does not have to scroll past them.
  */
-export function HorizonConfidence({
-  forecast,
+export function AnomalyAttentionCard({
+  attention,
 }: {
-  readonly forecast: ForecastResponse;
+  readonly attention: AnomalyAttention;
 }): ReactNode {
-  const uncertainty = forecast.uncertainty;
-  const horizon = uncertainty?.horizon ?? [];
-  const nearest = horizon[0] ?? null;
+  return (
+    <div className={styles.attention}>
+      <div className={styles.attentionHead}>
+        <Badge tone="warning">Attention</Badge>
+        <span className={styles.attentionCount}>
+          {attention.count} entr{attention.count === 1 ? "y" : "ies"} stood out
+        </span>
+      </div>
+      <p className={styles.attentionFigure}>
+        {attention.strongest.deviation}
+        <span className={styles.attentionScore}>
+          {attention.strongest.score} against a threshold of {attention.threshold}
+        </span>
+      </p>
+      <p className={styles.attentionNote}>{attention.strongest.stamp}</p>
+      <p className={styles.attentionNote}>{attention.method}</p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------ the model's reading */
+
+/**
+ * The artifact's "Grounded Neural Synthesis", as the thing Weathra can honestly put there.
+ *
+ * The artifact's appears the moment the page opens, is attributed to an agent it versions, and
+ * carries a confidence percentage on the prose. Weathra's is a real model call against a real
+ * allowance, so it stays a control — but a *secondary* one, and the report above is complete
+ * without it. What it produces is one paragraph, the chips naming what it was read from, the model
+ * that wrote it, and a link into the run's own evidence.
+ */
+export function GroundedSynthesis({
+  answer,
+  chips,
+  evidenceId,
+  busy,
+  onAsk,
+}: {
+  readonly answer: AnswerEnvelope | null;
+  readonly chips: readonly string[];
+  readonly evidenceId: string | null;
+  readonly busy: boolean;
+  readonly onAsk: () => void;
+}): ReactNode {
+  if (answer === null) {
+    return (
+      <div className={styles.synthesisPrompt}>
+        <p className={styles.quiet}>
+          Everything above is retrieved or computed. A model reading is one call, and optional.
+        </p>
+        <Button variant="secondary" size="sm" busy={busy} onClick={onAsk}>
+          {busy ? "Reading…" : "Add a model reading"}
+        </Button>
+      </div>
+    );
+  }
 
   return (
-    <div className={styles.horizon}>
-      {horizon.length > 0 ? (
-        <ol className={styles.horizonScale}>
-          {horizon.map((point) => (
-            <li className={styles.horizonStep} key={point.time_utc} data-confidence={point.confidence}>
-              <span className={styles.horizonBar} aria-hidden="true" />
-              <span className={styles.horizonHours}>{point.hours_ahead} h</span>
-              <span className={styles.horizonBand}>{point.confidence}</span>
+    <div className={styles.synthesisBody}>
+      <p className={styles.synthesis}>{answer.answer_prose}</p>
+      {chips.length > 0 ? (
+        <ul className={styles.chips}>
+          {chips.map((chip) => (
+            <li className={styles.chip} key={chip}>
+              {chip}
             </li>
           ))}
-        </ol>
+        </ul>
       ) : null}
-
-      {nearest && uncertainty ? (
-        <UncertaintyIndicator
-          confidence={nearest.confidence}
-          basis={uncertainty.basis}
-          hoursAhead={nearest.hours_ahead}
-          spreadAvailable={uncertainty.spread_available}
-        />
+      {evidenceId ? (
+        <Link className={styles.evidence} href={`/evidence/${evidenceId}`}>
+          See how this answer was produced
+        </Link>
       ) : null}
     </div>
   );
 }
 
-/* --------------------------------------------------------------- source footer */
+/* ------------------------------------------------------------- the grounding */
 
-export interface SourceRow {
-  readonly name: string;
-  readonly detail: string;
-  readonly dataClass: "observed" | "forecast" | "historical" | "analytics";
-}
-
-/**
- * The artifact's "Grounding Evidence" panel: every surface this report was read from.
- *
- * Its version is a retrieval score over three named third-party feeds with millisecond latencies.
- * None of those exists here. What does is the set of providers the five reads actually reported,
- * each with what it supplied and when it was retrieved — which is the claim the artifact's panel
- * is shaped like and the only one this product can make.
- */
-export function SourceFooter({ rows }: { readonly rows: readonly SourceRow[] }): ReactNode {
+/** The artifact's "Grounding Evidence" panel: one row per class of figure, short. */
+export function GroundingPanel({ rows }: { readonly rows: readonly GroundingRow[] }): ReactNode {
   if (rows.length === 0) return null;
 
   return (
     <ul className={styles.sources}>
       {rows.map((row) => (
-        <li className={styles.source} key={`${row.name}-${row.dataClass}`}>
+        <li className={styles.source} key={row.role}>
           <span className={styles.sourceMark} data-class={row.dataClass} aria-hidden="true" />
-          <span className={styles.sourceName}>{row.name}</span>
+          <span className={styles.sourceRole}>{row.role}</span>
+          <span className={styles.sourceName}>{row.provider}</span>
           <span className={styles.sourceDetail}>{row.detail}</span>
-          <Badge tone="neutral">{row.dataClass}</Badge>
         </li>
       ))}
     </ul>
+  );
+}
+
+/* -------------------------------------------------------------- the deep dive */
+
+/**
+ * Everything the report computed, behind one control.
+ *
+ * This is where the old page's three widest regions went: the grid of every computed finding, the
+ * horizon-by-horizon confidence scale, and the plot and list of every flagged entry. None of it is
+ * deleted — a figure that was on screen yesterday is still reachable today, and `specs/analytics`
+ * requires a computed figure to travel with the method that produced it, which it still does. What
+ * changed is that a report opens on its conclusions rather than on its working.
+ */
+export function DeepDive({
+  analysis,
+  forecast,
+  deviations,
+}: {
+  readonly analysis: AnalysisResponse | null;
+  readonly forecast: ForecastResponse | null;
+  readonly deviations: readonly DeviationPoint[];
+}): ReactNode {
+  const findings = analysis?.findings ?? [];
+  const anomalies = analysis?.anomalies ?? null;
+  const uncertainty = forecast?.uncertainty ?? null;
+  const horizon = uncertainty?.horizon ?? [];
+  const nearest = horizon[0] ?? null;
+
+  if (findings.length === 0 && horizon.length === 0 && deviations.length === 0) return null;
+
+  return (
+    <details className={styles.deepDive}>
+      <summary className={styles.deepDiveSummary}>
+        <span className={styles.deepDiveTitle}>Deep dive</span>
+        <span className={styles.deepDiveHint}>
+          Every computed figure, the confidence scale and the flagged entries
+        </span>
+      </summary>
+
+      <div className={styles.deepDiveBody}>
+        {findings.length > 0 ? (
+          <section className={styles.deepDiveRegion} aria-labelledby="report-findings">
+            <h3 className={styles.deepDiveHeading} id="report-findings">
+              Computed for this window
+            </h3>
+            <div className={styles.findings}>
+              {findings.map((result, index) => (
+                <FindingTile key={`${result.measure}-${result.statistic}-${index}`} result={result} />
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {horizon.length > 0 && uncertainty ? (
+          <section className={styles.deepDiveRegion} aria-labelledby="report-confidence">
+            <h3 className={styles.deepDiveHeading} id="report-confidence">
+              Confidence by horizon
+            </h3>
+            <ol className={styles.horizonScale}>
+              {horizon.map((point) => (
+                <li
+                  className={styles.horizonStep}
+                  key={point.time_utc}
+                  data-confidence={point.confidence}
+                >
+                  <span className={styles.horizonBar} aria-hidden="true" />
+                  <span className={styles.horizonHours}>{point.hours_ahead} h</span>
+                  <span className={styles.horizonBand}>{point.confidence}</span>
+                </li>
+              ))}
+            </ol>
+            {nearest ? (
+              <UncertaintyIndicator
+                confidence={nearest.confidence}
+                basis={uncertainty.basis}
+                hoursAhead={nearest.hours_ahead}
+                spreadAvailable={uncertainty.spread_available}
+              />
+            ) : null}
+          </section>
+        ) : null}
+
+        {deviations.length > 0 && anomalies ? (
+          <section className={styles.deepDiveRegion} aria-labelledby="report-deviation">
+            <h3 className={styles.deepDiveHeading} id="report-deviation">
+              Entries that stood out
+            </h3>
+            <DeviationChart
+              points={deviations}
+              threshold={anomalies.threshold}
+              unit={anomalies.unit || null}
+              title="Entries that stood out"
+              method={anomalies.method}
+            />
+          </section>
+        ) : null}
+      </div>
+    </details>
+  );
+}
+
+/** One computed finding: the figure, what it is, and how it was computed. */
+function FindingTile({ result }: { readonly result: StatisticResult }): ReactNode {
+  const value = figureOf(result);
+  return (
+    <Metric
+      label={statisticPhrase(result.statistic, result.measure)}
+      value={value ?? "Not computable"}
+      dataClass="analytics"
+      note={value === null ? (result.reason ?? undefined) : result.method}
+    />
+  );
+}
+
+/* ----------------------------------------------------------- the empty state */
+
+/** The screen's place control, exported so both branches of the screen use the same one. */
+export function ReportPlaceChooser({
+  location,
+  usingDefault,
+  hasDefault,
+  onChoose,
+}: {
+  readonly location: Location | null;
+  readonly usingDefault: boolean;
+  readonly hasDefault: boolean;
+  readonly onChoose: (location: Location | null) => void;
+}): ReactNode {
+  return (
+    <PlaceChooser
+      summary="Report on another place"
+      label="Report on a place"
+      description="Weathra resolves the name before it retrieves anything. Leave it empty to use your default location."
+      current={location}
+      usingDefault={usingDefault}
+      hasDefault={hasDefault}
+      onChoose={onChoose}
+    />
   );
 }

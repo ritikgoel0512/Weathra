@@ -1,33 +1,41 @@
 /*
- * Weather Intelligence Report — from the task 20.3 tokens against
- * `docs/design/screens/12-weather-intelligence-report.png`.
+ * Weather Intelligence Report — against `docs/design/screens/12-weather-intelligence-report.png`.
  *
  * The artifact is a two-column intelligence report: a wide analytical column with a narrower
- * context column beside it, banded top to bottom. The first build was a single stack of full-width
- * cards, which is why the fidelity review of 2026-09-10 read it as a document rather than a report.
+ * context column beside it, banded top to bottom, and every band is *short*. The build before this
+ * one had the artifact's columns and none of its restraint — nine full-height panels, six of them
+ * holding everything an endpoint returned — so the page was right in structure and about twice the
+ * height it should be. What changed here is density: tighter tiles, a real day card, stat rows
+ * instead of tile grids, and a disclosure at the foot where three panels used to be.
  *
  * **The bands are `minmax`, not fractions, and that is the thin-data rule.**
  * `grid-template-columns: 2fr 1fr` divides the row whatever is in it, so a panel holding two
  * figures where the artifact holds six gets two thirds of a 1440-pixel row and leaves a void beside
- * its content — the defect `design-system.md` §13 names, and the one the previous pass found three
- * of on the Dashboard. Every band below is `repeat(auto-fit, minmax(<floor>, 1fr))`: with room for
- * both panels it is the artifact's two columns, and with one panel — or at a width where the floor
- * no longer fits — the surviving panel takes the whole row instead of sitting in a half of one.
+ * its content — the defect `design-system.md` §13 names. Every band below is
+ * `repeat(auto-fit, minmax(<floor>, 1fr))`: with room for both panels it is the artifact's two
+ * columns, and with one panel it takes the whole row instead of sitting in a half of one.
  *
  * The same rule governs the tile grids inside the panels. `auto-fit` + `minmax` means two observed
  * measures fill their column exactly as honestly as six do, and nothing anywhere is sized to a
  * count the provider is not obliged to return.
+ *
+ * No colour, size or spacing is written here that is not a token.
  */
 
 .screen {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-4);
   min-width: 0;
 }
 
 /* --------------------------------------------------------------------- header */
 
+/*
+ * The artifact's one header band: what the report is, where, over what window, and when it was
+ * read. The place control is folded into it as a disclosure rather than opening a full-width panel
+ * under the title, which is what used to push the first figure below the fold.
+ */
 .header {
   display: flex;
   flex-wrap: wrap;
@@ -41,6 +49,7 @@
 
 .headerText {
   min-width: 0;
+  flex: 1 1 22rem;
 }
 
 .headerBadges {
@@ -68,38 +77,138 @@
 
 .lede {
   margin: var(--space-2) 0 0;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
   max-width: 68ch;
 }
 
-.headerMeta {
+.ledePlace {
+  color: var(--color-text-secondary);
+  font-weight: var(--type-card-weight);
+}
+
+.headerControls {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--space-2);
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
   min-width: 0;
 }
 
 .headerStamp {
+  margin: 0;
+  flex-basis: 100%;
+  text-align: end;
   color: var(--color-text-muted);
-  font-size: var(--type-meta-size);
-  line-height: var(--type-meta-line);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
 }
 
-/* ---------------------------------------------------------------- the bands */
+/* The place, as one control rather than as an always-open panel. */
+.placeControl {
+  min-width: 0;
+}
+
+.placeSummary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+  cursor: pointer;
+  min-width: 0;
+}
+
+.placeName {
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.placeHint {
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.placeControl > :not(summary) {
+  margin-block-start: var(--space-3);
+}
+
+/*
+ * The artifact's segmented window control. A radio group underneath, so the four read as one
+ * choice to a keyboard as well as to an eye — the same control, and the same markup, as the
+ * Forecast Explorer's.
+ */
+.horizon {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  padding: 2px;
+  margin: 0;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+}
+
+.horizonOption {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.25rem;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.horizonOption input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  cursor: pointer;
+}
+
+.horizonOption:hover {
+  color: var(--color-text-primary);
+}
+
+.horizonOption:has(input:checked) {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+.horizonOption:has(input:focus-visible) {
+  box-shadow: var(--shadow-focus);
+}
+
+/* ------------------------------------------------------------------ the bands */
 
 /*
  * The lead band, and every band under it.
  *
- * 520px is the floor a chart, a day strip and a tile grid all still read at; below it the two
+ * 480px is the floor a chart, a day strip and a tile grid all still read at; below it the two
  * panels stack rather than each being squeezed to something neither fits in. `align-items: start`
  * stops a short panel from stretching to the height of a tall one and printing its own background
- * over empty space — the "awkward column void" this pass exists to remove.
+ * over empty space.
  */
 .lead,
 .band {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(520px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(480px, 100%), 1fr));
   align-items: start;
   gap: var(--space-4);
   min-width: 0;
@@ -113,7 +222,15 @@
   }
 }
 
-/* ----------------------------------------------------------------- the hero */
+/* The context column: the record, and the attention card under it when there is one. */
+.sideColumn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------- the hero */
 
 .hero {
   display: flex;
@@ -129,9 +246,13 @@
 
 .heroOverlay {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-1);
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.heroOverlayText {
   min-width: 0;
 }
 
@@ -141,15 +262,34 @@
   font-size: var(--type-section-size);
   line-height: var(--type-section-line);
   font-weight: var(--type-section-weight);
+  overflow-wrap: anywhere;
+}
+
+.heroStamp {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
 }
 
 .heroReadout {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-1);
   margin: 0;
   color: var(--color-text-primary);
   font-size: var(--type-readout-size);
   line-height: var(--type-readout-line);
   font-weight: var(--type-readout-weight);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.heroUnit {
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-secondary);
 }
 
 .heroBody {
@@ -167,12 +307,27 @@
   gap: var(--space-2);
 }
 
+.heroKicker {
+  color: var(--color-class-analytics);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+}
+
+/*
+ * The report's one headline. Section weight rather than card weight: the artifact's hero statement
+ * is the largest text on the screen after the title, and it is the sentence the whole page is an
+ * argument for.
+ */
 .heroTitle {
   margin: 0;
-  font-size: var(--type-heading-size);
-  line-height: var(--type-heading-line);
-  font-weight: var(--type-heading-weight);
+  font-size: var(--type-section-size);
+  line-height: var(--type-section-line);
+  font-weight: var(--type-section-weight);
   color: var(--color-text-primary);
+  max-width: 46ch;
 }
 
 .heroSummary {
@@ -183,25 +338,137 @@
 
 .heroTiles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  gap: var(--space-3);
+  margin-block-start: var(--space-1);
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------ conditions now */
+
+.conditions {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-3);
   min-width: 0;
 }
 
-/* ------------------------------------------------------------ observed tiles */
-
-.observedGrid {
+/*
+ * Six compact tiles, two across in the context column — the artifact's arrangement exactly. These
+ * are deliberately not `Metric`: a badge on each of six tiles inside a panel whose own header
+ * already says OBSERVED is the badge noise the artifact does not have, and the figure is what the
+ * reader is here for.
+ */
+.conditionGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
   min-width: 0;
 }
 
-/* ---------------------------------------------------------------- day strip */
+.conditionTile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-items: flex-start;
+  padding: var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
 
+/*
+ * The measure's name, and deliberately no badge beside it.
+ *
+ * `12-weather-intelligence-report.png` puts an OBSERVED chip on each of its six tiles, and that was
+ * tried: in the context column a badge and a measure name do not fit on one line, so
+ * "TEMPERATURE" broke across three and six tiles became six ragged blocks. The panel these sit in
+ * is titled *Conditions now* and carries the OBSERVED badge in its own header, which classes
+ * everything inside it — so the class is stated once, where it fits, rather than six times where
+ * it does not.
+ */
+.conditionLabel {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.conditionValue {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  color: var(--color-text-primary);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  font-variant-numeric: tabular-nums;
+}
+
+.conditionUnit {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--type-body-weight);
+}
+
+/* ------------------------------------------------------------- disclosures */
+
+.disclosure {
+  min-width: 0;
+}
+
+.disclosureSummary {
+  color: var(--color-accent);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  cursor: pointer;
+}
+
+.disclosureList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.disclosureList li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-block: var(--space-1);
+  border-block-start: 1px solid var(--color-border-subtle);
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  min-width: 0;
+}
+
+.disclosureValue {
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------- the day cards */
+
+/*
+ * Seven across, and the floor is what decides that rather than a media query.
+ *
+ * 96px was one pixel-budget too wide for the artifact's week in the analytical column at 1440, so
+ * the seventh card wrapped onto a row of its own — a week drawn as six days and an orphan. The
+ * floor is the card's real minimum instead, and the inline padding comes off to pay for it.
+ */
 .days {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(104px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(84px, 100%), 1fr));
   gap: var(--space-2);
   margin: 0;
   padding: 0;
@@ -214,15 +481,16 @@
   flex-direction: column;
   align-items: center;
   gap: var(--space-1);
-  padding: var(--space-3) var(--space-2);
+  padding: var(--space-3) var(--space-1);
   background: var(--color-surface-inset);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-md);
+  text-align: center;
   min-width: 0;
 }
 
 .dayName {
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   font-size: var(--type-label-size);
   letter-spacing: var(--type-label-tracking);
   text-transform: uppercase;
@@ -235,39 +503,22 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The provider's own condition code, drawn. Nothing here infers a sky from a figure. */
+.dayIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  block-size: 30px;
+  color: var(--color-class-forecast);
+}
+
 .dayHigh {
   color: var(--color-text-primary);
-  font-size: var(--type-heading-size);
-  line-height: var(--type-heading-line);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
   font-weight: var(--type-heading-weight);
   font-variant-numeric: tabular-nums;
-}
-
-/*
- * The day's own span, positioned in the week's span.
- *
- * Geometry from two retrieved figures — that day's minimum and maximum against the window's — and
- * nothing else. A day missing either gets no bar at all rather than one drawn from an assumed end.
- */
-.dayRange {
-  position: relative;
-  display: block;
-  inline-size: 100%;
-  block-size: 6px;
-  border-radius: var(--radius-pill);
-  background: var(--color-surface-overlay);
-  overflow: hidden;
-}
-
-.dayRangeFill {
-  position: absolute;
-  inset-block: 0;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(
-    90deg,
-    var(--color-class-forecast) 0%,
-    var(--color-class-historical) 100%
-  );
+  white-space: nowrap;
 }
 
 .dayLow {
@@ -276,16 +527,28 @@
   font-variant-numeric: tabular-nums;
 }
 
+.dayCondition {
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  overflow-wrap: anywhere;
+}
+
 .dayPrecipitation {
-  color: var(--color-class-observed);
+  color: var(--color-text-muted);
   font-size: var(--type-meta-size);
   font-variant-numeric: tabular-nums;
+}
+
+/* Wet days carry the observed class's colour; a dry one stays muted rather than going green. */
+.dayPrecipitation[data-level="wet"],
+.dayPrecipitation[data-level="possible"] {
+  color: var(--color-class-observed);
 }
 
 .dayUnreported {
   color: var(--color-text-muted);
   font-size: var(--type-meta-size);
-  text-align: center;
 }
 
 /* -------------------------------------------------------------- what changed */
@@ -311,25 +574,23 @@
   list-style: none;
 }
 
-.movedRow {
+/* The artifact's three stacked notes: the movement, what moved, and when. */
+.movedNote {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: baseline;
-  gap: var(--space-2);
-  padding-block: var(--space-2);
-  border-block-start: 1px solid var(--color-border-subtle);
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
   min-width: 0;
-}
-
-.movedDate {
-  color: var(--color-text-muted);
-  font-size: var(--type-meta-size);
-  font-variant-numeric: tabular-nums;
 }
 
 .movedValue {
   font-variant-numeric: tabular-nums;
   font-weight: var(--type-card-weight);
+  font-size: var(--type-card-size);
 }
 
 /* The sign leads; the colour only agrees with it. */
@@ -346,23 +607,62 @@
 }
 
 .movedMeasure {
-  color: var(--color-text-muted);
-  font-size: var(--type-meta-size);
+  color: var(--color-text-primary);
+  font-size: var(--type-ui-size);
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-/* ----------------------------------------------------------------- findings */
+.movedDate {
+  grid-column: 1 / -1;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  font-variant-numeric: tabular-nums;
+}
 
-.findings {
+/* ----------------------------------------------------- the figures in a row */
+
+/*
+ * The artifact's stat row: the figures that describe a chart, under it, as a row rather than as a
+ * grid of bordered tiles. Three or four of them, which is what makes them readable at a glance —
+ * the grid of every computed finding is behind *Deep dive*.
+ */
+.chartStats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
   gap: var(--space-3);
-  margin-block-end: var(--space-4);
+  margin: var(--space-4) 0 0;
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--color-border-subtle);
   min-width: 0;
 }
 
-/* ------------------------------------------------------- historical context */
+.chartStat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.chartStatLabel {
+  color: var(--color-text-muted);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-tracking);
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.chartStatValue {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  font-variant-numeric: tabular-nums;
+}
+
+/* -------------------------------------------------------- historical context */
 
 .historical {
   display: flex;
@@ -371,30 +671,251 @@
   min-width: 0;
 }
 
-.historicalLabelling {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--type-meta-size);
-  line-height: var(--type-meta-line);
-}
-
-.historicalTiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.historicalCharacterization {
+.historicalParagraph {
   margin: 0;
   color: var(--color-text-secondary);
 }
 
-/* ------------------------------------------------------ horizon confidence */
+/* The stat row inside the side card has nothing above it to be divided from. */
+.historical .chartStats {
+  margin-block-start: 0;
+  padding-block-start: 0;
+  border-block-start: none;
+}
 
-.horizon {
+/* --------------------------------------------------------- anomaly attention */
+
+.attention {
   display: flex;
   flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.attentionHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.attentionCount {
+  color: var(--color-text-secondary);
+  font-size: var(--type-ui-size);
+}
+
+.attentionFigure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-status-warning);
+  font-size: var(--type-heading-size);
+  line-height: var(--type-heading-line);
+  font-weight: var(--type-heading-weight);
+  font-variant-numeric: tabular-nums;
+}
+
+.attentionScore {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  font-weight: var(--type-body-weight);
+}
+
+.attentionNote {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------ the model's reading */
+
+.synthesisPrompt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.synthesisBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.synthesis {
+  margin: 0;
+  color: var(--color-text-primary);
+  max-width: 72ch;
+}
+
+/* The artifact's evidence chips: what the reading was read from, in a word each. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  overflow-wrap: anywhere;
+}
+
+.evidence {
+  color: var(--color-accent);
+  font-size: var(--type-meta-size);
+}
+
+/* ------------------------------------------------------------------ sources */
+
+.sources {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.source {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  padding-block: var(--space-2);
+  border-block-start: 1px solid var(--color-border-subtle);
+  min-width: 0;
+}
+
+.source:first-child {
+  border-block-start: none;
+}
+
+.sourceMark {
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-border-strong);
+  align-self: center;
+}
+
+.sourceMark[data-class="observed"] {
+  background: var(--color-class-observed);
+}
+
+.sourceMark[data-class="forecast"] {
+  background: var(--color-class-forecast);
+}
+
+.sourceMark[data-class="historical"] {
+  background: var(--color-class-historical);
+}
+
+.sourceMark[data-class="analytics"] {
+  background: var(--color-class-analytics);
+}
+
+.sourceRole {
+  color: var(--color-text-primary);
+  font-size: var(--type-ui-size);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sourceName {
+  color: var(--color-text-secondary);
+  font-size: var(--type-meta-size);
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+
+.sourceDetail {
+  grid-column: 2 / -1;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------- deep dive */
+
+/*
+ * Where three panels went.
+ *
+ * The grid of every computed finding, the horizon-by-horizon confidence scale and the plot of
+ * every flagged entry were three full bands on the page. Nothing is deleted — `specs/analytics`
+ * still gets its method beside every figure — but a report opens on its conclusions rather than on
+ * its working, so they are behind one control at the foot of the screen.
+ */
+.deepDive {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  min-width: 0;
+}
+
+.deepDiveSummary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  min-width: 0;
+}
+
+.deepDiveTitle {
+  color: var(--color-text-primary);
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+}
+
+.deepDiveHint {
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  overflow-wrap: anywhere;
+}
+
+.deepDiveBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: 0 var(--space-4) var(--space-4);
+  min-width: 0;
+}
+
+.deepDiveRegion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.deepDiveHeading {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  font-weight: var(--type-card-weight);
+}
+
+.findings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
   gap: var(--space-3);
   min-width: 0;
 }
@@ -447,68 +968,6 @@
   font-size: var(--type-label-size);
   letter-spacing: var(--type-label-tracking);
   text-transform: uppercase;
-}
-
-/* ------------------------------------------------------------------ sources */
-
-.sources {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.source {
-  display: grid;
-  grid-template-columns: auto minmax(0, auto) minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-2);
-  padding-block: var(--space-2);
-  border-block-start: 1px solid var(--color-border-subtle);
-  min-width: 0;
-}
-
-.source:first-child {
-  border-block-start: none;
-}
-
-.sourceMark {
-  inline-size: 8px;
-  block-size: 8px;
-  border-radius: var(--radius-pill);
-  background: var(--color-border-strong);
-}
-
-.sourceMark[data-class="observed"] {
-  background: var(--color-class-observed);
-}
-
-.sourceMark[data-class="forecast"] {
-  background: var(--color-class-forecast);
-}
-
-.sourceMark[data-class="historical"] {
-  background: var(--color-class-historical);
-}
-
-.sourceMark[data-class="analytics"] {
-  background: var(--color-class-analytics);
-}
-
-.sourceName {
-  color: var(--color-text-primary);
-  font-weight: var(--type-card-weight);
-  overflow-wrap: anywhere;
-  min-width: 0;
-}
-
-.sourceDetail {
-  color: var(--color-text-muted);
-  font-size: var(--type-meta-size);
-  min-width: 0;
-  overflow-wrap: anywhere;
 }
 
 /* ------------------------------------------------------------------- charts */
@@ -596,7 +1055,7 @@
 }
 
 .chartPlot {
-  block-size: 260px;
+  block-size: 240px;
   min-inline-size: 320px;
 }
 
@@ -708,24 +1167,12 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ------------------------------------------------------------------- prose */
-
-.synthesis {
-  margin: 0 0 var(--space-3);
-  color: var(--color-text-primary);
-  max-width: 72ch;
-}
-
-.evidence {
-  color: var(--color-accent);
-}
+/* -------------------------------------------------------------------- prose */
 
 .quiet {
-  margin: 0 0 var(--space-3);
+  margin: 0;
   color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
   max-width: 72ch;
-}
-
-.quiet:last-child {
-  margin-block-end: 0;
 }

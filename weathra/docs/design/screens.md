@@ -212,11 +212,24 @@ invented figure reads as a real operational fact.
 charts through it rather than sections of figures — and that rebuild made its refusals worth
 naming rather than leaving to the general rule above.
 
+It was rebuilt a second time on 2026-09-13, and that pass was about *curation* rather than about
+graphical weight. The first rebuild had the artifact's sections and its charts and rendered every
+endpoint exhaustively inside them: a tile per computed finding, a bar per horizon band, every
+flagged entry plotted and then listed again, a sentence of provenance under every source. The
+artifact shows three hero figures, six tiles, seven day cards, three change notes, four chart
+stats and four source rows, and those counts are now constants in `frontend/lib/report/view-model.ts`.
+Nothing was deleted to reach them — what a cap drops is behind that panel's own disclosure, and the
+three regions taken off the page are together behind *Deep dive* at the foot of the screen. The
+window control the artifact draws is real: `TODAY / 3D / 7D / 14D` is the `days` parameter of
+`GET /weather/forecast`, `/weather/changes` and `/weather/analysis`, so it re-reads the window
+rather than re-slicing one already fetched.
+
 | In `12-weather-intelligence-report.png` | What is implemented instead |
 |---|---|
 | "Neural Agent v4.2" and the agent version beside the synthesis | The gateway and model key the run actually resolved to, written by the backend. Weathra versions no agent of its own. |
 | "EVIDENCE NODES: 47" and the node count beside the sources | The sources the report actually read, listed with what each supplied. Nothing is counted for effect. |
-| "EXPORT PDF" | Nothing. There is no report export; see the export row above. |
+| "EXPORT PDF" | Nothing. There is no report export; see the export row above. A disabled control would advertise the capability in order to deny it. |
+| "REPORT ID: WX-INTEL-882-B" | Nothing. No report is issued, stored or identified, so there is no id to print. |
 | "CONFIDENCE 96.4%" attached to the narrative | The forecast's own banded confidence with its basis and horizon. A percentage on a piece of prose attributes a measured certainty to a sentence nothing measured. |
 | "DECADAL STABILITY INDEX", "MODEL ALIGNMENT SCORE" | Nothing. Neither is computed, and both name a capability in order to display it. |
 | Named third-party feeds with millisecond latencies | The one provider each figure came from, with the period it covers and when it was retrieved. |

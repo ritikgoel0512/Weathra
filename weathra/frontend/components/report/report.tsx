@@ -1,53 +1,57 @@
 "use client";
 
 /**
- * Weather Intelligence Report — one place, read across every surface Weathra has.
+ * Weather Intelligence Report — one place, read across every surface Weathra has, and *curated*.
  *
  * Built against `docs/design/screens/12-weather-intelligence-report.png`. Composed from
  * `/weather/current`, `/weather/forecast`, `/weather/changes`, `/weather/analysis`,
  * `/weather/history/baseline` and `/weather/history/baseline/comparison` — the report is a
  * *reading* of those six, and adds no figure of its own.
  *
- * **This is a report with charts through it, not a document with figures in it.** The first build
- * had the artifact's sections as six stacked description lists, and the production fidelity review
- * of 2026-09-10 graded it NOT CLOSE for exactly that: "the artifact is a report with charts through
- * it; ours is mostly figures and prose in cards. The sections are right and the graphical weight is
- * not." The composition below is the artifact's own — a photographic hero with its figure tiles, an
- * observed column beside it, the outlook as day cards over a plotted window, the record drawn as a
- * reference line through that window rather than described beside it, deviation as a plot when the
- * backend flagged any, and the sources as a footer.
+ * **The last rebuild made it a report with charts through it; this one makes it a report somebody
+ * would read.** Every endpoint's whole payload was on the page: every computed finding as its own
+ * tile, every horizon band as its own bar, every flagged entry plotted and then listed again
+ * underneath, a paragraph of provenance under every source, and a full-width "Ask Weathra to read
+ * this" call to action where the artifact puts its conclusion. Nine panels, about 2,800 pixels of
+ * report, and the decisions a person actually came for scattered among the working.
  *
- * Every region follows one hierarchy: **the visualisation or the figure, a short label, and one
- * short line of interpretation** — where that line is a figure, a phrase the backend wrote, or the
- * method a statistic states. None of it is composed here.
+ * The artifact's answer is curation, and it is structural rather than cosmetic. Seven regions, in
+ * this order, each answering exactly one question:
+ *
+ *     header          what is this, where, over what window
+ *     hero            what is happening, in one statement and three figures
+ *     conditions      what is it like right now                       (six tiles)
+ *     outlook         what are the next few days                      (seven cards)
+ *     what changed    what moved since the last retrieval             (three notes)
+ *     the record      how unusual is this, against the archive        (one chart, one side card)
+ *     the reading     what Weathra concludes, and what it rests on    (one paragraph, four rows)
+ *
+ * Every count above is a constant in `lib/report/view-model.ts`, which is also where the choosing
+ * happens — so what the report shows is one module's decision rather than a rule re-litigated in
+ * each panel. **Nothing is deleted.** What a cap dropped is behind that panel's own disclosure, and
+ * the three regions this pass took off the page — every finding, the confidence scale, and the
+ * flagged entries — are together behind *Deep dive* at the foot of the screen.
  *
  * **A region whose data did not arrive is not drawn.** No zero bars, no filled meters, no
  * placeholder tiles: `EmptyChart` keeps a chart region's geometry when a series is genuinely
- * expected and absent, and everything else is omitted with the backend's own reason. That is what
- * makes the thin-data case — two observed measures rather than six, two forecast days rather than
- * seven — read as a shorter report rather than as a broken one.
+ * expected and absent, and everything else is omitted with the backend's own reason.
  *
- * **The synthesis is asked for, not spent automatically.** The artifact's version is written by a
- * "neural agent" and appears the moment the page opens. Weathra's is a real language-model call
- * against the real agent, which costs a model call and an allowance — so it is a control a person
- * presses, and the report is complete and readable without ever pressing it. Everything above it is
- * retrieved or deterministically computed.
+ * **The synthesis is asked for, not spent automatically, and it is no longer the loudest thing on
+ * the page.** The artifact's is written by an agent it calls neural and appears the moment the page
+ * opens. Weathra's is a real model call against a real allowance, so it stays a control — a
+ * secondary one, in a card the report is complete without.
  *
  * **What the artifact draws and Weathra does not have:** an agent version string, an evidence-node
- * count, a PDF export, a confidence percentage attached to the narrative, a decadal stability
- * index, a model-alignment score, and named third-party feeds with millisecond latencies. No
- * version is printed, nothing is counted, no export is offered, and every confidence shown is the
- * forecast's own banded statement with its basis. Recorded in `docs/design/screens.md` §5.
+ * count, a report identifier, a PDF export, a confidence percentage attached to the narrative, a
+ * decadal stability index, a model-alignment score, and named third-party feeds with millisecond
+ * latencies. Recorded in `docs/design/screens.md` §5.
  */
 
-import { PlaceChooser } from "@/components/locations/place-chooser";
 import { ScreenPreview } from "@/components/locations/screen-preview";
-import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
 import {
   Badge,
-  Button,
   Card,
   CardBody,
   CardHeader,
@@ -71,29 +75,44 @@ import type {
 import {
   briefingLocationFrom,
   calendarWindowFrom,
+  formatFigure,
 } from "@/lib/dashboard/briefing";
 import { friendlyName } from "@/lib/locations/place";
 import { useApiMutation, useApiQuery } from "@/lib/query/hooks";
 import { PREFERENCES_KEY } from "@/lib/query/keys";
+import {
+  anomalyAttentionFrom,
+  changedFrom,
+  chartStatsFrom,
+  currentTilesFrom,
+  evidenceChipsFrom,
+  groundingFrom,
+  heroFiguresFrom,
+  historicalContextFrom,
+  isReportHorizon,
+  outlookFrom,
+  synthesisFrom,
+} from "@/lib/report/view-model";
 
 import {
-  DeviationChart,
   ForecastTimelineChart,
   hourLabelOf,
   type DeviationPoint,
   type TimelinePoint,
 } from "./charts";
 import {
-  HistoricalContext,
-  HorizonConfidence,
-  ObservedNow,
+  AnomalyAttentionCard,
+  ChartStats,
+  ConditionTiles,
+  DeepDive,
+  GroundedSynthesis,
+  GroundingPanel,
+  HistoricalContextCard,
   OutlookStrip,
+  ReportHeader,
   ReportHero,
-  SourceFooter,
-  StatisticTiles,
-  WhatMoved,
-  outlookDaysFrom,
-  type SourceRow,
+  ReportPlaceChooser,
+  WhatChangedNotes,
 } from "./sections";
 import styles from "./report.module.css";
 
@@ -102,6 +121,7 @@ function Panel({
   title,
   id,
   dataClass,
+  badges,
   subtitle,
   children,
 }: {
@@ -109,6 +129,8 @@ function Panel({
   readonly id: string;
   readonly dataClass:
     "observed" | "forecast" | "historical" | "analytics" | "interpretation";
+  /** A second class, where a panel genuinely reads two — the record against the window. */
+  readonly badges?: ReactNode;
   readonly subtitle?: string;
   readonly children: ReactNode;
 }): ReactNode {
@@ -120,7 +142,12 @@ function Panel({
         title={title}
         titleId={id}
         subtitle={subtitle}
-        badge={<DataClassBadge dataClass={dataClass} />}
+        badge={
+          <>
+            {badges}
+            <DataClassBadge dataClass={dataClass} />
+          </>
+        }
       />
       <CardBody>{children}</CardBody>
     </Card>
@@ -133,13 +160,9 @@ function timelineFrom(forecast: ForecastResponse | null): TimelinePoint[] {
     label: hourLabelOf(entry.time_local),
     stamp: entry.time_local,
     temperature:
-      typeof entry.values?.temperature === "number"
-        ? entry.values.temperature
-        : null,
+      typeof entry.values?.temperature === "number" ? entry.values.temperature : null,
     precipitation:
-      typeof entry.values?.precipitation === "number"
-        ? entry.values.precipitation
-        : null,
+      typeof entry.values?.precipitation === "number" ? entry.values.precipitation : null,
   }));
 }
 
@@ -153,80 +176,48 @@ function deviationsFrom(analysis: AnalysisResponse | null): DeviationPoint[] {
   }));
 }
 
-/** Every provider the six reads reported, once each, with what it supplied. */
-function sourcesFrom({
-  current,
-  forecast,
-  analysis,
-  baseline,
-}: {
-  readonly current: CurrentResponse | null;
-  readonly forecast: ForecastResponse | null;
-  readonly analysis: AnalysisResponse | null;
-  readonly baseline: Baseline | null;
-}): SourceRow[] {
-  const rows: SourceRow[] = [];
-  const add = (
-    name: string | null | undefined,
-    detail: string,
-    dataClass: SourceRow["dataClass"],
-  ) => {
-    if (!name) return;
-    if (rows.some((row) => row.name === name && row.dataClass === dataClass))
-      return;
-    rows.push({ name, detail, dataClass });
-  };
-
-  if (current) {
-    add(
-      current.attribution?.provider,
-      `Observed ${formatInstant(current.attribution?.retrieved_at) ?? "at an unreported time"}`,
-      "observed",
-    );
-  }
-  if (forecast) {
-    add(
-      forecast.attribution?.provider,
-      `Forecast retrieved ${formatInstant(forecast.attribution?.retrieved_at) ?? "at an unreported time"}`,
-      "forecast",
-    );
-  }
-  if (baseline) add(baseline.provider, baseline.labelling, "historical");
-  if (analysis)
-    add(
-      analysis.provider,
-      "Computed by Weathra from the retrieved series",
-      "analytics",
-    );
-
-  return rows;
+/** What the report covers, in one line. About the report, never about the weather. */
+function scopeOf(days: number): string {
+  return `Current conditions, a ${days}-day outlook and the archive record for the same window.`;
 }
 
 function ReportFor({
   location,
   chooser,
+  defaultHorizon,
 }: {
   readonly location: Location;
-  /** The screen's place control, rendered under its own heading. */
+  /** The screen's place control, folded into the header bar. */
   readonly chooser: ReactNode;
+  /** The horizon the person's preferences ask for, as the control's starting value. */
+  readonly defaultHorizon: string;
 }): ReactNode {
   const place = { latitude: location.latitude, longitude: location.longitude };
+
+  /*
+   * The artifact's TODAY / 3D / 7D / 14D control, and it is a real one: `days` is a parameter of
+   * `GET /weather/forecast`, `/weather/changes` and `/weather/analysis`, so changing it re-reads
+   * all three against the new window rather than re-slicing a window already fetched. The baseline
+   * follows, because it is asked for over whatever calendar period the forecast came back naming.
+   */
+  const [horizon, setHorizon] = useState(defaultHorizon);
+  const days = Number(horizon);
 
   const current = useApiQuery<CurrentResponse>({
     key: ["weather", "current", place.latitude, place.longitude],
     request: (client) => client.current(place),
   });
   const forecast = useApiQuery<ForecastResponse>({
-    key: ["weather", "forecast", place.latitude, place.longitude, 7],
-    request: (client) => client.forecast({ ...place, days: 7 }),
+    key: ["weather", "forecast", place.latitude, place.longitude, days],
+    request: (client) => client.forecast({ ...place, days }),
   });
   const changes = useApiQuery<WhatChanged>({
-    key: ["weather", "changes", place.latitude, place.longitude, 7],
-    request: (client) => client.changes({ ...place, days: 7 }),
+    key: ["weather", "changes", place.latitude, place.longitude, days],
+    request: (client) => client.changes({ ...place, days }),
   });
   const analysis = useApiQuery<AnalysisResponse>({
-    key: ["weather", "analysis", place.latitude, place.longitude, 7],
-    request: (client) => client.analysis({ ...place, days: 7 }),
+    key: ["weather", "analysis", place.latitude, place.longitude, days],
+    request: (client) => client.analysis({ ...place, days }),
   });
 
   const window = calendarWindowFrom(
@@ -255,7 +246,7 @@ function ReportFor({
    *
    * Held until the forecast has named the window, like the baseline above, so the two describe the
    * same calendar period rather than two that happen to be near each other. A backend that cannot
-   * compute it answers with a failure this screen omits the tile for; it is never approximated
+   * compute it answers with a failure this screen omits the figure for; it is never approximated
    * here from the baseline mean and a current reading, which would be this screen inventing a
    * statistic and attributing it to the analytics engine.
    */
@@ -278,164 +269,146 @@ function ReportFor({
     enabled: window !== null,
   });
 
-  const [asked, setAsked] = useState(false);
   const synthesis = useApiMutation<void, AskResponse>({
     run: (client) =>
       client.ask({
-        question: `Summarise the weather outlook for ${friendlyName(location)} over the next week, using the retrieved figures only.`,
+        question: `Summarise the weather outlook for ${friendlyName(location)} over the next ${days} days, using the retrieved figures only.`,
       }),
   });
+
+  const forecastData = forecast.state.kind === "ready" ? forecast.state.data : null;
+  const currentData = current.state.kind === "ready" ? current.state.data : null;
+  const changesData = changes.state.kind === "ready" ? changes.state.data : null;
+  const analysisData = analysis.state.kind === "ready" ? analysis.state.data : null;
+  const baselineData = baseline.state.kind === "ready" ? baseline.state.data : null;
+  const comparisonData = comparison.state.kind === "ready" ? comparison.state.data : null;
 
   /*
    * The shell outlives the report.
    *
    * Both branches below used to replace the whole screen with one sentence, so a provider hiccup
-   * took the heading, the place chooser and the visual shell with it — and the chooser is the one
-   * control that would let a person try somewhere else. `specs/web-ui` wants a degraded panel, not
-   * a degraded screen.
+   * took the heading, the place chooser and the horizon control with it — and those are the two
+   * controls that would let a person try somewhere else, or a shorter window.
    */
-  const shell = (body: ReactNode): ReactNode => (
-    <div className={styles.screen}>
-      <header className={styles.header}>
-        <div className={styles.headerText}>
-          <div className={styles.headerBadges}>
-            <DataClassBadge dataClass="analytics" />
-            <span className={styles.headerPeriod}>{location.timezone}</span>
-          </div>
-          <h1 className={styles.title}>Weather Intelligence Report</h1>
-          <p className={styles.lede}>{friendlyName(location)}</p>
-        </div>
-      </header>
-
-      {chooser}
-
-      {body}
-    </div>
+  const header = (
+    <ReportHeader
+      location={location}
+      scope={scopeOf(forecastData?.horizon_days ?? days)}
+      horizon={horizon}
+      onHorizon={setHorizon}
+      retrievedAt={forecastData?.attribution?.retrieved_at ?? null}
+      chooser={chooser}
+    />
   );
 
   if (forecast.state.kind === "loading" || current.state.kind === "loading") {
-    return shell(
-      <LoadingState
-        label={`Building the report for ${friendlyName(location)}`}
-        lines={6}
-      />,
+    return (
+      <div className={styles.screen}>
+        {header}
+        <LoadingState
+          label={`Building the report for ${friendlyName(location)}`}
+          lines={6}
+        />
+      </div>
     );
   }
   if (forecast.state.kind === "error") {
-    return shell(
-      <ErrorState failure={forecast.state.failure} onRetry={forecast.retry} />,
+    return (
+      <div className={styles.screen}>
+        {header}
+        <ErrorState failure={forecast.state.failure} onRetry={forecast.retry} />
+      </div>
     );
   }
 
-  const forecastData =
-    forecast.state.kind === "ready" ? forecast.state.data : null;
-  const currentData =
-    current.state.kind === "ready" ? current.state.data : null;
-  const analysisData =
-    analysis.state.kind === "ready" ? analysis.state.data : null;
-  const baselineData =
-    baseline.state.kind === "ready" ? baseline.state.data : null;
-  const comparisonData =
-    comparison.state.kind === "ready" ? comparison.state.data : null;
-
-  const nearest = forecastData?.uncertainty?.horizon?.[0] ?? null;
   const timeline = timelineFrom(forecastData);
-  const missingHours = timeline.filter(
-    (point) => point.temperature === null,
-  ).length;
+  const missingHours = timeline.filter((point) => point.temperature === null).length;
   const plottable = timeline.some((point) => point.temperature !== null);
-  const days = outlookDaysFrom(forecastData);
   const deviations = deviationsFrom(analysisData);
-  const anomalies = analysisData?.anomalies ?? null;
-  const baselineMean =
-    typeof baselineData?.mean?.value === "number"
-      ? baselineData.mean.value
+
+  const heroSynthesis = synthesisFrom({
+    analysis: analysisData,
+    comparison: comparisonData,
+  });
+  const heroFigures = heroFiguresFrom({
+    forecast: forecastData,
+    comparison: comparisonData,
+    analysis: analysisData,
+  });
+  const tiles = currentTilesFrom(currentData);
+  const outlook = outlookFrom(forecastData);
+  const changed = changedFrom(changesData);
+  const stats = chartStatsFrom({
+    analysis: analysisData,
+    baseline: baselineData,
+    comparison: comparisonData,
+  });
+  const historical = historicalContextFrom({
+    baseline: baselineData,
+    comparison: comparisonData,
+    headline: heroSynthesis.headline,
+  });
+  const attention = anomalyAttentionFrom(analysisData);
+  const grounding = groundingFrom({
+    current: currentData,
+    forecast: forecastData,
+    baseline: baselineData,
+    analysis: analysisData,
+    formatStamp: formatInstant,
+  });
+
+  const temperature = currentData?.values?.temperature;
+  const reading =
+    typeof temperature === "number"
+      ? {
+          figure: formatFigure({ value: temperature }),
+          unit: currentData?.units?.temperature ?? null,
+        }
       : null;
 
+  const baselineMean =
+    typeof baselineData?.mean?.value === "number" ? baselineData.mean.value : null;
   const temperatureUnit =
-    forecastData?.hourly?.units?.temperature ??
-    currentData?.units?.temperature ??
-    null;
+    forecastData?.hourly?.units?.temperature ?? currentData?.units?.temperature ?? null;
   const precipitationUnit = forecastData?.hourly?.units?.precipitation ?? null;
-  const dailyUnit =
-    forecastData?.daily?.units?.temperature_max ??
-    forecastData?.daily?.units?.temperature ??
-    null;
-  const dailyPrecipitationUnit =
-    forecastData?.daily?.units?.precipitation_sum ??
-    forecastData?.daily?.units?.precipitation_probability_max ??
-    null;
+
+  const answer = synthesis.state.kind === "saved" ? synthesis.state.data.answer : null;
 
   return (
     <div className={styles.screen}>
-      <header className={styles.header}>
-        <div className={styles.headerText}>
-          <div className={styles.headerBadges}>
-            <DataClassBadge dataClass="analytics" />
-            <span className={styles.headerPeriod}>
-              {forecastData?.horizon_days ?? 7} days · {location.timezone}
-            </span>
-          </div>
-          <h1 className={styles.title}>Weather Intelligence Report</h1>
-          <p className={styles.lede}>
-            {friendlyName(location)} — read across current conditions, the
-            forecast window, what has moved, the computed statistics and the
-            archive record.
-          </p>
-        </div>
-        <div className={styles.headerMeta}>
-          {nearest ? (
-            <Badge tone={nearest.confidence === "high" ? "ok" : "warning"}>
-              {nearest.confidence} confidence at {nearest.hours_ahead} h
-            </Badge>
-          ) : null}
-          {forecastData?.attribution?.retrieved_at ? (
-            <span className={styles.headerStamp}>
-              Retrieved {formatInstant(forecastData.attribution.retrieved_at)}
-            </span>
-          ) : null}
-        </div>
-      </header>
+      {header}
 
-      {/* Under the heading, where the artifacts put a screen's own controls. */}
-      {chooser}
-
-      {/* Lead band: the place and its computed reading, with everything observed beside it. */}
+      {/* What is happening, and what it is like right now. */}
       <div className={styles.lead}>
         <ReportHero
           location={location}
-          current={currentData}
-          summary={analysisData?.summary ?? null}
-          comparison={comparisonData}
-          trend={analysisData?.trend ?? null}
-          forecast={forecastData}
+          synthesis={heroSynthesis}
+          figures={heroFigures}
+          reading={reading}
+          observedAt={currentData?.observed_at_utc ?? null}
         />
 
-        {currentData ? (
+        {tiles.shown.length > 0 ? (
           <Panel id="report-now" title="Conditions now" dataClass="observed">
-            <ObservedNow current={currentData} />
+            <ConditionTiles tiles={tiles} />
           </Panel>
         ) : null}
       </div>
 
-      {/* The outlook, and what has moved under it. */}
+      {/* What the next few days look like, and what moved since the last retrieval. */}
       <div className={styles.band}>
         <Panel
           id="report-outlook"
-          title="The outlook"
+          title="Forecast outlook"
           dataClass="forecast"
           subtitle={
             forecastData?.attribution?.provider
-              ? `From ${forecastData.attribution.provider}.`
+              ? `Day by day, from ${forecastData.attribution.provider}.`
               : undefined
           }
         >
-          {days.length > 0 ? (
-            <OutlookStrip
-              days={days}
-              unit={dailyUnit}
-              precipitationUnit={dailyPrecipitationUnit}
-            />
+          {outlook.length > 0 ? (
+            <OutlookStrip days={outlook} />
           ) : (
             <p className={styles.quiet}>
               This provider reported no daily outlook for this window.
@@ -444,22 +417,27 @@ function ReportFor({
         </Panel>
 
         <Panel id="report-moved" title="What changed" dataClass="forecast">
-          {changes.state.kind === "ready" ? (
-            <WhatMoved changes={changes.state.data} />
+          {changed ? (
+            <WhatChangedNotes changed={changed} />
           ) : (
             <p className={styles.quiet}>
-              No earlier forecast is on record to compare against.
+              No earlier forecast is on record to compare this window against.
             </p>
           )}
         </Panel>
       </div>
 
-      {/* The plotted window against the record — the artifact's central chart. */}
+      {/*
+        The one analytical block. The window plotted against the archive record, with the figures
+        that describe it under the plot — and beside it, the record itself and whatever the backend
+        flagged. Everything else it computed is behind *Deep dive*.
+      */}
       <div className={styles.band}>
         <Panel
           id="report-window"
           title="The window, against the record"
-          dataClass="forecast"
+          dataClass="analytics"
+          badges={<DataClassBadge dataClass="historical" />}
           subtitle="The forecast series, with the archive baseline drawn through it."
         >
           {plottable ? (
@@ -484,109 +462,39 @@ function ReportFor({
               reason="This provider reported no hourly series for this window."
             />
           )}
+
+          <ChartStats stats={stats} />
         </Panel>
 
-        <Panel
-          id="report-history"
-          title="Against the record"
-          dataClass="historical"
-          subtitle={
-            baselineData
-              ? undefined
-              : "No baseline is available for this window yet."
-          }
-        >
-          {baselineData ? (
-            <HistoricalContext
-              baseline={baselineData}
-              comparison={comparisonData}
-            />
-          ) : (
-            <p className={styles.quiet}>
-              The archive returned no baseline for this calendar window, so
-              nothing is placed against it.
-            </p>
-          )}
-        </Panel>
+        <div className={styles.sideColumn}>
+          <Panel
+            id="report-history"
+            title="Historical context"
+            dataClass="historical"
+            subtitle={
+              historical ? undefined : "No baseline is available for this window yet."
+            }
+          >
+            {historical ? (
+              <HistoricalContextCard context={historical} />
+            ) : (
+              <p className={styles.quiet}>
+                The archive returned no baseline for this calendar window, so nothing is
+                placed against it.
+              </p>
+            )}
+          </Panel>
+
+          {/* Drawn only when the backend flagged something. An always-present alert is not one. */}
+          {attention ? (
+            <Panel id="report-attention" title="Needs attention" dataClass="analytics">
+              <AnomalyAttentionCard attention={attention} />
+            </Panel>
+          ) : null}
+        </div>
       </div>
 
-      {/* What Weathra computed, and how far into the horizon it is willing to be confident. */}
-      <div className={styles.band}>
-        <Panel
-          id="report-computed"
-          title="Computed for this window"
-          dataClass="analytics"
-          /*
-            Not the summary. The hero already carries `AnalysisResponse.summary` as the window's
-            computed reading, and repeating it here put the same sentence on the screen twice —
-            the prose redundancy this pass exists to remove. The provider is the fact this panel
-            adds.
-          */
-          subtitle={
-            analysisData?.provider
-              ? `Computed by Weathra from ${analysisData.provider}.`
-              : undefined
-          }
-        >
-          {analysisData ? (
-            <>
-              <StatisticTiles results={analysisData.findings ?? []} />
-
-              {deviations.length > 0 || !anomalies ? null : (
-                <p className={styles.quiet}>
-                  {anomalies.note ??
-                    `No entry stood out from this window by ${anomalies.method}.`}
-                </p>
-              )}
-            </>
-          ) : (
-            <p className={styles.quiet}>
-              Nothing was computed for this window.
-            </p>
-          )}
-        </Panel>
-
-        <Panel
-          id="report-confidence"
-          title="Confidence by horizon"
-          dataClass="forecast"
-          subtitle="Banded by distance into the horizon, with the basis the provider stated."
-        >
-          {forecastData ? (
-            <HorizonConfidence forecast={forecastData} />
-          ) : (
-            <p className={styles.quiet}>This forecast stated no uncertainty.</p>
-          )}
-        </Panel>
-      </div>
-
-      {/*
-        The deviation plot, on its own row.
-        *
-        It sat under the statistics tiles, which made the analytics panel about twice the height of
-        the confidence panel beside it and left a card-width void at the foot of that row — the
-        thin-data defect this pass exists to remove, reintroduced by a chart rather than by thin
-        data. On its own band it is also closer to the artifact, whose anomaly figure is a panel of
-        its own rather than a footnote to the statistics.
-      */}
-      {deviations.length > 0 && anomalies ? (
-        <Panel
-          id="report-deviation"
-          title="Entries that stood out"
-          dataClass="analytics"
-          subtitle={`Flagged by ${anomalies.method}, against the window's own median.`}
-        >
-          <DeviationChart
-            points={deviations}
-            threshold={anomalies.threshold}
-            unit={anomalies.unit || null}
-            title="Entries that stood out"
-            method={anomalies.method}
-          />
-        </Panel>
-      ) : null}
-
-      {/* The model's reading, and everything the report was read from. */}
+      {/* What Weathra concludes, and what the conclusion rests on. */}
       <div className={styles.band}>
         <Panel
           id="report-synthesis"
@@ -594,69 +502,53 @@ function ReportFor({
           dataClass="interpretation"
           subtitle="Written by a language model about the figures above. It produces no measurement."
         >
-          {synthesis.state.kind === "saved" ? (
-            <>
-              <p className={styles.synthesis}>
-                {synthesis.state.data.answer.answer_prose}
-              </p>
-              {synthesis.state.data.answer.llm_model ? (
-                <p className={styles.quiet}>
-                  {synthesis.state.data.answer.llm_provider} ·{" "}
-                  {synthesis.state.data.answer.llm_model}
-                </p>
-              ) : null}
-              {synthesis.state.data.evidence_id ? (
-                <Link
-                  className={styles.evidence}
-                  href={`/evidence/${synthesis.state.data.evidence_id}`}
-                >
-                  See how this answer was produced
-                </Link>
-              ) : null}
-            </>
-          ) : synthesis.state.kind === "error" ? (
+          {synthesis.state.kind === "error" ? (
             <ErrorState
               failure={synthesis.state.failure}
               title="That reading was not produced"
             />
           ) : (
-            <>
-              <p className={styles.quiet}>
-                The report above is complete without this. Ask Weathra to read
-                it and it will summarise the figures, citing what it used.
-              </p>
-              <Button
-                variant="primary"
-                busy={synthesis.busy}
-                onClick={() => {
-                  setAsked(true);
-                  synthesis.submit();
-                }}
-              >
-                {asked && synthesis.busy
-                  ? "Reading…"
-                  : "Ask Weathra to read this"}
-              </Button>
-            </>
+            <GroundedSynthesis
+              answer={answer}
+              chips={evidenceChipsFrom({ answer, baseline: baselineData })}
+              evidenceId={
+                synthesis.state.kind === "saved"
+                  ? (synthesis.state.data.evidence_id ?? null)
+                  : null
+              }
+              busy={synthesis.busy}
+              onAsk={() => synthesis.submit()}
+            />
           )}
         </Panel>
 
         <Panel
           id="report-sources"
-          title="What this was read from"
+          title="Grounding evidence"
           dataClass="observed"
-          subtitle="Every surface behind the figures above."
+          subtitle="What each part of this report was read from."
         >
-          <SourceFooter
-            rows={sourcesFrom({
-              current: currentData,
-              forecast: forecastData,
-              analysis: analysisData,
-              baseline: baselineData,
-            })}
-          />
+          {grounding.length > 0 ? (
+            <GroundingPanel rows={grounding} />
+          ) : (
+            <p className={styles.quiet}>No provider reported an attribution for this report.</p>
+          )}
         </Panel>
       </div>
+
+      {/* The working, kept and moved off the page. */}
+      <DeepDive
+        analysis={analysisData}
+        forecast={forecastData}
+        deviations={deviations}
+      />
+
+      {analysisData?.from_cache ? (
+        <p className={styles.quiet}>
+          <Badge tone="neutral">Cached</Badge> The statistics above were served from Weathra&apos;s
+          own cache of this window.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -674,10 +566,7 @@ export function WeatherIntelligenceReport(): ReactNode {
   }
   if (preferences.state.kind === "error") {
     return (
-      <ErrorState
-        failure={preferences.state.failure}
-        onRetry={preferences.retry}
-      />
+      <ErrorState failure={preferences.state.failure} onRetry={preferences.retry} />
     );
   }
   if (preferences.state.kind !== "ready") return null;
@@ -686,16 +575,16 @@ export function WeatherIntelligenceReport(): ReactNode {
   const location = chosen ?? saved;
 
   /*
-   * Declared once and used in both branches. The empty branch needs it most: its own text
-   * says "name one above", and an empty state saying that with nothing above it is the
-   * dead end this control exists to remove.
+   * The saved horizon is the control's starting value, so the report opens on the window the
+   * person's preferences ask for rather than on a number written here. A preference outside the
+   * four the control offers falls back to the middle one instead of adding a fifth button.
    */
+  const preferred = String(preferences.state.data.forecast_horizon_days ?? 7);
+  const defaultHorizon = isReportHorizon(preferred) ? preferred : "7";
+
   const chooser = (
-    <PlaceChooser
-      summary="Report on another place"
-      label="Report on a place"
-      description="Weathra resolves the name before it retrieves anything. Leave it empty to use your default location."
-      current={location}
+    <ReportPlaceChooser
+      location={location}
       usingDefault={chosen === null}
       hasDefault={saved !== null}
       onChoose={setChosen}
@@ -709,7 +598,6 @@ export function WeatherIntelligenceReport(): ReactNode {
         to Settings, which made the feature reachable only by configuring a preference somewhere
         else first — see `PlaceChooser` for why that is not a substitute for a product.
       */}
-
       {location === null ? (
         <>
           {chooser}
@@ -723,18 +611,18 @@ export function WeatherIntelligenceReport(): ReactNode {
                   "Temperature, wind, humidity and pressure as retrieved, with the moment they were observed.",
               },
               {
-                title: "The days ahead",
+                title: "Forecast outlook",
                 blurb: "The forecast horizon your preferences ask for, day by day.",
                 chart: 150,
               },
               {
-                title: "Against the record",
+                title: "The window, against the record",
                 blurb:
                   "How this period compares with the climate baseline for the same place and time of year.",
                 chart: 150,
               },
               {
-                title: "What the model reads into it",
+                title: "Weathra's reading",
                 blurb:
                   "An interpretation of the figures above, clearly separated from them, asked for rather than spent on arrival.",
               },
@@ -746,6 +634,7 @@ export function WeatherIntelligenceReport(): ReactNode {
           key={`${location.latitude},${location.longitude}`}
           location={location}
           chooser={chooser}
+          defaultHorizon={defaultHorizon}
         />
       )}
     </>
