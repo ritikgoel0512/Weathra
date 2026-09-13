@@ -203,31 +203,143 @@ export function overviewFactsFrom(
   return facts;
 }
 
-/* ------------------------------------------------------------ the comparison */
+/**
+ * One deterministic sentence about the saved places, assembled from the figures already returned.
+ *
+ * Assembled, never generated. A summary of four numbers does not need a language model, and
+ * spending somebody's allowance to be told which of two cities is warmer would be the clearest
+ * possible waste of it — so every clause below is a figure the backend computed, joined by fixed
+ * words, and a clause whose figure is missing is simply not written.
+ */
+export function overviewSummaryFrom(
+  comparison: PlacesComparison | null | undefined,
+): string | null {
+  if (!comparison) return null;
+  const { warmest, coolest, windiest } = comparison;
+  if (!warmest || !coolest) return null;
 
-export interface ComparisonRow {
-  readonly key: string;
-  readonly name: string;
-  readonly value: string;
+  const unit = comparison.temperature_unit ?? null;
+  const clauses: string[] = [
+    `${warmest.name} is currently the warmest saved location at ${formatMeasured(warmest.value, unit)}` +
+      (typeof comparison.temperature_spread === "number" && comparison.temperature_spread > 0
+        ? `, ${formatMeasured(comparison.temperature_spread, unit)} warmer than ${coolest.name}`
+        : ""),
+  ];
+
+  if (windiest) {
+    clauses.push(
+      `${windiest.name === warmest.name ? "It" : windiest.name} also has the highest wind speed at ${formatMeasured(windiest.value, windiest.unit ?? null)}`,
+    );
+  }
+
+  const wet = comparison.reporting_precipitation ?? 0;
+  clauses.push(
+    wet === 0
+      ? "None of them is reporting measurable precipitation"
+      : wet === 1 && comparison.wettest
+        ? `${comparison.wettest.name} is the only one reporting measurable precipitation`
+        : `${wet} of ${comparison.compared} are reporting measurable precipitation`,
+  );
+
+  return `${clauses.join(". ")}.`;
 }
 
-/** The rail's compact temperature column, ordered warmest first. */
-export function comparisonRowsFrom(
+/* ------------------------------------------------------------ the comparison */
+
+export interface ComparisonMeasureRow {
+  readonly key: string;
+  readonly label: string;
+  readonly left: string | null;
+  readonly right: string | null;
+  readonly difference: string | null;
+}
+
+export interface ComparisonView {
+  /** The two places being compared, named so the pair is never ambiguous. */
+  readonly leftName: string;
+  readonly rightName: string;
+  readonly rows: readonly ComparisonMeasureRow[];
+  /** Why these two, where they were chosen rather than being the only two. */
+  readonly basis: string | null;
+}
+
+/** The measures the compact preview compares, in the order the cards show them. */
+const COMPARED: readonly { measure: Measure; label: string; difference: boolean }[] = [
+  { measure: "temperature", label: "Temperature", difference: true },
+  { measure: "precipitation", label: "Precipitation", difference: false },
+  { measure: "relative_humidity", label: "Humidity", difference: false },
+  { measure: "wind_speed", label: "Wind", difference: false },
+];
+
+/**
+ * A compact side-by-side of two saved places, across every measure both of them reported.
+ *
+ * It used to compare temperature alone, which threw away three quarters of a retrieval the page had
+ * already paid for. It is still only a *preview*: Compare Cities ranks places against a criterion
+ * over a window, and the button beneath this is how somebody gets that.
+ *
+ * **The pair is named, never implied.** Above two saved places there is no natural pair, so the
+ * warmest and the coolest are chosen and the panel says that is what they are — an unlabelled pair
+ * out of five would leave a reader guessing which two the figures belong to.
+ */
+export function comparisonFrom(
   cards: readonly WorkspaceCard[],
   overview: SavedLocationsOverview,
-): readonly ComparisonRow[] {
+): ComparisonView | null {
   const byId = new Map((overview.places ?? []).map((place) => [place.saved_id, place]));
+  const withReadings = cards.filter((card) => byId.get(card.savedId)?.conditions);
+  if (withReadings.length < 2) return null;
 
-  return cards
-    .flatMap((card) => {
-      const value = byId.get(card.savedId)?.conditions?.values?.temperature;
-      const unit = byId.get(card.savedId)?.conditions?.units?.temperature ?? null;
-      return typeof value !== "number"
-        ? []
-        : [{ key: card.savedId, name: card.name, value: formatMeasured(value, unit), sort: value }];
-    })
-    .sort((left, right) => right.sort - left.sort)
-    .map(({ key, name, value }) => ({ key, name, value }));
+  const comparison = overview.comparison;
+  const warmestId = comparison?.warmest?.saved_id;
+  const coolestId = comparison?.coolest?.saved_id;
+
+  const chosen =
+    withReadings.length > 2 && warmestId && coolestId
+      ? [
+          withReadings.find((card) => card.savedId === warmestId),
+          withReadings.find((card) => card.savedId === coolestId),
+        ].filter((card): card is WorkspaceCard => card !== undefined)
+      : withReadings.slice(0, 2);
+
+  if (chosen.length < 2) return null;
+  const [left, right] = chosen as [WorkspaceCard, WorkspaceCard];
+
+  const reading = (card: WorkspaceCard, measure: Measure) => {
+    const place = byId.get(card.savedId);
+    const value = place?.conditions?.values?.[measure];
+    return typeof value === "number"
+      ? { value, unit: place?.conditions?.units?.[measure] ?? null }
+      : null;
+  };
+
+  return {
+    leftName: left.name,
+    rightName: right.name,
+    basis:
+      withReadings.length > 2
+        ? `The warmest and coolest of your ${withReadings.length} places reporting a reading.`
+        : null,
+    rows: COMPARED.flatMap<ComparisonMeasureRow>(({ measure, label, difference }) => {
+      const a = reading(left, measure);
+      const b = reading(right, measure);
+      // A measure neither of them reported is not a row; one that only one reported still is,
+      // because "London 8.6 km/h, Berlin not reported" is a fact worth seeing.
+      if (a === null && b === null) return [];
+      return [
+        {
+          key: measure,
+          label,
+          left: a === null ? null : formatMeasured(a.value, a.unit),
+          right: b === null ? null : formatMeasured(b.value, b.unit),
+          difference:
+            difference && a !== null && b !== null
+              ? formatMeasured(Math.abs(a.value - b.value), a.unit)
+              : null,
+        },
+      ];
+    }),
+  };
 }
 
 /* -------------------------------------------------------------- the usage */

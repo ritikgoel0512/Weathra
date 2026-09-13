@@ -57,10 +57,15 @@
   font-weight: var(--type-label-weight);
 }
 
-.headerControls {
+/*
+ * One row: the field and the button, baseline-aligned. The field's label is its accessible name
+ * and is not drawn — the placeholder says the same words, and a stacked label was pushing the
+ * header a third taller for a word already on screen twice.
+ */
+.toolbar {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   gap: var(--space-3);
   min-width: 0;
 }
@@ -68,6 +73,17 @@
 .search {
   inline-size: min(20rem, 100%);
   min-width: 0;
+}
+
+.search label {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* ----------------------------------------------------------------- attention */
@@ -130,6 +146,15 @@
  * Four across where there is room, then three, two, one. `auto-fit` with a floor rather than fixed
  * breakpoints, so a card never squeezes below the width its three metric chips need.
  */
+/*
+ * A grid that is intentional at every count rather than a row of narrow cards in a wide page.
+ *
+ * `auto-fit` alone fills the row with as many 272px tracks as fit, so two saved places became two
+ * small cards against half a page of nothing. The count is on the element, so one and two get their
+ * own treatment: one card is capped so it reads as a card rather than a banner, two share the width
+ * evenly, and three or more fall back to the fluid grid — which lands on three or four across
+ * depending on the room, exactly as the artifact does.
+ */
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(272px, 100%), 1fr));
@@ -140,8 +165,24 @@
   min-width: 0;
 }
 
+@media (min-width: 720px) {
+  .cards[data-count="1"] {
+    grid-template-columns: minmax(0, 32rem);
+  }
+
+  .cards[data-count="2"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1040px) {
+  .cards[data-count="3"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (min-width: 1500px) {
-  .cards {
+  .cards:not([data-count="1"]):not([data-count="2"]):not([data-count="3"]) {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
@@ -154,7 +195,12 @@
   background: var(--color-surface-raised);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-lg);
+  transition: border-color 120ms ease;
   min-width: 0;
+}
+
+.card:hover {
+  border-color: var(--color-border-strong);
 }
 
 /* A place whose weather did not arrive keeps its card, and says so rather than looking empty. */
@@ -171,11 +217,22 @@
   border-radius: var(--radius-lg);
 }
 
-.cardHead {
+/*
+ * Provenance and watches along the top, above the place's own name.
+ *
+ * Two rows' worth of height whether or not the flags need them. At four cards across there is not
+ * room for "OBSERVED 6 h ago" and "DEFAULT 2 WATCHES" on one line, so a card carrying flags wrapped
+ * and pushed its place name a line lower than its neighbours' — a row of cards whose names sit at
+ * two different heights reads as a rendering fault. Reserving the row costs a little space on the
+ * cards without flags and buys alignment across every card in the grid.
+ */
+.cardTop {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-2);
+  min-block-size: 2.75rem;
   min-width: 0;
 }
 
@@ -189,9 +246,9 @@
 .cardName {
   margin: 0;
   color: var(--color-text-primary);
-  font-size: var(--type-card-size);
-  line-height: var(--type-card-line);
-  font-weight: var(--type-card-weight);
+  font-size: var(--type-lead-size);
+  line-height: 1.25;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 
@@ -246,13 +303,17 @@
 .cardTemperature {
   margin: 0;
   color: var(--color-text-primary);
-  font-size: var(--type-readout-size, 2rem);
-  line-height: 1.05;
+  font-size: clamp(2rem, 4.2vw, 2.75rem);
+  line-height: 1.02;
   font-weight: 600;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
 
 .cardCondition {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   margin: 0;
   color: var(--color-accent);
   font-size: var(--type-ui-size);
@@ -274,6 +335,9 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-inset);
+  border-radius: var(--radius-sm);
   min-width: 0;
 }
 
@@ -313,6 +377,19 @@
   padding-block-start: var(--space-3);
   border-block-start: 1px solid var(--color-border-subtle);
   min-width: 0;
+}
+
+/* The destructive pair, kept visually lighter than the one way onward. */
+.cardSecondary {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  opacity: 0.82;
+}
+
+.card:hover .cardSecondary,
+.card:focus-within .cardSecondary {
+  opacity: 1;
 }
 
 .cardProvenance {
@@ -436,6 +513,15 @@
 
 /* ----------------------------------------------------------------- the facts */
 
+/* One assembled sentence about the figures beneath it. Never a model's prose. */
+.summary {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--type-lead-size);
+  line-height: var(--type-lead-line);
+  max-width: 72ch;
+}
+
 .facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
@@ -502,71 +588,86 @@
 
 /* ------------------------------------------------------------ the comparison */
 
+/*
+ * Two places against each other, measure by measure. A three-column row — left, right, and the
+ * difference where one is meaningful — rather than a list of one figure each, which threw away
+ * three quarters of a retrieval the page had already paid for.
+ */
+.comparisonHead {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  inline-size: 100%;
+  padding-inline-start: 0;
+  min-width: 0;
+}
+
+.comparisonPlace {
+  color: var(--color-text-primary);
+  font-size: var(--type-ui-size);
+  font-weight: var(--type-ui-weight);
+  overflow-wrap: anywhere;
+}
+
 .comparison {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
   margin: 0;
-  padding: 0;
   inline-size: 100%;
-  list-style: none;
   min-width: 0;
 }
 
 .comparisonRow {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-2) 0;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-block-end: var(--space-2);
   border-block-end: 1px solid var(--color-border-subtle);
   min-width: 0;
 }
 
 .comparisonRow:last-child {
   border-block-end: none;
+  padding-block-end: 0;
 }
 
-.comparisonName {
-  color: var(--color-text-secondary);
-  font-size: var(--type-ui-size);
-  overflow-wrap: anywhere;
-}
-
-.comparisonValue {
-  color: var(--color-text-primary);
-  font-size: var(--type-ui-size);
-  font-weight: var(--type-ui-weight);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.comparisonSpread {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  margin: 0;
-  padding: var(--space-3);
-  inline-size: 100%;
-  background: var(--color-surface-inset);
-  border-inline-start: 2px solid var(--color-accent);
-  border-radius: var(--radius-md);
-  min-width: 0;
-}
-
-.comparisonSpreadLabel {
+.comparisonRow dt {
   color: var(--color-text-muted);
   font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
   letter-spacing: var(--type-label-tracking);
   text-transform: uppercase;
   font-weight: var(--type-label-weight);
 }
 
-.comparisonSpreadValue {
-  color: var(--color-accent);
-  font-size: var(--type-card-size);
-  font-weight: var(--type-card-weight);
+.comparisonRow dd {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  min-width: 0;
+}
+
+.comparisonValue {
+  color: var(--color-text-secondary);
+  font-size: var(--type-ui-size);
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.comparisonDifference {
+  grid-column: 1 / -1;
+  color: var(--color-accent);
+  font-size: var(--type-meta-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.railActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 /* ---------------------------------------------------------------- the usage */

@@ -24,11 +24,11 @@
 
 import type { ReactNode } from "react";
 
-import { Badge, Button, Input } from "@/components/ui";
+import { Badge, Button, Input, WeatherIcon } from "@/components/ui";
 import {
   agoOf,
   type AttentionItem,
-  type ComparisonRow,
+  type ComparisonView,
   type OverviewFact,
   type UsageFigure,
   type WorkspaceCard,
@@ -71,7 +71,12 @@ export function WorkspaceHeader({
         </p>
       </div>
 
-      <div className={styles.headerControls}>
+      {/*
+        One toolbar row. The field's own label is the control's accessible name and is not drawn —
+        the placeholder says the same words, and a stacked label pushed the header a third taller
+        for a word already on screen twice.
+      */}
+      <div className={styles.toolbar}>
         {/*
           A filter over what is already saved, never a geocoder. Typing a city nobody has saved
           finds nothing here and is supposed to: adding a place is the button beside it, and one
@@ -118,7 +123,14 @@ export function AttentionStrip({ items }: { readonly items: readonly AttentionIt
 
 /* -------------------------------------------------------------- the cards */
 
-/** One saved place, as a weather card rather than as a record. */
+/**
+ * One saved place, as a weather card rather than as a record.
+ *
+ * The hierarchy is the artifact's: provenance and watches along the top, the place's identity, the
+ * temperature at readout weight with its condition beside it, the measures as labelled boxes, and
+ * one primary way onward. The destructive control is the smallest thing on the card and sits behind
+ * the same row as Compare, because a Remove drawn like a navigation control gets pressed by mistake.
+ */
 export function PlaceCard({
   card,
   now,
@@ -136,19 +148,32 @@ export function PlaceCard({
 }): ReactNode {
   return (
     <li className={styles.card} data-unavailable={card.unavailable !== null}>
-      <div className={styles.cardHead}>
-        <div className={styles.cardIdentity}>
-          <p className={styles.cardName}>{card.name}</p>
-          {card.qualifier ? <p className={styles.cardQualifier}>{card.qualifier}</p> : null}
-        </div>
-        <div className={styles.cardFlags}>
+      <div className={styles.cardTop}>
+        <span className={styles.cardProvenance}>
+          {card.unavailable === null ? (
+            <>
+              <Badge tone="ok">Observed</Badge>
+              <span className={styles.cardAge}>{agoOf(card.observedAt, now)}</span>
+            </>
+          ) : (
+            <span className={styles.cardAge}>
+              {card.observedAt === null ? "No reading yet" : `Last read ${agoOf(card.observedAt, now)}`}
+            </span>
+          )}
+        </span>
+        <span className={styles.cardFlags}>
           {card.isDefault ? <span className={styles.flag} data-kind="default">Default</span> : null}
           {card.watchCount > 0 ? (
             <span className={styles.flag} data-kind={card.metWatchCount > 0 ? "met" : "watching"}>
               {card.watchCount} watch{card.watchCount === 1 ? "" : "es"}
             </span>
           ) : null}
-        </div>
+        </span>
+      </div>
+
+      <div className={styles.cardIdentity}>
+        <p className={styles.cardName}>{card.name}</p>
+        {card.qualifier ? <p className={styles.cardQualifier}>{card.qualifier}</p> : null}
       </div>
 
       {card.unavailable === null ? (
@@ -156,7 +181,10 @@ export function PlaceCard({
           <div className={styles.cardReadout}>
             <p className={styles.cardTemperature}>{card.temperature ?? "—"}</p>
             {card.condition ? (
-              <p className={styles.cardCondition}>{card.condition.label}</p>
+              <p className={styles.cardCondition}>
+                <WeatherIcon condition={card.condition} size={20} />
+                {card.condition.label}
+              </p>
             ) : null}
           </div>
 
@@ -184,29 +212,10 @@ export function PlaceCard({
       )}
 
       <div className={styles.cardFoot}>
-        <span className={styles.cardProvenance}>
-          {card.unavailable === null ? (
-            <>
-              <Badge tone="ok">Observed</Badge>
-              <span className={styles.cardAge}>{agoOf(card.observedAt, now)}</span>
-            </>
-          ) : (
-            <span className={styles.cardAge}>
-              {card.observedAt === null
-                ? "No reading yet"
-                : `Last read ${agoOf(card.observedAt, now)}`}
-            </span>
-          )}
-        </span>
-        <span className={styles.cardActions}>
-          <Button size="sm" variant="primary" onClick={onOpen}>
-            View analytics
-          </Button>
-          {/*
-            Remove is not a peer of the primary action. It sits in the same row at the smallest
-            weight the design system has, because a destructive control drawn like a navigation one
-            is pressed by accident.
-          */}
+        <Button size="sm" variant="primary" onClick={onOpen}>
+          View analytics →
+        </Button>
+        <span className={styles.cardSecondary}>
           <Button size="sm" onClick={onCompare}>
             Compare
           </Button>
@@ -224,15 +233,20 @@ export function PlaceCard({
 /** The cross-location summary. Deterministic facts, and one line where there is nothing to say. */
 export function MultiLocationOverview({
   facts,
+  summary,
   single,
 }: {
   readonly facts: readonly OverviewFact[];
+  /** One assembled sentence about the figures below it. Never a model's prose. */
+  readonly summary: string | null;
   /** The card that is on screen when only one place is saved, so the panel is still useful. */
   readonly single: WorkspaceCard | null;
 }): ReactNode {
   if (facts.length > 0) {
     return (
-      <dl className={styles.facts}>
+      <>
+        {summary ? <p className={styles.summary}>{summary}</p> : null}
+        <dl className={styles.facts}>
         {facts.map((fact) => (
           <div className={styles.fact} key={fact.key}>
             <dt>{fact.label}</dt>
@@ -241,8 +255,9 @@ export function MultiLocationOverview({
               {fact.note ? <span className={styles.factNote}>{fact.note}</span> : null}
             </dd>
           </div>
-        ))}
-      </dl>
+          ))}
+        </dl>
+      </>
     );
   }
 
@@ -286,45 +301,65 @@ export function MultiLocationOverview({
 
 /* ----------------------------------------------------------- the comparison */
 
-/** The rail: every saved place's current temperature, warmest first, and the way into Compare. */
+/**
+ * The rail: two saved places side by side across every measure both reported, and the way into
+ * Compare Cities.
+ *
+ * A preview rather than a second Compare Cities. That screen ranks places against a criterion over
+ * a window; this answers "how do these two differ right now" from a retrieval the page already
+ * made, and hands off for anything more.
+ */
 export function LocationComparison({
-  rows,
-  spread,
+  view,
   onCompare,
+  onAdd,
 }: {
-  readonly rows: readonly ComparisonRow[];
-  readonly spread: string | null;
+  readonly view: ComparisonView | null;
   readonly onCompare: () => void;
+  readonly onAdd: () => void;
 }): ReactNode {
-  if (rows.length < 2) {
+  if (view === null) {
     return (
       <>
         <p className={styles.quiet}>
-          Save another location to compare conditions side by side.
+          Save another location to compare conditions side by side — temperature, precipitation,
+          humidity and wind, from the readings this page already has.
         </p>
-        <Button size="sm" onClick={onCompare}>
-          Open Compare Cities
-        </Button>
+        <div className={styles.railActions}>
+          <Button size="sm" variant="primary" onClick={onAdd}>
+            Add another location
+          </Button>
+          <Button size="sm" onClick={onCompare}>
+            Open Compare Cities
+          </Button>
+        </div>
       </>
     );
   }
 
   return (
     <>
-      <ul className={styles.comparison}>
-        {rows.map((row) => (
-          <li className={styles.comparisonRow} key={row.key}>
-            <span className={styles.comparisonName}>{row.name}</span>
-            <span className={styles.comparisonValue}>{row.value}</span>
-          </li>
+      <div className={styles.comparisonHead}>
+        <span className={styles.comparisonPlace}>{view.leftName}</span>
+        <span className={styles.comparisonPlace}>{view.rightName}</span>
+      </div>
+      {view.basis ? <p className={styles.quiet}>{view.basis}</p> : null}
+
+      <dl className={styles.comparison}>
+        {view.rows.map((row) => (
+          <div className={styles.comparisonRow} key={row.key}>
+            <dt>{row.label}</dt>
+            <dd>
+              <span className={styles.comparisonValue}>{row.left ?? "Not reported"}</span>
+              <span className={styles.comparisonValue}>{row.right ?? "Not reported"}</span>
+              {row.difference ? (
+                <span className={styles.comparisonDifference}>Δ {row.difference}</span>
+              ) : null}
+            </dd>
+          </div>
         ))}
-      </ul>
-      {spread ? (
-        <p className={styles.comparisonSpread}>
-          <span className={styles.comparisonSpreadLabel}>Temperature difference</span>
-          <span className={styles.comparisonSpreadValue}>{spread}</span>
-        </p>
-      ) : null}
+      </dl>
+
       <Button size="sm" onClick={onCompare}>
         Open Compare Cities
       </Button>

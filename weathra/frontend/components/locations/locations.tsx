@@ -50,14 +50,14 @@ import type {
 import {
   attentionFrom,
   cardsFrom,
-  comparisonRowsFrom,
+  comparisonFrom,
   filterCards,
   overviewFactsFrom,
+  overviewSummaryFrom,
   usageFrom,
   usageShare,
   type WorkspaceCard,
 } from "@/lib/locations/workspace";
-import { formatMeasured } from "@/lib/format/figures";
 
 import {
   AttentionStrip,
@@ -329,7 +329,7 @@ function SavedLocationsWorkspace(): ReactNode {
   const cards = overview ? cardsFrom(overview) : [];
   const shown = filterCards(cards, query);
   const comparison = overview?.comparison ?? null;
-  const rows = overview ? comparisonRowsFrom(cards, overview) : [];
+  const sideBySide = overview ? comparisonFrom(cards, overview) : null;
 
   const open = (card: WorkspaceCard) => {
     const place = (overview?.places ?? []).find((entry) => entry.saved_id === card.savedId);
@@ -394,7 +394,7 @@ function SavedLocationsWorkspace(): ReactNode {
                 saved; use Add location to save somewhere new.
               </p>
             ) : (
-              <ul className={workspace.cards}>
+              <ul className={workspace.cards} data-count={shown.length}>
                 {shown.map((card) => (
                   <PlaceCard
                     card={card}
@@ -419,22 +419,16 @@ function SavedLocationsWorkspace(): ReactNode {
               >
                 <MultiLocationOverview
                   facts={overviewFactsFrom(comparison)}
+                  summary={overviewSummaryFrom(comparison)}
                   single={cards[0] ?? null}
                 />
               </Panel>
 
               <Panel id="locations-comparison" title="Location comparison" icon="compare">
                 <LocationComparison
-                  rows={rows}
-                  spread={
-                    typeof comparison?.temperature_spread === "number"
-                      ? formatMeasured(
-                          comparison.temperature_spread,
-                          comparison.temperature_unit ?? null,
-                        )
-                      : null
-                  }
+                  view={sideBySide}
                   onCompare={() => router.push("/compare")}
+                  onAdd={() => setAdding(true)}
                 />
               </Panel>
             </div>

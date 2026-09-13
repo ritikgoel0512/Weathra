@@ -1197,11 +1197,11 @@ const FIXTURES = {
    */
   "/api/v1/me/locations/overview": {
     summary: {
-      saved_count: 3,
+      saved_count: 4,
       limit: 25,
-      remaining: 22,
-      country_count: 3,
-      timezone_count: 3,
+      remaining: 21,
+      country_count: 4,
+      timezone_count: 4,
     },
     places: [
       {
@@ -1261,6 +1261,41 @@ const FIXTURES = {
         unavailable: null,
       },
       {
+        saved_id: "s-tokyo",
+        location: {
+          display_name: "Tokyo",
+          latitude: 35.6895,
+          longitude: 139.6917,
+          timezone: "Asia/Tokyo",
+          region: "Tokyo",
+          country: "Japan",
+          country_code: "JP",
+        },
+        label: null,
+        is_default: false,
+        watch_count: 0,
+        met_watch_count: 0,
+        conditions: {
+          values: {
+            temperature: 27.4,
+            precipitation: 0,
+            relative_humidity: 58,
+            wind_speed: 9.1,
+            weather_code: 1,
+          },
+          units: {
+            temperature: "°C",
+            precipitation: "mm",
+            relative_humidity: "%",
+            wind_speed: "km/h",
+          },
+          observed_at: "2026-09-13T21:00:00+09:00",
+          provider: "open-meteo",
+          retrieved_at: "2026-09-13T12:05:00Z",
+        },
+        unavailable: null,
+      },
+      {
         saved_id: "s-reykjavik",
         location: {
           display_name: "Reykjavík",
@@ -1280,10 +1315,10 @@ const FIXTURES = {
       },
     ],
     comparison: {
-      compared: 2,
-      warmest: { saved_id: "s-berlin", name: "Berlin", value: 21.1, unit: "°C" },
+      compared: 3,
+      warmest: { saved_id: "s-tokyo", name: "Tokyo", value: 27.4, unit: "°C" },
       coolest: { saved_id: "s-munich", name: "Office", value: 14.8, unit: "°C" },
-      temperature_spread: 6.3,
+      temperature_spread: 12.6,
       temperature_unit: "°C",
       wettest: { saved_id: "s-munich", name: "Office", value: 1.4, unit: "mm" },
       windiest: { saved_id: "s-berlin", name: "Berlin", value: 22.5, unit: "km/h" },

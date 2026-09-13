@@ -313,14 +313,14 @@ describe("Agent Evidence", () => {
 describe("Saved Locations", () => {
   it("labels every input and names every control, populated", async () => {
     const { container } = mount(<SavedLocations />);
-    await screen.findAllByRole("button", { name: "View analytics" });
+    await screen.findAllByRole("button", { name: /^View analytics/ });
     expectAccessible(container);
   });
 
   it("stays accessible while it is asking which place was meant", async () => {
     const person = userEvent.setup();
     const { container } = mount(<SavedLocations />);
-    await screen.findAllByRole("button", { name: "View analytics" });
+    await screen.findAllByRole("button", { name: /^View analytics/ });
 
     // Adding is the header's primary action rather than a form standing open above the weather.
     await person.click(screen.getByRole("button", { name: "Add location" }));
@@ -562,7 +562,7 @@ describe("keyboard-only operation", () => {
 
   it("reaches every control on Saved Locations and Historical Analytics", async () => {
     const saved = mount(<SavedLocations />);
-    await screen.findAllByRole("button", { name: "View analytics" });
+    await screen.findAllByRole("button", { name: /^View analytics/ });
     expectReachableInOrder(saved.container);
     saved.unmount();
 
@@ -608,7 +608,7 @@ describe("keyboard-only operation", () => {
   it("chooses a candidate with Enter, from the keyboard alone", async () => {
     const person = userEvent.setup();
     mount(<SavedLocations />);
-    await screen.findAllByRole("button", { name: "View analytics" });
+    await screen.findAllByRole("button", { name: /^View analytics/ });
 
     await person.click(screen.getByRole("button", { name: "Add location" }));
     await person.type(await screen.findByLabelText("Place"), "Springfield");

@@ -252,7 +252,7 @@ afterEach(() => {
  * primary action is waiting for the readings to have arrived.
  */
 async function placeCards(): Promise<HTMLElement[]> {
-  const actions = await screen.findAllByRole("button", { name: "View analytics" });
+  const actions = await screen.findAllByRole("button", { name: /^View analytics/ });
   return actions.map((action) => {
     const card = action.closest("li");
     if (card === null) throw new Error("a place card's action is not inside its card");
@@ -314,12 +314,15 @@ describe("the workspace", () => {
     expect(within(overview).getByText("2.7 °C")).toBeInTheDocument();
 
     const comparison = await screen.findByRole("region", { name: "Location comparison" });
-    // Warmest first, both temperatures, and the difference between them.
-    const rows = within(comparison).getAllByRole("listitem");
-    expect(rows[0]).toHaveTextContent("Berlin");
-    expect(rows[0]).toHaveTextContent("21.1 °C");
-    expect(rows[1]).toHaveTextContent("London");
-    expect(within(comparison).getByText("Temperature difference")).toBeInTheDocument();
+    // Both places named once, then a row per measure both of them reported — not temperature alone.
+    expect(within(comparison).getByText("London")).toBeInTheDocument();
+    expect(within(comparison).getByText("Berlin")).toBeInTheDocument();
+    for (const measure of ["Temperature", "Precipitation", "Humidity", "Wind"]) {
+      expect(within(comparison).getByText(measure), measure).toBeInTheDocument();
+    }
+    expect(within(comparison).getByText("18.4 °C")).toBeInTheDocument();
+    expect(within(comparison).getByText("21.1 °C")).toBeInTheDocument();
+    expect(within(comparison).getByText("Δ 2.7 °C")).toBeInTheDocument();
   });
 
   it("stays useful with one saved place, and says what a second would add", async () => {
@@ -334,6 +337,7 @@ describe("the workspace", () => {
 
     const comparison = screen.getByRole("region", { name: "Location comparison" });
     expect(within(comparison).getByText(/Save another location to compare/)).toBeInTheDocument();
+    expect(within(comparison).getByRole("button", { name: "Add another location" })).toBeInTheDocument();
     expect(within(comparison).getByRole("button", { name: "Open Compare Cities" })).toBeInTheDocument();
   });
 
