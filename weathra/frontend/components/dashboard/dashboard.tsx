@@ -512,15 +512,37 @@ function Briefing({
         about what the baseline is. Three introductions to one panel; the artifact has one, inside
         the band, beside the plot. The rule is gone and the panel keeps its own heading.
       */}
-      <div className={styles.baselineRow}>
-        {baseline.state.kind === "loading" ? (
-          <LoadingState label="Loading the baseline" lines={3} />
-        ) : baseline.state.kind === "error" ? (
-          <ErrorState failure={baseline.state.failure} onRetry={baseline.retry} />
-        ) : baseline.state.kind === "ready" ? (
-          <HistoricalContext baseline={baseline.state.data} />
-        ) : null}
-      </div>
+      {/*
+        **The baseline is optional, and a failure omits it rather than announcing it.**
+
+        Every other retrieval on this screen answers a question somebody came for: what it is like
+        now, what it will be like, what changed. The baseline answers "and how does that compare to
+        the years behind it" — context on the forecast above it, and a Dashboard without it is a
+        Dashboard, not a broken one.
+
+        It is also the only retrieval here that costs the provider ten requests: one archive call per
+        candidate year (`GET /weather/history/baseline`, ten years by default), against an archive
+        that rate-limits. So it is both the most likely to fail and the least consequential when it
+        does — and it used to close the page with a red panel reading "open-meteo rate-limited the
+        request", which told a person about Weathra's provider arrangements in the place the artifact
+        puts a climate comparison, and made a working screen look broken.
+
+        Omitted, therefore, rather than errored: the band is not rendered at all, so there is no
+        empty frame and no gap where a panel should be. Nothing is invented in its place and nothing
+        is retried — a failure is still a failure, it is still logged by the backend that had it, and
+        `HistoricalContext` still renders the real figures and the years actually used whenever the
+        request succeeds. The strict-equality check on `"ready"` is what makes that true: this omits
+        an *absent* baseline, never a partial one.
+      */}
+      {baseline.state.kind === "error" ? null : (
+        <div className={styles.baselineRow}>
+          {baseline.state.kind === "loading" ? (
+            <LoadingState label="Loading the baseline" lines={3} />
+          ) : baseline.state.kind === "ready" ? (
+            <HistoricalContext baseline={baseline.state.data} />
+          ) : null}
+        </div>
+      )}
 
       {/*
         The rule the artifact closes on. Its own version reads "DATA FLOW: ACTIVE · SYSTEM HASH:

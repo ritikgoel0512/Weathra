@@ -848,10 +848,17 @@ describe("the error state", () => {
 
     renderDashboard();
 
-    // The historical surface reports its own failure; conditions and forecast are unaffected.
+    // The property under test is unchanged: one failing retrieval takes its own card and nothing
+    // else. What changed is what "takes its own card" means for this one — the baseline is the
+    // screen's only optional surface, so it is omitted rather than made to report itself. See "a
+    // baseline the archive would not serve" below.
     expect(await screen.findByRole("region", { name: "Current conditions" })).toBeInTheDocument();
-    expect(await screen.findByText(/No fixture for/, undefined, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Forecast Explorer" })).toBeInTheDocument();
+    await waitFor(
+      () => expect(screen.queryByText(/Loading the baseline/)).toBeNull(),
+      { timeout: 5000 },
+    );
+    expect(screen.queryByRole("region", { name: "Climate Baseline Comparison" })).toBeNull();
   });
 });
 
@@ -1539,5 +1546,112 @@ describe("the place every card is about", () => {
     await screen.findByRole("region", { name: /precipitation outlook/i });
     expect(screen.getAllByText(/Berlin|Unnamed place/).length).toBeGreaterThan(1);
     expect(screen.queryByText("Unnamed place")).toBeNull();
+  });
+});
+
+/**
+ * The baseline is optional, and its failure is not the Dashboard's news — task 34.5's neighbour.
+ *
+ * `GET /weather/history/baseline` costs the provider one archive request per candidate year, ten by
+ * default, against an archive that rate-limits. It is both the likeliest retrieval on this screen to
+ * fail and the least consequential when it does: every other card answers a question somebody came
+ * for, and this one adds context to the forecast above it.
+ *
+ * In production it closed the page with a red panel reading "open-meteo rate-limited the request." —
+ * a sentence about Weathra's provider arrangements, in the place the artifact puts a climate
+ * comparison, on a screen where everything else had worked. The band is now omitted instead.
+ */
+describe("a baseline the archive would not serve", () => {
+  /** Every Dashboard route answers, except the baseline, which fails with *status*. */
+  function baselineFails(status: number, body: unknown) {
+    return vi.fn(async (input: string) => {
+      const path = new URL(input).pathname;
+      if (path === "/api/v1/weather/history/baseline") return jsonResponse(status, body);
+      const answer = (POPULATED as Record<string, unknown>)[path];
+      if (answer === undefined) {
+        return jsonResponse(404, {
+          error: { code: "not_found", message: `No fixture for ${path}`, details: null, request_id: "r" },
+        });
+      }
+      return jsonResponse(200, answer);
+    });
+  }
+
+  const RATE_LIMITED = {
+    error: {
+      code: "provider_rate_limited",
+      message: "open-meteo rate-limited the request.",
+      details: { provider: "open-meteo", status: 429 },
+      request_id: "req-429",
+    },
+  };
+  const INTERNAL = {
+    error: {
+      code: "internal_error",
+      message: "Weathra hit an unexpected internal error.",
+      details: null,
+      request_id: "req-500",
+    },
+  };
+
+  it("renders the band when the archive does serve it", async () => {
+    renderDashboard();
+
+    // The success case is unchanged: real figures, and the years actually used.
+    const historical = await screen.findByRole("region", { name: "Climate Baseline Comparison" });
+    expect(within(historical).getByText(/Based on 5 years of archive observations/)).toBeInTheDocument();
+  });
+
+  it("omits the band on a rate limit, and says nothing about the provider", async () => {
+    fetchMock = baselineFails(429, RATE_LIMITED) as unknown as Mock;
+    renderDashboard();
+
+    // The screen is up: something that does not depend on the baseline has rendered.
+    await screen.findByRole("region", { name: "Forecast Explorer" });
+
+    // A 429 is retried once by the query layer, so the band is still loading for a moment. The
+    // assertion is about where it settles, and no empty frame is left behind when it does.
+    await waitFor(
+      () => expect(screen.queryByText(/Loading the baseline/)).toBeNull(),
+      { timeout: 5000 },
+    );
+    expect(screen.queryByRole("region", { name: "Climate Baseline Comparison" })).toBeNull();
+    expect(screen.queryByText("That request did not complete")).toBeNull();
+    expect(screen.queryByText(/rate-limited the request/i)).toBeNull();
+  });
+
+  it("omits the band on a backend error too, for the same reason", async () => {
+    fetchMock = baselineFails(500, INTERNAL) as unknown as Mock;
+    renderDashboard();
+
+    await screen.findByRole("region", { name: "Forecast Explorer" });
+
+    await waitFor(
+      () => expect(screen.queryByText(/Loading the baseline/)).toBeNull(),
+      { timeout: 5000 },
+    );
+    expect(screen.queryByRole("region", { name: "Climate Baseline Comparison" })).toBeNull();
+    expect(screen.queryByText("That request did not complete")).toBeNull();
+    expect(screen.queryByText(/unexpected internal error/i)).toBeNull();
+  });
+
+  it("leaves every other card exactly as it was", async () => {
+    fetchMock = baselineFails(429, RATE_LIMITED) as unknown as Mock;
+    renderDashboard();
+
+    // The cards that do not depend on the archive all still answer.
+    expect(await screen.findByRole("region", { name: "Forecast Explorer" })).toBeInTheDocument();
+    expect(await screen.findByText("Current conditions")).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "What Changed?" })).toBeInTheDocument();
+
+    // Including the provenance strip the screen closes on, which the band used to sit above.
+    expect(await screen.findByText(/Provider:/)).toBeInTheDocument();
+
+    // And no error panel anywhere on the page, once the retry has settled.
+    await waitFor(
+      () => expect(screen.queryByText(/Loading the baseline/)).toBeNull(),
+      { timeout: 5000 },
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });
