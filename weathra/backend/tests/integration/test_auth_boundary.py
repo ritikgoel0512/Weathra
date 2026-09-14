@@ -89,6 +89,11 @@ PROTECTED_REQUESTS: tuple[tuple[str, str, dict[str, Any]], ...] = (
     ("PUT", "/me/preferences", {"json": {"unit_system": "imperial"}}),
     ("DELETE", "/me/preferences", {}),
     ("GET", "/me/usage", {}),
+    # Choosing a tier is owner-scoped like every line around it: the route takes no subject and
+    # writes the validated token's row. `free` rather than a higher tier on purpose — this suite
+    # asserts a valid token *succeeds*, so the request it sends should not hand the throwaway
+    # principal a larger allowance than the one it started with.
+    ("PUT", "/me/plan", {"json": {"plan_code": "free"}}),
     ("GET", "/me/locations", {}),
     ("GET", "/me/locations/overview", {}),
     ("POST", "/me/locations", {"json": {"location": "Berlin"}}),

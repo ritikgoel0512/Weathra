@@ -598,10 +598,13 @@ async def test_the_suite_can_run_with_enforcement_off(
 
 async def _plan_of(api: ApiHarness, user_id: str) -> str | None:
     async with privileged_session(api.app.state.engines.privileged_sessionmaker) as session:
-        return await session.scalar(
+        # Annotated rather than returned straight through: `scalar` is typed `Any`, and returning it
+        # from a function that promises `str | None` is what `mypy --strict` calls a no-any-return.
+        plan: str | None = await session.scalar(
             text("SELECT plan_code FROM user_plans WHERE user_id = CAST(:u AS uuid)"),
             {"u": user_id},
         )
+        return plan
 
 
 async def test_a_person_can_put_themselves_on_every_tier_and_come_back(
@@ -752,7 +755,10 @@ async def test_choosing_a_tier_changes_only_the_callers_own_plan(
     api_factory: ApiFactory, seeded_reference_data: None
 ) -> None:
     """The route names no subject, so a body that names one is refused by validation rather than
-    obeyed — and the other person's tier is untouched either way."""
+    obeyed — and the other person's tier is untouched either way.
+
+    The refusal is a 400, not FastAPI's 422: `api/errors.py` translates every validation failure
+    into the one error envelope, which is what the rest of this suite asserts too."""
     mine, theirs = new_user_id(), new_user_id()
     async with with_inference(api_factory) as api:  # type: ignore[attr-defined]
         await api.client.put(
@@ -774,7 +780,7 @@ async def test_choosing_a_tier_changes_only_the_callers_own_plan(
         assert await _plan_of(api, theirs) == "pro", "somebody else's tier was changed"
         assert await _plan_of(api, mine) == "premium", "the caller's own tier was not changed"
 
-    assert spoofed.status_code == 422, "an extra body field is refused rather than ignored"
+    assert spoofed.status_code == 400, "an extra body field is refused rather than ignored"
     assert honest.status_code == 200
     assert honest.json()["user_id"] == mine
 
@@ -795,7 +801,7 @@ async def test_an_unknown_tier_is_refused_and_nothing_changes(
             response = await api.client.put(
                 f"{PREFIX}/me/plan", json=body, headers=api.authorize(subject=user_id)
             )
-            assert response.status_code == 422, f"{body} was not refused"
+            assert response.status_code == 400, f"{body} was not refused"
 
         assert await _plan_of(api, user_id) == "pro", "a refused write changed the tier"
 
