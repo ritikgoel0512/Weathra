@@ -105,7 +105,33 @@ function describeViolations(
     .join("\n");
 }
 
+/**
+ * Wait for the document to be settled before auditing it.
+ *
+ * Every rule stays enabled — this suppresses nothing and excludes nothing. It waits for one
+ * precondition that axe assumes and that this suite was not honouring on the interactive states:
+ * that the document it is sampling is not mid-reconciliation.
+ *
+ * Measured on 2026-09-14, because the alternative was guessing. Opening Settings' account
+ * confirmation was reported as a `document-title` violation, with `document.querySelector("title")`
+ * returning `null` at that instant. `app/(app)/settings/page.tsx` does export
+ * `metadata: { title: "Settings" }`, and the page serves `"Settings · Weathra"` — the element is
+ * briefly absent while React reconciles the hoisted head during a client state update, and three
+ * runs of the same sequence reproduced it once. The same confirmation component on the AI
+ * Intelligence tab never reproduced it, and neither did an ordinary select change or a tab switch.
+ * So it is not the dialog, and it is not a page without a title.
+ *
+ * If `/settings` genuinely lost its title this would time out and the test would fail — which is
+ * the property that makes this a precondition rather than a way around the rule.
+ */
 async function audit(page: Page): Promise<string> {
+  await expect
+    .poll(() => page.evaluate(() => document.querySelector("title")?.textContent ?? ""), {
+      timeout: 5_000,
+      message: "the document never settled with a title for axe to audit",
+    })
+    .not.toBe("");
+
   const results = await new AxeBuilder({ page }).withTags(TAGS).analyze();
   return results.violations.length === 0 ? "" : describeViolations(results.violations);
 }

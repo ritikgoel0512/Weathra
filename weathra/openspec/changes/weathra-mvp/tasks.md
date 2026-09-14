@@ -3,16 +3,15 @@
 > **Current state — 2026-09-14.** **Implementation is substantially complete. Remaining open items
 > are operational acceptance/evidence tasks rather than missing product implementation.**
 >
-> 308 numbered tasks: **305 complete, 3 partially complete** (21.8, 34.5, 34.7), none unstarted.
-> Each of the three carries a dated note under its own line stating exactly what is done, what is
-> not, and what the remaining prerequisite is.
+> 308 numbered tasks: **306 complete, 2 partially complete** (34.5, 34.7), none unstarted.
+> Each of the two carries a dated note under its own line stating exactly what is done, what is
+> not, and what the remaining prerequisite is. Both need credentials for a deployed administrative
+> account, and neither is blocked on code.
 >
-> 21.8's acceptance contract was **amended** on 2026-09-14: its three unreproducible human
-> activities were replaced by twelve clauses of automated accessibility, semantic, keyboard,
-> destructive-action and responsive-browser verification. No screen-reader or physical-handset pass
-> is claimed, then or now. It stays open because two of those clauses do not currently pass — see
-> its note. 34.5 and 34.7 need credentials for a deployed administrative account, and neither is
-> blocked on code.
+> 21.8 closed on 2026-09-14 against an **amended** acceptance contract: its three unreproducible
+> human activities were replaced by twelve clauses of automated accessibility, semantic, keyboard,
+> destructive-action and responsive-browser verification, all of which run in CI. No screen-reader
+> or physical-handset pass is claimed, then or now.
 >
 > This note does not relax any requirement. A task is checked only when its stated requirement is
 > genuinely satisfied.
@@ -255,7 +254,7 @@ Completes before substantial frontend implementation in groups 20 and 21. Visily
 - [x] 21.5 Implement Agent Evidence / Activity — the run record showing agents, tool calls and results, analytics methods, cited knowledge, and timings, reachable from an answer and limited to the signed-in person's own runs; verify component tests cover a populated record, an unknown run identifier, and another user's identifier producing the same not-found treatment.
 - [x] 21.6 Implement Saved Locations and Settings — list, add, and remove saved locations; unit system, default horizon, default location, sign-out, session-memory deletion, and account data deletion with confirmation; verify component tests cover saving and removing a location, changing units and seeing later screens reflect it, deleting thread memory with confirmation, and account data deletion with an explicit confirmation step.
 - [x] 21.7 Implement ambiguous-location handling across every location-entry surface, presenting candidates and showing data only after a choice; verify component tests cover an ambiguous entry on the Dashboard and on Compare Cities.
-- [ ] 21.8 Verify accessibility and responsiveness across all MVP screens, authentication and product alike, by reproducible automated verification: (1) automated accessibility assertions; (2) semantic DOM and ARIA verification; (3) automated keyboard traversal of every interactive control; (4) visible keyboard focus; (5) no keyboard traps; (6) correct form, dialog, tab and table semantics; (7) an accessible name on every actionable control, unique wherever one screen offers several of the same kind; (8) safe destructive-action behaviour — a confirmation step before any irreversible write, cancellable by control and by Escape, with focus moved into the confirmation and restored on dismissal; (9) responsive browser verification at 1440, 1024, 768 and 375 pixels; (10) no unintended page-level horizontal overflow at any of those widths; (11) usable dialogs and navigation at every supported width; and (12) a text or semantic equivalent for provenance and for every data visualisation that carries meaning; verify every one of the twelve by an assertion that runs in CI, and record the results with the instrument that produced each.
+- [x] 21.8 Verify accessibility and responsiveness across all MVP screens, authentication and product alike, by reproducible automated verification: (1) automated accessibility assertions; (2) semantic DOM and ARIA verification; (3) automated keyboard traversal of every interactive control; (4) visible keyboard focus; (5) no keyboard traps; (6) correct form, dialog, tab and table semantics; (7) an accessible name on every actionable control, unique wherever one screen offers several of the same kind; (8) safe destructive-action behaviour — a confirmation step before any irreversible write, cancellable by control and by Escape, with focus moved into the confirmation and restored on dismissal; (9) responsive browser verification at 1440, 1024, 768 and 375 pixels; (10) no unintended page-level horizontal overflow at any of those widths; (11) usable dialogs and navigation at every supported width; and (12) a text or semantic equivalent for provenance and for every data visualisation that carries meaning; verify every one of the twelve by an assertion that runs in CI, and record the results with the instrument that produced each.
 
   **The acceptance contract above was amended on 2026-09-14.** It previously required "automated
   accessibility assertions plus a recorded manual pass", and the manual pass was read as three
@@ -276,25 +275,41 @@ Completes before substantial frontend implementation in groups 20 and 21. Visily
   *had* been performed was retracted before this amendment and its results removed; that retraction
   stands and is not what this amendment is about.
 
-  **PARTIALLY COMPLETE (2026-09-14) against the amended contract.** Ten of the twelve clauses are
-  green. Three defects the amendment's own review found were fixed and are held by new tests — the
-  Weather Watch and Saved Locations removals now go through a confirmation (clause 8), and every
-  conversation, watch and saved place names its own destructive control (clause 7). Four further
-  reported items were measured in the browser and are **not** defects: the Travel Intelligence date
-  fields do show the global focus ring, the Dashboard's disabled Show briefing is natively disabled
-  and visually distinct, the composer's UNITS and DEPTH are intentionally read-only, and no "Stop
-  Claude" control exists anywhere in Weathra's source. All of that is recorded in
-  `docs/design/accessibility.md` §9 and §13.
+  **COMPLETE (2026-09-14) against the amended contract.** All twelve clauses are established by
+  assertions that run in CI.
 
-  **What is not green, and it is not this change's doing.** Fixing the browser suite's stale Saved
-  Locations locators — it looked for a `<summary>` disclosure the screen stopped having when it was
-  rebuilt on 2026-09-13, which had been failing every browser test since — unmasked two failures
-  that were behind it: `/settings` reports an axe `document-title` violation in the destructive
-  confirmation state, and the Account tab does not take `aria-selected` when driven from the
-  keyboard. The first is clause 2 and the second is clause 6. Neither touches the confirmation
-  component this change added; both are in surfaces this change did not modify. They are the
-  remaining blockers, and 21.8 stays open until they are fixed and the browser suite is green on
-  both engines.
+  **Three defects found and fixed.** The Weather Watch and Saved Locations removals each destroyed a
+  record on one press with no undo behind it; both now go through the confirmation the product
+  already had, which moved to `components/ui/confirm-action.tsx` and gained Escape-to-cancel, focus
+  moved into the panel and restored to the trigger, and an `alertdialog` role named by its question
+  (clause 8). Every conversation, watch and saved place now names its own destructive control,
+  replacing lists of identically named "Delete" and "Remove" buttons (clause 7).
+
+  **Four reported items measured and found not to be defects.** The Travel Intelligence date fields
+  do paint the global focus ring — `outline: solid 2px rgb(34, 211, 238)`, both engines, with the
+  browser reporting `:focus-visible`. The Dashboard's disabled Show briefing is natively `disabled`
+  with no `aria-disabled` beside it, is not reachable by `Tab`, and is visually distinct from its
+  enabled self. The composer's UNITS and DEPTH are intentionally read-only and are now guarded
+  against becoming focusable. No "Stop Claude" control exists anywhere in Weathra's source, and no
+  product code was changed for it. All four are recorded with their measurements in
+  `docs/design/accessibility.md` §13.
+
+  **Two test defects found and corrected, both predating this work.** The browser suite had been
+  failing 51 tests since the Saved Locations rebuild of 2026-09-13: it looked for a `<summary>`
+  disclosure the screen stopped having when the add form became a panel behind a control. Behind
+  that wall sat two more. The Settings tablist test asserted that one ArrowRight from General
+  selected Account, which stopped being true when AI Intelligence was added between them — the
+  tablist was correct and the expectation was stale; the walk now asserts both hops and the roving
+  tab index. And the interactive-state axe audits sampled the document mid-reconciliation: opening
+  the account confirmation intermittently found no `<title>` element, though `/settings` exports
+  `metadata: { title: "Settings" }` and serves `"Settings · Weathra"` — reproduced once in three
+  runs of the same sequence, never on the same component elsewhere. Every axe rule stays enabled;
+  the audit now waits for a settled document first, which still fails if a title is genuinely
+  missing.
+
+  **Not claimed.** No screen-reader session and no physical-handset pass was performed, then or
+  now. Field testing with real assistive technology on real devices remains worth doing as product
+  QA and is not a condition of this task.
 - [x] 21.9 Verify every implemented screen against its approved Visily artifact and record any deliberate divergence with its reason; verify the review covers all fifteen MVP screens and is recorded in `docs/design/`.
 - [x] 21.10 Implement the Playwright flows — sign up through verification into the product; ask a question then open its evidence; save a location then see the unit preference applied; and an expired session routed to sign-in; verify all four pass against a backend running with a fake inference provider.
 - [x] 21.11 Audit all eight approved screens against the running application in the states people actually meet — populated, empty, loading, error and unauthenticated — classifying every difference, correcting the mechanical ones and redesigning the surfaces whose character had drifted without losing grounding, provenance, uncertainty or evidence; verify the audit, its fixes and what it deliberately left are recorded in `docs/design/runtime-fidelity-audit.md`.

@@ -1,11 +1,10 @@
 # Accessibility and responsiveness audit — task 21.8
 
-**Status: ten of the twelve clauses of the acceptance contract as amended on 2026-09-14 are
-established by assertions that run in continuous integration and are reproducible with the commands
-in §11. Two are not yet green**, and both are recorded in §14 rather than glossed: an axe
-`document-title` violation on `/settings` in its destructive-confirmation state (clause 2), and the
-Account tab not taking `aria-selected` when driven from the keyboard (clause 6). Task 21.8 stays
-open on those two.
+**Status: complete against the acceptance contract as amended on 2026-09-14.** All twelve clauses
+are established by assertions that run in continuous integration and are reproducible with the
+commands in §11. §14 records the two failures that closing it turned up and what each turned out
+to be — both were defects in the tests rather than in the product, and neither was found by
+assuming so.
 
 Task 21.8 previously asked for "automated accessibility assertions **plus** a recorded manual pass",
 and the second of those was read as three human activities — a real screen-reader session, a
@@ -415,23 +414,51 @@ and by `components/analyst/analyst.test.tsx`.
 | The composer's UNITS and DEPTH read as controls that do nothing | **Not a defect — intentional** | Both are `<span>` pairs containing no focusable element. Units reports the run's resolution or the stored preference; DEPTH states "Full synthesis", the one behaviour there is, because `specs/model-policy` keeps model behaviour out of the caller's hands. FOCUS beside them genuinely is a control, which is the contrast the artifact's row obscures. Guarded by a test that fails if either becomes focusable. |
 | An invisible but focusable "Stop Claude" control | **Not Weathra** | Searched for as a literal string across the whole repository, as any Claude or Anthropic string in shipped frontend source, and as any hidden cancellation control: no match on any of the three. The frontend contains no vendor name at all, which is an architecture rule (`design.md` decision 1) with its own test. The single `AbortController` in shipped source cancels an image fetch on unmount and is not a control. The observation could not be reproduced or located in Weathra source and appears attributable to the browser or AI testing environment; it is excluded from Weathra's 21.8 defect set, and no product code was changed for it. |
 
-## 14. The two clauses that are not green
+## 14. The two failures behind the stale locators, and what they were
 
 Fixing the browser suite's stale Saved Locations locators is what made these visible. The suite had
 been looking for a `<summary>` disclosure headed "Add a location"; the screen was rebuilt on
 2026-09-13 so that the add form is a panel the header's "Add location" control reveals, and the
 `<summary>` is not in the document until that control has been pressed. Every browser test that
 loaded Saved Locations, and every one that used it as a marker, had been failing since — 51 of them
-— and two real failures were sitting behind that wall.
+— and two more failures were sitting behind that wall. Both turned out to be defects in the tests.
+Neither was assumed to be: each was reproduced and measured first.
 
-| Clause | Failure | Where |
-|---|---|---|
-| 2 — semantic DOM and ARIA verification | axe `document-title` (serious): "Documents must have `<title>` element to aid in navigation", reported against `html` while `/settings` shows its destructive confirmation. `app/(app)/settings/page.tsx` does export `metadata: { title: "Settings" }`, so what empties it in this state is the thing to find. | `tests/e2e/axe.spec.ts` — "the destructive confirmation has no violations" |
-| 6 — correct form, dialog, tab and table semantics | The Account tab does not take `aria-selected="true"` when the tab list is driven from the keyboard; it stays `false` with `tabindex="-1"`. | `tests/e2e/accessibility.spec.ts` — "operates the destructive confirmation in Settings from the keyboard" |
+**The Settings tablist — a stale expectation, not an ARIA bug.** The keyboard test asserted that one
+`ArrowRight` from General selected Account. That was true when it was written; `components/settings/
+settings.tsx` now orders the tabs General, AI Intelligence, Account, Transparency, so Account is the
+second stop. `components/ui/tabs.tsx` was doing exactly what the pattern requires — moving one
+selectable tab at a time, moving focus with the selection, and keeping the roving tab index. The
+walk now asserts both hops, that focus follows each one, that the selected tab carries
+`tabindex="0"` and the one it left carries `-1`, and that the tab it left reports
+`aria-selected="false"`. That is more of the tablist contract than the single assertion covered, and
+no component changed.
 
-Neither is in the confirmation component the 2026-09-14 pass added, and neither is in a surface that
-pass modified — the first is the document's own title and the second is the shared `Tabs` primitive.
-They are recorded here as open, and task 21.8 is open on them.
+**The axe `document-title` violation — a document sampled mid-reconciliation.** Opening the account
+confirmation was reported as a serious `document-title` violation, with
+`document.querySelector("title")` returning `null` at that instant. Measured rather than guessed:
+
+| Step | `<title>` |
+|---|---|
+| `/sign-in` | `"Sign in · Weathra"` |
+| after sign-in, on `/` | `"Dashboard · Weathra"` |
+| `/settings` loaded | `"Settings · Weathra"` |
+| after the Account tab | `"Settings · Weathra"` |
+| account confirmation open | **`null`** — once in three runs of the identical sequence |
+
+`app/(app)/settings/page.tsx` exports `metadata: { title: "Settings" }` and the root layout frames
+it as `%s · Weathra`, so the page has a title and serves it. The same confirmation component on the
+AI Intelligence tab never reproduced it; neither did a select change nor a tab switch; and two
+further runs of the exact failing sequence, one of them polling for four seconds afterwards, kept
+the title throughout. What is left is React reconciling the hoisted head during a client state
+update, briefly between removing and re-adding the element — not a dialog that invalidates the
+document, and not a page without a title.
+
+The fix is a precondition on the audit, not a change to what is audited: every axe rule stays
+enabled and nothing is excluded, and `audit()` now waits for the document to settle with a title
+before analysing. If `/settings` ever genuinely lost its title, that wait times out and the test
+fails — which is what makes it a precondition rather than a way around the rule. The intermittent
+head reconciliation is recorded here because it is real, brief, and worth knowing about.
 
 One further note, because it cost a re-run: the Dashboard's 360-pixel overflow check failed once
 with a 4-pixel document overflow naming `LocationImage`'s own boxes at 920 pixels, and passed on

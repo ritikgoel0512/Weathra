@@ -839,10 +839,29 @@ test.describe("keyboard operation and visible focus", () => {
     await signIn(page);
     await page.goto("/settings");
 
-    // Tabs move with the arrow keys, as a tablist must.
+    /*
+      Tabs move with the arrow keys, as a tablist must — one tab at a time.
+
+      This asserted that one ArrowRight from General selected Account, which was true when Settings
+      had the tabs it had when this was written. AI Intelligence now sits between them
+      (`components/settings/settings.tsx`), so Account is the second stop, and the walk below says
+      so rather than skipping to the end. Both hops are asserted, which also holds the roving tab
+      index: the selected tab is the only one in the tab order.
+    */
     await page.getByRole("tab", { name: "General" }).focus();
+
     await page.keyboard.press("ArrowRight");
-    await expect(page.getByRole("tab", { name: "Account" })).toHaveAttribute("aria-selected", "true");
+    const intelligence = page.getByRole("tab", { name: "AI Intelligence" });
+    await expect(intelligence).toHaveAttribute("aria-selected", "true");
+    await expect(intelligence).toBeFocused();
+    await expect(page.getByRole("tab", { name: "General" })).toHaveAttribute("tabindex", "-1");
+
+    await page.keyboard.press("ArrowRight");
+    const account = page.getByRole("tab", { name: "Account" });
+    await expect(account).toHaveAttribute("aria-selected", "true");
+    await expect(account).toBeFocused();
+    await expect(account).toHaveAttribute("tabindex", "0");
+    await expect(intelligence).toHaveAttribute("aria-selected", "false");
 
     await page.getByRole("button", { name: "Delete my Weathra data" }).click();
     const confirmation = page.getByRole("alertdialog", {
