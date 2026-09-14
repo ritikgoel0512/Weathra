@@ -35,7 +35,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from weathra.api.dependencies import Inference, Places, Quota, Tools, engines_of
 from weathra.api.middleware import annotate
-from weathra.api.routers.admin.deps import AdministrativeSession
+from weathra.api.routers.admin.deps import AdministrativeReadSession, AdministrativeSession
 from weathra.auth.deps import AdministrativePrincipal
 from weathra.auth.profiles import ensure_profile
 from weathra.auth.rls import session_for
@@ -242,7 +242,7 @@ async def start_comparison(
 async def list_comparisons(
     request: Request,
     principal: AdministrativePrincipal,
-    session: AdministrativeSession,
+    session: AdministrativeReadSession,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> LabRunListResponse:
     annotate(request, acting_user_id=principal.user_id)
@@ -259,7 +259,7 @@ async def read_comparison(
     request: Request,
     run_id: RunId,
     principal: AdministrativePrincipal,
-    session: AdministrativeSession,
+    session: AdministrativeReadSession,
 ) -> LabRunResponse:
     """One run's results, readable after a compared model has been disabled.
 

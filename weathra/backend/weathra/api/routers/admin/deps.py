@@ -15,9 +15,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from weathra.api.dependencies import engines_of
 from weathra.auth.deps import AdministrativePrincipal
-from weathra.auth.rls import administrative_session
+from weathra.auth.rls import administrative_session, session_for
 
-__all__ = ["AdministrativeSession", "administrative_db"]
+__all__ = [
+    "AdministrativeReadSession",
+    "AdministrativeSession",
+    "administrative_db",
+    "administrative_read_db",
+]
 
 
 async def administrative_db(
@@ -43,3 +48,42 @@ async def administrative_db(
 
 
 AdministrativeSession = Annotated[AsyncSession, Depends(administrative_db)]
+
+
+async def administrative_read_db(
+    request: Request,
+    principal: AdministrativePrincipal,
+) -> AsyncIterator[AsyncSession]:
+    """The ordinary request connection, acting as the administrator, for administrative *reads*.
+
+    **Why a second session exists at all.** ``administrative_db`` above opens the privileged
+    connection, and the request-serving container is deliberately never given that credential:
+    ``tests/test_secret_storage.py::test_the_render_service_never_holds_the_privileged_database_url``
+    asserts it and explains that migrations run from GitHub Actions precisely so the browser-facing
+    container never holds a connection that bypasses Row Level Security. Every administrative read
+    therefore returned 500 in production — ``resolve_url`` raising ``DATABASE_URL_PRIVILEGED is not
+    configured`` inside the dependency, after authorization had already succeeded, which is why the
+    screen saw no 403 and no route ever ran. The ``db`` suite could not catch it because it runs
+    where both credentials exist.
+
+    **What this does instead.** The same session every other handler uses: the restricted role, with
+    the acting principal's validated claims bound, so Row Level Security applies to it exactly as it
+    applies to anybody. ``0016`` is what makes the administrative rows reachable through it, and it
+    reaches them through ``weathra_is_administrative()`` — a ``SECURITY DEFINER`` predicate over
+    ``admin_roles`` that ``0011`` already built, and that no claim, header or body field can
+    satisfy.
+    So the authorization is asserted twice over the same state: once by ``AdministrativePrincipal``,
+    which produces the 401 and the 403, and once by the database, which produces no rows. A handler
+    bug that forgot the dependency would read nothing rather than everything.
+
+    **Reads only, and that is enforced below the code.** ``0016`` grants the restricted role
+    ``SELECT`` and nothing else, so an administrative *write* attempted on this session is
+    refused by PostgreSQL rather than by a convention. Every mutation keeps
+    ``AdministrativeSession`` and the privileged connection, which is to say it keeps running
+    somewhere other than this container.
+    """
+    async with session_for(engines_of(request), principal) as session:
+        yield session
+
+
+AdministrativeReadSession = Annotated[AsyncSession, Depends(administrative_read_db)]

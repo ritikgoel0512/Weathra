@@ -29,7 +29,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 
 from weathra.api.middleware import annotate
-from weathra.api.routers.admin.deps import AdministrativeSession
+from weathra.api.routers.admin.deps import AdministrativeReadSession, AdministrativeSession
 from weathra.auth.deps import AdministrativePrincipal
 from weathra.auth.roles import ADMINISTRATOR_ROLE, RoleStore
 from weathra.domain.entitlements import PlanCode
@@ -147,7 +147,7 @@ class RoleListResponse(BaseModel):
 async def list_plans(
     request: Request,
     principal: AdministrativePrincipal,
-    session: AdministrativeSession,
+    session: AdministrativeReadSession,
 ) -> PlanListResponse:
     annotate(request, acting_user_id=principal.user_id)
     plans = await PlanStore(session).list()
@@ -158,7 +158,7 @@ async def list_plans(
 async def list_allowances(
     request: Request,
     principal: AdministrativePrincipal,
-    session: AdministrativeSession,
+    session: AdministrativeReadSession,
     plan_code: Annotated[PlanCode | None, Query(description="Narrow to one plan.")] = None,
     internal: Annotated[bool, Query(description="The internal allowance only.")] = False,
 ) -> AllowanceListResponse:
@@ -315,13 +315,16 @@ async def list_principals(
 async def list_administrators(
     request: Request,
     principal: AdministrativePrincipal,
-    session: AdministrativeSession,
+    session: AdministrativeReadSession,
 ) -> RoleListResponse:
     """Who holds the administrative role, and who granted it to them.
 
-    Privileged, and only reachable here: the owner policy on `admin_roles` returns a request
-    session exactly its own row, so this list cannot be assembled from the request path however
-    the query is written.
+    Reachable from the request path since `0016`. The owner policy on `admin_roles` returns a
+    request session exactly its own row, which is why this used to need the privileged connection;
+    `admin_roles_admin_read` adds a second policy beside it, gated on `weathra_is_administrative()`,
+    so an administrator — and only an administrator — sees the whole table. `0011` noted that its
+    owner policy meant the predicate could not be used to enumerate administrators; this endpoint
+    is the product asking for exactly that, for exactly them.
     """
     annotate(request, acting_user_id=principal.user_id)
     grants = await RoleStore(session).holders(ADMINISTRATOR_ROLE)

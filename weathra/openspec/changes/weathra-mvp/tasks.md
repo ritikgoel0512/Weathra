@@ -503,12 +503,62 @@ written to fail then.
   a principal without the role is still 403, and every administrative read and write still takes
   `AdministrativePrincipal` and the privileged session behind it.
 
-  **What the retest is for.** *Why* those two reads raise a 500 in production is **not established**
-  — it needs the failure's own request id against the deployed logs, or an authenticated
-  administrative session, and neither exists here. The fix is what makes that diagnosable: the panel
-  will now show the backend's own `internal_error` envelope and its request id instead of a network
-  error. So the deployed pair must be redeployed and retested by a real administrator before this
-  task can close, and the promotion half above still needs the same credential it always did.
+  **The 500 itself was found and fixed on 2026-09-14, and it was not those two reads.** With the
+  CORS defect gone the browser could finally read the responses, and **every** administrative
+  endpoint was returning 500 for an authenticated administrator — `/admin/policies`,
+  `/admin/lab/comparisons`, `/admin/models`, `/admin/usage`, `/admin/usage/series`, `/admin/plans`
+  and `/admin/principals` — with no 401 and no 403, while ordinary authenticated routes answered in
+  the same session. One dependency was common to all seven. `administrative_db` opens the
+  **privileged** connection, and the request-serving container is deliberately never given that
+  credential: `tests/test_secret_storage.py::test_the_render_service_never_holds_the_privileged_database_url`
+  asserts it and explains that migrations run from GitHub Actions precisely so the browser-facing
+  container never holds a connection that bypasses Row Level Security. So `resolve_url` raised
+  `DATABASE_URL_PRIVILEGED is not configured` inside the dependency, after authorization had already
+  succeeded — which is exactly why there was no 403 and no handler ever ran. Reproduced against the
+  real application under production-shaped settings; the traceback runs
+  `deps.administrative_db` → `rls.administrative_session` → `engine.privileged` → `urls.resolve_url`.
+  Nothing caught it because `test_admin_api.py` is `db`-marked and a `db` run has both credentials.
+
+  **Fixed by `0016_admin_read_policies`, which keeps the invariant rather than reversing it.**
+  Adding the variable to the web service was the obvious repair and is the one that test exists to
+  refuse. Instead the administrative **reads** move onto the ordinary request connection, and the
+  rows they need become reachable there behind `weathra_is_administrative()` — the `SECURITY
+  DEFINER` predicate over `admin_roles` that `0011` already built, which reads backend state and
+  which no claim, header or body field can satisfy. Verified directly against PostgreSQL: an
+  administrator reads the lab tables, an authenticated non-administrator reads none of them, a
+  session asserting `weathra_role: administrator` in its claims reads none of them, and an
+  unauthenticated session reads none of them. `SELECT` is the only grant, so an administrator
+  attempting a write on that session is refused by PostgreSQL rather than by convention — checked,
+  and it is. Every mutation keeps the privileged connection and therefore keeps running somewhere
+  other than this container. Upgrade and downgrade both verified, the downgrade restoring `0007`'s
+  "nothing, stated twice" and leaving the three ownership policies untouched.
+
+  **Four of the seven are fixed, and three are not, for a stated reason.** `/admin/policies`,
+  `/admin/models`, `/admin/plans` and `/admin/lab/comparisons` read operational tables and now work
+  on the request connection, as do `/admin/policies/{policy_id}/audit` and
+  `/admin/principals/administrators` — which together are exactly task 34.5's evidence surface.
+  `/admin/usage`, `/admin/usage/series` and `/admin/principals` read **across people**
+  (`llm_usage_events`, `profiles`, `user_plans`), and an administrative read policy on a user-owned
+  table would grant an administrator access to another person's data. `specs/authentication` forbids
+  that and `tests/integration/test_saas_rls.py::test_a_new_user_owned_table_carries_an_owner_policy`
+  refuses it outright — it caught the first version of this migration doing exactly that, and the
+  policies were removed. Those three keep the privileged connection and still fail in the container;
+  the fix for them is a design decision (an aggregate returning measures and no rows would satisfy
+  both rules) and is deliberately not made here. `tests/test_admin_read_connection.py` asserts the
+  split in both directions, with no database, so neither half can drift.
+
+  **The frontend no longer draws a failed read as an answer.** The KPI row rendered `—` and "Not
+  reported" for a backend answering 500, which reads as an estate with no traffic, and the usage
+  trend rendered nothing at all. Both now show the backend's own safe message, its request id and a
+  working retry, while a 403 still shows "Not permitted" with no invitation to retry.
+
+  **What the retest is for.** This needs a deployment: `0016` must be applied to the production
+  database and the new backend released. After that, an authenticated administrator loading
+  `/admin/model-usage` should see the policy and comparison panels answer with real data, and the
+  three cross-person panels report a readable error rather than an unreachable backend. The
+  promotion half is unchanged and still needs a credential for the administrative principal.
+
+  
 - [x] 34.6 Extend the traceability table in `docs/architecture.md` to cover `model-policy`, `model-catalog`, `llm-telemetry`, `usage-limits`, and `model-lab`; verify every requirement in those five specs maps to at least one test.
 - [x] 34.8 Implement the administrative model policy confirmation surface `specs/web-ui` requires — on the administrative route, reachable only by a principal the backend confirms holds the role, presenting each policy's ordered candidate list with the evaluation the backend recorded per candidate, an unevidenced candidate marked unevidenced rather than failed, the comparison runs available as evidence, and one audited write that submits the candidate list citing the runs relied upon, with the recorded result read back from the audit trail rather than assumed; add the smallest backend read that exposes one policy's audit trail, and keep the screen's unbuilt panels stating that they are unbuilt and fetching nothing; verify a non-administrator is shown a not-permitted state with nothing behind it, that the write sends the stored order and the selected run and nothing else, that a promotion-gate refusal is shown as itself, and that no credential is displayed or read outside the API client.
 - [x] 34.9 Report the acting principal's administrative capability on the authenticated account contract, read from the same `admin_roles` state every administrative capability checks and answering only for the validated token subject, and offer an Admin section in the navigation to a principal the backend confirms holds the role — naming only administrative surfaces that are implemented, defaulting to offering nothing where the capability is unknown, and never inferring it from an address, an identifier list, a configuration value or a stored flag; verify an ordinary person is offered nothing, an administrator is offered a real link to the route, a token asserting the role changes nothing, and the route still refuses a principal without it.

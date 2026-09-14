@@ -1174,16 +1174,21 @@ async def test_a_write_that_fails_after_its_audit_row_leaves_neither_behind(
 
         catalog_module.CatalogStore.edit = explode  # type: ignore[method-assign]
         try:
-            # The failure propagates rather than becoming a 500 here: Starlette's server-error
-            # middleware re-raises after handling, and `ASGITransport` runs the app in-process
-            # with nothing above it to swallow that. The status a real caller sees is covered by
-            # `test_api.py`'s handler tests; what this one is about is the two rows.
-            with pytest.raises(RuntimeError, match="connection dropped"):
-                await api.client.patch(
-                    f"{PREFIX}/admin/models/standard-general",
-                    json={"display_name": "Renamed then lost"},
-                    headers=api.authorize(subject=admin),
-                )
+            # The failure becomes the error envelope rather than propagating. It used to escape,
+            # because Starlette's server-error middleware re-raises after handling and
+            # `ASGITransport` runs the app in-process with nothing above it to swallow that; since
+            # task 34.5, `UnhandledErrorMiddleware` answers first — inside CORS, so a browser can
+            # actually read the 500 rather than seeing a blocked response and reporting an
+            # unreachable backend. What this test is about is the two rows, and that is unchanged.
+            failed = await api.client.patch(
+                f"{PREFIX}/admin/models/standard-general",
+                json={"display_name": "Renamed then lost"},
+                headers=api.authorize(subject=admin),
+            )
+            assert failed.status_code == 500
+            assert failed.json()["error"]["code"] == "internal_error"
+            # Nothing of the exception reaches the caller.
+            assert "connection dropped" not in failed.text
         finally:
             catalog_module.CatalogStore.edit = original  # type: ignore[method-assign]
 

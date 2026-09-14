@@ -49,6 +49,11 @@ EXPECTED_CHAIN = (
     # owner-scoped INSERT and UPDATE on `user_plans` — the grant `0006` deliberately withheld while
     # a tier was an administrative assignment. Additive, and the `WITH CHECK` is what keeps it safe.
     "0015_user_plan_self_selection",
+    # Task 34.5. Administrative reads move off the privileged connection, which the request-serving
+    # container is deliberately never given, onto the ordinary request connection — so the rows they
+    # need become reachable there behind `weathra_is_administrative()`, and only there. `SELECT`
+    # only: every administrative write stays privileged, and `admin_roles` gains no write at all.
+    "0016_admin_read_policies",
 )
 
 # The two roles migrations may name, and what each is for. `0002` creates the assumed role and

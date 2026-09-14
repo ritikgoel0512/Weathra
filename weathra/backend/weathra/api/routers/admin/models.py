@@ -25,7 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from weathra.api.dependencies import Inference
 from weathra.api.middleware import annotate
-from weathra.api.routers.admin.deps import AdministrativeSession
+from weathra.api.routers.admin.deps import AdministrativeReadSession, AdministrativeSession
 from weathra.auth.deps import AdministrativePrincipal
 from weathra.domain.entitlements import CallRole, PlanCode
 from weathra.domain.errors import ValidationFailed
@@ -234,7 +234,7 @@ class PolicyAuditResponse(BaseModel):
 async def list_catalog(
     request: Request,
     principal: AdministrativePrincipal,
-    session: AdministrativeSession,
+    session: AdministrativeReadSession,
     status: Annotated[CatalogStatus | None, Query(description="Narrow by status.")] = None,
     capability_role: Annotated[
         CallRole | None, Query(description="Narrow to entries fit for one call role.")
@@ -344,7 +344,7 @@ async def disable_catalog_entry(
 async def list_policies(
     request: Request,
     principal: AdministrativePrincipal,
-    session: AdministrativeSession,
+    session: AdministrativeReadSession,
 ) -> PolicyListResponse:
     annotate(request, acting_user_id=principal.user_id)
     policies = await PolicyStore(session).list()
@@ -360,7 +360,7 @@ async def read_policy_audit(
     request: Request,
     policy_id: PolicyIdentifier,
     principal: AdministrativePrincipal,
-    session: AdministrativeSession,
+    session: AdministrativeReadSession,
     limit: Annotated[int, Query(ge=1, le=100, description="Newest first.")] = 20,
 ) -> PolicyAuditResponse:
     """What has been done to one policy, newest first, with the comparison runs each change cited.
