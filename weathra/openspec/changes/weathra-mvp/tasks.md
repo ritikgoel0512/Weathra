@@ -1,5 +1,17 @@
 # Part A — MVP / capstone implementation
 
+> **Current state — 2026-09-14.** **Implementation is substantially complete. Remaining open items
+> are operational acceptance/evidence tasks rather than missing product implementation.**
+>
+> 308 numbered tasks: **305 complete, 3 partially complete** (21.8, 34.5, 34.7), none unstarted.
+> Each of the three carries a dated note under its own line stating exactly what is done, what is
+> not, and what the remaining prerequisite is. All three need something this development environment
+> cannot supply — a person with real assistive technology and a physical handset, or credentials for
+> a deployed administrative account. None of them is blocked on code.
+>
+> This note does not relax any requirement. A task is checked only when its stated requirement is
+> genuinely satisfied.
+
 Tracked work for this change. Ordered by dependency: foundation and identity first, then the data and analytics spine, then the tool boundary, then orchestration, then the API, then design, then the frontend, then evaluation and delivery.
 
 Authentication lands early (group 4) because memory, the API, the graph, and every frontend screen depend on having a validated principal to scope against. The Visily design phase (group 19) completes before substantial frontend implementation begins, seeded by the design direction already approved during the earlier UXPilot exploration rather than starting from nothing.
@@ -239,6 +251,8 @@ Completes before substantial frontend implementation in groups 20 and 21. Visily
 - [x] 21.6 Implement Saved Locations and Settings — list, add, and remove saved locations; unit system, default horizon, default location, sign-out, session-memory deletion, and account data deletion with confirmation; verify component tests cover saving and removing a location, changing units and seeing later screens reflect it, deleting thread memory with confirmation, and account data deletion with an explicit confirmation step.
 - [x] 21.7 Implement ambiguous-location handling across every location-entry surface, presenting candidates and showing data only after a choice; verify component tests cover an ambiguous entry on the Dashboard and on Compare Cities.
 - [ ] 21.8 Verify accessibility and responsiveness across all MVP screens, authentication and product alike — keyboard-only operation of every action, labelled inputs, accessible control names, 4.5:1 body-text contrast in both appearances, usability at a 360-pixel viewport with no horizontal page scroll, and wide content scrolling in its own container; verify with automated accessibility assertions plus a recorded manual pass.
+
+  **PARTIALLY COMPLETE (2026-09-14).** The automated half is done and green on two engines — reachability, tab order as document order, no traps, focus rings, 4.5:1 contrast in both appearances, 360-pixel fit with no horizontal page scroll, and WCAG 2.0/2.1 A and AA and 2.2 AA by rule — recorded in `docs/design/accessibility.md`, with 59 assertions in the Vitest suites plus 25 Playwright cases re-run on every push. What remains is the half no instrument can judge, and it is recorded openly in `docs/design/accessibility-manual-pass.md` §5: **the screen-reader pass has not been performed** (an earlier claim that it had was retracted and the false results removed), **the keyboard walkthrough covers the authentication screens only**, and **no physical handset pass has been done**. These need a person at a real device with real assistive technology. Browser emulation does not satisfy the handset requirement and is not offered as though it does.
 - [x] 21.9 Verify every implemented screen against its approved Visily artifact and record any deliberate divergence with its reason; verify the review covers all fifteen MVP screens and is recorded in `docs/design/`.
 - [x] 21.10 Implement the Playwright flows — sign up through verification into the product; ask a question then open its evidence; save a location then see the unit preference applied; and an expired session routed to sign-in; verify all four pass against a backend running with a fake inference provider.
 - [x] 21.11 Audit all eight approved screens against the running application in the states people actually meet — populated, empty, loading, error and unauthenticated — classifying every difference, correcting the mechanical ones and redesigning the surfaces whose character had drifted without losing grounding, provenance, uncertainty or evidence; verify the audit, its fixes and what it deliberately left are recorded in `docs/design/runtime-fidelity-audit.md`.
@@ -408,6 +422,8 @@ written to fail then.
 - [x] 34.3 Extend `docs/privacy-ethics.md` with the telemetry stance — metadata only, no prompt or completion text, owner-scoped events, aggregates that disclose no content, the retention window, and what account deletion removes — and `docs/authentication.md` with the administrative role and the SaaS-ready table classification; verify both documents match the implemented behavior and the RLS classification actually applied by migration.
 - [x] 34.4 Extend `docs/evaluation.md` with the model-comparison methodology — the five selection criteria and how each is measured, what is pinned across candidates, why numerical accuracy is model-independent, and the rule that reliability and groundedness cannot be traded away for cost or latency; verify the document states each criterion's measurement definition and how to run a comparison.
 - [ ] 34.5 Execute the first model comparison across the seeded catalog candidates, record its results, and seed or reorder the policy candidate lists from the recorded evidence with the promotion audited against the cited runs; verify the comparison record exists with all five criteria per candidate, the resulting policy state cites it, and `docs/evaluation.md` records the outcome honestly including any candidate that failed a criterion.
+
+  **PARTIALLY COMPLETE (2026-09-14).** The comparison half is **done, twice, and now leaves no candidate unmeasured.** Run `9b5849dd-b798-4dc8-b04f-a8e6c0874e1a` (2026-09-10) evidenced `economy-free-primary` 5/5 with both gates passed, while `economy-free-secondary` was refused HTTP 429 at the pre-flight on all three retries and recorded `unevidenced: no_case_scored`. Run `c1e8768f-e2a8-4c32-a065-df1a5ea8f2c4` (2026-09-14, status `completed`) re-ran the same five cases of dataset `1.0.0` under the same pinned conditions and **both** candidates scored 5/5 and passed both gating criteria, with an empty `unevidenced` map. Both runs and all five criteria per candidate are recorded in `docs/evaluation.md`, including the finding that the two gating criteria tie at 1.0 and latency — not a gate — is the only discriminator, favouring the secondary. **What remains is the promotion half**: seeding or reordering the policy candidate lists from that evidence through `PUT /api/v1/admin/policies/{policy_id}/candidates`, with the `admin_audit` row citing run `c1e8768f`. That needs an authenticated session for the administrative principal. One is properly granted (subject `e7b66ef2-5bc6-4100-92cf-7c27cecdf63e`, carrying a `role_grant` audit row from the documented bootstrap) but **no credential for it exists in the development environment**, and the evaluation harness's own fixture principal must not be substituted — `_ensure_role_row` grants it unaudited and with no `granted_by`, so using it would let the lab authorise its own promotion, which `specs/model-lab` refuses.
 - [x] 34.6 Extend the traceability table in `docs/architecture.md` to cover `model-policy`, `model-catalog`, `llm-telemetry`, `usage-limits`, and `model-lab`; verify every requirement in those five specs maps to at least one test.
 - [x] 34.8 Implement the administrative model policy confirmation surface `specs/web-ui` requires — on the administrative route, reachable only by a principal the backend confirms holds the role, presenting each policy's ordered candidate list with the evaluation the backend recorded per candidate, an unevidenced candidate marked unevidenced rather than failed, the comparison runs available as evidence, and one audited write that submits the candidate list citing the runs relied upon, with the recorded result read back from the audit trail rather than assumed; add the smallest backend read that exposes one policy's audit trail, and keep the screen's unbuilt panels stating that they are unbuilt and fetching nothing; verify a non-administrator is shown a not-permitted state with nothing behind it, that the write sends the stored order and the selected run and nothing else, that a promotion-gate refusal is shown as itself, and that no credential is displayed or read outside the API client.
 - [x] 34.9 Report the acting principal's administrative capability on the authenticated account contract, read from the same `admin_roles` state every administrative capability checks and answering only for the validated token subject, and offer an Admin section in the navigation to a principal the backend confirms holds the role — naming only administrative surfaces that are implemented, defaulting to offering nothing where the capability is unknown, and never inferring it from an address, an identifier list, a configuration value or a stored flag; verify an ordinary person is offered nothing, an administrator is offered a real link to the route, a token asserting the role changes nothing, and the route still refuses a principal without it.
@@ -467,9 +483,15 @@ written to fail then.
 
 - [ ] 34.7 Run the SaaS-layer acceptance verification end to end against the deployed backend — a Free-plan caller served their entitled model with the resolution recorded in the evidence record; a body field claiming Pro ignored; an administrative override accepted for an enabled model and refused for a disabled one; a usage event recorded for every call including a forced failure; an estimated cost present and labelled; an exhausted allowance returning 429 with its basis while forecast, history, analysis and comparison still serve; internal lab and evaluation usage reported separately from every product plan; a second account seeing none of the first's usage; and both memory tiers plus every deterministic figure unchanged throughout; verify each and record the results.
 
-# Part B — Post-MVP / advanced SaaS capabilities
+  **PARTIALLY COMPLETE (2026-09-14).** The credential-free half runs green against the deployed backend (`https://weathra-backend.onrender.com`): every protected route refuses a caller carrying no token, every locally-signed token is rejected, CORS answers as configured, and no secret appears in any response. A coverage gap was found and closed on 2026-09-14 — `test_every_protected_path_has_a_credential_free_check` was failing because five protected routes (`/evidence`, `/me/locations/overview`, `/me/watch-dashboard`, `/travel/intelligence`, `/me/plan`) had never been added to the deployed probe list; all five are now covered and verified refusing anonymous callers in production. **What remains is every check that needs a real session**, and none of the required credentials exists in the development environment: `WEATHRA_LIVE_SUPABASE_URL`, `WEATHRA_LIVE_SUPABASE_ANON_KEY`, `WEATHRA_LIVE_USER_A_EMAIL`, `WEATHRA_LIVE_USER_A_PASSWORD` (the entitled-model, override, usage-event, cost and quota checks), `WEATHRA_LIVE_USER_B_EMAIL` and `WEATHRA_LIVE_USER_B_PASSWORD` (cross-account isolation), and `WEATHRA_LIVE_ADMIN_EMAIL` and `WEATHRA_LIVE_ADMIN_PASSWORD` (the administrative override checks). With those unset the suite skips 53 checks, naming the missing variable in each skip rather than passing vacuously. Supplying them is an operator step: the accounts must be created through the real sign-up flow and the administrative role granted out of band by `scripts/grant_administrator.py`.
 
-Deliberately **not** tracked as tasks in this change and **not** to be implemented by the apply phase. Recorded so the architecture keeps room for them and `docs/roadmap.md` stays honest.
+# Part B — capabilities beyond the MVP
+
+Recorded so the architecture keeps room for them and `docs/roadmap.md` stays honest.
+
+**Read this list with its dates.** It was written as the set of things deliberately *not* tracked as tasks in this change. Several of them were subsequently built anyway, as numbered tasks in Part A — the Scenario Lab, Travel Intelligence, Weather Watch, the Intelligence Report, Forecast Explorer, Plan & Usage and the administrative policy confirmation surface are all shipped. Those entries are **struck through and annotated** below rather than deleted, because what a change chose not to do and then did is part of its record.
+
+Everything not annotated remains genuinely unimplemented and out of scope.
 
 **Identity and access (beyond the MVP's Supabase Auth email/password)**
 
@@ -483,25 +505,25 @@ Deliberately **not** tracked as tasks in this change and **not** to be implement
 
 **Product capabilities**
 
-- Historical forecast-accuracy and skill scoring — compare stored forecast snapshots against subsequent observations; needs a long snapshot history and scheduled capture.
-- Weather Scenario Lab — explore hypothetical or alternative conditions and their implications.
-- Travel Intelligence — weather intelligence along a route or across trip dates.
-- Weather Watch — monitor a location against conditions and notify on change; needs scheduling and notification infrastructure.
-- Weather Intelligence Report — a composed, exportable report across capabilities.
+- Historical forecast-accuracy and skill scoring — compare stored forecast snapshots against subsequent observations; needs a long snapshot history and scheduled capture. **Still unimplemented.**
+- ~~Weather Scenario Lab~~ — **BUILT.** Deterministic scenario engine with the baseline stated beside every adjusted figure.
+- ~~Travel Intelligence~~ — **BUILT.** Trip-window intelligence for a destination, on its own screen.
+- ~~Weather Watch~~ — **BUILT**, save for outbound delivery: watches are stored, evaluated on a schedule and surfaced on a dashboard, but notify only inside the product. Push and email delivery remain unimplemented.
+- ~~Weather Intelligence Report~~ — **BUILT** as a composed report. Export remains unimplemented.
 - Behavioral personalization — intelligence shaped by usage history rather than only explicit preferences.
 - Multi-provider forecast consensus and a confidence signal derived from provider disagreement.
 
 **Screens**
 
-- Weather Intelligence Report, Forecast Explorer, Weather Scenario Lab, Weather Watch, Travel Intelligence — represented in the Visily design roadmap, not implemented in this change.
-- Admin Model & AI Usage and Plan & Usage — designed and approved in group 33 and represented in the design roadmap; implemented post-MVP.
+- ~~Weather Intelligence Report, Forecast Explorer, Weather Scenario Lab, Weather Watch, Travel Intelligence~~ — **ALL BUILT**, each against its approved Visily artifact.
+- ~~Plan & Usage~~ — **BUILT**, including self-service tier selection. ~~Admin Model & AI Usage~~ — **BUILT IN PART**: the model policy confirmation surface is implemented; the model-status, token-usage, cost, latency, error and plan-usage panels are not, and the route states so.
 
 **Commercial and model governance**
 
-- Payment processing — checkout, card handling, invoicing, dunning, proration, and a billing-provider integration. Plans are administratively assigned in this change; `subscription_plans` carries a stable plan code and an unused external subscription reference so the integration has somewhere to land.
+- Payment processing — checkout, card handling, invoicing, dunning, proration, and a billing-provider integration. **Still unimplemented, and deliberately so.** `subscription_plans` carries a stable plan code and an unused external subscription reference so the integration has somewhere to land.
 - Enforced estimated-cost budgets per plan and window against paid models. The allowance model of group 30 can express one; none is enabled.
 - Reconciliation of estimated cost against a gateway invoice. Cost stays an operational estimate in this change.
-- Self-service plan upgrade and downgrade, which needs payment processing first.
+- ~~Self-service plan upgrade and downgrade, which needs payment processing first.~~ — **BUILT, and the premise was wrong.** The product decision of 2026-09-13 made Free, Pro and Premium selectable by the account they apply to (task 34.44). It needed no payment processing because nothing is charged: a tier controls allowances and which class of model answers, and choosing one is free in the literal sense. Payment processing above stays out of scope.
 - Automatic or adaptive model routing — bandits, per-question difficulty routing, or cost-aware fallback chosen at runtime. Policies stay declared candidate lists in a fixed order, promoted by a recorded human decision.
 - Scheduled model health probing and automatic disabling of a failing catalog entry.
 - Per-model prompt variants, so a policy could carry a prompt tuned to its model rather than sharing one.

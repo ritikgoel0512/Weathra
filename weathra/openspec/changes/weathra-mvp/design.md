@@ -27,7 +27,7 @@ Six constraints shape everything below:
 **Non-Goals (design-level, beyond the proposal's exclusions):**
 
 - No microservice decomposition. The backend is one deployable containing separately-bounded modules; the MCP server has its own boundary and its own transport but ships in the same container for the MVP.
-- No billing system. No payment provider, checkout, invoicing, or reconciliation against a gateway invoice. Plans are administratively assigned rows; cost is an estimate computed from token counts and catalog pricing.
+- No billing system. No payment provider, checkout, invoicing, or reconciliation against a gateway invoice. Plans are rows a person may select for themselves since 2026-09-13, and which an administrator may still assign for another principal; neither path charges anything, and no price is published. Cost is an estimate computed from token counts and catalog pricing.
 - No graded permission model. One server-held administrative/internal flag, not roles, scopes, or organizations.
 - No model auto-selection or bandit routing. Policies are declared candidate lists in a fixed order; promotion between them is a human decision recorded against evaluation evidence.
 - No identity system of our own. Supabase Auth owns credentials, sessions, verification, and reset; Weathra stores no password material. Enterprise SSO, additional OAuth providers, multi-factor authentication, and organization role hierarchies are out of scope.
@@ -582,6 +582,28 @@ Account deletion removes a user's rows here alongside their threads, preferences
 Nothing to migrate — this is the first code in the repository.
 
 **Bring-up order:** provision the Supabase project, enable pgvector, and configure Auth (email confirmation required, confirmation and recovery templates carrying the one-time token, redirect URLs per environment) → apply migrations, including the Row Level Security policies and the seeded catalog, policies, plans, and allowances → verify the backend serves the public weather, history, analysis, and comparison endpoints with no inference credential and no session → create a test account through the real sign-up and verification flow and verify a protected endpoint accepts its token and rejects a missing or expired one → ingest the RAG corpus → configure `OPENROUTER_API_KEY` and verify `/ask` and the authenticated SSE stream, with a resolution recorded in the evidence record and a usage event recorded for each call → grant the administrative role to the operating account and verify the administrative catalog, plan, usage, and lab endpoints → deploy the backend to Render → deploy the frontend to Vercel pointed at it → run the evaluation suite as an authenticated test user and record its results → run the first model comparison and seed the policy candidate lists from its recorded evidence.
+
+**Status of that sequence (2026-09-14).** Every step through the evaluation suite is **completed**:
+the project is provisioned, migrated and seeded; the public endpoints serve with no credential and
+no session; accounts are created through the real sign-up and verification flow; the corpus is
+ingested; `OPENROUTER_API_KEY` is configured and both `/ask` and the authenticated stream answer
+with a recorded resolution and a usage event per call; the administrative role is granted; the
+backend is deployed on Render and the frontend on Vercel against it; and the evaluation suite runs
+as an authenticated user with its results recorded.
+
+The **candidate and evaluation infrastructure is complete**, and the **model-policy mechanisms are
+implemented** — named policies, plan-to-policy mapping, server-side entitlement, the bounded
+administrative override, deterministic resolution and the audited promotion action.
+
+Of the final step, the **comparison is executed and recorded**: run
+`9b5849dd-b798-4dc8-b04f-a8e6c0874e1a` (2026-09-10) evidenced `economy-free-primary`, and run
+`c1e8768f-e2a8-4c32-a065-df1a5ea8f2c4` (2026-09-14) evidenced **both** seeded economy candidates
+with all five criteria, no candidate left unevidenced, and both passing the two gating criteria.
+
+**What remains** is the seeding-or-reordering itself: an audited promotion decision written through
+`PUT /api/v1/admin/policies/{policy_id}/candidates` citing those runs, which requires a session for
+the administrative principal and is an operator step rather than a development one. Task 34.5 stays
+open until it is taken. See `docs/deployment.md` for the exact blocker.
 
 **Rollback:** the backend is a container revision, so rollback is redeploying the previous revision; the frontend likewise. Migrations are additive in this change (no destructive operations), so a rolled-back revision runs against the newer schema without loss. Data rollback is not required — there is no pre-existing data.
 

@@ -571,6 +571,89 @@ One state change did occur, from the provisioning path rather than from the comp
 idempotent, deliberately unaudited — a harness provisioning its own fixture is not an acting
 administrator — and it was not used to promote anything.
 
+## The second recorded live comparison — both candidates evidenced
+
+Run `c1e8768f-e2a8-4c32-a065-df1a5ea8f2c4`, 2026-09-14 06:25:13Z to 06:28:41Z, over the **same**
+`comparison` category of dataset `1.0.0` and the same five cases, in the same order, at commit
+`ecf0d9dd587b1265243ad266c50f6d33f5ec49f1`. Same command, same two candidates, live and persisted:
+
+```
+weathra-compare --candidates economy-free-primary,economy-free-secondary \
+                --category comparison --mode live --persist
+```
+
+**Status `completed`, and the `unevidenced` map is empty.** This run is what the first was missing:
+`economy-free-secondary` was rate-limited out of the first attempt and has now been measured over
+the same dataset, under the same pinned conditions — same `case_ids`, same `weather_provider`
+(`open-meteo`), same `embedding_model` (`BAAI/bge-small-en-v1.5`), same mode. Only the model varied,
+which is the claim a comparison has to be able to make.
+
+### Both candidates — five cases scored, both gates passed
+
+| | `economy-free-primary` | `economy-free-secondary` |
+|---|---|---|
+| Gateway model | `nvidia/nemotron-3-super-120b-a12b:free` | `nex-agi/nex-n2.5-mini:free` |
+| Evaluation | `dd3787d0-771f-448f-9b19-057d06cb8674` | `5e9c7fb2-7c6b-41d7-bd8b-0c5ce65b0433` |
+| Cases scored | 5 / 5, all succeeded | 5 / 5, all succeeded |
+| **Structured JSON reliability** (gate) | **pass** — first-attempt-valid 1.0 over 5 decisions, mean attempts 1.0 | **pass** — first-attempt-valid 1.0 over 5 decisions, mean attempts 1.0 |
+| **Groundedness** (gate) | **pass** — 1.0; hallucination 0.0; unsupported weather claim 0.0 | **pass** — 1.0; hallucination 0.0; unsupported weather claim 0.0 |
+| Tool-selection accuracy | 1.0 | 1.0 |
+| Source attribution coverage | 1.0 | 1.0 |
+| Latency, overall | median 9,210 ms / p95 9,272 ms | median 7,599 ms / p95 7,691 ms |
+| Latency, routing | median 3,768 ms / p95 3,768 ms | median 1,449 ms / p95 1,451 ms |
+| Latency, synthesis | median 4,341 ms / p95 4,343 ms | median 2,098 ms / p95 2,100 ms |
+| Cost | **null** — no per-call cost for a `:free` model | **null** — same |
+| `plan_correctness` | **null** — no multi-step case in this category | **null** — same |
+| `numerical_accuracy_intact` | **null** — no deterministic-figure case in this category | **null** — same |
+
+The nulls are unchanged in meaning from the first run: not scores, not defaults, and not readable as
+either. The same two criteria go unmeasured because the same category asks nothing that would
+exercise them.
+
+### What the comparison actually shows
+
+**Both candidates pass both gating criteria, and neither is separated by them.** Structured-output
+reliability and groundedness — the two criteria a promotion may rest on — are identical at 1.0
+across both, as are tool-selection accuracy and attribution coverage. Cost ties at null: both are
+free-tier models and the gateway reported no per-call cost for either.
+
+The one criterion that separates them is **latency, on which `economy-free-secondary` is the faster
+model** — roughly 1.6 seconds lower median overall, and markedly faster in both call roles. Latency
+is not a gate. It is a real consideration *among candidates that pass both gates*, which is what
+both now do.
+
+So the honest conclusion is narrow and worth stating as such: **the evidence supports keeping
+`economy-free-primary` first and no longer describes `economy-free-secondary` as unmeasured.** It
+does not compel a reorder — the gating criteria tie — and it does not forbid one, since the tie
+leaves latency as the only discriminator and it favours the secondary. That is a decision for the
+administrative principal to take and record, not one this document can take on their behalf.
+
+### No candidate failed a criterion
+
+Recorded explicitly because the first run's honesty depended on saying the opposite. In run
+`c1e8768f` no candidate recorded `False` on a gating criterion, none was aborted, none was
+rate-limited, and none appears in `unevidenced`. Ten `model_comparison_results` cells were written,
+all with `succeeded = true`, five per candidate, each resolving to its candidate's own evaluation
+row. Usage was attributed `internal` under the `__lab_comparison__` resolution — no plan, no product
+allowance, no user quota.
+
+### Still no promotion
+
+**Task 34.5's promotion half remains unexecuted.** No policy candidate list, catalog status or plan
+mapping has been changed by either run. `free_default` is still
+`[economy-free-primary, economy-free-secondary]` as seeded on 2026-09-09, and `admin_audit` holds no
+`policy_candidates` row.
+
+What is different after this run is *why* it is unexecuted. On the first run's evidence a promotion
+could only have spoken about one of two candidates. On this run's evidence it could speak about
+both. The remaining blocker is no longer the evidence but the actor: the audited write is
+`PUT /api/v1/admin/policies/{policy_id}/candidates`, which needs a session for an administrative
+principal. One is properly granted — subject `e7b66ef2-5bc6-4100-92cf-7c27cecdf63e`, carrying a
+`role_grant` row in `admin_audit` from the documented bootstrap — but no credential for it exists in
+the development environment. The evaluation harness's own fixture principal must not be substituted:
+`_ensure_role_row` grants it unaudited and with no `granted_by`, so using it would let the lab
+authorise its own promotion, which `specs/model-lab` refuses.
+
 ## Comparing runs
 
 Run records are persisted (`evaluation_runs`, `evaluation_case_results`) and can be compared. A

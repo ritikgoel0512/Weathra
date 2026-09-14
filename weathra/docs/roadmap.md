@@ -1,6 +1,6 @@
 # Roadmap
 
-What Weathra does today, and what it deliberately does not. The post-MVP list is not a wish list: it
+What Weathra does today, and what it deliberately does not. The list beyond the MVP is not a wish list: it
 is the set of capabilities the architecture was shaped to accept later, and each entry names the seam
 it arrives through.
 
@@ -36,7 +36,17 @@ administratively; nothing here bills.
 **One of each provider.** One weather provider, one geocoder, one inference gateway, one vector
 store — each behind a contract, which is what makes the list below additions rather than rewrites.
 
-## Post-MVP
+## Beyond the MVP
+
+> **Read this section with its dates (note added 2026-09-14).** It was written as the list of things
+> Weathra deliberately did not do. **Several of them were subsequently built** — the Scenario Lab,
+> Travel Intelligence, Weather Watch, the Weather Intelligence Report, Forecast Explorer, Plan &
+> Usage, and the administrative model policy confirmation surface all ship today. Those entries are
+> annotated **BUILT** below rather than deleted, because what a product chose not to do and then did
+> is part of its record. Everything without that annotation remains genuinely unimplemented.
+>
+> Implementation is substantially complete. The open items in `openspec/changes/weathra-mvp/tasks.md`
+> are operational acceptance/evidence tasks rather than missing product implementation.
 
 ### Identity and access
 
@@ -72,24 +82,20 @@ this" from "what may they do".
 *Arrives through:* the capability catalogue in `agents/plan.py`, the provider contract, and the
 snapshot table that already exists.
 
-### Screens
+### Screens — **all built**
 
 Weather Intelligence Report, Forecast Explorer, Weather Scenario Lab, Weather Watch, and Travel
-Intelligence are represented in the design roadmap and **not implemented** in this change. Their
-routes exist in the frontend and state plainly that they are not yet available — routing structure
-that is real, with nothing rendering broken or empty. Each gained a *visual* roadmap reference on
-2026-09-09; none is an approved implementation reference, and none authorizes building the screen,
-because the capability behind each is a Part B entry above rather than a requirement of this
-change.
+Intelligence were recorded here as designed but **not implemented**. **All five are now built**,
+each against its approved Visily artifact, and each is in the navigation without a caveat.
 
-**Admin Model & AI Usage** (`/admin/model-usage`) and **Plan & Usage** (`/plan`) are subject to the
-same design gate as every other screen and are **not implemented** in this change. They are
-recorded as post-MVP entries in [`design/roadmap.md`](design/roadmap.md), and unlike the five above
-they are deliberately absent from the navigation while they are unbuilt: one is administrative, and
-the other would offer a plan view that cannot yet be shown. Both routes exist and state that the
-screen is not yet available, and **neither issues any request** — the administrative route fetches
-no catalog, usage, cost, or lab content for *anyone*, including an administrator, while it is
-unbuilt.
+**Plan & Usage** (`/plan`) is **built**, including self-service tier selection.
+
+**Admin Model & AI Usage** (`/admin/model-usage`) is **built in part**: the model policy
+confirmation surface is implemented (task 34.8) — each policy's ordered candidate list with the
+evaluation recorded per candidate, and one audited write citing the runs relied upon. Its
+model-status, token-usage, cost, latency, error and plan-usage panels are **not built**, the route
+states so, and those panels fetch nothing for anyone. It is in the navigation for an administrator
+and absent for everybody else.
 
 Both were designed and approved on 2026-09-09, which closes the design half of the gate and
 settles nothing about the implementation half. `docs/design/screens.md` §5 records what each
@@ -107,7 +113,7 @@ The model layer of this change measures, resolves, and bounds; it does not bill,
 route itself.
 
 - **Payment processing** — checkout, card handling, invoicing, dunning, proration, and a
-  billing-provider integration. Plans are administratively assigned rows in this change, and
+  billing-provider integration. Since 2026-09-13 a person selects their own tier and is charged nothing for it; administrative assignment still governs another principal's tier and every allowance. Either way no money moves, and
   `subscription_plans` carries a stable plan code and an unused external subscription reference so
   the integration has somewhere to land.
 - **Enforced estimated-cost budgets** per plan and window against paid models. The allowance model
@@ -142,7 +148,7 @@ rows rather than environment variables, and the recorded resolution on every run
   [`privacy-ethics.md`](privacy-ethics.md).
 - **Infrastructure-as-code** for the deployment topology.
 
-## Why these are deferred rather than missing
+## Why the remaining entries are deferred rather than missing
 
 Each one costs something the MVP could not pay:
 

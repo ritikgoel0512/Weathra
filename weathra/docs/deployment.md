@@ -1100,14 +1100,38 @@ plan that names it, for as long as the check ran plus one cache TTL. Absent and 
 branch apart in the same allowlist check, and `integration/test_agent_resolution.py` covers the
 disabled branch in process, against a database that is nobody's.
 
-**Task 34.5's live comparison.** The first model comparison across the seeded catalog candidates is
-not run. The implementation is complete and tested — group 32's lab, its bounds, its records, its
-criteria and its promotion action — but executing it means four candidates' worth of real
-inference against the gateway and writing `model_comparison_runs` rows into the production
-database, and *then* re-ordering a policy's candidate list from what it found. An offline run
-cannot substitute: it scores `FakeLLMClient`, so promoting a candidate from its numbers would be a
-decision made on measurements of the harness. The task stays open rather than being satisfied with
-a comparison whose evidence means nothing.
+**Task 34.5's live comparison — the comparison half is done; the promotion half is not.**
+
+The implementation was complete and tested from group 32 — the lab, its bounds, its records, its
+criteria and its promotion action. What was missing was an executed run, because executing one
+means real inference against the gateway and writing evaluation rows into the production database.
+An offline run cannot substitute: it scores `FakeLLMClient`, so promoting a candidate from its
+numbers would be a decision made on measurements of the harness.
+
+Two live runs have now been executed against the seeded `economy` candidates, over the
+`comparison` category of dataset `1.0.0`, five cases, live mode, persisted:
+
+| Run | Date | Status | Outcome |
+|---|---|---|---|
+| `9b5849dd-b798-4dc8-b04f-a8e6c0874e1a` | 2026-09-10 | `partial` | `economy-free-primary` scored 5/5 and passed both gates. `economy-free-secondary` was refused with HTTP 429 at the pre-flight on all three retries, never reached the dataset, and was recorded `unevidenced: no_case_scored` |
+| `c1e8768f-e2a8-4c32-a065-df1a5ea8f2c4` | 2026-09-14 | `completed` | **Both** candidates scored 5/5 and passed both gates. No candidate unevidenced |
+
+The second run is what the first was missing: `economy-free-secondary` was rate-limited in
+September's first attempt and has now been measured. `docs/evaluation.md` records both runs and
+their five criteria per candidate.
+
+**What still blocks the task.** 34.5 also requires the policy candidate lists to be seeded or
+reordered *from* the recorded evidence, with the promotion audited against the cited runs. That is
+`PUT /api/v1/admin/policies/{policy_id}/candidates`, which records an `admin_audit` row citing the
+run relied upon. It needs an authenticated session for an administrative principal. One exists and
+is properly granted — subject `e7b66ef2-5bc6-4100-92cf-7c27cecdf63e`, carrying a `role_grant` audit
+row from the documented `scripts/grant_administrator.py` bootstrap — but **no credential for it is
+available in the development environment**, and the evaluation harness's own fixture principal must
+not be used: `_ensure_role_row` grants it with no `granted_by` and no audit row, so promoting with
+it would let the lab authorise its own promotion, which `specs/model-lab` refuses.
+
+The task therefore stays open on one operator step: sign in as the administrative account and
+submit the candidate list citing run `c1e8768f-e2a8-4c32-a065-df1a5ea8f2c4`.
 
 **And criteria from 25.3 and 25.4** — restated 2026-09-11 after a second pass the same day, which
 supplied a genuinely distinct second account and resolved the inference diagnosis:

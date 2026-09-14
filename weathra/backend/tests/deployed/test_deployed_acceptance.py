@@ -118,6 +118,13 @@ PROTECTED_GETS: tuple[str, ...] = (
     "/evidence/00000000-0000-4000-8000-000000000000",
     "/me/watches",
     "/weather/changes?location=Berlin",
+    # Added 2026-09-14, the third time this assertion has found an unprobed protected surface.
+    # Three owner-scoped reads that arrived with their screens — the evidence listing (34.43), the
+    # saved-locations overview and the watch dashboard — and none of them was ever asked the only
+    # question this module asks: does it refuse a caller carrying nothing.
+    "/evidence",
+    "/me/locations/overview",
+    "/me/watch-dashboard",
 )
 
 # The protected endpoints a browser reaches with something other than GET. They are checked with
@@ -142,6 +149,13 @@ PROTECTED_WRITES: tuple[tuple[str, str], ...] = (
     ("PATCH", "/me/watches/00000000-0000-4000-8000-000000000000"),
     ("DELETE", "/me/watches/00000000-0000-4000-8000-000000000000"),
     ("POST", "/me/watches/00000000-0000-4000-8000-000000000000/evaluate"),
+    # Travel Intelligence reaches a provider and the model, so an unauthenticated request that got
+    # past the boundary would spend somebody's allowance on nobody's behalf. Checked for the same
+    # reason `evaluate` is.
+    ("POST", "/travel/intelligence"),
+    # Choosing a tier, added with Plan & Usage self-selection (34.44). A write that changes what an
+    # account is allowed is exactly the kind that must refuse an anonymous caller at the boundary.
+    ("PUT", "/me/plan"),
 )
 
 NOT_A_REAL_ID = "00000000-0000-4000-8000-000000000000"

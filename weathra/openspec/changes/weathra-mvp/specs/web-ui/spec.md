@@ -64,10 +64,11 @@ The design gate SHALL be satisfiable with Visily's freely available capabilities
 - **THEN** its design artifact is referenced in the repository documentation
 - **AND** the implementation follows it rather than generic generated styling
 
-#### Scenario: Post-MVP screens represented in the design roadmap
+#### Scenario: The screens reached after the MVP are represented in the design roadmap
 
 - **WHEN** the design roadmap is inspected
-- **THEN** Weather Intelligence Report, Forecast Explorer, Weather Scenario Lab, Weather Watch, Travel Intelligence, Admin Model & AI Usage, and Plan & Usage are represented as post-MVP
+- **THEN** Weather Intelligence Report, Forecast Explorer, Weather Scenario Lab, Weather Watch, Travel Intelligence, Admin Model & AI Usage, and Plan & Usage are each represented with their design artifact
+- **AND** each is shown at its actual status rather than as a future entry, all seven now being built
 
 #### Scenario: Divergence recorded
 
@@ -309,15 +310,17 @@ Every MVP product screen SHALL be reachable from a persistent navigation surface
 - **WHEN** a different person signs in on the same browser
 - **THEN** they see only their own saved locations and preferences
 
-### Requirement: Post-MVP screens are designed, not built
+### Requirement: A route that is not built says so, and every screen reserved here is now built
 
-The frontend SHALL reserve navigation and routing structure for the post-MVP screens — Weather Intelligence Report, Forecast Explorer, Weather Scenario Lab, Weather Watch, Travel Intelligence, Admin Model & AI Usage, and Plan & Usage — without implementing their functionality in this change. Any such route present SHALL state plainly that the screen is not yet available rather than rendering a broken or empty screen.
+**This requirement has been satisfied and its subject has changed.** It was written as *"Post-MVP screens are designed, not built"*, reserving navigation and routing for Weather Intelligence Report, Forecast Explorer, Weather Scenario Lab, Weather Watch, Travel Intelligence, Admin Model & AI Usage, and Plan & Usage without implementing them. **All seven routes are now implemented**, and the requirement is kept — amended rather than deleted — because the standing rule it carries outlives the list it was written about.
 
-Two of those screens are exceptions, and they are named rather than left to inference. The administrative model policy confirmation surface required below is implemented in this change, because the audited candidate-list confirmation it carries is the only administrative write the MVP's own evidence trail depends on; every other panel of the Admin Model & AI Usage screen remains unbuilt and SHALL continue to state so on the same route. Plan & Usage is implemented in full, because everything it shows is a person's own plan and consumption, which the account contract has always reported.
+The standing rule: a route the frontend publishes SHALL either render its screen or state plainly that it is not yet available. It SHALL NOT render a broken or empty interface, and a navigation entry leading to a screen that does not exist SHALL be de-emphasised with the caveat in its accessible name rather than in a badge, so the navigation does not read as a roadmap. The caveat SHALL be removed per screen as each is built, and never for a screen that is not.
 
-#### Scenario: Post-MVP route states its status
+One part of one screen still meets that rule by stating its absence rather than by rendering: the Admin Model & AI Usage route's model-status, token-usage, cost, latency, error and plan-usage panels are **not built**, SHALL continue to state so on the route, and SHALL fetch nothing. The administrative model policy confirmation surface on the same route **is** built, and is the only part of that screen that loads anything.
 
-- **WHEN** a person navigates to a post-MVP screen's route
+#### Scenario: A route without a screen states its status
+
+- **WHEN** a person navigates to a route whose screen is not built
 - **THEN** the screen states that it is not yet available
 - **AND** does not render a broken or empty interface
 
@@ -327,15 +330,21 @@ Two of those screens are exceptions, and they are named rather than left to infe
 - **THEN** a screen that is not yet built is de-emphasised and its accessible name says it is coming
 - **AND** it is not advertised as working, and carries no badge that makes the navigation read as a roadmap
 
+#### Scenario: Every screen this requirement reserved is reachable and built
+
+- **WHEN** the seven routes this requirement reserved are navigated to
+- **THEN** each renders its implemented screen rather than a not-yet-available statement
+- **AND** the only exception is the Admin Model & AI Usage panels named above, which state their own absence
+
 #### Scenario: Plan & Usage shows the person their own standing
 
-- **WHEN** a signed-in person navigates to the Plan & Usage route in this change
+- **WHEN** a signed-in person navigates to the Plan & Usage route
 - **THEN** their own plan, allowances and consumption are shown
 - **AND** no other person's usage and no aggregate across users is requested or rendered
 
 #### Scenario: The administrative route states which of its panels are unbuilt
 
-- **WHEN** any person navigates to the Admin Model & AI Usage route in this change
+- **WHEN** any person navigates to the Admin Model & AI Usage route
 - **THEN** the route states that model status, token usage, cost, latency, errors and plan usage are not yet available
 - **AND** no token-usage, cost, or plan-consumption request is issued for any visitor
 - **AND** the policy confirmation surface below is the only part of the screen that loads anything, and every read it issues is one the backend refuses to a caller without the administrative role
@@ -594,7 +603,7 @@ The frontend SHALL provide an administrative Model & AI Usage screen, reachable 
 - **Plan usage** — consumption against allowance per plan, with internal and evaluation usage shown separately from product usage.
 - **Internal model selector** — selection of one or more enabled catalog models for a controlled comparison run, with the recorded results of past runs.
 
-The screen SHALL present no conversation content, since usage records hold none, and SHALL show no other user's questions, threads, or saved data. This screen is post-MVP; it is designed in the design phase and implemented after the MVP screens, save for the model policy confirmation surface required next, which this change implements on the same route.
+The screen SHALL present no conversation content, since usage records hold none, and SHALL show no other user's questions, threads, or saved data. This screen was designed in the design phase and reached after the MVP screens; of it, the model policy confirmation surface required next **is implemented** on this route, and the panels named above are not and say so.
 
 #### Scenario: Administrative screen reachable by an administrator
 
@@ -768,7 +777,7 @@ It SHALL name the plans Weathra has and which one is in effect, and SHALL offer 
 
 The Admin Model & AI Usage screen and the plan-and-usage view SHALL be designed in Visily before substantial implementation, following the same gate as every other screen: an artifact per screen covering its populated, loading, empty, error, and not-permitted states; conformance to the established Weathra design system and its carried-forward design direction rather than generic generated styling; a recorded approval before implementation begins; and a recorded reason for any deliberate divergence.
 
-Until they are implemented, they SHALL be represented in the design roadmap as post-MVP entries rather than advertised as working.
+Until they were implemented they SHALL have been represented in the design roadmap as later entries rather than advertised as working. **Both are now implemented**, each through this gate: the design gate above is what they were held to, and it is not relaxed by their being built.
 
 #### Scenario: Design precedes implementation
 
@@ -787,6 +796,12 @@ Until they are implemented, they SHALL be represented in the design roadmap as p
 
 #### Scenario: Represented in the roadmap while unbuilt
 
-- **WHEN** the design roadmap is read before these screens are implemented
-- **THEN** they appear as post-MVP entries
-- **AND** no route advertises them as working
+- **WHEN** the design roadmap is read for a screen that is not yet implemented
+- **THEN** it appears as a later entry
+- **AND** no route advertises it as working
+
+#### Scenario: Both screens passed the gate before they were built
+
+- **WHEN** the Admin Model & AI Usage screen and the plan-and-usage view are inspected now that both are implemented
+- **THEN** each has its recorded approved artifact from before implementation began
+- **AND** any deliberate divergence from it is recorded with its reason

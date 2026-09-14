@@ -19,7 +19,7 @@ One thing the original architecture left implicit is now made explicit, because 
 - **Backend-controlled model policy layer** between the LangGraph orchestrator and the LLM client. Named, subscription-aware policies — `free_default`, `balanced`, `high_reasoning`, `admin_experimental` — resolve a model per call from the acting principal's backend-derived plan and the call role. Plans map onto Free / Pro / Premium. The frontend is never trusted to authorize premium model access; enforcement is server-side, and a caller-named model is advisory at most.
 - **Model catalog as operational data.** Allowlisted gateway model ids with their metadata — capability role, tier, structured-output support, context window, pricing, enable/disable status — held in the database, seeded by migration, administrable at runtime. Model availability changes without a code change, and no business rule is coupled to a vendor model id.
 - **Per-call LLM telemetry.** Every language model call — success or failure, on every path — records user, agent run, model, policy and plan, prompt/completion/total tokens, estimated cost, latency, status, and timestamp. Metadata only: no prompt or completion text.
-- **Server-side usage limits.** Quotas by plan across daily and monthly request windows, monthly token totals, and concurrency, with internal/administrative usage accounted separately and room for a future estimated-cost budget. No payment processing — plans are assigned administratively.
+- **Server-side usage limits.** Quotas by plan across daily and monthly request windows, monthly token totals, and concurrency, with internal/administrative usage accounted separately and room for a future estimated-cost budget. No payment processing. A person selects their own tier; an administrator assigns another principal's. Neither charges anything.
 - **Admin / internal model lab.** An administrative facility to run one prompt or question across several allowlisted models and record model, latency, tokens, cost, success/failure, and evaluation result side by side. It holds no privilege of its own: no security control and no user data isolation is bypassed.
 - **Deterministic analytics engine** in pure Python. Every meteorological number a caller sees is computed here — never estimated by a language model.
 - **RAG subsystem** over a curated weather-domain knowledge corpus, using pgvector on Supabase Postgres (ChromaDB documented as the fallback). Conceptual explanation only; never a source for live or historical measurements.
@@ -57,20 +57,29 @@ Twenty capability specs, all new. `openspec/specs/` is currently empty.
 | `rag-knowledge` | Knowledge corpus, ingestion and chunking, embedding, retrieval, citation, and the prohibition on sourcing measurements from RAG | Yes |
 | `memory` | Short-term conversation memory and checkpointing scoped by authenticated user and thread, durable preferences and saved locations, retention and privacy rules | Yes |
 | `http-api` | Versioned REST surface, SSE streams, bearer-token authentication, public/protected endpoint classification, request/response contracts, error model, health and readiness, observability | Yes |
-| `web-ui` | The Next.js application: the Visily design phase, the design direction carried forward from the earlier UXPilot exploration, the design system, authentication screens and states, protected routing, MVP product screens, post-MVP screens, state handling, accessibility | Partial — see screen classification below |
+| `web-ui` | The Next.js application: the Visily design phase, the design direction carried forward from the earlier UXPilot exploration, the design system, authentication screens and states, protected routing, MVP product screens, the screens reached after the MVP, state handling, accessibility | Yes — every screen in the classification below is built, except the Admin Model & AI Usage panels that row names as unbuilt |
 | `evaluation` | The evaluation dataset, the ten metrics with their exact measurement definitions, the runner, and the acceptance thresholds | Yes |
 | `safety-grounding` | Fabrication prohibitions, data-class labelling, attribution, uncertainty communication, severe-weather stance, privacy | Yes |
 | `model-policy` | The backend-controlled policy layer between orchestration and the LLM client: named subscription-aware policies, plan-to-policy mapping, server-side entitlement, bounded administrative override, deterministic resolution and honest degradation, `LLM_MODEL` as development/administrative fallback, provider-agnosticism | Yes |
 | `model-catalog` | Allowlisted gateway model ids and their metadata as persisted data: capability roles, tier, structured-output support, context window, pricing, enable/disable status; runtime availability changes; decoupling business logic from vendor model ids | Yes |
 | `llm-telemetry` | The per-call usage event — user, agent run, model, policy, plan, prompt/completion/total tokens, estimated cost, latency, status, timestamp — with failures recorded, metadata-only storage, owner scoping, internal separation, aggregation and retention | Yes |
 | `usage-limits` | Subscription plans as data, server-side quota enforcement by plan across daily/monthly/token/concurrency dimensions, explicit windows, honest refusal, concurrency-safe accounting, separate internal allowance, and the explicit exclusion of payment processing | Yes |
-| `model-lab` | The administrative internal model lab: allowlisted model selection, same-prompt comparison across models, recorded latency/tokens/cost/status/evaluation result, no security or isolation bypass, internal accounting, and no implicit change to production policy | Partial — backend and records in scope; its screen is post-MVP |
+| `model-lab` | The administrative internal model lab: allowlisted model selection, same-prompt comparison across models, recorded latency/tokens/cost/status/evaluation result, no security or isolation bypass, internal accounting, and no implicit change to production policy | Yes — backend, records and the administrative policy confirmation surface |
 
 ### Modified Capabilities
 
 None. Every capability above is new.
 
-## Product capabilities: MVP versus post-MVP
+## Product capabilities: what shipped
+
+**Current state (2026-09-14).** Implementation is substantially complete. Everything this section
+once divided into *MVP* and *post-MVP* is **built, deployed and serving** — the division below is
+kept because it records what was committed to first and what was reached afterwards, not because
+anything in the second group is still outstanding. Remaining open items are operational
+acceptance/evidence tasks rather than missing product implementation; they are named in
+`tasks.md` and summarised at the end of this section.
+
+The *Status* columns therefore read **MVP** or **Shipped after MVP**. Neither means unbuilt.
 
 ### Signature capabilities
 
@@ -86,12 +95,12 @@ None. Every capability above is new.
 | **Multi-location comparison** | **MVP** | |
 | **Forecast confidence / uncertainty communication** | **MVP** | Derived from provider-supplied spread and horizon distance; single-provider, so it is a bounded signal — stated as such |
 | **Personalized weather intelligence** — briefings shaped by saved locations, preferred units, and preferred horizon, private to the signed-in person | **MVP**, preference-driven | Behavioral personalization from usage history is post-MVP |
-| **Weather Scenario Lab** — explore hypothetical or alternative weather conditions and their implications | **Post-MVP** | Screen and capability both deferred |
-| **Travel Intelligence** — weather intelligence along a route or across trip dates | **Post-MVP** | |
-| **Weather Watch** — monitoring a location against conditions and notifying on change | **Post-MVP** | Requires scheduling and notification infrastructure |
-| **Historical forecast-accuracy / skill scoring** | **Post-MVP** | Requires a long snapshot history; explicitly *not* the same as historical weather retrieval, which is MVP |
-| **Model policy and plan tiers** — server-side model routing by subscription plan, with per-call telemetry and quotas | **MVP**, backend-enforced | Free / Pro / Premium assigned administratively; no payment processing in this change |
-| **Admin model lab** — comparing one prompt across allowlisted models on measured evidence | **MVP** backend and records; **post-MVP** screen | Promotion of a model into a policy is an explicit administrative action |
+| **Weather Scenario Lab** — explore hypothetical or alternative weather conditions and their implications | **Shipped after MVP** | Screen and capability both built; deterministic scenario engine with the baseline stated beside every adjusted figure |
+| **Travel Intelligence** — weather intelligence along a route or across trip dates | **Shipped after MVP** | Trip-window intelligence for a destination, on its own screen |
+| **Weather Watch** — monitoring a location against conditions and notifying on change | **Shipped after MVP** | Watches are stored, evaluated on a schedule and surfaced on a dashboard. Push/email delivery is the one part still out of scope — a watch reports in the product, it does not notify outside it |
+| **Historical forecast-accuracy / skill scoring** | **Not built** | The one capability in this table that genuinely is not implemented. It requires a long snapshot history; explicitly *not* the same as historical weather retrieval, which is MVP and shipped |
+| **Model policy and plan tiers** — server-side model routing by subscription plan, with per-call telemetry and quotas | **MVP**, backend-enforced | Free / Pro / Premium. Since the product decision of 2026-09-13 a person selects their own tier from Plan & Usage (`PUT /me/plan`); administrative assignment still governs *another* principal's tier and every allowance. There is still no payment processing, no price and no charge |
+| **Admin model lab** — comparing one prompt across allowlisted models on measured evidence | **MVP** backend and records; its administrative screen **shipped after MVP** | Promotion of a model into a policy is an explicit, separately authorised administrative action |
 
 ### Screens
 
@@ -112,17 +121,19 @@ None. Every capability above is new.
 | Agent Evidence / Activity | **MVP** |
 | Saved Locations | **MVP** |
 | Settings | **MVP** |
-| Weather Intelligence Report | Post-MVP — a composed, exportable report |
-| Forecast Explorer | Post-MVP — deep hourly/measure exploration beyond the Dashboard |
-| Weather Scenario Lab | Post-MVP |
-| Weather Watch | Post-MVP |
-| Travel Intelligence | Post-MVP |
-| Admin Model & AI Usage | Post-MVP — model status, token usage, cost, latency, errors, plan usage, internal model selector; administrative principals only |
-| Plan & Usage | Post-MVP — the signed-in person's own plan, consumption, and window resets |
+| Weather Intelligence Report | **Shipped after MVP** — a composed report over a location and window |
+| Forecast Explorer | **Shipped after MVP** — deep hourly/measure exploration beyond the Dashboard |
+| Weather Scenario Lab | **Shipped after MVP** |
+| Weather Watch | **Shipped after MVP** |
+| Travel Intelligence | **Shipped after MVP** |
+| Admin Model & AI Usage | **Shipped after MVP, in part** — the model policy confirmation surface is built: each policy's ordered candidate list with the evaluation recorded per candidate, and one audited write citing the runs relied upon. The model-status, token-usage, cost, latency, error and plan-usage panels are **not built** and the route says so of itself rather than fetching anything. Administrative principals only |
+| Plan & Usage | **Shipped after MVP** — the signed-in person's own plan, consumption, window resets, and self-service tier selection |
 
-The Admin Model & AI Usage screen and the Plan & Usage view are post-MVP but remain subject to the same Visily design gate as every other screen — designed and approved before substantial implementation, and represented in the design roadmap until then.
+Every screen above is built and deployed, except where the Admin Model & AI Usage row states
+otherwise. Both later screens went through the same Visily design gate as every other screen —
+designed and approved before substantial implementation — rather than being exempted from it.
 
-**Visily.ai** produces the UI/UX design artifacts for these screens before substantial frontend implementation begins, covering both the authentication and the core product experiences, and establishes the shared Weathra design system — typography, spacing, component hierarchy, navigation, cards, charts, weather visualization patterns, responsive behavior, and loading, empty, error, and authentication states. The implemented Next.js UI follows the approved artifacts rather than generic generated styling. Post-MVP screens remain represented in the design roadmap.
+**Visily.ai** produces the UI/UX design artifacts for these screens before substantial frontend implementation begins, covering both the authentication and the core product experiences, and establishes the shared Weathra design system — typography, spacing, component hierarchy, navigation, cards, charts, weather visualization patterns, responsive behavior, and loading, empty, error, and authentication states. The implemented Next.js UI follows the approved artifacts rather than generic generated styling. The screens reached after the MVP went through the same gate as they were built.
 
 The delivery path is therefore **OpenSpec → Visily → approved UI/UX artifacts → React/Next.js implementation → FastAPI → LangGraph → MCP → weather providers**. This is a design-workflow change only: it replaces which tool the remaining screen design is done in and changes no part of the locked architecture.
 
@@ -158,9 +169,9 @@ Next.js on Vercel; FastAPI with LangGraph, MCP, and analytics on Render; Postgre
 
 ### Out of scope for this change
 
-Enterprise single sign-on, additional OAuth identity providers, multi-factor authentication, organization and role-based access control beyond the single administrative/internal role this change introduces, multi-tenancy, rate limiting and API keys for third-party consumers, push notifications, severe-weather alerting, additional weather providers, additional LLM adapters, scheduled snapshot capture, and every capability and screen marked post-MVP above.
+Enterprise single sign-on, additional OAuth identity providers, multi-factor authentication, organization and role-based access control beyond the single administrative/internal role this change introduces, multi-tenancy, rate limiting and API keys for third-party consumers, push notifications, severe-weather alerting, additional weather providers, additional LLM adapters, scheduled snapshot capture, outbound notification delivery for Weather Watch, and historical forecast-accuracy scoring. Everything once listed here as *post-MVP* has since been built and is named as shipped above; what remains out of scope is only what this paragraph still names.
 
-**Payment processing is explicitly out of scope.** No checkout, card handling, invoicing, dunning, proration, or billing-provider integration is implemented. Plans are assigned administratively; estimated cost is reported as an operational estimate and never as a charge. The schema leaves room for a later billing integration — a stable plan code and an unused external subscription reference — without that integration existing. Paid-model budgets are representable in the allowance model but are not funded or enforced against a real budget in this change.
+**Payment processing is explicitly out of scope, and remains so.** No checkout, card handling, invoicing, dunning, proration, or billing-provider integration is implemented, and no price is published. A person selecting Pro or Premium from Plan & Usage changes what they are allowed and which class of model answers them, and is charged nothing — selectable is not purchasable. Estimated cost is reported as an operational estimate and never as a charge. The schema leaves room for a later billing integration — a stable plan code and an unused external subscription reference — without that integration existing. Paid-model budgets are representable in the allowance model but are not funded or enforced against a real budget in this change.
 
 ## Assumptions
 
@@ -168,12 +179,12 @@ Recorded because they were not specified. Each is reversible without changing th
 
 - **Verification delivers a code.** Supabase's signup-confirmation email template is configured to include the one-time token so Weathra can offer code-entry UI, and the returning confirmation link is also handled for people who click through instead. Both paths complete the same verification.
 - **Sessions are cookie-based.** The frontend uses the Supabase SSR/cookie session helpers so Next.js can protect routes on the server before a protected screen renders, and forwards the access token to FastAPI as a bearer token.
-- **Public weather endpoints stay public.** Locations, current weather, forecast, history, analysis, and comparison serve unauthenticated callers; everything touching user-owned data is protected. Rate limiting for those public endpoints remains post-MVP and is flagged as needed before public exposure.
+- **Public weather endpoints stay public.** Locations, current weather, forecast, history, analysis, and comparison serve unauthenticated callers; everything touching user-owned data is protected. Rate limiting for those public endpoints remains out of scope and is flagged as needed before public exposure.
 - **Embeddings run in-process.** OpenRouter is an inference gateway and is not relied on for embeddings, so a small local ONNX model (BGE-small-en-v1.5, 384 dimensions) produces vectors inside the backend. This keeps RAG keyless and deterministic. An `EmbeddingProvider` abstraction allows a hosted embedding service later, with re-indexing.
 - Python 3.12 for the backend; Node 20 LTS for the frontend.
 - Units default to metric with an explicit per-request override; forecast horizon defaults to 7 days; hourly detail is available for at least the first 48 hours.
 - The initial policy candidates are free-tier OpenRouter models, seeded as catalog data and expected to change. No model name appears in application logic, and the specific models seeded are an operational choice, not an architectural one.
-- **Plans are administratively assigned.** With no payment processing, a person's plan is set by an administrative write. Free is the default when no assignment exists.
-- **One administrative role, not an RBAC system.** A single server-held administrative/internal flag gates policy, catalog, plan, aggregate-usage, and model-lab access. Organizations, teams, and graded roles remain post-MVP.
+- **Plans are self-selected, and were administratively assigned until 2026-09-13.** The original assumption was that with no payment processing a person's plan must be set by an administrative write. The product decision of 2026-09-13 reversed that: Free, Pro and Premium are selectable by the account they apply to, through a route that takes no subject and writes the validated token's own row, with the database refusing any other. Administrative assignment still governs *another* principal's tier and every allowance. Free remains the default when nobody has chosen.
+- **One administrative role, not an RBAC system.** A single server-held administrative/internal flag gates policy, catalog, plan, aggregate-usage, and model-lab access. Organizations, teams, and graded roles remain out of scope.
 - **Quota windows are calendar day and calendar month** in a configured time zone, with consumption reconcilable against the recorded usage events. A cost-budget dimension is representable but unset.
 - **Cost is an estimate.** It is computed in Python from recorded token counts and the catalog pricing in effect at the time of the call, labelled as an estimate, and never reconciled against a gateway invoice in this change.
