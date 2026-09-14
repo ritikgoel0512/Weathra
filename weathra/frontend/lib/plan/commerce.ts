@@ -246,7 +246,7 @@ const DIMENSION_PHRASES: Record<string, string> = {
   agent_runs_per_month: "monthly agent runs",
   tokens_per_day: "daily token budget",
   tokens_per_month: "monthly token budget",
-  concurrent_runs: "runs at once",
+  concurrent_runs: "concurrent AI tasks",
   saved_locations: "saved locations",
 };
 

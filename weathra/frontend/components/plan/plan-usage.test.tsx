@@ -209,7 +209,7 @@ describe("consumption against allowance", () => {
 
     // Each dimension is named. "Requests per day" also names the reset row and the tile note, so
     // the row is found by its own list item rather than by the first match of the label.
-    for (const label of ["Requests per day", "Tokens per month", "Concurrent runs"]) {
+    for (const label of ["Requests per day", "Tokens per month", "Concurrent AI tasks"]) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
 
@@ -230,6 +230,17 @@ describe("consumption against allowance", () => {
     expect(within(row).getByText("Consumed: 12")).toBeInTheDocument();
   });
 
+  it("explains what a concurrency allowance counts, which its figure alone does not say", async () => {
+    mount(client());
+    await screen.findByRole("heading", { name: "Allowances" });
+
+    // The one dimension whose name is a different *kind* of limit from the others: a ceiling on
+    // what runs at the same time, not on what runs in a day.
+    expect(
+      screen.getByText("Maximum AI tasks that can run at the same time for your account."),
+    ).toBeInTheDocument();
+  });
+
   it("states each window's reset instant", async () => {
     mount(client());
     await screen.findByRole("heading", { name: "Reset windows" });
@@ -241,7 +252,7 @@ describe("consumption against allowance", () => {
       .getAllByRole("listitem")
       .filter((row) => /Sep|Oct/.test(row.textContent ?? ""));
     expect(scheduled).toHaveLength(2);
-    expect(scheduled.some((row) => /Concurrent runs/.test(row.textContent ?? ""))).toBe(false);
+    expect(scheduled.some((row) => /Concurrent AI tasks/.test(row.textContent ?? ""))).toBe(false);
   });
 
   it("reports a token count the gateway did not send as unreported, never as zero", async () => {

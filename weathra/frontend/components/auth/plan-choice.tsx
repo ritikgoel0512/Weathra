@@ -54,7 +54,7 @@ const DIMENSION_LABELS: Record<string, string> = {
   requests_per_day: "Requests",
   requests_per_month: "Requests",
   tokens_per_month: "Tokens",
-  concurrent_runs: "Runs at once",
+  concurrent_runs: "Concurrent AI tasks",
 };
 
 const WINDOW_LABELS: Record<string, string> = {
@@ -66,7 +66,7 @@ const WINDOW_LABELS: Record<string, string> = {
 /**
  * The order the allowances read in, widest cadence first.
  *
- * Alphabetical order put "Runs at once" above the request counts, which buries the figure most
+ * Alphabetical order put the concurrency figure above the request counts, which buries the one most
  * people are actually comparing. Anything the backend adds later that is not named here sorts
  * after these, alphabetically, so a new dimension appears rather than disappearing.
  */
@@ -93,14 +93,18 @@ function periodOf(allowance: PlanAllowanceView): string {
 /**
  * The bar's label: the measure and its window, unless the measure already carries the window.
  *
- * "Runs at once" over a `concurrent` window composed to "Runs at once at a time", which is what
- * production drew. Where the measure's own name states the cadence, the window is left off rather
- * than a second phrase for the same thing being appended to it.
+ * A `concurrent` allowance is the case: "Concurrent AI tasks" already states the cadence, and
+ * appending the window composed "Concurrent AI tasks at a time" — a second phrase for the same
+ * fact, which is what production drew back when the measure read "Runs at once".
+ *
+ * Keyed on the window rather than on the words in the measure. Sniffing the copy for "at once" tied
+ * this rule to one particular wording, so renaming the measure silently reintroduced the very
+ * phrase the rule exists to prevent.
  */
 function meterLabel(allowance: PlanAllowanceView): string {
   const measure = measureOf(allowance);
-  const period = periodOf(allowance);
-  return measure.toLowerCase().endsWith("at once") ? measure : `${measure} ${period}`;
+  if (allowance.window === "concurrent") return measure;
+  return `${measure} ${periodOf(allowance)}`;
 }
 
 /** An allowance with no ceiling is genuinely unlimited, not zero and not unknown. */

@@ -51,15 +51,47 @@ export function asPlanCode(code: string): PlanCode | null {
 export const NEAR_LIMIT = 0.8;
 
 /**
+ * The few dimensions whose identifier does not make a name a person would use.
+ *
+ * Deliberately tiny, and an exception to the derivation below rather than a replacement for it:
+ * `concurrent_runs` derives to "Concurrent runs", which says *runs* — an internal word for what a
+ * person experiences as an AI task answering their question. Every other dimension still reads as
+ * itself, so a dimension the backend adds later appears rather than disappearing behind a lookup
+ * nobody updated.
+ */
+const DIMENSION_NAMES: Readonly<Record<string, string>> = {
+  concurrent_runs: "Concurrent AI tasks",
+};
+
+/**
+ * What a dimension means, for the line under its name.
+ *
+ * Only where the name alone leaves a real question. "Requests per day" needs no gloss; a ceiling on
+ * how many things may run *at the same time* is a different kind of limit from a ceiling on how
+ * many run in a day, and the two are easy to read as the same thing.
+ */
+const DIMENSION_HELP: Readonly<Record<string, string>> = {
+  concurrent_runs: "Maximum AI tasks that can run at the same time for your account.",
+};
+
+/**
  * A dimension's name, for a person.
  *
  * Derived from the identifier rather than mapped, so a dimension the backend adds later reads as
  * itself instead of disappearing behind a lookup that has not been updated. `requests_per_day`
  * becomes "Requests per day"; the window is shown separately, because it is a different fact.
+ * `DIMENSION_NAMES` overrides that for the few identifiers whose own words are not the product's.
  */
 export function dimensionLabel(dimension: string): string {
+  const named = DIMENSION_NAMES[dimension];
+  if (named !== undefined) return named;
   const words = dimension.replace(/_/g, " ").trim();
   return words.length === 0 ? dimension : words[0]!.toUpperCase() + words.slice(1);
+}
+
+/** A dimension's one-line explanation, or null where its name already says everything. */
+export function dimensionHelp(dimension: string): string | null {
+  return DIMENSION_HELP[dimension] ?? null;
 }
 
 /** How the period reads in a sentence. Unknown windows pass through as themselves. */

@@ -26,6 +26,7 @@ import { modelTierLabel, valueProposition } from "@/lib/plan/commerce";
 import {
   PLANS_KEY,
   USAGE_KEY,
+  dimensionHelp,
   headlineDimension,
   isInternal,
   pressuredDimensions,
@@ -104,6 +105,7 @@ function unitOf(dimension: string): string | null {
 
 function Allowance({ reading }: { reading: DimensionReading }): ReactNode {
   const unit = unitOf(reading.dimension);
+  const help = dimensionHelp(reading.dimension);
   return (
     <li className={styles.allowance}>
       <div className={styles.allowanceHead}>
@@ -119,6 +121,10 @@ function Allowance({ reading }: { reading: DimensionReading }): ReactNode {
           {resetPhrase(reading.resetsAt) ?? reading.windowLabel}
         </span>
       </div>
+
+      {/* Only where the name alone leaves a real question — see `dimensionHelp`. It sits above the
+          figures because it says what the figure counts, which is worth knowing first. */}
+      {help === null ? null : <p className={styles.allowanceHelp}>{help}</p>}
 
       {reading.limited ? (
         <>

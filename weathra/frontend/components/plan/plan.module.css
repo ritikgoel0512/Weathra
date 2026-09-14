@@ -240,6 +240,15 @@
   font-size: var(--type-meta-size);
 }
 
+/* One muted line explaining what a dimension counts, for the few whose name leaves a real
+   question. Meta size and muted so it reads as a gloss on the name above it rather than as a
+   second fact competing with the figures below. */
+.allowanceHelp {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-meta-size);
+}
+
 /*
  * The reading line of an allocation row, at the prominence `10-plan-usage.png` gives it: the
  * consumed figure at metric size, its allowance and unit beside it in muted type, and the share
