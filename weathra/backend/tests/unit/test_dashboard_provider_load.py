@@ -19,13 +19,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from typing import Any
 
 import pytest
 
 from tests.provider_support import StubProvider, provider_settings
 from weathra.domain.errors import ProviderRateLimited
 from weathra.domain.location import Location
-from weathra.domain.weather import Measure, UnitSystem
+from weathra.domain.weather import HistoricalObservations, Measure, UnitSystem
 from weathra.providers.cache import CachedProvider
 from weathra.weather.history_service import HistoryService
 
@@ -157,7 +158,7 @@ class RateLimitedAfter(StubProvider):
         super().__init__(**keywords)  # type: ignore[arg-type]
         self._serves = serves
 
-    async def history(self, location, **keywords):  # type: ignore[no-untyped-def]
+    async def history(self, location: Location, **keywords: Any) -> HistoricalObservations:
         if self.history_calls >= self._serves:
             self.history_calls += 1
             raise ProviderRateLimited(
