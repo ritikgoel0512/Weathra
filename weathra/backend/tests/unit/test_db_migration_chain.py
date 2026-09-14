@@ -54,6 +54,12 @@ EXPECTED_CHAIN = (
     # need become reachable there behind `weathra_is_administrative()`, and only there. `SELECT`
     # only: every administrative write stays privileged, and `admin_roles` gains no write at all.
     "0016_admin_read_policies",
+    # Task 34.5's last blocker. The audited candidate-order confirmation is a write task 34.8 puts
+    # on the administrative screen, so it happens in the container that serves browsers — the one
+    # never given the privileged credential. Exactly the two statements it makes: `UPDATE` on
+    # `model_policies`, `INSERT` on `admin_audit`, both gated on `weathra_is_administrative()`.
+    # No `DELETE` anywhere, and `admin_roles` still gains nothing.
+    "0017_admin_write_policies",
 )
 
 # The two roles migrations may name, and what each is for. `0002` creates the assumed role and

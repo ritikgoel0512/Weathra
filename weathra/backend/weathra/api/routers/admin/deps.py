@@ -18,10 +18,10 @@ from weathra.auth.deps import AdministrativePrincipal
 from weathra.auth.rls import administrative_session, session_for
 
 __all__ = [
-    "AdministrativeReadSession",
+    "AdministrativeRequestSession",
     "AdministrativeSession",
     "administrative_db",
-    "administrative_read_db",
+    "administrative_request_db",
 ]
 
 
@@ -50,11 +50,11 @@ async def administrative_db(
 AdministrativeSession = Annotated[AsyncSession, Depends(administrative_db)]
 
 
-async def administrative_read_db(
+async def administrative_request_db(
     request: Request,
     principal: AdministrativePrincipal,
 ) -> AsyncIterator[AsyncSession]:
-    """The ordinary request connection, acting as the administrator, for administrative *reads*.
+    """The ordinary request connection, acting as the administrator.
 
     **Why a second session exists at all.** ``administrative_db`` above opens the privileged
     connection, and the request-serving container is deliberately never given that credential:
@@ -76,14 +76,17 @@ async def administrative_read_db(
     which produces the 401 and the 403, and once by the database, which produces no rows. A handler
     bug that forgot the dependency would read nothing rather than everything.
 
-    **Reads only, and that is enforced below the code.** ``0016`` grants the restricted role
-    ``SELECT`` and nothing else, so an administrative *write* attempted on this session is
-    refused by PostgreSQL rather than by a convention. Every mutation keeps
+    **What it can do is enforced below the code, not by which handler holds it.** ``0016`` grants
+    the restricted role ``SELECT`` on the lab and audit tables; ``0017`` adds exactly two writes —
+    ``UPDATE`` on ``model_policies`` and ``INSERT`` on ``admin_audit`` — because the audited
+    candidate-order confirmation task 34.8 specifies is a write that has to happen on the request
+    path, and it is the only one that does. Every other administrative mutation keeps
     ``AdministrativeSession`` and the privileged connection, which is to say it keeps running
-    somewhere other than this container.
+    somewhere other than this container, and anything this session attempts beyond those two is
+    refused by PostgreSQL rather than by a convention.
     """
     async with session_for(engines_of(request), principal) as session:
         yield session
 
 
-AdministrativeReadSession = Annotated[AsyncSession, Depends(administrative_read_db)]
+AdministrativeRequestSession = Annotated[AsyncSession, Depends(administrative_request_db)]

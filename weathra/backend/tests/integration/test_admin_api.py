@@ -1363,3 +1363,122 @@ async def test_an_ordinary_persons_request_stays_attributed_to_their_plan_everyw
         assert subject_kind == "user"
         assert is_internal is False
         assert plan == "free", "a product event must carry the plan it was served under"
+
+
+# ================================================== 34.5 the audited confirmation, on the request path
+
+
+async def test_confirming_the_current_order_is_a_real_audited_decision(
+    api_factory: ApiFactory, seeded_reference_data: None
+) -> None:
+    """The production action task 34.5 has left: keep the order, and record why.
+
+    This is the write that failed twice in production with an internal error and no audit row —
+    `AdministrativeSession` raised `DATABASE_URL_PRIVILEGED is not configured` while resolving, so
+    the handler never ran. It is on the request connection since `0017`, which grants exactly the
+    two statements it makes: `UPDATE` on `model_policies` and `INSERT` on `admin_audit`.
+
+    **Confirming an unchanged order is a decision, not a no-op.** An administrator who has read the
+    comparison and concluded that the current order is right has decided something, and the trail
+    has to be able to say so — otherwise the only auditable outcome is a change, and "we looked and
+    kept it" is indistinguishable from nobody having looked. So `before` and `after` are equal here
+    on purpose, and the row is still written.
+    """
+    async with with_inference(api_factory) as api:
+        admin = await administrator(api)
+
+        async with privileged_session(api.app.state.engines.privileged_sessionmaker) as session:
+            current = list(
+                await session.scalars(
+                    text(
+                        "SELECT unnest(candidate_catalog_keys) FROM model_policies WHERE policy_id = 'balanced'"
+                    )
+                )
+            )
+            run_id = await session.scalar(
+                text("SELECT id::text FROM model_comparison_runs LIMIT 1")
+            )
+
+        response = await call(
+            api,
+            "PUT",
+            "/admin/policies/balanced/candidates",
+            {
+                "candidate_catalog_keys": current,
+                **({"cited_comparison_run_ids": [run_id]} if run_id else {}),
+            },
+            api.authorize(subject=admin),
+        )
+
+        assert response.status_code == 200, response.text
+        assert response.json()["candidate_catalog_keys"] == current, "the order did not survive"
+
+        # Exactly one row, and it is about this decision.
+        async with privileged_session(api.app.state.engines.privileged_sessionmaker) as session:
+            rows = (
+                await session.execute(
+                    text(
+                        "SELECT acting_principal::text, action, subject_kind, subject_id, "
+                        "before, after, created_at FROM admin_audit WHERE subject_id = 'balanced'"
+                    )
+                )
+            ).all()
+
+        assert len(rows) == 1, f"expected one audit row, found {len(rows)}"
+        acting, action, kind, subject_id, before, after, created_at = rows[0]
+        assert acting == admin, "the row does not name the administrator who decided"
+        assert action, "the row records no action"
+        assert kind == "model_policy"
+        assert subject_id == "balanced"
+        assert created_at is not None, "the row carries no moment"
+        # Before and after are both recorded, and both are the order that stands.
+        assert before["candidate_catalog_keys"] == current
+        assert after["candidate_catalog_keys"] == current
+
+
+async def test_confirming_twice_leaves_the_order_intact_and_each_decision_recorded(
+    api_factory: ApiFactory, seeded_reference_data: None
+) -> None:
+    """A person who presses it again after a failure must not corrupt anything.
+
+    Both production attempts failed, so the real operator will press it once more. The order is the
+    same order either way — the write is a `SET`, not an append — and each press is its own entry in
+    the trail, because an audit log that collapsed repeats would be hiding that somebody pressed it
+    twice, which is a fact about what happened.
+    """
+    async with with_inference(api_factory) as api:
+        admin = await administrator(api)
+
+        async with privileged_session(api.app.state.engines.privileged_sessionmaker) as session:
+            current = list(
+                await session.scalars(
+                    text(
+                        "SELECT unnest(candidate_catalog_keys) FROM model_policies WHERE policy_id = 'balanced'"
+                    )
+                )
+            )
+
+        for _ in range(2):
+            response = await call(
+                api,
+                "PUT",
+                "/admin/policies/balanced/candidates",
+                {"candidate_catalog_keys": current},
+                api.authorize(subject=admin),
+            )
+            assert response.status_code == 200, response.text
+
+        async with privileged_session(api.app.state.engines.privileged_sessionmaker) as session:
+            settled = list(
+                await session.scalars(
+                    text(
+                        "SELECT unnest(candidate_catalog_keys) FROM model_policies WHERE policy_id = 'balanced'"
+                    )
+                )
+            )
+            entries = await session.scalar(
+                text("SELECT count(*) FROM admin_audit WHERE subject_id = 'balanced'")
+            )
+
+        assert settled == current, "a repeated confirmation changed the order"
+        assert entries == 2, f"two presses left {entries} entries in the trail"

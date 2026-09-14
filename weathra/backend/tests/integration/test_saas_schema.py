@@ -543,23 +543,37 @@ async def test_a_lab_or_audit_table_is_reachable_only_by_an_administrator(
             {"table": table},
         )
     ]
-    assert policies == [f"{table}_admin_read"], (
-        f"{table} carries {policies or 'no policy'}; it is meant to carry exactly the "
-        "administrator-gated read and nothing else"
+    # `admin_audit` carries a second one: `0017` lets an administrator *append* to the trail,
+    # because the audited candidate-order confirmation task 34.8 specifies writes its record from
+    # the request path. Append only — no `UPDATE` and no `DELETE` is granted to that role, so a
+    # trail this role can add to is still one it cannot edit or prune.
+    expected = [f"{table}_admin_read"]
+    if table == "admin_audit":
+        expected.append("admin_audit_admin_append")
+    assert sorted(policies) == sorted(expected), (
+        f"{table} carries {policies or 'no policy'}; expected {expected}"
     )
 
     using = await privileged.scalar(
-        text(
-            "SELECT pg_get_expr(polqual, polrelid) FROM pg_policy "
-            "WHERE polrelid = to_regclass(:table)"
-        ),
-        {"table": table},
+        text("SELECT pg_get_expr(polqual, polrelid) FROM pg_policy WHERE polname = :policy"),
+        {"policy": f"{table}_admin_read"},
     )
     # The gate is the row-backed predicate, not a claim. `0011` replaced a claim-reading accessor
     # with this one precisely so an asserted role grants nothing.
     assert "weathra_is_administrative()" in using, (
-        f"{table}'s policy does not consult the administrative predicate: {using}"
+        f"{table}'s read policy does not consult the administrative predicate: {using}"
     )
+
+    if table == "admin_audit":
+        # An `INSERT` policy carries no `USING` — what it may append is the `WITH CHECK`, and that
+        # is the whole control on who may write to the trail.
+        check = await privileged.scalar(
+            text("SELECT pg_get_expr(polwithcheck, polrelid) FROM pg_policy WHERE polname = :p"),
+            {"p": "admin_audit_admin_append"},
+        )
+        assert "weathra_is_administrative()" in check, (
+            f"the audit append policy does not consult the administrative predicate: {check}"
+        )
 
 
 async def test_the_privileged_path_can_still_write_the_lab_and_audit_tables(

@@ -10236,7 +10236,7 @@
     },
     "/api/v1/admin/policies/{policy_id}/candidates": {
       "put": {
-        "description": "**Protected. Administrative.** Re-points a policy's ordered candidate list \u2014 a model promotion.",
+        "description": "**Protected. Administrative.** Re-points a policy's ordered candidate list \u2014 a model promotion.\n\nConfirm a policy's candidate order, citing the evidence relied upon.\n\nOn the request connection, and the only administrative write that is. Task 34.8 puts this\nwrite on the administrative screen, so it runs in the container that serves browsers \u2014 which\nis deliberately never given the privileged credential, so it used to fail before the handler\nran, with no audit row and no refusal to explain it. `0017` grants the two statements it makes\nand nothing else: the `UPDATE` on `model_policies` and the `INSERT` on `admin_audit`, each\ngated on the database's own answer to whether the acting subject holds the role.",
         "operationId": "set_policy_candidates_api_v1_admin_policies__policy_id__candidates_put",
         "parameters": [
           {

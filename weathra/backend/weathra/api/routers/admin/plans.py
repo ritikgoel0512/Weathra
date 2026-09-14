@@ -29,7 +29,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 
 from weathra.api.middleware import annotate
-from weathra.api.routers.admin.deps import AdministrativeReadSession, AdministrativeSession
+from weathra.api.routers.admin.deps import AdministrativeRequestSession, AdministrativeSession
 from weathra.auth.deps import AdministrativePrincipal
 from weathra.auth.roles import ADMINISTRATOR_ROLE, RoleStore
 from weathra.domain.entitlements import PlanCode
@@ -147,7 +147,7 @@ class RoleListResponse(BaseModel):
 async def list_plans(
     request: Request,
     principal: AdministrativePrincipal,
-    session: AdministrativeReadSession,
+    session: AdministrativeRequestSession,
 ) -> PlanListResponse:
     annotate(request, acting_user_id=principal.user_id)
     plans = await PlanStore(session).list()
@@ -158,7 +158,7 @@ async def list_plans(
 async def list_allowances(
     request: Request,
     principal: AdministrativePrincipal,
-    session: AdministrativeReadSession,
+    session: AdministrativeRequestSession,
     plan_code: Annotated[PlanCode | None, Query(description="Narrow to one plan.")] = None,
     internal: Annotated[bool, Query(description="The internal allowance only.")] = False,
 ) -> AllowanceListResponse:

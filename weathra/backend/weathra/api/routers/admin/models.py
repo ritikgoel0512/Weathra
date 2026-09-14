@@ -25,7 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from weathra.api.dependencies import Inference
 from weathra.api.middleware import annotate
-from weathra.api.routers.admin.deps import AdministrativeReadSession, AdministrativeSession
+from weathra.api.routers.admin.deps import AdministrativeRequestSession, AdministrativeSession
 from weathra.auth.deps import AdministrativePrincipal
 from weathra.domain.entitlements import CallRole, PlanCode
 from weathra.domain.errors import ValidationFailed
@@ -234,7 +234,7 @@ class PolicyAuditResponse(BaseModel):
 async def list_catalog(
     request: Request,
     principal: AdministrativePrincipal,
-    session: AdministrativeReadSession,
+    session: AdministrativeRequestSession,
     status: Annotated[CatalogStatus | None, Query(description="Narrow by status.")] = None,
     capability_role: Annotated[
         CallRole | None, Query(description="Narrow to entries fit for one call role.")
@@ -344,7 +344,7 @@ async def disable_catalog_entry(
 async def list_policies(
     request: Request,
     principal: AdministrativePrincipal,
-    session: AdministrativeReadSession,
+    session: AdministrativeRequestSession,
 ) -> PolicyListResponse:
     annotate(request, acting_user_id=principal.user_id)
     policies = await PolicyStore(session).list()
@@ -360,7 +360,7 @@ async def read_policy_audit(
     request: Request,
     policy_id: PolicyIdentifier,
     principal: AdministrativePrincipal,
-    session: AdministrativeReadSession,
+    session: AdministrativeRequestSession,
     limit: Annotated[int, Query(ge=1, le=100, description="Newest first.")] = 20,
 ) -> PolicyAuditResponse:
     """What has been done to one policy, newest first, with the comparison runs each change cited.
@@ -414,9 +414,18 @@ async def set_policy_candidates(
     policy_id: PolicyIdentifier,
     body: PolicyCandidatesRequest,
     principal: AdministrativePrincipal,
-    session: AdministrativeSession,
+    session: AdministrativeRequestSession,
     inference: Inference,
 ) -> PolicyRecord:
+    """Confirm a policy's candidate order, citing the evidence relied upon.
+
+    On the request connection, and the only administrative write that is. Task 34.8 puts this
+    write on the administrative screen, so it runs in the container that serves browsers — which
+    is deliberately never given the privileged credential, so it used to fail before the handler
+    ran, with no audit row and no refusal to explain it. `0017` grants the two statements it makes
+    and nothing else: the `UPDATE` on `model_policies` and the `INSERT` on `admin_audit`, each
+    gated on the database's own answer to whether the acting subject holds the role.
+    """
     annotate(request, acting_user_id=principal.user_id)
 
     # `specs/evaluation`: a candidate failing structured JSON reliability or groundedness is not

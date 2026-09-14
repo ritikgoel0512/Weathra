@@ -26,7 +26,7 @@ import pytest
 from fastapi.routing import APIRoute
 
 from weathra.api.app import build_app
-from weathra.api.routers.admin.deps import administrative_db, administrative_read_db
+from weathra.api.routers.admin.deps import administrative_db, administrative_request_db
 from weathra.config import Settings
 
 ADMIN_PREFIX = "/api/v1/admin"
@@ -108,7 +108,7 @@ def test_every_administrative_read_uses_the_request_connection() -> None:
         dependencies = _dependency_callables(route)
         if administrative_db in dependencies:
             offences.append(f"GET {path} opens the privileged connection")
-        elif administrative_read_db not in dependencies:
+        elif administrative_request_db not in dependencies:
             offences.append(f"GET {path} takes neither administrative session")
 
     assert not offences, "administrative reads that cannot work in production:\n  " + "\n  ".join(
@@ -119,7 +119,7 @@ def test_every_administrative_read_uses_the_request_connection() -> None:
 def test_every_administrative_read_is_still_behind_the_role() -> None:
     """Moving off the privileged connection must not have moved the refusal with it.
 
-    `administrative_read_db` depends on `AdministrativePrincipal`, so the 401 and the 403 are
+    `administrative_request_db` depends on `AdministrativePrincipal`, so the 401 and the 403 are
     produced before a session is opened — exactly as they were. Asserted because the change that
     would break it looks like a simplification: the read session does not *need* the principal for
     authorization, only for its claims, and dropping the annotation would compile.
@@ -159,7 +159,7 @@ def test_each_endpoint_the_browser_reported_as_failing(path: str) -> None:
     """
     route = _get_route(path)
     assert administrative_db not in _dependency_callables(route)
-    assert administrative_read_db in _dependency_callables(route)
+    assert administrative_request_db in _dependency_callables(route)
 
 
 @pytest.mark.parametrize(
@@ -191,21 +191,45 @@ def test_the_three_that_read_across_people_stay_privileged(path: str) -> None:
     """
     route = _get_route(path)
     assert administrative_db in _dependency_callables(route)
-    assert administrative_read_db not in _dependency_callables(route)
+    assert administrative_request_db not in _dependency_callables(route)
 
 
-def test_every_administrative_write_keeps_the_privileged_connection() -> None:
-    """The other half, and the reason this is not simply "stop using the privileged session".
+# The one administrative write that runs on the request connection. Task 34.8 puts the audited
+# candidate-order confirmation on the administrative screen, so it happens in the container that
+# serves browsers — the one deliberately never given the privileged credential. `0017` grants
+# exactly the two statements it makes and nothing else.
+AUDITED_CONFIRMATION = f"{ADMIN_PREFIX}/policies/{{policy_id}}/candidates"
 
-    `0016` grants the restricted role `SELECT` and nothing more, so a write on the read session
-    would be refused by PostgreSQL. Writes stay where they were, which is to say they stay out of
-    the request-serving container — and `34.5`'s promotion is blocked by that, honestly, rather
-    than by a mistake.
+
+def test_the_audited_confirmation_runs_on_the_request_connection() -> None:
+    """34.5's promotion, and the reason `0017` exists."""
+    route = next(
+        (
+            r
+            for served, r in _admin_routes()
+            if served == AUDITED_CONFIRMATION and "PUT" in (r.methods or set())
+        ),
+        None,
+    )
+    assert route is not None, f"{AUDITED_CONFIRMATION} is not a registered PUT route"
+    dependencies = _dependency_callables(route)
+    assert administrative_request_db in dependencies
+    assert administrative_db not in dependencies
+
+
+def test_every_other_administrative_write_keeps_the_privileged_connection() -> None:
+    """Everything else stays out of the request-serving container.
+
+    `0016` and `0017` between them grant the restricted role `SELECT` on the lab and audit tables,
+    `UPDATE` on `model_policies` and `INSERT` on `admin_audit` — and nothing more. Any other write
+    attempted on that session is refused by PostgreSQL, so a route that quietly moved onto it would
+    fail in production rather than here. This is what makes that a deliberate list of two.
     """
     for path, route in _admin_routes():
         methods = route.methods or set()
-        if methods <= {"GET", "HEAD", "OPTIONS"}:
+        if methods <= {"GET", "HEAD", "OPTIONS"} or path == AUDITED_CONFIRMATION:
             continue
-        assert administrative_read_db not in _dependency_callables(route), (
-            f"{sorted(methods)} {path} writes on the read session, which cannot write"
+        assert administrative_request_db not in _dependency_callables(route), (
+            f"{sorted(methods)} {path} writes on the request session, which may write only the "
+            "candidate order and its audit row"
         )
