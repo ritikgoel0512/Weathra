@@ -692,12 +692,13 @@ the resolution existed and nothing called it, so a live run reached its model th
 walk; group 34's wiring is what made the requirement true, and the row cites it. A status
 following the checkbox is now asserted in both directions, which is what would have caught both.
 
-**No requirement is outstanding.** `web-ui`'s accessibility and responsive layout was the last
-`MANUAL` row; it closed on 2026-09-14 against task 21.8's amended contract, which replaced its three
-unreproducible human passes with twelve clauses of automated accessibility, semantic, keyboard,
-destructive-action and responsive-browser verification that CI runs on every push. The four `OPEN`
-rows are `web-ui`'s
-Admin Model & AI Usage and Plan & Usage screens, which group 33 may not begin until the Visily
-designs exist (33.1, 33.2) — they are **DESIGN-GATED**, not merely unwritten, and no route
-advertises either screen as working. They name no test on purpose: writing tests for screens
-nobody has designed would make this table claim coverage of code that does not exist.
+**No requirement is outstanding, and no row is anything but `IMPLEMENTED`.** `web-ui`'s
+accessibility and responsive layout was the last `MANUAL` row; it closed on 2026-09-14 against task
+21.8's amended contract, which replaced its three unreproducible human passes with twelve clauses of
+automated accessibility, semantic, keyboard, destructive-action and responsive-browser verification
+that CI runs on every push. The last `OPEN` rows were `web-ui`'s Admin Model & AI Usage and Plan &
+Usage screens, which group 33 could not begin until the Visily designs existed (33.1, 33.2) — they
+were **DESIGN-GATED** rather than merely unwritten, and until they were built no route advertised
+either screen as working. Both are now designed, built and traced: Plan & Usage by task 34.10 with
+self-service tier selection added by 34.44, and Admin Model & AI Usage by 34.8's audited policy
+confirmation surface and 34.18's usage dashboard over the administrative aggregates.

@@ -1,0 +1,833 @@
+# web-ui Specification
+
+## Purpose
+The Next.js application people actually use: a dashboard that briefs them, an analyst they can question, historical and comparison screens that carry the argument, an evidence screen that shows the work, and saved locations and settings that make it theirs — a separately structured frontend that consumes the documented API and nothing else.
+
+## Requirements
+
+### Requirement: Separate frontend application
+
+The frontend SHALL be a Next.js application written in React and TypeScript, developed, built, and deployed independently of the backend. It SHALL communicate with the backend exclusively through the documented versioned API and SSE streams, and the backend SHALL NOT serve the frontend's pages or assets.
+
+The backend's base URL SHALL be frontend configuration, so the two may be deployed to different origins and later placed behind one domain without code changes. The only Supabase configuration exposed to the browser SHALL be the project URL and the public client key; no server-side secret, and in particular no service-role key, SHALL be present in the frontend's configuration or built bundle.
+
+#### Scenario: Frontend builds independently
+
+- **WHEN** the frontend is built
+- **THEN** it builds without the backend running
+
+#### Scenario: Backend does not serve the UI
+
+- **WHEN** the backend's routes are inspected
+- **THEN** none of them serves frontend pages or assets
+
+#### Scenario: Backend URL is configuration
+
+- **WHEN** the configured backend base URL is changed
+- **THEN** the frontend targets the new origin with no code change
+
+#### Scenario: Only documented endpoints used
+
+- **WHEN** the frontend's network calls are inspected
+- **THEN** every call targets a documented versioned API endpoint, an SSE stream, or Supabase Auth
+
+### Requirement: Visily design artifacts precede implementation
+
+Frontend implementation SHALL follow approved design artifacts produced in **Visily.ai**. A Visily design phase SHALL complete before substantial frontend implementation begins and SHALL cover both the authentication experience and the core product experience. Visily is the design tool for the remaining UI/UX work; the earlier UXPilot exploration is prior art whose approved decisions are carried forward under the requirement below rather than rediscovered.
+
+The design phase SHALL establish a shared Weathra design system covering typography, spacing, component hierarchy, navigation, cards, charts, weather visualization patterns, responsive behavior, loading states, empty states, error states, and authentication states. Every MVP screen — authentication and product alike — SHALL have an approved design artifact recorded in the repository documentation before its implementation is considered complete. Implemented screens SHALL follow the approved artifacts rather than generic generated styling, and any deliberate divergence SHALL be recorded with its reason.
+
+The design gate SHALL be satisfiable with Visily's freely available capabilities. No paid Visily export capability, no design-to-code handoff, and no other design tool — Figma included — SHALL be required to satisfy it: an approved Visily screen is a visual reference, and implementing it manually in Next.js against the recorded design system SHALL be a conforming implementation path.
+
+#### Scenario: Design phase precedes implementation
+
+- **WHEN** substantial frontend implementation begins
+- **THEN** the Visily artifacts covering the authentication screens, the product screens, and the shared design system are already approved and recorded
+
+#### Scenario: No paid export or second tool required
+
+- **WHEN** the design gate is satisfied for a screen
+- **THEN** it was satisfied without a paid Visily export capability and without Figma or any other design tool
+
+#### Scenario: Manual implementation conforms
+
+- **WHEN** an approved Visily screen is implemented by hand in Next.js against the recorded design system
+- **THEN** the implementation conforms to the gate, no generated-code export being required
+
+#### Scenario: Design system established
+
+- **WHEN** the recorded design system is inspected
+- **THEN** it covers typography, spacing, component hierarchy, navigation, cards, charts, weather visualization patterns, responsive behavior, loading, empty, error, and authentication states
+
+#### Scenario: Screen implemented against a design artifact
+
+- **WHEN** an MVP screen is implemented
+- **THEN** its design artifact is referenced in the repository documentation
+- **AND** the implementation follows it rather than generic generated styling
+
+#### Scenario: The screens reached after the MVP are represented in the design roadmap
+
+- **WHEN** the design roadmap is inspected
+- **THEN** Weather Intelligence Report, Forecast Explorer, Weather Scenario Lab, Weather Watch, Travel Intelligence, Admin Model & AI Usage, and Plan & Usage are each represented with their design artifact
+- **AND** each is shown at its actual status rather than as a future entry, all seven now being built
+
+#### Scenario: Divergence recorded
+
+- **WHEN** an implemented screen deliberately diverges from its design artifact
+- **THEN** the divergence and its reason are recorded
+
+### Requirement: Approved design direction carried into Visily
+
+The design decisions already approved during the earlier UXPilot exploration SHALL be carried into Visily as design-direction inputs rather than rediscovered, and the Visily design system and screens SHALL conform to them. The carried-forward direction is:
+
+| Decision | What it fixes |
+|---|---|
+| **Midnight Intelligence** palette | The dark-first color direction and its token set, with the light appearance derived from it |
+| **Plus Jakarta Sans** for display and heading type, **Inter** for body and UI type | The typographic pairing and its role assignment |
+| **Intelligent Command Center** shell with persistent left navigation | The application frame: a persistent left navigation identifying the signed-in person and reaching every screen |
+| Location-focused **Dashboard** | The Dashboard is organized around a chosen or default location rather than a generic feed |
+| Premium modern SaaS visual direction | The overall level of visual finish: density, elevation, restraint, and chart treatment |
+| **Weathra Intelligence** | The named synthesized briefing surface on the Dashboard |
+| **What Changed?** | The named surface for forecast movement since the last captured snapshot |
+| **Why?** | The named surface explaining what drove a stated conclusion |
+| **Agent Evidence** | The named surface showing the run record behind an answer |
+| Visible distinction between **Observed**, **Forecast**, **Historical**, **Deterministic Analytics**, and **AI Interpretation** | Data class is a presentational primitive, not prose |
+| Source attribution | Provider, location, and period shown on every weather-bearing surface |
+| Timestamps | Retrieval and validity times shown rather than implied |
+| Uncertainty and confidence presentation | Confidence and its stated basis are presented, not omitted or overstated |
+| No implication that the language model predicts numerical weather values | Nothing in the visual or copy direction may suggest the model produces measurements |
+
+These decisions SHALL be recorded as approved design-direction inputs with their UXPilot origin noted, and any later departure from one SHALL be recorded with its reason in the same way a screen-level divergence is.
+
+#### Scenario: Direction carried forward rather than rediscovered
+
+- **WHEN** the Visily design system is inspected
+- **THEN** every carried-forward decision above is present in it
+- **AND** each is recorded as an approved design-direction input rather than reopened
+
+#### Scenario: Palette and typography conform
+
+- **WHEN** the recorded design tokens are inspected
+- **THEN** the color tokens are the Midnight Intelligence palette and the type roles are Plus Jakarta Sans for display and heading and Inter for body and UI
+
+#### Scenario: Shell and Dashboard conform
+
+- **WHEN** the Visily screens are inspected
+- **THEN** they share the Intelligent Command Center shell with persistent left navigation
+- **AND** the Dashboard is organized around a chosen or default location
+
+#### Scenario: Data-class distinction preserved in the design
+
+- **WHEN** any screen presenting weather data is inspected
+- **THEN** observed, forecast, historical, deterministic-analytics, and AI-interpretation content are visibly distinguished, attributed, timestamped, and carry their uncertainty
+- **AND** nothing in the design implies the language model produced a numerical weather value
+
+#### Scenario: Departure from the direction recorded
+
+- **WHEN** a Visily design deliberately departs from a carried-forward decision
+- **THEN** the departure and its reason are recorded
+
+### Requirement: MVP authentication screens
+
+The frontend SHALL implement these authentication screens and states in the MVP, each following its approved design artifact:
+
+| Screen / state | Purpose |
+|---|---|
+| Sign In | Email and password sign-in with a non-disclosing failure state |
+| Create Account | Sign-up with the password rules stated before submission |
+| Verify Email / Enter Verification Code | Code entry for the configured Supabase verification flow, and handling of a returning verification link |
+| Verification Successful | Confirmation before continuing into the product |
+| Verification Failed / Expired Code | Distinct incorrect-code and expired-code states |
+| Resend Verification Code | Resend action with in-progress, confirmed, and rate-limited states |
+| Forgot Password | Reset request with an identical response for known and unknown addresses |
+| Reset Password | New-password entry with the rules stated and an expired-reset state |
+
+Authentication screens SHALL be reachable without an authenticated session, and SHALL redirect an already-authenticated person into the product rather than showing a sign-in form.
+
+#### Scenario: Sign-up through verification to the product
+
+- **WHEN** a person creates an account, enters the verification code they received, and continues
+- **THEN** the success state is shown and they reach the protected product area
+
+#### Scenario: Incorrect and expired codes distinguished
+
+- **WHEN** a person enters an incorrect code, and separately an expired code
+- **THEN** the two states are visibly distinct and each offers the appropriate next step
+
+#### Scenario: Resend states shown
+
+- **WHEN** a person requests a new verification code
+- **THEN** an in-progress state is shown followed by confirmation
+- **AND** a request made too soon shows how long they must wait
+
+#### Scenario: Verification link handled
+
+- **WHEN** a person follows the verification link from their email
+- **THEN** verification completes without further entry and the success state is shown
+
+#### Scenario: Sign-in failure non-disclosing
+
+- **WHEN** a person submits an unknown email, and separately a wrong password
+- **THEN** the same failure message is shown in both cases
+
+#### Scenario: Unverified sign-in routed to verification
+
+- **WHEN** an unverified person signs in with correct credentials
+- **THEN** they are shown the verification step rather than the product or a generic error
+
+#### Scenario: Forgot password through reset
+
+- **WHEN** a person requests a reset, verifies, and sets a new password meeting the stated rules
+- **THEN** the new password takes effect and they can sign in with it
+
+#### Scenario: Expired reset
+
+- **WHEN** a person attempts to complete an expired reset
+- **THEN** an expired state is shown with the option to request another
+
+#### Scenario: Authenticated person redirected away from auth screens
+
+- **WHEN** an authenticated person opens the sign-in or create-account screen
+- **THEN** they are redirected into the product
+
+### Requirement: Protected areas and authentication states
+
+The frontend SHALL treat the product screens as protected. An unauthenticated visitor SHALL be routed to sign-in rather than shown an empty or broken product screen, and after signing in SHALL be returned to where they were going. Route protection SHALL be applied before a protected screen renders, and SHALL NOT be the only place authorization is enforced — the backend remains authoritative.
+
+The frontend SHALL show a distinct state while authentication status is still being determined, and SHALL NOT flash protected content before that resolves. An authenticated session SHALL persist across reloads and browser restarts, and SHALL be refreshed transparently while valid. When a session expires, the frontend SHALL show an expired-session state, return the person to sign-in, and preserve their destination — never presenting an authentication failure as a data or server error. A sign-out action SHALL be available wherever a person is signed in, and SHALL clear all client-side authenticated state.
+
+#### Scenario: Unauthenticated visitor routed to sign-in
+
+- **WHEN** an unauthenticated visitor opens a protected product screen
+- **THEN** they are routed to sign-in
+- **AND** no protected content is rendered
+
+#### Scenario: Destination preserved through sign-in
+
+- **WHEN** an unauthenticated visitor is routed to sign-in from a protected screen and then signs in
+- **THEN** they arrive at the screen they originally requested
+
+#### Scenario: Authentication status pending
+
+- **WHEN** authentication status has not yet resolved
+- **THEN** a distinct pending state is shown
+- **AND** protected content does not flash before it resolves
+
+#### Scenario: Session persists across a reload
+
+- **WHEN** an authenticated person reloads the application
+- **THEN** they remain signed in without re-entering credentials
+
+#### Scenario: Expired session handled gracefully
+
+- **WHEN** an API request fails because the session expired
+- **THEN** an expired-session state is shown and the person is returned to sign-in
+- **AND** the failure is not presented as a data or server error
+
+#### Scenario: Sign out clears state
+
+- **WHEN** a signed-in person signs out
+- **THEN** all client-side authenticated state is cleared and protected screens are no longer reachable
+
+#### Scenario: Backend remains authoritative
+
+- **WHEN** a protected API request is made without a valid session
+- **THEN** the backend rejects it regardless of what the frontend rendered
+
+### Requirement: MVP product screens
+
+The frontend SHALL implement these protected product screens in the MVP:
+
+| Screen | Purpose |
+|---|---|
+| Dashboard | The Weathra Intelligence briefing for a chosen or default location: current conditions, forecast movement, anomalies, historical context, and What Changed? |
+| AI Weather Analyst | Free-text questioning with streamed progress and a data-class-labelled answer |
+| Historical Analytics | Historical retrieval, period comparison, and baseline comparison with charts |
+| Compare Cities | Multi-location comparison with criterion selection and per-candidate evidence |
+| Agent Evidence / Activity | The full record of a run: agents, tool calls, results, analytics methods, cited knowledge, timings |
+| Saved Locations | List, add, and remove saved locations |
+| Settings | Unit system, default forecast horizon, default location, sign-out, session-memory deletion, and deletion of the person's Weathra data |
+
+Every MVP product screen SHALL be reachable from a persistent navigation surface visible to an authenticated person, and that surface SHALL identify who is signed in.
+
+#### Scenario: MVP screens present and reachable
+
+- **WHEN** an authenticated person opens the application
+- **THEN** every MVP product screen is reachable from the persistent navigation
+- **AND** the navigation identifies who is signed in
+
+#### Scenario: Dashboard briefing rendered
+
+- **WHEN** a person opens the Dashboard with a default or chosen location
+- **THEN** it renders current conditions, forecast movement, anomalies, historical context, and What Changed?
+- **AND** labels each part with its data class
+
+#### Scenario: Analyst streams progress
+
+- **WHEN** a person asks a question in the AI Weather Analyst
+- **THEN** routing, agent, and tool progress appear as they occur
+- **AND** the final answer appears with its data-class labels and attribution
+
+#### Scenario: Evidence screen shows the run
+
+- **WHEN** a person opens Agent Evidence for a completed question
+- **THEN** it shows the agents that ran, each tool call and result, the analytics methods, the cited knowledge, and the timings
+
+#### Scenario: Evidence is reachable without an identifier
+
+- **WHEN** a person opens Agent Evidence from the navigation with no run selected
+- **THEN** their own recent runs are listed, newest first, each naming its question, when it ran, and the places it resolved
+- **AND** each row opens that run's full record
+- **AND** with no runs stored, the screen says so and offers where to produce one
+
+#### Scenario: One person's evidence is not another's
+
+- **WHEN** a person opens Agent Evidence
+- **THEN** only records belonging to that person are listed
+- **AND** the screen states that a run is readable only by the account that produced it
+
+#### Scenario: Historical analytics rendered
+
+- **WHEN** a person requests a period comparison on Historical Analytics
+- **THEN** both periods, their deltas, and their charts render with the historical data class labelled
+
+#### Scenario: Comparison rendered with evidence
+
+- **WHEN** a person compares three cities
+- **THEN** the ranking renders with each candidate's score and the values behind it
+
+#### Scenario: Saved locations and settings work end to end
+
+- **WHEN** an authenticated person saves a location and sets imperial units in Settings
+- **THEN** the location appears in Saved Locations and later screens render in imperial units
+
+#### Scenario: Saved data follows the person across sessions and devices
+
+- **WHEN** a person signs in from a different browser
+- **THEN** their saved locations and preferences are present
+
+#### Scenario: Another person's data not visible
+
+- **WHEN** a different person signs in on the same browser
+- **THEN** they see only their own saved locations and preferences
+
+### Requirement: A route that is not built says so, and every screen reserved here is now built
+
+**This requirement has been satisfied and its subject has changed.** It was written as *"Post-MVP screens are designed, not built"*, reserving navigation and routing for Weather Intelligence Report, Forecast Explorer, Weather Scenario Lab, Weather Watch, Travel Intelligence, Admin Model & AI Usage, and Plan & Usage without implementing them. **All seven routes are now implemented**, and the requirement is kept — amended rather than deleted — because the standing rule it carries outlives the list it was written about.
+
+The standing rule: a route the frontend publishes SHALL either render its screen or state plainly that it is not yet available. It SHALL NOT render a broken or empty interface, and a navigation entry leading to a screen that does not exist SHALL be de-emphasised with the caveat in its accessible name rather than in a badge, so the navigation does not read as a roadmap. The caveat SHALL be removed per screen as each is built, and never for a screen that is not.
+
+One part of one screen still meets that rule by stating its absence rather than by rendering: the Admin Model & AI Usage route's model-status, token-usage, cost, latency, error and plan-usage panels are **not built**, SHALL continue to state so on the route, and SHALL fetch nothing. The administrative model policy confirmation surface on the same route **is** built, and is the only part of that screen that loads anything.
+
+#### Scenario: A route without a screen states its status
+
+- **WHEN** a person navigates to a route whose screen is not built
+- **THEN** the screen states that it is not yet available
+- **AND** does not render a broken or empty interface
+
+#### Scenario: An unbuilt screen is caveated rather than badged
+
+- **WHEN** the navigation surface is inspected
+- **THEN** a screen that is not yet built is de-emphasised and its accessible name says it is coming
+- **AND** it is not advertised as working, and carries no badge that makes the navigation read as a roadmap
+
+#### Scenario: Every screen this requirement reserved is reachable and built
+
+- **WHEN** the seven routes this requirement reserved are navigated to
+- **THEN** each renders its implemented screen rather than a not-yet-available statement
+- **AND** the only exception is the Admin Model & AI Usage panels named above, which state their own absence
+
+#### Scenario: Plan & Usage shows the person their own standing
+
+- **WHEN** a signed-in person navigates to the Plan & Usage route
+- **THEN** their own plan, allowances and consumption are shown
+- **AND** no other person's usage and no aggregate across users is requested or rendered
+
+#### Scenario: The administrative route states which of its panels are unbuilt
+
+- **WHEN** any person navigates to the Admin Model & AI Usage route
+- **THEN** the route states that model status, token usage, cost, latency, errors and plan usage are not yet available
+- **AND** no token-usage, cost, or plan-consumption request is issued for any visitor
+- **AND** the policy confirmation surface below is the only part of the screen that loads anything, and every read it issues is one the backend refuses to a caller without the administrative role
+
+### Requirement: Forecast Explorer
+
+The frontend SHALL provide a Forecast Explorer screen showing, for the acting person's default location, the current measurements the provider reported, a selectable forecast horizon, the forecast series drawn over that horizon, the deterministic statistics computed for it, the confidence the forecast itself carries with its stated basis, and every hourly entry the provider returned.
+
+It SHALL show the resolution the provider actually reported: no entry SHALL be interpolated to fill a grid and none SHALL be dropped to fit one. A measure the provider did not report SHALL be absent rather than shown as a dash or a zero, and where no hourly series was returned the screen SHALL say so instead of drawing one. The screen SHALL name the provider that answered, SHALL NOT name a forecast model, a sensor network, a reliability score or a convergence figure Weathra does not have, and SHALL NOT call a language model — every figure on it is retrieved or deterministically computed.
+
+#### Scenario: The forecast at the provider's own resolution
+
+- **WHEN** a person opens Forecast Explorer
+- **THEN** the current measurements, the forecast series, the computed statistics and the forecast's confidence are shown for their default location
+- **AND** every hourly entry the provider returned is listed, with no entry interpolated or dropped
+
+#### Scenario: A horizon is chosen
+
+- **WHEN** a person selects a different horizon
+- **THEN** the forecast, the statistics and the listing are requested for that horizon
+
+#### Scenario: Nothing is claimed that Weathra does not have
+
+- **WHEN** the screen is inspected
+- **THEN** the provider that answered is named
+- **AND** no forecast model, sensor network, reliability score or convergence figure appears
+- **AND** no language model is called
+
+### Requirement: Weather Intelligence Report
+
+The frontend SHALL provide a Weather Intelligence Report for the acting person's default location, composed of the current conditions, the forecast outlook, how the forecast has moved, the statistics computed for the window, and the historical baseline behind it — every figure retrieved or deterministically computed, and none originated by the screen.
+
+A model-written synthesis of those figures MAY be offered, and SHALL be produced only when the person asks for it: the report SHALL be complete and readable without it, and opening the report SHALL NOT call a language model. Where a synthesis is produced it SHALL be labelled as a model's reading, SHALL name the model that wrote it where the backend reported one, and SHALL offer the evidence record for the run. The screen SHALL NOT print an agent version, count evidence nodes, or offer an export it cannot produce.
+
+#### Scenario: The report is complete without a model
+
+- **WHEN** a person opens the report
+- **THEN** the conditions, outlook, movement, computed statistics and baseline are shown
+- **AND** no language model has been called
+
+#### Scenario: The synthesis is asked for
+
+- **WHEN** the person asks Weathra to read the report
+- **THEN** the model's reading is shown, labelled as an interpretation and naming the model
+- **AND** the evidence record for that run is offered
+
+### Requirement: Travel Intelligence
+
+The frontend SHALL provide a Travel Intelligence screen whose subject is a **trip**: a destination, a departure date and a return date, with an optional origin carried as context. It SHALL NOT require a scoring criterion or a rolling forecast horizon to be chosen, because those state Forecast Explorer's question rather than a traveller's, and it SHALL offer exactly one place editor rather than a second hidden location form.
+
+The screen SHALL obtain its whole analysis from a single backend request, and SHALL NOT assemble the trip by issuing several weather retrievals from the browser. It SHALL present the weather window, a travel viability index, analytical metrics, the destination's daily outlook, a packing strategy, a comparison against other travel windows, a synthesis, grounding evidence, and the historical baseline.
+
+Every figure SHALL come from the backend. The screen SHALL NOT compute a score, index or weighting of its own, and the viability index SHALL disclose that its weighting is Weathra's own heuristic rather than an authoritative index. It SHALL state that it describes weather only, and SHALL NOT present flight, airline, transport, booking or sensor information, none of which Weathra holds — including in the name of any metric.
+
+A section the backend could not produce SHALL be reported as unavailable with its reason, and SHALL NOT be fabricated or silently removed. A forecast-change comparison SHALL be shown only where an earlier snapshot exists.
+
+#### Scenario: A trip is analysed
+
+- **WHEN** a person sets a destination and travel dates
+- **THEN** the whole dashboard is produced from one backend request
+- **AND** the viability index, metrics, daily outlook, packing strategy, temporal comparison, synthesis and evidence are shown
+- **AND** no score, index or weighting is computed by the screen
+
+#### Scenario: It asks about a trip, not about a criterion
+
+- **WHEN** the screen is inspected
+- **THEN** the trip is stated as origin, destination and dates
+- **AND** no criterion selector and no rolling-window selector is offered
+- **AND** exactly one place editor exists
+
+#### Scenario: A secondary section is unavailable
+
+- **WHEN** the archive or the snapshot history cannot answer for a trip
+- **THEN** that section states that it is unavailable, with the reason
+- **AND** every other section still renders
+- **AND** no baseline, normal or forecast change is invented in its place
+
+#### Scenario: The core retrieval fails
+
+- **WHEN** the destination forecast cannot be retrieved
+- **THEN** one compact surface states so and offers a retry
+- **AND** the trip's origin, destination and dates are preserved
+- **AND** no hero, empty index or placeholder section is drawn beneath it
+
+#### Scenario: It says what it is not
+
+- **WHEN** the screen is inspected
+- **THEN** it states that it describes weather only
+- **AND** no flight, airline, transport, booking or sensor content appears
+- **AND** no metric is named in a way that implies aviation data
+
+### Requirement: Weather Scenario Lab
+
+The frontend SHALL provide a Weather Scenario Lab that takes the assumptions the scenario endpoint accepts, applies them to the forecast for the acting person's default location through that endpoint, and shows the resulting series against the baseline together with the per-measure arithmetic the backend reported.
+
+The screen SHALL NOT compute a scenario value itself. It SHALL label the result as simulated wherever it appears, SHALL state that it is neither a forecast nor an official warning, and SHALL state that no atmosphere was modelled. It SHALL report the hours an assumption was bounded and the hours the provider reported nothing to adjust, and SHALL offer no assumption the backend does not accept.
+
+#### Scenario: An assumption is applied
+
+- **WHEN** a person runs a scenario
+- **THEN** the request carries only the assumptions the endpoint declares
+- **AND** the adjusted series, the per-measure arithmetic and the differences the backend computed are shown
+
+#### Scenario: It is labelled as a hypothetical
+
+- **WHEN** the screen is inspected in any state
+- **THEN** the result is labelled simulated
+- **AND** it states that it is not a forecast and that no atmosphere was modelled
+
+### Requirement: Weather Watch
+
+The frontend SHALL provide a Weather Watch screen listing the acting person's watches with, for each, its condition, the reading at the last check, whether the condition held, and when it was last checked; and SHALL let them add, check and remove one.
+
+A watch never checked, and a watch whose provider reported no reading, SHALL each be presented as having no answer rather than as the condition not holding. The screen SHALL state the evaluation semantics the backend reports rather than wording of its own, SHALL NOT claim monitoring, alerting or real-time evaluation, and SHALL carry the statement that it is not an official warning service.
+
+#### Scenario: Three outcomes, drawn as three
+
+- **WHEN** the watches are listed
+- **THEN** a met condition, an unmet condition and an absent reading are each shown distinctly
+
+#### Scenario: It does not claim to monitor
+
+- **WHEN** the screen is inspected
+- **THEN** it states how and when watches are evaluated
+- **AND** no monitoring, alerting or real-time claim appears
+
+### Requirement: The navigation is grouped by what a screen is for
+
+The frontend SHALL group the navigation into the product's core screens, the intelligence screens that analyse Weathra's own data, the account screens, and — for a principal the backend confirms holds the administrative role — the administrative ones. The core group SHALL carry no heading, being the product itself.
+
+An intelligence screen SHALL be offered in that group whether or not it is built, and one that is not built SHALL be de-emphasised with the caveat carried in its accessible name rather than in a badge. It SHALL NOT be offered without that caveat before its screen exists, since an uncaveated entry leading to nothing is a dead end in the only navigation the product has. The caveat SHALL be removed per screen as each is built, and never for a screen that is not.
+
+#### Scenario: The four groups
+
+- **WHEN** a signed-in person views the navigation
+- **THEN** the core screens appear first without a heading, then the intelligence group, then the account group
+- **AND** the administrative group appears only for a principal the backend confirms holds the role
+
+#### Scenario: A built intelligence screen loses its caveat
+
+- **WHEN** an intelligence screen is built
+- **THEN** its entry is offered without a caveat
+- **AND** every intelligence screen that is not built keeps one
+
+### Requirement: Data classes and attribution are visible
+
+Every displayed weather value SHALL carry a visible indication of its data class — current conditions, forecast, historical observation, computed statistic, or AI interpretation — and every screen showing weather data SHALL display the source provider, the location, the period covered, and the retrieval time. AI interpretation SHALL be visually distinguishable from retrieved data.
+
+A surface that bears no weather value — a language-model run's own record, and nothing else in this change — SHALL NOT display a weather provenance field that does not apply to it. A weather provider, a location, a covered period, a retrieval time or a unit system SHALL be displayed on such a surface only where that field genuinely describes the content shown, and SHALL NOT be displayed as unreported, empty, or with a stand-in value merely to complete a footer's shape. Such a surface SHALL still identify the model and gateway that produced it wherever the backend reported them. This narrowing SHALL NOT apply to any surface bearing a weather value, whose four fields remain required above and are stated as unreported when the backend reported none.
+
+#### Scenario: Value shows its data class
+
+- **WHEN** any weather value is displayed
+- **THEN** its data class is visible
+
+#### Scenario: Attribution visible on screen
+
+- **WHEN** a screen shows weather data
+- **THEN** the source provider, location, period, and retrieval time are visible
+
+#### Scenario: A non-weather-bearing surface omits the fields that do not apply
+
+- **WHEN** a surface shows a language-model run's own record and no weather value
+- **THEN** no weather provenance field that does not describe that record is displayed, as a value or as unreported
+- **AND** the model and gateway the backend reported are still identified
+
+#### Scenario: Interpretation visually distinct
+
+- **WHEN** a screen shows AI interpretation alongside retrieved data
+- **THEN** the interpretation is visually distinguishable from the data
+
+#### Scenario: Uncertainty shown with forecasts
+
+- **WHEN** a forecast figure is displayed
+- **THEN** its uncertainty indication is displayed with it
+
+### Requirement: Loading, empty, and error states
+
+Every view SHALL show a distinct state while a request is in flight, when there is nothing yet to display, and when a request fails. A failure SHALL show the backend's error message and leave the person able to retry without reloading the page. An in-flight request SHALL disable its submit control so the same request is not issued twice. An empty result SHALL NOT be displayed as though it were a successful answer.
+
+#### Scenario: Request in flight
+
+- **WHEN** a view has issued a request that has not returned
+- **THEN** it shows a loading state distinct from its empty state
+- **AND** its submit control is disabled
+
+#### Scenario: Request fails
+
+- **WHEN** an API request fails
+- **THEN** the view shows the backend's error message
+- **AND** the person can retry without reloading the page
+
+#### Scenario: Nothing entered yet
+
+- **WHEN** a view has been opened with no input submitted
+- **THEN** it shows an empty state explaining what to enter
+
+#### Scenario: Stream interrupted
+
+- **WHEN** an SSE stream fails partway through a question
+- **THEN** the view shows what was received, states that the run did not complete, and offers a retry
+
+### Requirement: Agent unavailability handled gracefully
+
+When the backend reports the agent surface unavailable, the AI Weather Analyst SHALL state that it is unavailable and name the missing configuration, and every non-agent screen SHALL remain fully usable.
+
+#### Scenario: Analyst unavailable
+
+- **WHEN** the backend reports no inference provider configured
+- **THEN** the AI Weather Analyst states that it is unavailable and names the missing configuration
+- **AND** the Dashboard, Historical Analytics, Compare Cities, and Saved Locations screens remain usable
+
+### Requirement: Ambiguous location handling in the UI
+
+When a location entry resolves ambiguously, the affected screen SHALL present the candidate locations for the person to choose and SHALL show data only once a candidate is chosen.
+
+#### Scenario: Ambiguous entry offers candidates
+
+- **WHEN** a person enters a location name matching several places
+- **THEN** the screen presents the candidates
+- **AND** shows no weather data until one is chosen
+
+### Requirement: Accessibility and responsive layout
+
+The frontend SHALL be operable by keyboard alone for every action across authentication and product screens alike, SHALL label every input, SHALL apply accessible names to interactive controls that are unique wherever one screen offers several controls of the same kind, and SHALL meet a contrast ratio of at least 4.5 to 1 for body text in both light and dark appearance. Layout SHALL remain usable down to a 360-pixel-wide viewport without horizontal page scrolling, with wide content such as tables and charts scrolling within their own containers.
+
+Conformance SHALL be established by reproducible automated verification that runs in continuous integration — automated accessibility assertions, semantic DOM and ARIA verification, automated keyboard traversal, visible-focus and keyboard-trap checks, form, dialog, tab and table semantics, accessible-name uniqueness, destructive-action behaviour, and responsive browser checks at 1440, 1024, 768 and 375 pixels. Field testing on physical devices or with assistive technology MAY be performed as additional product quality assurance and SHALL NOT be a condition of conformance.
+
+#### Scenario: Keyboard-only use
+
+- **WHEN** a person navigates and submits using only the keyboard
+- **THEN** every action on every MVP screen, authentication and product alike, can be reached and performed
+
+#### Scenario: Narrow viewport
+
+- **WHEN** the application is displayed in a 360-pixel-wide viewport
+- **THEN** the layout remains usable and the page does not scroll horizontally
+
+#### Scenario: Dark appearance
+
+- **WHEN** the person's system requests a dark appearance
+- **THEN** the interface renders legibly with body text meeting the required contrast ratio
+
+#### Scenario: Wide content contained
+
+- **WHEN** a table or chart is wider than the viewport
+- **THEN** it scrolls within its own container rather than scrolling the page
+
+#### Scenario: Several controls of the same kind on one screen
+
+- **WHEN** a screen offers a list whose rows each carry a control of the same kind
+- **THEN** each of those controls has an accessible name naming the row it acts on
+
+#### Scenario: A destructive action is confirmed
+
+- **WHEN** a person activates a control that would irreversibly remove something
+- **THEN** nothing is removed until a second, separately labelled control is activated
+- **AND** the confirmation can be dismissed by its own control and by the Escape key
+- **AND** focus moves into the confirmation when it opens and returns to the control that opened it when it is dismissed
+- **AND** a removal the backend refused is reported as a refusal rather than as a removal
+
+#### Scenario: Recorded widths
+
+- **WHEN** any MVP screen is displayed at 1440, 1024, 768 or 375 pixels
+- **THEN** the document does not scroll horizontally and its dialogs and navigation remain usable
+
+#### Scenario: Conformance is reproducible
+
+- **WHEN** conformance with this requirement is asserted
+- **THEN** it rests on automated checks that run in continuous integration rather than on a session a person performed once
+
+### Requirement: Admin Model & AI Usage screen
+
+The frontend SHALL provide an administrative Model & AI Usage screen, reachable only by a principal the backend confirms holds the administrative role, presenting at minimum:
+
+- **Model status** — every catalog entry with its display name, capability roles, tier, structured-output support, free-or-paid classification, pricing, and enabled or disabled status, with the enable and disable controls.
+- **Token usage** — prompt, completion, and total tokens over a selected period, broken down by model, policy, plan, and call role.
+- **Cost** — estimated cost over the period by model, policy, and plan, labelled an estimate and never presented as a billed amount.
+- **Latency** — median and 95th-percentile latency by model and call role.
+- **Errors** — failure counts and rates by model and failure classification, including timeouts, gateway rate limits, and schema-validation failures.
+- **Plan usage** — consumption against allowance per plan, with internal and evaluation usage shown separately from product usage.
+- **Internal model selector** — selection of one or more enabled catalog models for a controlled comparison run, with the recorded results of past runs.
+
+The screen SHALL present no conversation content, since usage records hold none, and SHALL show no other user's questions, threads, or saved data. This screen was designed in the design phase and reached after the MVP screens; of it, the model policy confirmation surface required next **is implemented** on this route, and the panels named above are not and say so.
+
+#### Scenario: Administrative screen reachable by an administrator
+
+- **WHEN** a principal the backend confirms is administrative opens the Model & AI Usage screen
+- **THEN** model status, token usage, cost, latency, errors, plan usage, and the internal model selector are all present
+
+#### Scenario: Non-administrative visitor cannot reach it
+
+- **WHEN** an ordinary authenticated person navigates to the administrative route
+- **THEN** they are shown a not-available state
+- **AND** no catalog, usage, cost, or lab content is fetched or rendered
+
+#### Scenario: Cost labelled as an estimate
+
+- **WHEN** cost is displayed
+- **THEN** it is labelled an estimate and is not presented as an amount owed
+
+#### Scenario: Model enabled and disabled from the screen
+
+- **WHEN** an administrator disables a model from the screen and the backend confirms the change
+- **THEN** the screen reflects the disabled status
+
+#### Scenario: Comparison initiated from the internal selector
+
+- **WHEN** an administrator selects several enabled models and a question and starts a comparison
+- **THEN** the run's per-model latency, tokens, estimated cost, status, and evaluation result are shown side by side when it completes
+
+#### Scenario: No conversation content shown
+
+- **WHEN** the usage, cost, latency, and error views are inspected
+- **THEN** they contain no prompt text, completion text, or other person's question
+
+### Requirement: Administrative model policy confirmation
+
+The frontend SHALL provide, on the administrative route and reachable only by a principal the backend confirms holds the administrative role, a surface presenting each model policy's ordered candidate list, the evaluation outcome the backend has recorded for each candidate, and the comparison runs available as evidence — and SHALL submit a candidate-list confirmation to the backend citing the comparison runs relied upon, as an ordinary authenticated request carrying the signed-in person's own session.
+
+A candidate for which the backend recorded no evaluation SHALL be presented as unevidenced, and SHALL NOT be presented as having failed a criterion. The surface SHALL NOT compute, infer, or display an evaluation outcome the backend did not record, SHALL NOT describe an ordering as evidenced by a comparison run that scored no result for the candidate in question, and SHALL state a candidate ordering it submits unchanged as a confirmation rather than as a reordering.
+
+The administrative route SHALL be offered in the navigation to a principal the backend confirms holds the role, and SHALL NOT be offered to any other visitor. The offer SHALL be decided from the capability the backend reports for the acting principal and from nothing a client could assert about itself — not an address, not a list of identifiers, not a configuration value, not a stored flag — and SHALL default to offering nothing where the capability is unknown. Only administrative surfaces that are implemented SHALL appear. The offer is a presentation convenience: the route SHALL refuse a principal without the role whether or not the navigation linked to it.
+
+The surface SHALL display no access token, no service-role credential, and no configuration value. Its refusals SHALL be distinguishable by a reader: an expired session, an authenticated principal without the role, a validation failure, a refusal by the backend's promotion gate, and a backend or network failure SHALL each be stated as itself, and none SHALL be retried automatically. The surface SHALL show the recorded result of a confirmation it made — the resulting candidate order, the comparison runs cited, and that the change was audited — read back from the backend rather than assumed from the request having succeeded.
+
+#### Scenario: The administrative route is offered to an administrator
+
+- **WHEN** a principal the backend confirms is administrative views the navigation
+- **THEN** an administrative section is offered, naming only the administrative surfaces that are implemented
+- **AND** following it reaches the administrative route without knowing an unlinked address
+
+#### Scenario: It is not offered to anybody else
+
+- **WHEN** an ordinary authenticated person views the navigation
+- **THEN** no administrative section appears
+- **AND** none appears when the capability cannot be read
+
+#### Scenario: Administrator sees the recorded evidence
+
+- **WHEN** a principal the backend confirms is administrative opens the policy confirmation surface
+- **THEN** each policy's ordered candidate list is shown
+- **AND** each candidate carries the evaluation outcome the backend recorded for it, or is marked unevidenced
+
+#### Scenario: An unevidenced candidate is not reported as failing
+
+- **WHEN** a candidate has no recorded evaluation
+- **THEN** it is marked unevidenced
+- **AND** it is not described as having failed any criterion
+
+#### Scenario: A confirmation cites the runs it rests on
+
+- **WHEN** an administrator confirms a policy's candidate list
+- **THEN** the request carries the ordered candidate list and the comparison run identifiers selected as its basis
+- **AND** the resulting audit record, read back from the backend, names the cited runs
+
+#### Scenario: An unchanged order is stated as a confirmation
+
+- **WHEN** the submitted candidate order is the order already stored
+- **THEN** the surface states that the order was confirmed rather than reordered
+
+#### Scenario: Non-administrative visitor is refused
+
+- **WHEN** an ordinary authenticated person opens the administrative route
+- **THEN** they are shown a not-permitted state
+- **AND** no policy, catalog, comparison, or audit content is rendered
+
+#### Scenario: The promotion gate's refusal is shown as itself
+
+- **WHEN** the backend refuses a confirmation because a candidate failed a gating criterion
+- **THEN** the refusal names the criteria the backend reported
+- **AND** it is not presented as a validation error, a session failure, or a server fault
+
+#### Scenario: No credential is displayed
+
+- **WHEN** the surface is inspected in any state
+- **THEN** no access token, service-role credential, or configuration value appears
+
+### Requirement: The UI never authorizes model access or an allowance
+
+The frontend SHALL treat the backend as the sole authority on plan, entitlement, model resolution, and allowance. It SHALL NOT decide which model serves a request, SHALL NOT gate a premium capability by a client-held value alone, and SHALL NOT present a raised allowance the backend has not granted. Hiding or disabling a control SHALL be a presentation convenience only; the backend SHALL refuse the underlying request regardless.
+
+Where the backend refuses a request for an exhausted allowance, the frontend SHALL present that as a distinct, honest state naming the limit and when it resets — not as a weather error, an authentication error, or a generic failure — and SHALL leave the person's thread, saved locations, and preferences intact.
+
+#### Scenario: Hidden control is not the gate
+
+- **WHEN** a premium control is hidden for a Free-plan person and the underlying request is issued anyway
+- **THEN** the backend refuses or downgrades it
+- **AND** the UI reflects what the backend actually did
+
+#### Scenario: Quota state presented honestly
+
+- **WHEN** the backend refuses an agent request for an exhausted allowance
+- **THEN** the screen states the limit reached and when it resets
+- **AND** it is visually and textually distinct from a weather error and from an expired session
+
+#### Scenario: Person's data intact after a quota refusal
+
+- **WHEN** a person hits their allowance
+- **THEN** their thread, saved locations, and preferences remain available
+
+#### Scenario: Displayed model is the one that ran
+
+- **WHEN** an answer reports the provider, model, and policy that served it
+- **THEN** the UI shows those values rather than a client-side assumption
+
+### Requirement: Plan and usage visible to the signed-in person
+
+The frontend SHALL show the signed-in person their own plan and usage — the plan name, consumption against allowance per applicable dimension, and each window's reset time — and SHALL show no other person's usage, no internal usage, and no aggregate cost across users. This view is designed in the design phase alongside the administrative screen, and is implemented in this change.
+
+It SHALL name the plans Weathra has and which one is in effect, and SHALL offer the person a way to change their own tier in **exactly one** place on the screen — a control that performs the change through the backend rather than recording an intention. It SHALL NOT present that change as a purchase: there is no checkout, no billing interval, no payment instrument, no invoice and no published price, and the view SHALL state plainly that changing tier charges nothing. Before the change is applied the person SHALL be told that their allowances update immediately and that nothing they have already used is removed. An unlimited dimension SHALL be stated as unlimited rather than shown as a proportion of nothing, and a figure the backend reported as absent — a token count the gateway did not send, a window that does not turn over — SHALL be stated as absent rather than as zero. Where the acting principal's traffic is accounted as internal rather than against a product plan, the view SHALL say so, since the plan's allowances are then not what their calls spend.
+
+#### Scenario: Plans named without a checkout
+
+- **WHEN** the plan view is inspected
+- **THEN** the plans Weathra has are named with the one in effect marked
+- **AND** no purchase, billing or payment control is offered
+
+#### Scenario: One place to change tier
+
+- **WHEN** the plan view is inspected
+- **THEN** exactly one set of controls offers a tier change
+- **AND** each tier the account is not on carries a working control, and the one it is on carries none
+
+#### Scenario: A tier change is confirmed, performed, and reflected
+
+- **WHEN** a person chooses a different tier and confirms it
+- **THEN** they are told beforehand that allowances change immediately, that nothing already used is removed, and that no payment is taken
+- **AND** the request is made only after the confirmation
+- **AND** once the backend confirms it, the current-tier marking, the plan name and every allowance figure reflect the new tier without a page reload
+
+#### Scenario: A failed tier change claims nothing
+
+- **WHEN** the backend refuses a tier change
+- **THEN** the refusal is reported with the backend's own message
+- **AND** the view still shows the tier the backend last confirmed
+
+#### Scenario: An absent figure is not shown as zero
+
+- **WHEN** a dimension is unlimited, or the backend reported no token count or no reset window
+- **THEN** each is stated as unlimited or absent
+- **AND** none is rendered as zero or as a full allowance
+
+#### Scenario: Own plan and usage shown
+
+- **WHEN** a signed-in person opens their plan and usage view
+- **THEN** their plan name, per-dimension consumption and remaining allowance, and reset times are shown
+
+#### Scenario: Only their own usage shown
+
+- **WHEN** the view is inspected
+- **THEN** it contains no other person's usage, no internal usage, and no cross-user cost total
+
+### Requirement: Administrative and plan screens remain subject to the Visily design gate
+
+The Admin Model & AI Usage screen and the plan-and-usage view SHALL be designed in Visily before substantial implementation, following the same gate as every other screen: an artifact per screen covering its populated, loading, empty, error, and not-permitted states; conformance to the established Weathra design system and its carried-forward design direction rather than generic generated styling; a recorded approval before implementation begins; and a recorded reason for any deliberate divergence.
+
+Until they were implemented they SHALL have been represented in the design roadmap as later entries rather than advertised as working. **Both are now implemented**, each through this gate: the design gate above is what they were held to, and it is not relaxed by their being built.
+
+#### Scenario: Design precedes implementation
+
+- **WHEN** implementation of the administrative screen or the plan-and-usage view is started
+- **THEN** an approved Visily artifact for it already exists and is recorded
+
+#### Scenario: States covered by the artifact
+
+- **WHEN** the artifact for the administrative screen is inspected
+- **THEN** it covers the populated, loading, empty, error, and not-permitted states
+
+#### Scenario: Design system followed
+
+- **WHEN** the artifact is inspected
+- **THEN** its typography, spacing, components, charts, and states come from the established Weathra design system
+
+#### Scenario: Represented in the roadmap while unbuilt
+
+- **WHEN** the design roadmap is read for a screen that is not yet implemented
+- **THEN** it appears as a later entry
+- **AND** no route advertises it as working
+
+#### Scenario: Both screens passed the gate before they were built
+
+- **WHEN** the Admin Model & AI Usage screen and the plan-and-usage view are inspected now that both are implemented
+- **THEN** each has its recorded approved artifact from before implementation began
+- **AND** any deliberate divergence from it is recorded with its reason

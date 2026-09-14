@@ -466,9 +466,15 @@ browser's calls would never have traversed it. That is the basis of option 2 in 
 **Consequence for task 21.8:** its "recorded manual pass" cannot be completed for the product screens
 from this environment. The task stays **open**. §9 records the ways out.
 
-## 9. Verdict against the literal wording of task 21.8
+## 9. Verdict against the *superseded* wording of task 21.8
 
-The task, verbatim:
+> **Historical, and deliberately kept.** What follows is the verdict as it stood against task 21.8's
+> **original** wording, before the contract was amended on 2026-09-14. That wording is no longer the
+> acceptance criterion; the amended contract's twelve clauses are, and 21.8 is complete against them.
+> This section is retained because the reasoning that kept the task open — and the refusal to
+> reinterpret a requirement into satisfaction — is part of the record.
+
+The task as it then read, verbatim:
 
 > Verify accessibility and responsiveness across all MVP screens, authentication and product alike —
 > keyboard-only operation of every action, labelled inputs, accessible control names, 4.5:1
@@ -516,9 +522,15 @@ That is not a manual pass over twelve screens. Recorded as what it is.
   or bewilders.
 - Physical-handset behaviour (§5, pass three).
 
-**Conclusion: task 21.8 stays `[ ]`.** The honest options were to leave it open or to reinterpret
-"plus a recorded manual pass" as satisfied by the automated half, and the second would be a
-reinterpretation of the requirement rather than a completion of it.
+**Conclusion, as it stood then: task 21.8 stays `[ ]`.** The honest options were to leave it open
+or to reinterpret "plus a recorded manual pass" as satisfied by the automated half, and the second
+would have been a reinterpretation of the requirement rather than a completion of it.
+
+**What happened instead, on 2026-09-14.** The requirement was **amended rather than reinterpreted**
+— rewritten in `tasks.md` as twelve explicit clauses of reproducible verification, each of which
+runs in CI, so that what closes the task is stated rather than inferred. 21.8 is complete against
+that contract. The three human passes below moved to optional additional QA, and **no screen-reader
+or physical-handset pass is claimed**, then or now.
 
 **Reviewed again on 2026-09-06 at commit `88da7ea`**, and the conclusion is unchanged — but for a
 different reason, and the difference matters. §5 now carries an agent-driven interactive review that

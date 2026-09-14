@@ -558,12 +558,14 @@ tidier than it was:
   reason a candidate failed survives in the run log and in this document, not in the table a
   promotion decision would read.
 
-### No promotion
+### No promotion from this run
 
-No policy candidate list, catalog status or plan mapping was changed, and `admin_audit` remains
-empty. `free_default` is still `[economy-free-primary, economy-free-secondary]` as seeded on
-2026-09-09. Task 34.5's promotion half is unexecuted, and on this run's evidence a promotion could
-only be made about one of the two candidates.
+No policy candidate list, catalog status or plan mapping was changed by this run, and `admin_audit`
+was still empty when it finished. `free_default` remained `[economy-free-primary,
+economy-free-secondary]` as seeded on 2026-09-09. On this run's evidence a promotion could only have
+been made about one of the two candidates, so none was taken here. The decision that did close task
+34.5 was taken later, on 2026-09-14, against the second run recorded below — see *The decision
+taken: keep the current order*.
 
 One state change did occur, from the provisioning path rather than from the comparison:
 `_ensure_role_row` granted the derived evaluation subject the `administrator` role in

@@ -600,10 +600,12 @@ Of the final step, the **comparison is executed and recorded**: run
 `c1e8768f-e2a8-4c32-a065-df1a5ea8f2c4` (2026-09-14) evidenced **both** seeded economy candidates
 with all five criteria, no candidate left unevidenced, and both passing the two gating criteria.
 
-**What remains** is the seeding-or-reordering itself: an audited promotion decision written through
-`PUT /api/v1/admin/policies/{policy_id}/candidates` citing those runs, which requires a session for
-the administrative principal and is an operator step rather than a development one. Task 34.5 stays
-open until it is taken. See `docs/deployment.md` for the exact blocker.
+The seeding-or-reordering step is **taken and recorded**: on 2026-09-14 the administrative
+principal submitted the candidate order through `PUT /api/v1/admin/policies/{policy_id}/candidates`
+citing run `c1e8768f`, and the write is in `admin_audit` as action `policy_edit` over
+`model_policy: free_default`. The evidence tied on both gating criteria, so the decision was to keep
+the current order — a decision the trail records rather than a default nobody examined. Task 34.5 is
+complete. See `docs/evaluation.md` for the runs, the criteria and the decision.
 
 **Rollback:** the backend is a container revision, so rollback is redeploying the previous revision; the frontend likewise. Migrations are additive in this change (no destructive operations), so a rolled-back revision runs against the newer schema without loss. Data rollback is not required — there is no pre-existing data.
 

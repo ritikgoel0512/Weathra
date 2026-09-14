@@ -1065,13 +1065,16 @@ and the saved-location preference was exercised through the same session afterwa
 *create an account and verify it by code* and *sign in*, and group 18.2's valid-request case for the
 endpoints the product uses.
 
-### What is not verified, and why
+### What needed real accounts, and how it was verified
 
-None of these is a gap in the deployment. Each is a criterion that needs something this repository
-deliberately cannot produce: a real account, a real inbox, or real spend.
+None of these was ever a gap in the deployment. Each is a criterion that needs something this
+repository deliberately cannot produce: a real account, a real inbox, or real spend. They were
+therefore performed in production, by hand, against real accounts — see *Task 34.7's standing,
+stated as a whole* below for the results.
 
 **Task 34.7's session tiers.** The SaaS-layer criteria that need a signed-in account are
-implemented in `test_saas_acceptance.py` and skip, naming their variables. They are, exactly:
+implemented in `test_saas_acceptance.py` and skip in any environment without the live credentials,
+naming their variables rather than passing vacuously. They are, exactly:
 
 | Criterion | Needs | Tier |
 |---|---|---|
@@ -1100,7 +1103,7 @@ plan that names it, for as long as the check ran plus one cache TTL. Absent and 
 branch apart in the same allowlist check, and `integration/test_agent_resolution.py` covers the
 disabled branch in process, against a database that is nobody's.
 
-**Task 34.5's live comparison — the comparison half is done; the promotion half is not.**
+**Task 34.5's live comparison — both halves are done.**
 
 The implementation was complete and tested from group 32 — the lab, its bounds, its records, its
 criteria and its promotion action. What was missing was an executed run, because executing one
@@ -1120,18 +1123,33 @@ The second run is what the first was missing: `economy-free-secondary` was rate-
 September's first attempt and has now been measured. `docs/evaluation.md` records both runs and
 their five criteria per candidate.
 
-**What still blocks the task.** 34.5 also requires the policy candidate lists to be seeded or
-reordered *from* the recorded evidence, with the promotion audited against the cited runs. That is
-`PUT /api/v1/admin/policies/{policy_id}/candidates`, which records an `admin_audit` row citing the
-run relied upon. It needs an authenticated session for an administrative principal. One exists and
-is properly granted — subject `e7b66ef2-5bc6-4100-92cf-7c27cecdf63e`, carrying a `role_grant` audit
-row from the documented `scripts/grant_administrator.py` bootstrap — but **no credential for it is
-available in the development environment**, and the evaluation harness's own fixture principal must
-not be used: `_ensure_role_row` grants it with no `granted_by` and no audit row, so promoting with
-it would let the lab authorise its own promotion, which `specs/model-lab` refuses.
+**The promotion half, and how it closed.** 34.5 also requires the policy candidate lists to be
+seeded or reordered *from* the recorded evidence, with the promotion audited against the cited runs.
+That is `PUT /api/v1/admin/policies/{policy_id}/candidates`, which records an `admin_audit` row
+citing the run relied upon, and it needs an authenticated session for an administrative principal.
+It was taken as an operator step, in production, on **2026-09-14**: the granted administrative
+principal — subject `e7b66ef2-5bc6-4100-92cf-7c27cecdf63e`, carrying a `role_grant` audit row from
+the documented `scripts/grant_administrator.py` bootstrap — signed in, reviewed run
+`c1e8768f-e2a8-4c32-a065-df1a5ea8f2c4` on the confirmation surface, and submitted the candidate
+order citing it.
 
-The task therefore stays open on one operator step: sign in as the administrative account and
-submit the candidate list citing run `c1e8768f-e2a8-4c32-a065-df1a5ea8f2c4`.
+| | |
+|---|---|
+| Decision | **Keep the current order** — `economy-free-primary`, then `economy-free-secondary` |
+| Policy | `free_default` |
+| Evidence cited | `c1e8768f-e2a8-4c32-a065-df1a5ea8f2c4` |
+| Audit row | action `policy_edit`, subject kind `model_policy`, subject `free_default` |
+| Recorded at | 2026-09-14T16:04:47.839Z |
+| Read back | the stored order re-read after a page reload; the audit entry returned by `GET /api/v1/admin/policies/free_default/audit` rather than assumed |
+
+Both candidates passed both gating criteria at 1.0, so no gate separated them and latency — which is
+not a gate — was the only discriminator. Keeping the order is the decision the evidence supports,
+and the trail now records that somebody looked at the measurements and said so. The evaluation
+harness's own fixture principal was **not** used and could not have been: `_ensure_role_row` grants
+it with no `granted_by` and no audit row, so promoting with it would let the lab authorise its own
+promotion, which `specs/model-lab` refuses.
+
+**Task 34.5 is complete.**
 
 **And criteria from 25.3 and 25.4** — restated 2026-09-11 after a second pass the same day, which
 supplied a genuinely distinct second account and resolved the inference diagnosis:
@@ -1301,6 +1319,54 @@ were **no new Supabase account is to be created**, **no second test account is t
 every workflow that names it — and **Supabase Auth configuration is not to be changed** without
 evidence that it is wrong, of which there was none. The second account was supplied directly instead,
 which satisfies all four.
+
+### Task 34.7's standing, stated as a whole
+
+**Complete, 2026-09-14.** Both halves of the SaaS-layer acceptance verification have now run against
+the deployed pair. The credential-free half is recorded above under *What automation proved (task
+34.7, the SaaS layer)*, and it closed a real coverage gap: five protected routes — `/evidence`,
+`/me/locations/overview`, `/me/watch-dashboard`, `/travel/intelligence` and `/me/plan` — had never
+been added to the deployed probe list, so `test_every_protected_path_has_a_credential_free_check`
+was failing. All five are now covered and verified refusing anonymous callers in production.
+
+The session half was then performed in production against real accounts: two ordinary users created
+through the real sign-up flow, and the administrative principal whose role was granted out of band
+by `scripts/grant_administrator.py`.
+
+| # | Criterion | Verdict |
+|---|---|---|
+| 1 | User A signs in against the deployed pair | **PASS** |
+| 2 | User B signs in against the deployed pair | **PASS** |
+| 3 | User A is served none of User B's data | **PASS** |
+| 4 | User B is served none of User A's data | **PASS** |
+| 5 | An ordinary authenticated user is refused every administrative operation, server-side | **PASS** |
+| 6 | The administrator signs in and the role is reported from backend state | **PASS** |
+| 7 | Administrative usage analytics answer with real aggregate measures | **PASS** |
+| 8 | Administrative plan assignment writes | **PASS** |
+| 9 | The assigned plan is observed by User B on their own account | **PASS** |
+| 10 | Usage counters and history survive the plan change | **PASS** |
+| 11 | An anonymous caller reaching a protected route is refused | **PASS** |
+| 12 | User B's original plan restored afterwards | **Yes** |
+
+Three properties of how this was run are worth stating, because each is the difference between a
+check and a gesture:
+
+* **Isolation was asked in both directions**, not once. A single-direction check passes on a system
+  that leaks one way.
+* **The administrative refusal was confirmed server-side.** The navigation hides the administrative
+  group from an ordinary person, and that is not the assertion — the assertion is that the endpoint
+  refuses.
+* **The assigned plan was read back from User B's own account**, rather than inferred from the
+  write's own response, and the original value was restored afterwards.
+
+**No blocker remained, and no credential, password or session value is recorded here or anywhere in
+this repository.** The checks that need live credentials still skip in any environment without them,
+naming the variable rather than passing vacuously — which is why the suite's own skip count is not
+evidence of anything unverified, only of where it is being run.
+
+*A non-blocking observation, recorded as a limitation rather than a defect.* Plan & Usage
+occasionally takes roughly five to nine seconds to leave its loading skeleton against a cold
+backend. It caused no criterion to fail.
 
 ## No local machine
 

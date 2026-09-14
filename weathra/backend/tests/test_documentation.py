@@ -31,6 +31,29 @@ DOCS = PROJECT_ROOT / "docs"
 PACKAGE = PROJECT_ROOT / "backend" / "weathra"
 
 
+def _change_root() -> Path:
+    """The `weathra-mvp` change directory, wherever it currently lives.
+
+    Archiving a completed change moves it from `openspec/changes/<name>/` to
+    `openspec/changes/archive/<date>-<name>/`, artifacts intact. These tests read those artifacts —
+    the delta specs, the task list, the design and the proposal — and they are the same artifacts
+    either side of the move, so the path is resolved rather than pinned to the one location that
+    only holds before the archive. Pinning it is how a green suite turns red on a bookkeeping
+    operation that changed no requirement.
+    """
+    changes = PROJECT_ROOT / "openspec" / "changes"
+    active = changes / "weathra-mvp"
+    if active.is_dir():
+        return active
+    archived = sorted((changes / "archive").glob("*-weathra-mvp"))
+    assert archived, "the weathra-mvp change is neither active nor archived"
+    return archived[-1]
+
+
+CHANGE = _change_root()
+CHANGE_LABEL = CHANGE.relative_to(PROJECT_ROOT).as_posix()
+
+
 def _read(name: str) -> str:
     path = DOCS / name if name != "README.md" else REPO_ROOT / "README.md"
     assert path.is_file(), f"{name} is missing"
@@ -244,15 +267,7 @@ def test_every_authentication_requirement_is_addressed(authentication: str) -> N
     say about it. A test that tried to judge whether prose "addresses" a requirement would either
     pass on anything or fail on a rewording.
     """
-    spec = (
-        PROJECT_ROOT
-        / "openspec"
-        / "changes"
-        / "weathra-mvp"
-        / "specs"
-        / "authentication"
-        / "spec.md"
-    ).read_text()
+    spec = (CHANGE / "specs" / "authentication" / "spec.md").read_text()
     requirements = re.findall(r"^### Requirement: (.+)$", spec, re.MULTILINE)
     assert len(requirements) >= 15
 
@@ -1177,15 +1192,7 @@ def test_every_safety_requirement_is_addressed() -> None:
     Curated phrases again, with the *list* checked against the spec — see the equivalent test for
     `specs/authentication` for why.
     """
-    spec = (
-        PROJECT_ROOT
-        / "openspec"
-        / "changes"
-        / "weathra-mvp"
-        / "specs"
-        / "safety-grounding"
-        / "spec.md"
-    ).read_text()
+    spec = (CHANGE / "specs" / "safety-grounding" / "spec.md").read_text()
     requirements = re.findall(r"^### Requirement: (.+)$", spec, re.MULTILINE)
     assert len(requirements) >= 10
 
@@ -1291,7 +1298,7 @@ def test_the_roadmap_and_part_b_agree() -> None:
     Part B is the change's own record of what the architecture keeps room for. Two lists that
     disagree are worse than one: a reader cannot tell which is the plan.
     """
-    tasks = (PROJECT_ROOT / "openspec" / "changes" / "weathra-mvp" / "tasks.md").read_text()
+    tasks = (CHANGE / "tasks.md").read_text()
     part_b = tasks.split("# Part B")[1]
     items = re.findall(r"^- \*{0,2}(.+?)\*{0,2}(?: —|\.|$)", part_b, re.MULTILINE)
     assert len(items) >= 20, "Part B parsed as almost nothing; check its formatting"
@@ -1364,11 +1371,11 @@ def test_the_withdrawn_hosting_decision_is_not_reintroduced() -> None:
     documents = {
         f"docs/{name}": _read(name) for name in ("deployment.md", "configuration.md", "agents.md")
     }
-    change = PROJECT_ROOT / "openspec" / "changes" / "weathra-mvp"
+    change = CHANGE
     for name in ("tasks.md", "design.md", "proposal.md"):
         path = change / name
         assert path.is_file(), f"{path} is missing"
-        documents[f"openspec/changes/weathra-mvp/{name}"] = path.read_text()
+        documents[f"{CHANGE_LABEL}/{name}"] = path.read_text()
 
     offences: list[str] = []
     for where, text in documents.items():
@@ -1388,7 +1395,7 @@ def test_the_withdrawn_hosting_decision_is_not_reintroduced() -> None:
 
 def test_the_selected_runtimes_are_named_in_the_task_list() -> None:
     """The deployment tasks name what is actually being deployed to."""
-    tasks = _flat((PROJECT_ROOT / "openspec" / "changes" / "weathra-mvp" / "tasks.md").read_text())
+    tasks = _flat((CHANGE / "tasks.md").read_text())
 
     assert "Render" in tasks, "no task names the backend runtime"
     assert "Vercel" in tasks, "no task names the frontend runtime"
@@ -1417,8 +1424,8 @@ def test_the_deployment_secrets_are_documented_where_they_live() -> None:
 # ---------------------------------------------------------------- 25.5 traceability
 
 
-SPECS_DIR = PROJECT_ROOT / "openspec" / "changes" / "weathra-mvp" / "specs"
-TASKS = PROJECT_ROOT / "openspec" / "changes" / "weathra-mvp" / "tasks.md"
+SPECS_DIR = CHANGE / "specs"
+TASKS = CHANGE / "tasks.md"
 
 
 def _traceability_rows() -> list[tuple[str, ...]]:

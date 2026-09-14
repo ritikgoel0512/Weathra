@@ -12,8 +12,9 @@ and the shipped screens were photographed at 1440 with the Playwright capture ha
 Source was read only to answer questions the pictures raised — what data exists, why a thing renders
 as it does. A fidelity judgement made from source is a judgement about source.
 
-**Baseline:** OpenSpec 289/292, `main` clean at `34d0896`. Remaining original tasks: 21.8, 34.5,
-34.7 — none touched.
+**Baseline at the time of this review:** OpenSpec 289/292, `main` clean at `34d0896`. The three
+original tasks still open then — 21.8, 34.5 and 34.7 — were not touched by it. All three have since
+closed; the change now stands at 308/308.
 
 ## The finding that changes the most
 

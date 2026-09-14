@@ -22,9 +22,10 @@ compared against the implemented markup and stylesheets for that screen. No arti
 artifacts, carried out by reading both. It is **not** a human visual walkthrough of the running
 application: no person has sat in front of these twelve screens and compared them to the artifacts
 side by side. Where that matters — the subjective "does it feel like the design" judgement — it is
-recorded as a limitation in §8 rather than claimed. The related manual accessibility pass is
-separately incomplete and is recorded in
-[`accessibility-manual-pass.md`](accessibility-manual-pass.md); task 21.8 remains open.
+recorded as a limitation in §8 rather than claimed. The optional manual accessibility pass is
+recorded separately in [`accessibility-manual-pass.md`](accessibility-manual-pass.md); it is not an
+acceptance criterion, and task 21.8 closed on 2026-09-14 against its amended contract of twelve
+automated clauses.
 
 ---
 

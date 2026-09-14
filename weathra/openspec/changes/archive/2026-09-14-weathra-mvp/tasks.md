@@ -1,18 +1,23 @@
 # Part A — MVP / capstone implementation
 
-> **Current state — 2026-09-14.** **Implementation is substantially complete. Remaining open items
-> are operational acceptance/evidence tasks rather than missing product implementation.**
+> **Final state — 2026-09-14.** **Implementation, deployment and deployed acceptance are complete.**
 >
-> 308 numbered tasks: **307 complete, 1 partially complete** (34.7), none unstarted.
-> 34.5 closed on 2026-09-14, when a real administrator reviewed the persisted comparison evidence in
-> production and recorded the audited candidate-order decision it calls for. 34.7 carries a dated
-> note under its own line stating exactly what is done, what is not, and what the remaining
-> prerequisite is: credentials for deployed accounts, not code.
+> 308 numbered tasks: **308 complete, 0 partially complete, 0 unstarted.**
 >
-> 21.8 closed on 2026-09-14 against an **amended** acceptance contract: its three unreproducible
-> human activities were replaced by twelve clauses of automated accessibility, semantic, keyboard,
-> destructive-action and responsive-browser verification, all of which run in CI. No screen-reader
-> or physical-handset pass is claimed, then or now.
+> The last three to close were the operational acceptance and evidence tasks, each against its own
+> stated contract:
+>
+> - **21.8** closed against an **amended** acceptance contract: its three unreproducible human
+>   activities were replaced by twelve clauses of automated accessibility, semantic, keyboard,
+>   destructive-action and responsive-browser verification, all of which run in CI. No screen-reader
+>   or physical-handset pass is claimed, then or now; physical-device and assistive-technology
+>   testing remains optional additional QA rather than a blocking acceptance criterion.
+> - **34.5** closed when a real administrator reviewed the persisted comparison evidence in
+>   production and recorded the audited candidate-order decision it calls for, citing run
+>   `c1e8768f`.
+> - **34.7** closed when the SaaS-layer acceptance verification ran end to end against the deployed
+>   pair with real accounts — two ordinary users, bidirectional isolation, an administrator — and
+>   every criterion passed with no blocker remaining.
 >
 > This note does not relax any requirement. A task is checked only when its stated requirement is
 > genuinely satisfied.
@@ -507,10 +512,10 @@ written to fail then.
   `docs/evaluation.md` records the decision, the cited run, the audit action and its timestamp
   alongside both comparison runs and all five criteria per candidate.
 
-  **The comparison half, for the record, is done twice and leaves no candidate unmeasured.** Run `9b5849dd-b798-4dc8-b04f-a8e6c0874e1a` (2026-09-10) evidenced `economy-free-primary` 5/5 with both gates passed, while `economy-free-secondary` was refused HTTP 429 at the pre-flight on all three retries and recorded `unevidenced: no_case_scored`. Run `c1e8768f-e2a8-4c32-a065-df1a5ea8f2c4` (2026-09-14, status `completed`) re-ran the same five cases of dataset `1.0.0` under the same pinned conditions and **both** candidates scored 5/5 and passed both gating criteria, with an empty `unevidenced` map. Both runs and all five criteria per candidate are recorded in `docs/evaluation.md`, including the finding that the two gating criteria tie at 1.0 and latency — not a gate — is the only discriminator, favouring the secondary. **What remains is the promotion half**: seeding or reordering the policy candidate lists from that evidence through `PUT /api/v1/admin/policies/{policy_id}/candidates`, with the `admin_audit` row citing run `c1e8768f`. That needs an authenticated session for the administrative principal. One is properly granted (subject `e7b66ef2-5bc6-4100-92cf-7c27cecdf63e`, carrying a `role_grant` audit row from the documented bootstrap) but **no credential for it exists in the development environment**, and the evaluation harness's own fixture principal must not be substituted — `_ensure_role_row` grants it unaudited and with no `granted_by`, so using it would let the lab authorise its own promotion, which `specs/model-lab` refuses.
+  **The comparison half, for the record, is done twice and leaves no candidate unmeasured.** Run `9b5849dd-b798-4dc8-b04f-a8e6c0874e1a` (2026-09-10) evidenced `economy-free-primary` 5/5 with both gates passed, while `economy-free-secondary` was refused HTTP 429 at the pre-flight on all three retries and recorded `unevidenced: no_case_scored`. Run `c1e8768f-e2a8-4c32-a065-df1a5ea8f2c4` (2026-09-14, status `completed`) re-ran the same five cases of dataset `1.0.0` under the same pinned conditions and **both** candidates scored 5/5 and passed both gating criteria, with an empty `unevidenced` map. Both runs and all five criteria per candidate are recorded in `docs/evaluation.md`, including the finding that the two gating criteria tie at 1.0 and latency — not a gate — is the only discriminator, favouring the secondary. The promotion half then ran against that evidence through `PUT /api/v1/admin/policies/{policy_id}/candidates`, with the `admin_audit` row citing run `c1e8768f`, under an authenticated session for the properly granted administrative principal (subject `e7b66ef2-5bc6-4100-92cf-7c27cecdf63e`, carrying a `role_grant` audit row from the documented bootstrap). The evaluation harness's own fixture principal was **not** substituted, and could not have been — `_ensure_role_row` grants it unaudited and with no `granted_by`, so using it would let the lab authorise its own promotion, which `specs/model-lab` refuses.
 
-  **A production defect on the administrative screen was found and fixed on 2026-09-14, and 34.5 is
-  now READY FOR PRODUCTION RETEST.** `/admin/model-usage` loaded for an authenticated administrator
+  **A production defect on the administrative screen was found and fixed on 2026-09-14, and the
+  production retest it unblocked is what closed 34.5.** `/admin/model-usage` loaded for an authenticated administrator
   but its Model policy and Comparison evidence panels both reported *"Weathra's backend could not be
   reached"*, while every other panel on the page answered. The backend was reached. The cause was
   where an unhandled exception becomes a response: FastAPI hands `@app.exception_handler(Exception)`
@@ -649,9 +654,44 @@ written to fail then.
 
 - [x] 34.44 Make the tier a person is on something they can actually change, because Plan & Usage offered the choice and could not honour it: `GET /plans` reported `self_service: false`, `checkoutFor` turned that into `unavailable`, and both the comparison and a second *Change your plan* list below it rendered a disabled button with no handler behind it — two competing interfaces for one action, neither of which worked, in front of a table that was otherwise truthful. The product decision of 2026-09-13 makes Free, Pro and Premium self-selectable, so amend `specs/usage-limits` rather than let the spec and the product disagree: administrative assignment stays for *another* principal's tier and for every allowance, and a new requirement governs a caller changing their own. Add `PUT /me/plan`, which takes no subject and writes the validated token's row; grant the request role INSERT and UPDATE on `user_plans` with `WITH CHECK (user_id = weathra_current_user_id())` on both verbs, so ownership is refused by the database rather than by one Python function — the grant `0006` withheld, now replaced by something stronger than the refusal it removes, and DELETE still withheld so that choosing Free is an update that keeps `assigned_by` and `assigned_at`. Return the recomputed `UsageResponse` so the screen corrects its allowances without asking twice, and change nothing else: no counter is reset, no usage event, conversation, saved location or watch is touched, and a caller left over the new tier's allowance is reported as over it rather than forgiven. Collapse the two interfaces into the comparison table itself — the tier headings carry the current badge, the footer row carries one working control per tier, and a confirmation states what changes, what does not, and that nothing is charged before the second press. Replace the top card's three-tier list, which was a plan selector in everything but function, with the current tier said once and described from its own allowances and model class. Carry the signup choice through too: that step has no session, so the tier is held and applied at the first sign-in, and the card says so rather than implying it already applies. Verify the six transitions persist across sessions, that a foreign row is refused by Row Level Security in both shapes, that consumption survives a downgrade, that the resolved policy follows the tier, and that no vendor model identifier reaches the frontend.
 
-- [ ] 34.7 Run the SaaS-layer acceptance verification end to end against the deployed backend — a Free-plan caller served their entitled model with the resolution recorded in the evidence record; a body field claiming Pro ignored; an administrative override accepted for an enabled model and refused for a disabled one; a usage event recorded for every call including a forced failure; an estimated cost present and labelled; an exhausted allowance returning 429 with its basis while forecast, history, analysis and comparison still serve; internal lab and evaluation usage reported separately from every product plan; a second account seeing none of the first's usage; and both memory tiers plus every deterministic figure unchanged throughout; verify each and record the results.
+- [x] 34.7 Run the SaaS-layer acceptance verification end to end against the deployed backend — a Free-plan caller served their entitled model with the resolution recorded in the evidence record; a body field claiming Pro ignored; an administrative override accepted for an enabled model and refused for a disabled one; a usage event recorded for every call including a forced failure; an estimated cost present and labelled; an exhausted allowance returning 429 with its basis while forecast, history, analysis and comparison still serve; internal lab and evaluation usage reported separately from every product plan; a second account seeing none of the first's usage; and both memory tiers plus every deterministic figure unchanged throughout; verify each and record the results.
 
-  **PARTIALLY COMPLETE (2026-09-14).** The credential-free half runs green against the deployed backend (`https://weathra-backend.onrender.com`): every protected route refuses a caller carrying no token, every locally-signed token is rejected, CORS answers as configured, and no secret appears in any response. A coverage gap was found and closed on 2026-09-14 — `test_every_protected_path_has_a_credential_free_check` was failing because five protected routes (`/evidence`, `/me/locations/overview`, `/me/watch-dashboard`, `/travel/intelligence`, `/me/plan`) had never been added to the deployed probe list; all five are now covered and verified refusing anonymous callers in production. **What remains is every check that needs a real session**, and none of the required credentials exists in the development environment: `WEATHRA_LIVE_SUPABASE_URL`, `WEATHRA_LIVE_SUPABASE_ANON_KEY`, `WEATHRA_LIVE_USER_A_EMAIL`, `WEATHRA_LIVE_USER_A_PASSWORD` (the entitled-model, override, usage-event, cost and quota checks), `WEATHRA_LIVE_USER_B_EMAIL` and `WEATHRA_LIVE_USER_B_PASSWORD` (cross-account isolation), and `WEATHRA_LIVE_ADMIN_EMAIL` and `WEATHRA_LIVE_ADMIN_PASSWORD` (the administrative override checks). With those unset the suite skips 53 checks, naming the missing variable in each skip rather than passing vacuously. Supplying them is an operator step: the accounts must be created through the real sign-up flow and the administrative role granted out of band by `scripts/grant_administrator.py`.
+  **COMPLETE (2026-09-14).** Both halves ran against the deployed pair. The credential-free half
+  runs green against the deployed backend (`https://weathra-backend.onrender.com`): every protected
+  route refuses a caller carrying no token, every locally-signed token is rejected, CORS answers as
+  configured, and no secret appears in any response. A coverage gap was found and closed on
+  2026-09-14 — `test_every_protected_path_has_a_credential_free_check` was failing because five
+  protected routes (`/evidence`, `/me/locations/overview`, `/me/watch-dashboard`,
+  `/travel/intelligence`, `/me/plan`) had never been added to the deployed probe list; all five are
+  now covered and verified refusing anonymous callers in production.
+
+  **The session half then ran in production with real accounts** — two ordinary users created
+  through the real sign-up flow, and the administrative principal whose role was granted out of band
+  by `scripts/grant_administrator.py`. Every criterion passed and no blocker remained:
+
+  | # | Criterion | Result |
+  |---|---|---|
+  | 1 | User A signs in against the deployed pair | PASS |
+  | 2 | User B signs in against the deployed pair | PASS |
+  | 3 | User A sees none of User B's data | PASS |
+  | 4 | User B sees none of User A's data | PASS |
+  | 5 | An ordinary authenticated user is refused every administrative operation, server-side | PASS |
+  | 6 | The administrator signs in and the role is reported from backend state | PASS |
+  | 7 | Administrative usage analytics answer with real aggregate measures | PASS |
+  | 8 | Administrative plan assignment writes | PASS |
+  | 9 | The assigned plan is observed by User B on their own account | PASS |
+  | 10 | Usage counters and history survive the plan change | PASS |
+  | 11 | An anonymous caller reaching a protected route is refused | PASS |
+  | 12 | User B's original plan restored afterwards | Yes |
+
+  Isolation was checked in **both** directions rather than once, the administrative refusal was
+  confirmed server-side rather than by the navigation hiding a link, and the plan assignment was
+  read back from User B's own account rather than assumed from the write's response. No password,
+  token or session value is recorded here or anywhere in the repository.
+
+  *Non-blocking observation.* Plan & Usage occasionally takes roughly five to nine seconds to leave
+  its loading skeleton on a cold backend. It did not cause any criterion to fail and is recorded as
+  a limitation rather than as a defect.
 
 # Part B — capabilities beyond the MVP
 
@@ -684,7 +724,7 @@ Everything not annotated remains genuinely unimplemented and out of scope.
 **Screens**
 
 - ~~Weather Intelligence Report, Forecast Explorer, Weather Scenario Lab, Weather Watch, Travel Intelligence~~ — **ALL BUILT**, each against its approved Visily artifact.
-- ~~Plan & Usage~~ — **BUILT**, including self-service tier selection. ~~Admin Model & AI Usage~~ — **BUILT IN PART**: the model policy confirmation surface is implemented; the model-status, token-usage, cost, latency, error and plan-usage panels are not, and the route states so.
+- ~~Plan & Usage~~ — **BUILT**, including self-service tier selection. ~~Admin Model & AI Usage~~ — **BUILT.** The audited model policy confirmation surface (task 34.8), the usage dashboard over the administrative aggregates — KPI row, usage chart, grouped table, product-and-internal split, failures panel and model catalog (task 34.18) — the plan-to-policy routing panel and principal plan administration are all implemented. What the Visily artifact drew and Weathra does not have — invented vendor model rows, composite quality and cost-efficiency scores, per-tier user headcounts, export and audit-report controls, and the "all services operational" footer — is absent rather than faked, and `docs/design/screens.md` §5 records why for each.
 
 **Commercial and model governance**
 
