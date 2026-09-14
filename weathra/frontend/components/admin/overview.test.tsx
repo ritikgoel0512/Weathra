@@ -14,7 +14,8 @@
  */
 
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiError, type ApiClient } from "@/lib/api/client";
@@ -221,5 +222,90 @@ describe("axis ticks", () => {
 
   it("leaves a short label with no slash alone", () => {
     expect(tickLabel("free")).toBe("free");
+  });
+});
+
+/**
+ * A failed administrative read is said, not drawn as zeroes — task 34.5.
+ *
+ * Production reported every administrative endpoint as 500 while this screen showed a KPI row of
+ * dashes and no trend at all. Both are worse than a skeleton: an operator reading "— model calls"
+ * and an absent chart has been shown an estate with no traffic, which is a statement about the
+ * business made by a failed request. `summary` is null while the read is in flight, when it failed
+ * and when there is nothing recorded, and the row could not tell those apart.
+ *
+ * The panels are independent on purpose: one read failing says so in its own place and the others
+ * still answer, which is what lets an operator see which half of the screen is broken.
+ */
+describe("an administrative read that failed", () => {
+  const INTERNAL = new ApiError(500, {
+    code: "internal_error",
+    message:
+      "Weathra hit an unexpected internal error. The failure has been logged with this request's identifier; nothing about it is included here.",
+    request_id: "req-500-abc",
+  });
+
+  /** The usage read fails; the catalog read answers. */
+  function withFailingUsage(): ApiClient {
+    const base = client(INTERNAL) as unknown as Record<string, unknown>;
+    return {
+      ...base,
+      adminUsageSeries: vi.fn(() => Promise.reject(INTERNAL)),
+    } as unknown as ApiClient;
+  }
+
+  it("leaves the loading state and says so, with the backend's message", async () => {
+    mount(withFailingUsage());
+
+    const failure = await screen.findByText("Admin data could not be loaded", {}, { timeout: 5000 });
+    expect(failure).toBeInTheDocument();
+    expect(screen.getAllByText(/unexpected internal error/).length).toBeGreaterThan(0);
+  });
+
+  it("renders the request id the backend sent, so the log line can be found", async () => {
+    mount(withFailingUsage());
+
+    await screen.findByText("Admin data could not be loaded", {}, { timeout: 5000 });
+    // Each failing panel carries it, because each is its own failure to chase in the log.
+    expect(screen.getAllByText("Request req-500-abc").length).toBeGreaterThan(0);
+  });
+
+  it("offers a retry that actually re-requests", async () => {
+    const api = withFailingUsage();
+    mount(api);
+
+    await screen.findByText("Admin data could not be loaded", {}, { timeout: 5000 });
+    const before = (api.adminUsage as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    await userEvent.click(screen.getAllByRole("button", { name: "Try again" })[0]!);
+    await waitFor(() =>
+      expect((api.adminUsage as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(before),
+    );
+  });
+
+  it("does not draw the figures as dashes behind the failure", async () => {
+    mount(withFailingUsage());
+
+    await screen.findByText("Admin data could not be loaded", {}, { timeout: 5000 });
+    // The KPI row is gone rather than showing "—" for calls and "Not reported" for everything else,
+    // which read as an estate with no traffic.
+    expect(screen.queryByText("Model calls")).toBeNull();
+    expect(screen.queryByText("Slowest median")).toBeNull();
+  });
+
+  it("says the trend could not be read rather than rendering nothing", async () => {
+    mount(withFailingUsage());
+
+    expect(
+      await screen.findByText("The usage trend could not be loaded", {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps a panel whose own read succeeded", async () => {
+    mount(withFailingUsage());
+
+    await screen.findByText("Admin data could not be loaded", {}, { timeout: 5000 });
+    // The catalog answered, so it still renders: one failing read does not blank the screen.
+    expect(screen.getByText("Model catalog")).toBeInTheDocument();
   });
 });

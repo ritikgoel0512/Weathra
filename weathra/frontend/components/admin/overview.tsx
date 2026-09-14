@@ -93,7 +93,16 @@ const AXIS = {
  * without the role who is offered *Try again* is being invited to repeat a question that has
  * already been answered. The policy panel below draws the same shape for the same reason.
  */
-function Refusal({ failure, onRetry }: { readonly failure: ViewFailure; readonly onRetry?: () => void }): ReactNode {
+function Refusal({
+  failure,
+  onRetry,
+  title = "That did not load",
+}: {
+  readonly failure: ViewFailure;
+  readonly onRetry?: () => void;
+  /** What failed, where the panel's own name is not enough to say it. */
+  readonly title?: string;
+}): ReactNode {
   if (isForbiddenCode(failure.code)) {
     return (
       <div className={styles.refusal} role="alert">
@@ -103,11 +112,7 @@ function Refusal({ failure, onRetry }: { readonly failure: ViewFailure; readonly
     );
   }
   return (
-    <ErrorState
-      failure={failure}
-      onRetry={failure.retryable ? onRetry : undefined}
-      title="That did not load"
-    />
+    <ErrorState failure={failure} onRetry={failure.retryable ? onRetry : undefined} title={title} />
   );
 }
 
@@ -346,6 +351,22 @@ export function AdminOverview(): ReactNode {
 
   return (
     <section className={styles.overview} aria-label="Model and AI usage">
+      {/*
+        A failed read is said, not drawn as zeroes — task 34.5.
+        
+        The row below reads its figures from `summary`, which is null in three different situations:
+        the read is in flight, the read failed, and there is nothing recorded. Rendering the same
+        dashes for all three made a backend that answered 500 look like an estate with no traffic,
+        which is the one reading an operator must never be given by accident. The panels are
+        independent on purpose: one failing read says so where it is, and the others still answer.
+      */}
+      {usage.state.kind === "error" ? (
+        <Refusal
+          failure={usage.state.failure}
+          title="Admin data could not be loaded"
+          onRetry={usage.retry}
+        />
+      ) : (
       <div className={styles.kpis}>
         <Kpi
           label="Model calls"
@@ -379,13 +400,24 @@ export function AdminOverview(): ReactNode {
           note="the highest per-group p50, not the estate's"
         />
       </div>
+      )}
 
       {/*
         The artifact leads with this one. It sits above the grouped chart because that is where
         `09-admin-model-ai-usage.png` puts it, and because "when" is the question an operator asks
         before "which model".
       */}
-      {series.state.kind === "ready" ? <UsageTrend series={series.state.data} /> : null}
+      {series.state.kind === "ready" ? (
+        <UsageTrend series={series.state.data} />
+      ) : series.state.kind === "error" ? (
+        /* It rendered nothing at all on a failure, so a trend that could not be read was
+           indistinguishable from a trend nobody had asked for. */
+        <Refusal
+          failure={series.state.failure}
+          title="The usage trend could not be loaded"
+          onRetry={series.retry}
+        />
+      ) : null}
 
       <div className={styles.overviewBody}>
         <Card aria-labelledby="admin-usage">
