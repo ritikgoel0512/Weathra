@@ -476,15 +476,25 @@ async def test_the_request_role_cannot_read_a_lab_or_audit_table(
     engines: Engines, clean_database: None, table: str
 ) -> None:
     """`specs/model-lab` and design.md decision 10: these belong to the project, and nothing a
-    browser does has any business reading a comparison's provenance or the administrative trail."""
+    browser does has any business reading a comparison's provenance or the administrative trail.
+
+    That rule is unchanged; what changed in `0016` is how it is enforced. These tables used to have
+    no grant at all, so an ordinary caller was refused by PostgreSQL. They now carry a grant and an
+    administrator-gated policy, so an ordinary caller is refused by the policy instead and reads
+    zero rows. Zero rows is the property worth asserting either way — "permission denied" was the
+    mechanism, not the requirement — and it is asserted here against a caller who is a real,
+    profiled, authenticated person rather than against nobody.
+    """
     user_id = new_user_id()
     async with privileged_session(engines.privileged_sessionmaker) as session:
         await insert_profile(session, user_id)
 
-    with pytest.raises(DBAPIError) as caught:
-        async with session_as(engines, user_id) as session:
-            await session.execute(text(f"SELECT count(*) FROM {table}"))
-    assert "permission denied" in str(caught.value)
+    async with session_as(engines, user_id) as session:
+        assert await session.scalar(text(f"SELECT count(*) FROM {table}")) == 0, (
+            f"an ordinary authenticated caller read rows from {table}"
+        )
+        # And the predicate that gates it says what it should for this caller.
+        assert await session.scalar(text("SELECT weathra_is_administrative()")) is False
 
 
 @pytest.mark.parametrize("table", LAB_AND_AUDIT_TABLES)
@@ -502,22 +512,54 @@ async def test_the_request_role_cannot_write_a_lab_or_audit_table(
 
 
 @pytest.mark.parametrize("table", LAB_AND_AUDIT_TABLES)
-async def test_a_lab_or_audit_table_has_row_level_security_on_and_no_policy(
+async def test_a_lab_or_audit_table_is_reachable_only_by_an_administrator(
     privileged: AsyncSession, table: str
 ) -> None:
-    """The denial stated twice. The grant alone was enough until Supabase's ``ensure_rls`` trigger
-    made it not enough (see ``0004``); RLS-with-no-policy alone would be enough only on a platform
-    that has such a trigger. Both, so the property does not depend on which platform this is."""
+    """Row Level Security on, and exactly one policy: the administrator-gated read.
+
+    ``0007`` left these four with no grant and no policy — "the denial stated twice" — because
+    nothing on the request path had any business reading a comparison run's provenance or the audit
+    trail of who changed which model. ``0016`` changed that for one caller and no other. The
+    administrative screen ``specs/web-ui`` requires is itself a request path, and the alternative
+    was giving the browser-facing container a credential that bypasses every policy on every table
+    (``test_secret_storage.py::test_the_render_service_never_holds_the_privileged_database_url``).
+
+    So the denial still stands for everybody the original rule was about, and it now stands as a
+    policy rather than as an absence. The behavioural half — that an ordinary caller reads nothing
+    from these tables — is asserted by the test below this one, which is where it belongs.
+    """
     enabled = await privileged.scalar(
         text("SELECT relrowsecurity FROM pg_class WHERE relname = :table"), {"table": table}
     )
     assert enabled, f"{table} does not have row level security enabled"
 
-    policies = await privileged.scalar(
-        text("SELECT count(*) FROM pg_policy WHERE polrelid = to_regclass(:table)"),
+    policies = [
+        row[0]
+        for row in await privileged.execute(
+            text(
+                "SELECT polname, pg_get_expr(polqual, polrelid) "
+                "FROM pg_policy WHERE polrelid = to_regclass(:table)"
+            ),
+            {"table": table},
+        )
+    ]
+    assert policies == [f"{table}_admin_read"], (
+        f"{table} carries {policies or 'no policy'}; it is meant to carry exactly the "
+        "administrator-gated read and nothing else"
+    )
+
+    using = await privileged.scalar(
+        text(
+            "SELECT pg_get_expr(polqual, polrelid) FROM pg_policy "
+            "WHERE polrelid = to_regclass(:table)"
+        ),
         {"table": table},
     )
-    assert policies == 0, f"{table} carries a policy; it is meant to be unreachable, not scoped"
+    # The gate is the row-backed predicate, not a claim. `0011` replaced a claim-reading accessor
+    # with this one precisely so an asserted role grants nothing.
+    assert "weathra_is_administrative()" in using, (
+        f"{table}'s policy does not consult the administrative predicate: {using}"
+    )
 
 
 async def test_the_privileged_path_can_still_write_the_lab_and_audit_tables(

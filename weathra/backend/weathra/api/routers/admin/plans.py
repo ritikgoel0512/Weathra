@@ -315,16 +315,13 @@ async def list_principals(
 async def list_administrators(
     request: Request,
     principal: AdministrativePrincipal,
-    session: AdministrativeReadSession,
+    session: AdministrativeSession,
 ) -> RoleListResponse:
     """Who holds the administrative role, and who granted it to them.
 
-    Reachable from the request path since `0016`. The owner policy on `admin_roles` returns a
-    request session exactly its own row, which is why this used to need the privileged connection;
-    `admin_roles_admin_read` adds a second policy beside it, gated on `weathra_is_administrative()`,
-    so an administrator — and only an administrator — sees the whole table. `0011` noted that its
-    owner policy meant the predicate could not be used to enumerate administrators; this endpoint
-    is the product asking for exactly that, for exactly them.
+    Privileged, and only reachable here: the owner policy on `admin_roles` returns a request
+    session exactly its own row, so this list cannot be assembled from the request path however
+    the query is written.
     """
     annotate(request, acting_user_id=principal.user_id)
     grants = await RoleStore(session).holders(ADMINISTRATOR_ROLE)

@@ -39,6 +39,10 @@ CROSS_PERSON_READS = frozenset(
         f"{ADMIN_PREFIX}/usage",
         f"{ADMIN_PREFIX}/usage/series",
         f"{ADMIN_PREFIX}/principals",
+        # Not cross-person exactly, but the same rule: an administrator enumerating the other
+        # administrators is a widening 34.5 does not need, so `admin_roles` keeps its owner policy
+        # alone and this endpoint keeps the privileged connection.
+        f"{ADMIN_PREFIX}/principals/administrators",
     }
 )
 
@@ -164,6 +168,7 @@ def test_each_endpoint_the_browser_reported_as_failing(path: str) -> None:
         f"{ADMIN_PREFIX}/usage",
         f"{ADMIN_PREFIX}/usage/series",
         f"{ADMIN_PREFIX}/principals",
+        f"{ADMIN_PREFIX}/principals/administrators",
     ],
 )
 def test_the_three_that_read_across_people_stay_privileged(path: str) -> None:
