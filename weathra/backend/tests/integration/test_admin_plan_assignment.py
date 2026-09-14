@@ -49,11 +49,13 @@ async def profiled(api: ApiHarness) -> str:
 
 
 async def plan_of(engines: Engines, subject: str) -> str | None:
+    """The tier one principal is on, read past every policy so the assertion is about the row."""
     async with privileged_session(engines.privileged_sessionmaker) as session:
-        return await session.scalar(
+        stored = await session.scalar(
             text("SELECT plan_code FROM user_plans WHERE user_id = CAST(:u AS uuid)"),
             {"u": subject},
         )
+    return None if stored is None else str(stored)
 
 
 # =========================================================================== the matrix

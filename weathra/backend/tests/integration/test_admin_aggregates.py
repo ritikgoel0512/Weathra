@@ -427,17 +427,14 @@ async def test_the_database_refuses_the_aggregate_to_a_caller_without_the_role(
         await insert_profile(session, ordinary)
 
     async with session_as(engines, ordinary) as session:
-        for statement, params in (
-            ("SELECT * FROM weathra_admin_usage_aggregate('model', NULL, NULL)", {}),
-            (
-                "SELECT * FROM weathra_admin_usage_series('day', now() - interval '1 day', now())",
-                {},
-            ),
-            ("SELECT * FROM weathra_admin_principals(10)", {}),
-            ("SELECT * FROM weathra_admin_administrators('administrator')", {}),
+        for statement in (
+            "SELECT * FROM weathra_admin_usage_aggregate('model', NULL, NULL)",
+            "SELECT * FROM weathra_admin_usage_series('day', now() - interval '1 day', now())",
+            "SELECT * FROM weathra_admin_principals(10)",
+            "SELECT * FROM weathra_admin_administrators('administrator')",
         ):
             with pytest.raises(DBAPIError) as raised:
-                await session.execute(text(statement), params)
+                await session.execute(text(statement))
             assert "administrative role" in str(raised.value)
             await session.rollback()
 
