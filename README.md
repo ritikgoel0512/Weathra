@@ -123,7 +123,117 @@ Fourteen screens, all built and deployed.
 
 ---
 
-## 4. Architecture
+## 4. Where Weathra MVP is useful
+
+The capabilities above answer *what it does*. This section answers *who it helps, and with what*.
+Every use below is served by a screen that is built and deployed.
+
+### Travel planning
+
+**Travel Intelligence** answers a whole trip — origin, destination, departure, return — as a
+destination overview, a viability index with its contributing figures, a daily outlook, a temporal
+comparison across the window, and a packing rationale in which every consideration names the figure
+that justifies it. **Compare Cities** ranks candidate destinations against a criterion you choose.
+**Forecast Explorer** opens the chosen destination hour by hour and per measure. **Historical
+Analytics** adds the question a forecast cannot answer: *is this window normal for the time of
+year?*, by comparing it against a multi-year baseline that names the archive years it actually got.
+
+Together they support destination selection, timing a trip within a window, understanding
+comparative weather risk between options, and preparing for what the figures actually show.
+
+Weathra informs travel decisions; it does not make safety-critical ones.
+
+### Outdoor and event planning
+
+Forecast conditions, precipitation, temperature and wind are retrieved per measure and analysed
+deterministically, with the provider's own confidence basis and horizon stated rather than implied.
+**Forecast Explorer** shows the hourly shape of a day rather than a daily summary — which is the
+difference between "rain tomorrow" and "rain clearing by eleven". **Weather Scenario Lab** explores
+a hypothetical — a warmer, wetter or windier version of the same window — with the unmodified
+baseline stated beside every adjusted figure, so the adjustment is always legible as an adjustment.
+
+This helps you understand the *likely* shape of conditions for an activity, an event or a short
+planning window. No forecast outcome is guaranteed, and Weathra presents none as certain.
+
+### Location comparison
+
+**Compare Cities** ranks several locations on one criterion, showing the values behind each rank and
+an explicit reason for any candidate it excluded — a rank without its inputs is an opinion.
+**Historical Analytics** and the baseline comparison add climate context, so a comparison can rest on
+what a place is typically like rather than only on the week ahead. **Forecast Explorer** then opens
+any single candidate in depth.
+
+The pattern suits shortlisting destinations, weighing relocation options, and comparing
+weather-sensitive operating locations against each other on a stated basis.
+
+### Weather research and analysis
+
+**Historical Analytics** retrieves archive observations, compares period against period, and
+compares a period against a multi-year baseline. The **Weather Intelligence Report** composes a
+report over a location and window. **Agent Evidence** then opens the run behind any answer: which
+agents ran, which tools were called with what arguments, what came back, which analytics methods
+were applied, which knowledge was cited, and how long each step took.
+
+Because the statistics are computed rather than generated, a figure is reproducible: the same inputs
+give the same result, and the provenance labels say which class each value belongs to. AI
+interpretation sits beside the figures, labelled as interpretation.
+
+**This is an intelligence and analysis layer over published weather data, not a scientific
+forecasting model.** Weathra runs no numerical weather prediction of its own.
+
+### Personal weather intelligence
+
+**Saved Locations** resolves your places once and reuses them, with an overview across all of them.
+**Weather Watch** monitors a condition at a place on a schedule and records every reading and
+outcome on a dashboard. **AI Weather Analyst** answers free-text questions about any of it, and
+**short-term conversational memory** makes a follow-up question mean something while **long-term
+preference memory** keeps your units and default horizon without you restating them.
+
+The result is a product that gets more useful on the tenth visit than on the first.
+
+### Operational decision support
+
+Teams whose work is weather-sensitive — field operations, logistics, scheduling, site planning — can
+use location comparison for where, forecast context and Forecast Explorer for when, historical
+analytics for whether a window is unusual, the Scenario Lab for what a worse version would look
+like, and the Weather Intelligence Report to carry the result to whoever decides.
+
+Weathra is **supporting context for planning**. It is not certified for and must not be used as the
+basis for aviation, maritime, emergency-response, medical or critical-infrastructure decisions, and
+it holds no aviation, maritime or hazard data of any kind.
+
+### AI and agent engineering demonstration
+
+Weathra is also a working reference implementation of a complete agentic SaaS application, which is
+why the engineering is documented as carefully as the product:
+
+- **Agent orchestration** over a closed capability set, with the graph — not the model — executing
+  tools.
+- **Grounded AI**, with a post-synthesis audit that reports any figure not traceable to retrieved or
+  computed data.
+- **Deterministic analytics** structurally separated from interpretation.
+- **RAG and evidence**, with threshold-gated retrieval and a persisted per-run provenance record.
+- **Two-tier memory** — conversational and preference.
+- **Row Level Security multi-tenancy**, asserted in both directions against production.
+- **Model evaluation** against a pinned dataset with gating criteria.
+- **Administrative model governance**, every write audited and citing its evidence.
+- **Admin analytics** that cross between people without granting access to anyone's content.
+- **Deployed production acceptance** with recorded results.
+- **OpenSpec-driven delivery** — requirements as testable scenarios, amended rather than
+  reinterpreted when a product decision changed.
+
+That makes it a usable reference for AI engineering, product engineering, agentic application
+development and SaaS architecture, independently of the weather domain.
+
+---
+
+**Weathra is a weather intelligence and decision-support tool.** It is not a replacement for
+official severe-weather warnings, certified meteorological services, or safety-critical operational
+systems. For severe weather, consult your national meteorological service.
+
+---
+
+## 5. Architecture
 
 One repository, two applications, built and deployed separately. The backend never serves the
 frontend's pages; the frontend talks to the backend only through its documented versioned API.
@@ -184,7 +294,7 @@ Component documentation:
 
 ---
 
-## 5. Agentic workflow
+## 6. Agentic workflow
 
 A question runs through five stages:
 
@@ -242,7 +352,7 @@ answer and the reader is told how it was routed.
 
 ---
 
-## 6. Data sources, grounding and provenance
+## 7. Data sources, grounding and provenance
 
 **Weather and geocoding come from [Open-Meteo](https://open-meteo.com)** — current conditions,
 forecasts, the historical archive, and the geocoder that resolves place names. No credential is
@@ -281,7 +391,7 @@ never a partial one.
 
 ---
 
-## 7. Memory
+## 8. Memory
 
 Two tiers, deliberately separate:
 
@@ -300,7 +410,7 @@ routine clears thread state on its own schedule. Usage records hold no conversat
 
 ---
 
-## 8. Model governance and evaluation
+## 9. Model governance and evaluation
 
 Models are **data, not configuration**. The catalog, the policies, the plan-to-policy mapping and
 the allowances are database rows, so changing which model answers a tier needs no redeployment.
@@ -333,7 +443,7 @@ policy row and distinguishable in the audit trail, which is what the trail is fo
 
 ---
 
-## 9. Admin analytics and administration
+## 10. Admin analytics and administration
 
 The administrative surface is a single screen over endpoints the backend authorises independently:
 
@@ -371,7 +481,7 @@ at the time of each call, never a billed amount.
 
 ---
 
-## 10. Plans and usage
+## 11. Plans and usage
 
 Three tiers — **Free**, **Pro** and **Premium** — and, since the product decision of 2026-09-13,
 **you choose your own**. Selecting a tier is one press in Plan & Usage, takes effect immediately,
@@ -413,7 +523,7 @@ purchasable, and a test asserts no payment-processing integration exists.
 
 ---
 
-## 11. Security and multi-tenancy
+## 12. Security and multi-tenancy
 
 - **Authentication is Supabase Auth** — email and password, with mandatory email verification by
   code or link. The frontend holds a cookie session and forwards the access token to FastAPI as a
@@ -452,7 +562,7 @@ penetration test. The guarantees above are the ones this repository tests, and n
 
 ---
 
-## 12. Accessibility and responsive design
+## 13. Accessibility and responsive design
 
 Acceptance rests on **reproducible engineering validation**, recorded in
 [`weathra/docs/design/accessibility.md`](weathra/docs/design/accessibility.md):
@@ -486,7 +596,7 @@ for anyone who chooses to do one is
 
 ---
 
-## 13. Tech stack
+## 14. Tech stack
 
 Read from the project manifests and configuration; nothing here is listed because it appeared
 during planning.
@@ -513,7 +623,7 @@ an architecture rule with its own test.
 
 ---
 
-## 14. Repository structure
+## 15. Repository structure
 
 The application lives in one top-level project directory. Only what belongs to the repository
 itself sits above it — the CI workflows GitHub Actions can discover nowhere else, the licence, the
@@ -565,7 +675,7 @@ documents sit beside the applications they describe.
 
 ---
 
-## 15. Development setup
+## 16. Development setup
 
 Everything below runs in a cloud environment or a container. **Nothing needs a particular local
 machine** — setup, sign-up, test and deploy have all been carried out from a browser, in GitHub
@@ -674,7 +784,7 @@ weathra-watch-evaluate   # evaluate scheduled weather watches
 
 ---
 
-## 16. Environment variables
+## 17. Environment variables
 
 **Names only. No value belongs in this file, in the repository, or in a commit.** Both applications
 ship a `.env.example` listing every setting with its default;
@@ -695,7 +805,7 @@ City imagery is optional and its provider credential is a **secret**, so it is c
 server-side and deliberately documented in [`docs/city-imagery.md`](weathra/docs/city-imagery.md)
 rather than here.
 
-### Backend
+### Backend — server-side only
 
 **Required — runtime and deployment:**
 
@@ -757,7 +867,7 @@ skip, naming the variable they need rather than passing vacuously.
 
 ---
 
-## 17. Testing and quality
+## 18. Testing and quality
 
 Validation is layered, and each layer answers a different question.
 
@@ -790,7 +900,7 @@ acceptance run, in that order.
 
 ---
 
-## 18. Production acceptance
+## 19. Production acceptance
 
 The three operational acceptance tasks are complete.
 
@@ -803,10 +913,10 @@ The three operational acceptance tasks are complete.
 **21.8** closed against an acceptance contract deliberately amended so that blocking MVP acceptance
 rests on reproducible engineering validation — twelve clauses, all running in CI — rather than on
 mandatory physical-device or real assistive-technology field testing. No screen-reader or handset
-pass is claimed. §12 lists what was verified.
+pass is claimed. §13 lists what was verified.
 
 **34.5** closed when an administrator reviewed comparison run `c1e8768f` in production and recorded
-the audited candidate-order decision. §8 describes it.
+the audited candidate-order decision. §9 describes it.
 
 **34.7** ran end to end against the deployed pair and validated:
 
@@ -825,12 +935,12 @@ the audited candidate-order decision. §8 describes it.
   with the check list driven off `openapi.json`.
 
 Every criterion passed and no blocker remained. No password, token or session value is recorded in
-this repository. One non-blocking observation is carried into §21 as a limitation rather than a
+this repository. One non-blocking observation is carried into §23 as a limitation rather than a
 defect.
 
 ---
 
-## 19. Deployment
+## 20. Deployment
 
 Five hosted services, each doing one thing, and no step that needs a particular computer.
 
@@ -885,7 +995,7 @@ secret is for, what each workflow may and may not do, and how each environment w
 
 ---
 
-## 20. OpenSpec development process
+## 21. OpenSpec development process
 
 Weathra was built specification-first. Every artifact of the change lives in
 [`weathra/openspec/`](weathra/openspec/):
@@ -913,58 +1023,186 @@ requirement.
 
 ---
 
-## 21. Known limitations
+## 22. MVP boundaries
 
-- **Weathra is not an official severe-weather warning system.** It issues no warnings and refers you
-  to your national meteorological service. Do not rely on it for safety-of-life decisions.
-- **One weather provider.** Everything comes from Open-Meteo, so its coverage, resolution, archive
-  depth and rate limits are Weathra's. The confidence signal derives from a single provider's own
-  spread and horizon distance — a bounded signal, and stated as one.
-- **External provider availability.** A provider outage or rate limit degrades the surfaces that
-  depend on it; each says so rather than substituting data.
-- **The optional Dashboard historical baseline may be omitted.** If its archive retrieval fails the
-  baseline section is left out; the rest of the Dashboard still renders and nothing is fabricated.
-- **Plan & Usage may occasionally take several seconds to load** — roughly five to nine against a
-  cold backend — before leaving its loading skeleton.
-- **No payment processing.** Tiers control allowances and model class; there is no checkout, no
-  billing and no published price.
-- **The AI explains; it does not know.** It writes prose from computed findings, can still emphasise
-  the wrong thing, and is labelled as interpretation so you can tell it from a measurement.
-- **AI availability depends on the configured gateway.** Without `OPENROUTER_API_KEY` the
-  deterministic capabilities all work and the Analyst says why it cannot answer.
-- **Forecast-accuracy scoring is not implemented.** Weathra retrieves historical weather; it does
-  not score how good its own past forecasts turned out to be.
+What Weathra deliberately does not attempt to be. These are scope decisions taken up front, not
+gaps discovered late — each one is recorded in the change's own design and roadmap documents, and
+together they mark where the next stage of the product begins.
+
+- **Weathra is not a meteorological forecasting model.** It runs no numerical weather prediction. It
+  consumes published data from external providers and builds intelligence on top of it.
+- **It does not guarantee forecast accuracy.** Forecast quality is the source provider's; Weathra
+  reports it with its horizon and stated basis rather than improving or warranting it.
+- **It is not built for safety-critical decision-making** — aviation, maritime, emergency response
+  or medical. It holds no aviation, maritime or hazard data of any kind, and issues no warnings.
+- **It is not an enterprise weather-data warehouse.** Observations are retrieved per request and
+  cached; Weathra stores evidence records and forecast snapshots, not a durable observation archive.
+- **It is not a billing-complete commercial SaaS.** Tiers, allowances, entitlement and usage
+  accounting are implemented end to end; payment collection deliberately is not.
+- **It does not provide multi-provider forecast consensus.** One provider supplies weather, and the
+  confidence signal derives from that provider's own spread and horizon distance — a bounded signal,
+  and presented as one.
+- **It does not continuously measure forecast against observation.** There is no accuracy or skill
+  scoring across providers and horizons; doing it honestly needs a long snapshot history that this
+  change does not accumulate.
+- **Optional historical components depend on upstream availability.** Where an archive retrieval
+  fails, the optional section is omitted rather than estimated.
+- **AI interpretation depends on a configured gateway.** Without one, every deterministic capability
+  still works and the Analyst says why it cannot answer.
+- **Physical assistive-technology and physical-device field testing are additional product QA**, not
+  blocking MVP acceptance criteria. The acceptance contract rests on twelve clauses of reproducible
+  automated verification that run in CI.
+
+**None of this makes the MVP partial.** The scope the capstone set out to demonstrate is delivered
+and verified in production: a deployed pair, multi-user isolation proven in both directions, agentic
+weather intelligence over a closed capability set, deterministic analytics separated from
+interpretation, per-run provenance, two-tier memory, model governance with audited decisions,
+administrative controls that cross between people without exposing anyone's content, and recorded
+deployed acceptance evidence. The boundaries above define the next stage of the product, not an
+unfinished one.
+
+---
+
+## 23. Known limitations
+
+Where §22 states scope, this states the practical constraints of the system as deployed today.
+
+- **Dependence on external weather providers.** Coverage, resolution, archive depth and rate limits
+  are Open-Meteo's, and its outages are Weathra's. Every affected surface says so rather than
+  substituting data.
+- **Forecast quality is ultimately the source provider's.** Weathra's analytics are exact over the
+  data they are given; they cannot make a forecast better than the one retrieved.
+- **The optional Dashboard climate baseline may be omitted.** If its archive retrieval fails, the
+  baseline section is left out and the rest of the Dashboard still renders — an absent baseline,
+  never a partial or fabricated one.
+- **The provider cache is process-local.** Each backend instance keeps its own, so horizontally
+  scaling multiplies upstream calls. It is an accepted trade for not operating a separate cache
+  service, and `CachedProvider` is the seam a shared cache drops into.
+- **Plan & Usage may take several seconds to load** — roughly five to nine against a cold backend —
+  before leaving its loading skeleton. Observed during deployed acceptance; it failed no criterion.
 - **Weather Watch reports; it does not notify.** Watches are evaluated on a schedule and surfaced in
   the product. There is no push or email delivery.
-- **Physical assistive-technology and physical-device field QA remains optional** and has not been
-  performed. See §12.
+- **The AI explains; it does not know.** It writes prose from computed findings, can still emphasise
+  the wrong thing, and is labelled as interpretation so a reader can tell it from a measurement.
+- **AI availability follows the configured gateway.** A gateway outage or rate limit degrades the
+  agent paths only.
+- **No screen-reader or physical-handset pass has been performed**, and none is claimed. The
+  automated accessibility acceptance is complete — see §13.
 
 ---
 
-## 22. Future work
+## 24. What could be improved next
 
-Beyond-MVP directions already aligned with the project's own roadmap:
+Everything the MVP required is delivered; nothing below is needed to complete it. These are the
+next logical product improvements, grouped by theme and prioritised at the end.
+[`weathra/docs/roadmap.md`](weathra/docs/roadmap.md) and Part B of the archived task list record the
+full set, including what is deliberately out of scope.
 
-- **Multi-provider weather consensus**, with a confidence signal derived from provider disagreement
-  rather than from one provider's spread.
-- **Forecast-accuracy scoring** — comparing stored forecast snapshots against subsequent
-  observations, which needs a longer snapshot history and scheduled capture.
-- **Richer scheduled intelligence delivery** — push and email for Weather Watch, subject to the
-  official-warnings stance.
-- **Real billing integration** — `subscription_plans` already carries a stable plan code and an
-  unused external subscription reference so the integration has somewhere to land.
-- **Expanded accessibility field QA** — the optional screen-reader and physical-handset passes.
-- **Broader production telemetry** — scheduled model health probing, and reconciliation of
-  estimated cost against a gateway invoice.
-- **Behavioural personalisation** — intelligence shaped by usage history rather than only explicit
-  preferences.
+### Weather data resilience
 
-[`weathra/docs/roadmap.md`](weathra/docs/roadmap.md) and Part B of `openspec/.../tasks.md` record
-the full list and what is deliberately out of scope.
+A persistent provider cache surviving restarts, and a distributed cache so horizontally scaled
+instances share one; stronger rate-limit protection; provider-health monitoring; fallback to a
+second provider behind the existing provider contract; clearer upstream-outage handling; and
+scheduled cache warming for frequently requested locations where the traffic justifies it.
+
+**Why:** to cut cold-start load on the upstream provider and keep surfaces answering through an
+outage — without weakening provenance, since a cached value still names the provider and the time it
+was retrieved.
+
+### Forecast quality
+
+Forecast-versus-observed accuracy measurement from stored snapshots; provider benchmarking by
+geography and by forecast horizon; calibration and confidence indicators derived from measured
+error rather than from provider spread alone; forecast error metrics; and comparison of forecast
+quality over time.
+
+**Why:** to move from consuming forecasts to reporting *measured* forecast quality — the single
+largest step from weather intelligence toward weather-quality intelligence. It needs a longer
+snapshot history than this change accumulates, which is why it is next rather than now.
+
+### Multi-provider weather intelligence
+
+Richer multi-provider consensus; detection and surfacing of provider disagreement; fallback-provider
+selection; per-location and per-provider quality ranking; and a confidence signal derived from
+agreement between providers rather than from one provider's own spread.
+
+None of this exists today — the MVP is deliberately single-provider, and says so wherever confidence
+is reported.
+
+### Intelligence layer
+
+A broader weather and domain knowledge corpus; stronger evidence summarisation; richer citation and
+evidence inspection in Agent Evidence; more sophisticated scenario analysis beyond single-variable
+adjustment; deeper multi-step reasoning for compound questions; domain-specific decision templates;
+and a richer account of uncertainty than a single confidence band.
+
+### Product experience
+
+Faster Plan & Usage loading; richer Weather Watch outcomes; scheduled reports and scheduled weather
+intelligence summaries; email and push delivery for watches, subject to the official-warnings
+stance; stronger mobile-specific QA; an optional native mobile experience; improved onboarding; and
+more dashboard customisation.
+
+### Accessibility
+
+**Automated accessibility acceptance for the MVP is already complete** — twelve clauses, two browser
+engines, running in CI. What would extend it: real NVDA, Narrator and VoiceOver sessions; physical
+handset QA; testing with people who rely on assistive technology daily; and continued keyboard,
+focus and semantic coverage as screens change. The worksheet for the optional passes is already
+written.
+
+### Commercial and SaaS readiness
+
+Real payment processing and subscription billing with invoices; organisation and workspace accounts;
+team roles and permissions beyond the single administrative role; enterprise SSO and MFA;
+customer-support and administrative tooling; a full commercial entitlement lifecycle; and SLA/SLO
+instrumentation. `subscription_plans` already carries a stable plan code and an unused external
+subscription reference, so a billing integration has somewhere to land.
+
+### Admin and model governance
+
+A dedicated persistent audit-history screen; richer model-evaluation dashboards; a clearer candidate
+reorder and promotion flow; model cost and latency analytics over time; quality-over-time trends;
+model-policy history; governance approval workflows; and a clearer experiment-to-production
+lifecycle. Scheduled model health probing with automatic disabling of a failing catalog entry
+belongs here too.
+
+### Scale and reliability
+
+Distributed caching; a queue and background-job infrastructure; scheduled workers beyond the current
+Actions-driven jobs; asynchronous report generation; load and performance testing; stronger
+production telemetry with distributed tracing and alerting; regional deployment; horizontal scaling;
+and a documented disaster-recovery plan. Infrastructure-as-code for the deployment topology sits
+alongside these.
+
+### Data and analytics maturity
+
+Scheduled forecast-snapshot capture, which would improve *What Changed?* coverage beyond
+request-driven snapshots and is the prerequisite for accuracy scoring above; a persistent
+observation store for longer-range historical analytics; precomputed climate aggregates and
+materialised baselines so a common comparison need not re-retrieve an archive; and richer export and
+report formats.
+
+### Prioritisation
+
+Ordered by value per unit of effort on the current system, not as committed delivery dates.
+
+**Near-term** — provider resilience and a persistent cache; the beginnings of forecast-accuracy
+measurement through scheduled snapshot capture; faster Plan & Usage; scheduled notifications and
+reports for Weather Watch; and the optional accessibility field QA. Each is contained, and each
+removes a limitation named in §23.
+
+**Medium-term** — multi-provider consensus and disagreement-based confidence; richer administrative
+and model-governance surfaces; real billing; organisations, teams and workspaces; and broader
+observability with tracing and alerting.
+
+**Longer-term** — enterprise-scale analytics over a persistent observation store; regional
+deployment and horizontal scaling; calibrated accuracy and confidence models built on accumulated
+verification data; and deeper automation of weather intelligence delivery.
 
 ---
 
-## 23. Final project status
+## 25. Final project status
 
 **Production deployed.** The backend runs on Render and the frontend on Vercel, both from `main`,
 both verified live.
