@@ -11,6 +11,9 @@ so a handler that forgets the predicate returns nothing rather than another user
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from typing import Any
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, ProgrammingError
@@ -165,6 +168,68 @@ async def test_shared_tables_are_not_restricted_by_owner(
             )
 
 
+# The writes the request path may perform on an operational table, named individually with the one
+# command each may use. There are two, both created by `0017`, and both exist because the audited
+# candidate-order confirmation task 34.8 specifies happens on the request path — the container that
+# serves browsers, which is deliberately never given the privileged credential.
+#
+# Named rather than allowed by shape, because "an administrative write policy" is precisely the
+# thing that must not become a category somebody can add to without deciding to. A third entry here
+# is a deliberate act with a reviewer attached; a policy that appears in the database without one
+# fails `write_policy_offences` below.
+ADMINISTRATIVE_WRITE_POLICIES: dict[tuple[str, str], str] = {
+    ("model_policies", "model_policies_admin_write"): "UPDATE",
+    ("admin_audit", "admin_audit_admin_append"): "INSERT",
+}
+
+# The predicate each of them must be gated on, and nothing else. `0011`'s SECURITY DEFINER read of
+# `admin_roles`: backend state, which no claim, header or body field can satisfy.
+ADMINISTRATIVE_PREDICATE = "weathra_is_administrative()"
+
+OPERATIONAL_POLICY_QUERY = """
+    SELECT tablename, policyname, cmd, roles, coalesce(qual, ''), coalesce(with_check, '')
+      FROM pg_policies
+     WHERE schemaname = 'public' AND tablename = ANY(:tables)
+"""
+
+
+def write_policy_offences(policies: Sequence[Any]) -> list[str]:
+    """Every operational policy that is neither a read nor one of the two sanctioned writes.
+
+    Separated from the test so the same rule can be pointed at a policy that does not exist and
+    shown to reject it — a checker nobody has watched fail is a green light rather than a check.
+
+    Four things are required of a write, and each rules out a different mistake:
+
+    * it is one of the two named above — so a *new* write policy fails here rather than passing on
+      the strength of resembling them;
+    * it carries only the command that entry names — so `admin_audit`'s append cannot become an
+      `UPDATE` or a `DELETE` under the same name, which is the difference between a trail this role
+      may add to and one it may rewrite;
+    * both its `USING` and its `WITH CHECK`, wherever present, are exactly the administrative
+      predicate — so a widened clause, or one testing a token claim, fails;
+    * it applies to the restricted role alone — so it cannot be a policy for `PUBLIC` that happens
+      to look administrative.
+    """
+    offences: list[str] = []
+    for table, name, cmd, roles, using, with_check in policies:
+        if cmd == "SELECT":
+            continue
+        where = f"{table}.{name}"
+        expected = ADMINISTRATIVE_WRITE_POLICIES.get((table, name))
+        if expected is None:
+            offences.append(f"{where} is an unsanctioned {cmd} policy on an operational table")
+            continue
+        if cmd != expected:
+            offences.append(f"{where} is {cmd}; the sanctioned write is {expected} only")
+        for clause, value in (("USING", using), ("WITH CHECK", with_check)):
+            if value and value.strip() != ADMINISTRATIVE_PREDICATE:
+                offences.append(f"{where} has a {clause} that is not {ADMINISTRATIVE_PREDICATE}")
+        if list(roles) != [RESTRICTED_ROLE]:
+            offences.append(f"{where} applies to {list(roles)} rather than {[RESTRICTED_ROLE]}")
+    return offences
+
+
 async def test_the_policy_set_matches_the_models_classification(
     privileged: AsyncSession,
 ) -> None:
@@ -177,6 +242,19 @@ async def test_the_policy_set_matches_the_models_classification(
     Scoped to the tables the models declare. LangGraph's checkpoint tables also carry
     owner-restricting policies, written by ``ensure_checkpoint_schema`` rather than by a migration,
     and they are not in ``Base.metadata`` because Weathra does not define them.
+
+    **The operational tables were read-only to the request path, and two of them no longer are.**
+    ``0017`` grants ``UPDATE`` on ``model_policies`` and ``INSERT`` on ``admin_audit``, because the
+    audited candidate-order confirmation is a write that has to happen in the container serving the
+    browser — the one deliberately never given the privileged credential. This test used to assert
+    that every operational policy was a ``SELECT``, which was true when it was written and stopped
+    being true when that shipped.
+
+    It is not relaxed into "writes are allowed here". The two are named, each with the one command
+    it may carry, the predicate it must be gated on and the role it must apply to
+    (``write_policy_offences``); a third policy, a widened clause, or one of these two gaining
+    ``DELETE`` all fail. The grants are asserted alongside, because a policy cannot grant a
+    privilege the role does not hold and a privilege is what a policy is checked after.
     """
     rows = await privileged.execute(
         text(
@@ -213,6 +291,26 @@ async def test_the_policy_set_matches_the_models_classification(
         "self-service administrative promotion"
     )
 
+    # The grant is the other half of the policy, and the half a policy cannot restore: PostgreSQL
+    # checks the privilege first, so a table with no `DELETE` grant cannot be deleted from however
+    # the policies read. The two sanctioned writes are asserted as whole grant sets rather than as
+    # presences, because "it still has INSERT" is exactly what a widening looks like.
+    for table, expected in (
+        ("admin_audit", {"SELECT", "INSERT"}),
+        ("model_policies", {"SELECT", "UPDATE"}),
+    ):
+        grants = await privileged.execute(
+            text(
+                "SELECT privilege_type FROM information_schema.role_table_grants "
+                " WHERE table_name = :table AND grantee = :role"
+            ),
+            {"table": table, "role": RESTRICTED_ROLE},
+        )
+        assert {row[0] for row in grants} == expected, (
+            f"{table} grants the request path more than {sorted(expected)}; an audit trail this "
+            "role can rewrite or prune is not an audit trail"
+        )
+
     everything = await privileged.execute(
         text("SELECT DISTINCT tablename FROM pg_policies WHERE schemaname = 'public'")
     )
@@ -220,20 +318,147 @@ async def test_the_policy_set_matches_the_models_classification(
     # principal to consult: the shared data everyone may read, or the operational policy tables a
     # resolution reads on the way to a model. Both are allowed and neither may be user-owned —
     # an owner-less policy on a user-owned table would hand every row to every caller.
+    operational: list[str] = []
     for table in ({row[0] for row in everything} & declared) - owner_restricted:
         ownership = ownership_of(table)
         assert ownership in (Ownership.SHARED, Ownership.OPERATIONAL), (
             f"{table} carries a policy that is neither owner-restricting nor shared-read"
         )
         if ownership is Ownership.OPERATIONAL:
-            commands = await privileged.execute(
-                text("SELECT DISTINCT cmd FROM pg_policies WHERE tablename = :table"),
-                {"table": table},
-            )
-            assert {row[0] for row in commands} == {"SELECT"}, (
-                f"{table} is operational and carries a policy that is not read-only; the request "
-                "path never writes these, and administration goes through the privileged path"
-            )
+            operational.append(table)
+
+    policies = await privileged.execute(
+        text(OPERATIONAL_POLICY_QUERY), {"tables": sorted(operational)}
+    )
+    assert write_policy_offences(policies.all()) == []
+
+
+def test_the_write_policy_check_rejects_a_policy_nobody_sanctioned() -> None:
+    """The checker is worth exactly its ability to fail, so it is shown failing — on the four
+    shapes that would matter, each of which would otherwise look like the two real ones."""
+    sanctioned = (
+        "admin_audit",
+        "admin_audit_admin_append",
+        "INSERT",
+        [RESTRICTED_ROLE],
+        "",
+        ADMINISTRATIVE_PREDICATE,
+    )
+    assert write_policy_offences([sanctioned]) == []
+
+    # A new write policy on an operational table, gated exactly as the real ones are.
+    unsanctioned = (
+        "model_catalog",
+        "model_catalog_admin_write",
+        "UPDATE",
+        [RESTRICTED_ROLE],
+        ADMINISTRATIVE_PREDICATE,
+        ADMINISTRATIVE_PREDICATE,
+    )
+    assert write_policy_offences([unsanctioned]), "an unsanctioned write policy went undetected"
+
+    # The sanctioned name, carrying a command it may not.
+    widened = (
+        "admin_audit",
+        "admin_audit_admin_append",
+        "DELETE",
+        [RESTRICTED_ROLE],
+        ADMINISTRATIVE_PREDICATE,
+        "",
+    )
+    assert write_policy_offences([widened]), "a trail this role could prune went undetected"
+
+    # The sanctioned name and command, gated on something weaker.
+    ungated = ("admin_audit", "admin_audit_admin_append", "INSERT", [RESTRICTED_ROLE], "", "true")
+    assert write_policy_offences([ungated]), "an ungated append went undetected"
+
+    # The sanctioned name, command and predicate — offered to everybody.
+    public = (
+        "admin_audit",
+        "admin_audit_admin_append",
+        "INSERT",
+        ["public"],
+        "",
+        ADMINISTRATIVE_PREDICATE,
+    )
+    assert write_policy_offences([public]), "a policy for PUBLIC went undetected"
+
+
+async def test_an_administrator_may_append_to_the_audit_trail_and_nobody_else_may(
+    engines: Engines, clean_database: None
+) -> None:
+    """`0017`'s append, asserted as behaviour rather than as catalogue rows.
+
+    Four callers and one statement. The administrator is the only one who may write it, and the
+    role comes from ``admin_roles`` rather than from the token — the claimant below asserts it and
+    is refused all the same.
+    """
+    admin, ordinary = new_user_id(), new_user_id()
+    async with privileged_session(engines.privileged_sessionmaker) as session:
+        await insert_profile(session, admin)
+        await insert_profile(session, ordinary)
+        await session.execute(
+            text(
+                "INSERT INTO admin_roles (subject_id, role) "
+                "VALUES (CAST(:u AS uuid), 'administrator')"
+            ),
+            {"u": admin},
+        )
+
+    append = text(
+        "INSERT INTO admin_audit (id, acting_principal, action, subject_kind, subject_id, "
+        "before, after) VALUES (gen_random_uuid(), CAST(:actor AS uuid), 'policy_edit', "
+        "'model_policy', 'balanced', NULL, '{\"candidate_catalog_keys\": []}')"
+    )
+
+    async with session_as(engines, admin) as session:
+        await session.execute(append, {"actor": admin})
+        assert await session.scalar(text("SELECT count(*) FROM admin_audit")) == 1
+
+    # An ordinary authenticated caller. The grant is there — the refusal is the policy's.
+    with pytest.raises(DBAPIError) as refused:
+        async with session_as(engines, ordinary) as session:
+            await session.execute(append, {"actor": ordinary})
+    assert "row-level security" in str(refused.value)
+
+    # A caller whose token asserts the role. `0011` made the predicate read backend state.
+    with pytest.raises(DBAPIError):
+        async with session_as(engines, ordinary, administrative=True) as session:
+            await session.execute(append, {"actor": ordinary})
+
+    # And nobody at all.
+    with pytest.raises(DBAPIError):
+        async with session_as(engines, None) as session:
+            await session.execute(append, {"actor": admin})
+
+    async with privileged_session(engines.privileged_sessionmaker) as session:
+        assert await session.scalar(text("SELECT count(*) FROM admin_audit")) == 1
+
+
+@pytest.mark.parametrize(
+    "statement", ["DELETE FROM admin_audit", "UPDATE admin_audit SET action = 'x'"]
+)
+async def test_an_administrator_may_not_edit_or_prune_the_audit_trail(
+    engines: Engines, clean_database: None, statement: str
+) -> None:
+    """Append is the whole of it. An audit trail the audited role can rewrite is not one, and the
+    refusal here is the *grant* rather than a policy — there is no `UPDATE` or `DELETE` to check a
+    policy against."""
+    admin = new_user_id()
+    async with privileged_session(engines.privileged_sessionmaker) as session:
+        await insert_profile(session, admin)
+        await session.execute(
+            text(
+                "INSERT INTO admin_roles (subject_id, role) "
+                "VALUES (CAST(:u AS uuid), 'administrator')"
+            ),
+            {"u": admin},
+        )
+
+    with pytest.raises(DBAPIError) as refused:
+        async with session_as(engines, admin) as session:
+            await session.execute(text(statement))
+    assert "permission denied" in str(refused.value)
 
 
 async def test_the_restricted_role_exists_and_cannot_bypass_policies(

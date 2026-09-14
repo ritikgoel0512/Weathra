@@ -238,15 +238,24 @@ async def assign_plan(
     subject_id: Subject,
     body: PlanAssignmentRequest,
     principal: AdministrativePrincipal,
-    session: AdministrativeSession,
+    session: AdministrativeRequestSession,
 ) -> PlanRecord:
-    """Put a person on a tier.
+    """Put a person on a tier. Recorded, and refused to everybody but an administrator.
 
-    The only way an assignment happens: `user_plans` grants the request role `SELECT` and nothing
-    else, so a caller cannot assign themselves one however the request is shaped.
+    **Read this beside `PUT /me/plan`, which is the other way onto a tier.** That one is a person
+    moving themselves and writes whichever row `0015`'s `WITH CHECK` allows — their own, and it
+    cannot be another's. This one names a subject, so it is a write no session may make by a
+    statement of its own: it goes through `0019`'s `weathra_admin_assign_plan`, which tests
+    `weathra_is_administrative()` before it writes anything and refuses everybody else with
+    `insufficient_privilege`. `user_plans` gains no policy and no grant from that, so an ordinary
+    caller still cannot touch another person's row however the request is shaped.
+
+    On the request connection because the container serving this screen is deliberately never given
+    the privileged credential — asking for it is what made this endpoint fail with an internal
+    error in production, after the caller's authorization had already succeeded.
     """
     annotate(request, acting_user_id=principal.user_id)
-    return await PlanStore(session).assign(
+    return await PlanStore(session).assign_on_the_request_path(
         subject_id, body.plan_code, acting_principal=principal.user_id
     )
 

@@ -318,9 +318,15 @@ class PlanStore:
     ) -> PlanRecord:
         """Put a person on a tier. Administrative, privileged, and recorded.
 
-        The only way a plan assignment happens: `user_plans` grants the request-serving role
-        `SELECT` and nothing else, so a caller cannot assign themselves one however the request is
-        shaped (``specs/model-policy``).
+        One person changing another person's entitlement, run under the privileged connection:
+        `user_plans` grants the request-serving role its own row and no other, so a caller cannot
+        assign themselves one however the request is shaped (``specs/model-policy``).
+
+        This is the operator's path — the bootstrap script, and anything else that already holds
+        the privileged credential. The administrative *screen* cannot use it, because the container
+        serving it is deliberately never given that credential; it calls
+        ``assign_on_the_request_path`` below, which makes the same change and records it the same
+        way.
         """
         plan = await self.require(plan_code)
         before = await self._session.scalar(
@@ -338,6 +344,57 @@ class PlanStore:
             ),
             {"user": user_id, "plan": str(plan_code), "by": acting_principal},
         )
+        await self._record_assignment(
+            user_id, plan, acting_principal=acting_principal, before=before
+        )
+        return plan
+
+    async def assign_on_the_request_path(
+        self, user_id: str, plan_code: PlanCode | str, *, acting_principal: str
+    ) -> PlanRecord:
+        """The same assignment, made from the container that serves the administrative screen.
+
+        **Why it is a second method rather than a flag.** The change is identical and the mechanism
+        is not: `assign` above writes ``user_plans`` directly, which only a connection exempt from
+        the policies can do for somebody else's row, and this one goes through `0019`'s
+        ``weathra_admin_assign_plan`` — a ``SECURITY DEFINER`` function that opens by testing
+        ``weathra_is_administrative()`` and refuses anybody else with ``insufficient_privilege``.
+        A parameter switching between them would make the security-relevant difference the value of
+        an argument somebody passes.
+
+        **What it is not.** It is not a widening of ``user_plans``: `0015`'s self-service policies
+        are untouched, so this session — an administrator's own — still cannot write another
+        person's row by a statement of its own, and ``choose`` still writes only the caller's. The
+        function's reach is one row of one table and the three columns an assignment consists of;
+        usage counters and recorded events are not among them, so a tier change never resets what
+        somebody has already consumed.
+
+        **The record is the same record.** ``record_change`` writes ``admin_audit`` in this
+        transaction through the ``INSERT`` `0017` already grants, so the trail does not learn that
+        there are two ways to make this change — which is the point of having one place that writes
+        it. The ``before`` state comes back from the function because reading it here would return
+        null for anybody but the caller, and an audit row that misreports the previous tier is
+        worse than one that omits it.
+        """
+        plan = await self.require(plan_code)
+        before = await self._session.scalar(
+            text("SELECT weathra_admin_assign_plan(:user, :plan, :by)"),
+            {"user": user_id, "plan": str(plan.plan_code), "by": acting_principal},
+        )
+        await self._record_assignment(
+            user_id, plan, acting_principal=acting_principal, before=before
+        )
+        return plan
+
+    async def _record_assignment(
+        self,
+        user_id: str,
+        plan: PlanRecord,
+        *,
+        acting_principal: str,
+        before: str | None,
+    ) -> None:
+        """The audit row both assignment paths write, so neither can drift from the other."""
         await record_change(
             self._session,
             acting_principal=acting_principal,
@@ -345,6 +402,5 @@ class PlanStore:
             subject_kind=USER_PLAN_SUBJECT_KIND,
             subject_id=user_id,
             before=None if before is None else {"plan_code": before},
-            after={"plan_code": str(plan_code)},
+            after={"plan_code": str(plan.plan_code)},
         )
-        return plan

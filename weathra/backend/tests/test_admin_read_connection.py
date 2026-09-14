@@ -187,24 +187,34 @@ def test_the_four_that_read_across_people_run_on_the_request_connection(path: st
     assert administrative_request_db in _dependency_callables(route)
 
 
-# The one administrative write that runs on the request connection. Task 34.8 puts the audited
-# candidate-order confirmation on the administrative screen, so it happens in the container that
-# serves browsers — the one deliberately never given the privileged credential. `0017` grants
-# exactly the two statements it makes and nothing else.
-AUDITED_CONFIRMATION = f"{ADMIN_PREFIX}/policies/{{policy_id}}/candidates"
+# The administrative writes that run on the request connection, because the screens that invoke
+# them run in the container that serves browsers — the one deliberately never given the privileged
+# credential. There are two, each with the mechanism that makes it safe named beside it:
+#
+# * the audited candidate-order confirmation task 34.8 specifies, which `0017` grants as `UPDATE`
+#   on `model_policies` and `INSERT` on `admin_audit`, both behind `weathra_is_administrative()`;
+# * the plan assignment the plan-management screen makes, which writes a row its caller does not
+#   own and therefore goes through `0019`'s administrator-gated `SECURITY DEFINER` function rather
+#   than through a policy — `user_plans` gains neither a grant nor a policy from it.
+#
+# A third entry here is a deliberate act. Everything else keeps the privileged connection, which is
+# to say it keeps running somewhere other than this container.
+REQUEST_PATH_WRITES = {
+    f"{ADMIN_PREFIX}/policies/{{policy_id}}/candidates": "PUT",
+    f"{ADMIN_PREFIX}/principals/{{subject_id}}/plan": "PUT",
+}
 
 
-def test_the_audited_confirmation_runs_on_the_request_connection() -> None:
-    """34.5's promotion, and the reason `0017` exists."""
+@pytest.mark.parametrize(("path", "method"), sorted(REQUEST_PATH_WRITES.items()))
+def test_the_supported_administrative_writes_run_on_the_request_connection(
+    path: str, method: str
+) -> None:
+    """34.5's promotion and 34.7's plan assignment, each in the container it is invoked from."""
     route = next(
-        (
-            r
-            for served, r in _admin_routes()
-            if served == AUDITED_CONFIRMATION and "PUT" in (r.methods or set())
-        ),
+        (r for served, r in _admin_routes() if served == path and method in (r.methods or set())),
         None,
     )
-    assert route is not None, f"{AUDITED_CONFIRMATION} is not a registered PUT route"
+    assert route is not None, f"{path} is not a registered {method} route"
     dependencies = _dependency_callables(route)
     assert administrative_request_db in dependencies
     assert administrative_db not in dependencies
@@ -214,15 +224,17 @@ def test_every_other_administrative_write_keeps_the_privileged_connection() -> N
     """Everything else stays out of the request-serving container.
 
     `0016` and `0017` between them grant the restricted role `SELECT` on the lab and audit tables,
-    `UPDATE` on `model_policies` and `INSERT` on `admin_audit` — and nothing more. Any other write
-    attempted on that session is refused by PostgreSQL, so a route that quietly moved onto it would
-    fail in production rather than here. This is what makes that a deliberate list of two.
+    `UPDATE` on `model_policies` and `INSERT` on `admin_audit` — and nothing more. `0018` and `0019`
+    add no grant at all: what they add is four gated functions and one gated write, each of which
+    can do exactly the one thing it names. Any *other* write attempted on that session is refused by
+    PostgreSQL, so a route that quietly moved onto it would fail in production rather than here.
+    This is what makes the list above a deliberate two.
     """
     for path, route in _admin_routes():
         methods = route.methods or set()
-        if methods <= {"GET", "HEAD", "OPTIONS"} or path == AUDITED_CONFIRMATION:
+        if methods <= {"GET", "HEAD", "OPTIONS"} or path in REQUEST_PATH_WRITES:
             continue
         assert administrative_request_db not in _dependency_callables(route), (
             f"{sorted(methods)} {path} writes on the request session, which may write only the "
-            "candidate order and its audit row"
+            "candidate order, its audit row, and a plan assignment through 0019's function"
         )
