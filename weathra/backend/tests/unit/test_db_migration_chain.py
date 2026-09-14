@@ -60,6 +60,18 @@ EXPECTED_CHAIN = (
     # `model_policies`, `INSERT` on `admin_audit`, both gated on `weathra_is_administrative()`.
     # No `DELETE` anywhere, and `admin_roles` still gains nothing.
     "0017_admin_write_policies",
+    # Task 34.7. The four administrative reads that cross between people — usage by dimension,
+    # usage over time, the principal listing and the role holders — which `0016` had to leave on
+    # the privileged connection, because an administrator-gated policy on a user-owned table would
+    # have granted an administrator another person's rows. Answered with functions instead of
+    # policies: `SECURITY DEFINER`, gated on `weathra_is_administrative()`, returning measures and
+    # listed columns rather than rows. No policy, and no table grant.
+    "0018_admin_aggregates",
+    # The write that belongs with them: a plan assignment names a subject, so it is the one
+    # administrative write no session may make by a statement of its own. Same answer for the same
+    # reason — `0015`'s self-service policies are OR-ed with anything added beside them, so the
+    # administrative path is a gated function rather than a second policy on `user_plans`.
+    "0019_admin_plan_assign",
 )
 
 # The two roles migrations may name, and what each is for. `0002` creates the assumed role and
