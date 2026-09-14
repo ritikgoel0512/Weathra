@@ -3,10 +3,11 @@
 > **Current state — 2026-09-14.** **Implementation is substantially complete. Remaining open items
 > are operational acceptance/evidence tasks rather than missing product implementation.**
 >
-> 308 numbered tasks: **306 complete, 2 partially complete** (34.5, 34.7), none unstarted.
-> Each of the two carries a dated note under its own line stating exactly what is done, what is
-> not, and what the remaining prerequisite is. Both need credentials for a deployed administrative
-> account, and neither is blocked on code.
+> 308 numbered tasks: **307 complete, 1 partially complete** (34.7), none unstarted.
+> 34.5 closed on 2026-09-14, when a real administrator reviewed the persisted comparison evidence in
+> production and recorded the audited candidate-order decision it calls for. 34.7 carries a dated
+> note under its own line stating exactly what is done, what is not, and what the remaining
+> prerequisite is: credentials for deployed accounts, not code.
 >
 > 21.8 closed on 2026-09-14 against an **amended** acceptance contract: its three unreproducible
 > human activities were replaced by twelve clauses of automated accessibility, semantic, keyboard,
@@ -478,9 +479,35 @@ written to fail then.
 - [x] 34.2 Extend `docs/configuration.md`, `backend/.env.example`, and the deployment notes with the new backend variables of design.md decision 19, and state explicitly that policies, plan mappings, allowances and the catalog are database rows rather than environment variables so a model or tier change needs no redeployment; verify a test asserts every new setting appears in `.env.example` and that no new secret carries a `NEXT_PUBLIC_` prefix.
 - [x] 34.3 Extend `docs/privacy-ethics.md` with the telemetry stance — metadata only, no prompt or completion text, owner-scoped events, aggregates that disclose no content, the retention window, and what account deletion removes — and `docs/authentication.md` with the administrative role and the SaaS-ready table classification; verify both documents match the implemented behavior and the RLS classification actually applied by migration.
 - [x] 34.4 Extend `docs/evaluation.md` with the model-comparison methodology — the five selection criteria and how each is measured, what is pinned across candidates, why numerical accuracy is model-independent, and the rule that reliability and groundedness cannot be traded away for cost or latency; verify the document states each criterion's measurement definition and how to run a comparison.
-- [ ] 34.5 Execute the first model comparison across the seeded catalog candidates, record its results, and seed or reorder the policy candidate lists from the recorded evidence with the promotion audited against the cited runs; verify the comparison record exists with all five criteria per candidate, the resulting policy state cites it, and `docs/evaluation.md` records the outcome honestly including any candidate that failed a criterion.
+- [x] 34.5 Execute the first model comparison across the seeded catalog candidates, record its results, and seed or reorder the policy candidate lists from the recorded evidence with the promotion audited against the cited runs; verify the comparison record exists with all five criteria per candidate, the resulting policy state cites it, and `docs/evaluation.md` records the outcome honestly including any candidate that failed a criterion.
 
-  **PARTIALLY COMPLETE (2026-09-14).** The comparison half is **done, twice, and now leaves no candidate unmeasured.** Run `9b5849dd-b798-4dc8-b04f-a8e6c0874e1a` (2026-09-10) evidenced `economy-free-primary` 5/5 with both gates passed, while `economy-free-secondary` was refused HTTP 429 at the pre-flight on all three retries and recorded `unevidenced: no_case_scored`. Run `c1e8768f-e2a8-4c32-a065-df1a5ea8f2c4` (2026-09-14, status `completed`) re-ran the same five cases of dataset `1.0.0` under the same pinned conditions and **both** candidates scored 5/5 and passed both gating criteria, with an empty `unevidenced` map. Both runs and all five criteria per candidate are recorded in `docs/evaluation.md`, including the finding that the two gating criteria tie at 1.0 and latency — not a gate — is the only discriminator, favouring the secondary. **What remains is the promotion half**: seeding or reordering the policy candidate lists from that evidence through `PUT /api/v1/admin/policies/{policy_id}/candidates`, with the `admin_audit` row citing run `c1e8768f`. That needs an authenticated session for the administrative principal. One is properly granted (subject `e7b66ef2-5bc6-4100-92cf-7c27cecdf63e`, carrying a `role_grant` audit row from the documented bootstrap) but **no credential for it exists in the development environment**, and the evaluation harness's own fixture principal must not be substituted — `_ensure_role_row` grants it unaudited and with no `granted_by`, so using it would let the lab authorise its own promotion, which `specs/model-lab` refuses.
+  **COMPLETE (2026-09-14).** Both halves are done, and the promotion half was executed in
+  production by a real administrator against the persisted evidence.
+
+  | | |
+  |---|---|
+  | Comparison cited | `c1e8768f-e2a8-4c32-a065-df1a5ea8f2c4`, dataset `1.0.0`, status `completed` |
+  | Evidence | `economy-free-primary` 5/5, both gates passed, median 9,210 ms / p95 9,272 ms; `economy-free-secondary` 5/5, both gates passed, median 7,599 ms / p95 7,691 ms; `unevidenced` empty |
+  | Decision | **Keep the current order** — `economy-free-primary`, then `economy-free-secondary` |
+  | Action | `PUT /api/v1/admin/policies/free_default/candidates`, the audited confirmation task 34.8 built, succeeded after `0017` |
+  | Audit row | action `policy_edit`, subject kind `model_policy`, subject `free_default`, citing `c1e8768f`, at **2026-09-14T16:04:47.839Z** |
+  | Read back | the order re-read after a page reload; the audit entry returned by `GET /api/v1/admin/policies/free_default/audit` rather than assumed |
+
+  **Why keeping the order satisfies the requirement rather than dodging it.** The clause asks for
+  the candidate lists to be seeded or reordered *from the recorded evidence*, with the promotion
+  audited against the cited runs. The evidence ties on both gating criteria at 1.0 and separates the
+  candidates only on latency, which is not a gate — so it does not compel a reorder, and
+  `docs/evaluation.md` said so before the decision was taken. The administrator submitted the order
+  through the same separately authorized write a reorder would have used, citing the run; what
+  changed is not the list but the record of why it stands. `specs/model-lab` requires the change to
+  be "recorded with the acting principal, the change made, and the comparison run identifiers cited
+  as its basis", which is the audit row above. It requires no dedicated audit-history screen, and
+  none is claimed.
+
+  `docs/evaluation.md` records the decision, the cited run, the audit action and its timestamp
+  alongside both comparison runs and all five criteria per candidate.
+
+  **The comparison half, for the record, is done twice and leaves no candidate unmeasured.** Run `9b5849dd-b798-4dc8-b04f-a8e6c0874e1a` (2026-09-10) evidenced `economy-free-primary` 5/5 with both gates passed, while `economy-free-secondary` was refused HTTP 429 at the pre-flight on all three retries and recorded `unevidenced: no_case_scored`. Run `c1e8768f-e2a8-4c32-a065-df1a5ea8f2c4` (2026-09-14, status `completed`) re-ran the same five cases of dataset `1.0.0` under the same pinned conditions and **both** candidates scored 5/5 and passed both gating criteria, with an empty `unevidenced` map. Both runs and all five criteria per candidate are recorded in `docs/evaluation.md`, including the finding that the two gating criteria tie at 1.0 and latency — not a gate — is the only discriminator, favouring the secondary. **What remains is the promotion half**: seeding or reordering the policy candidate lists from that evidence through `PUT /api/v1/admin/policies/{policy_id}/candidates`, with the `admin_audit` row citing run `c1e8768f`. That needs an authenticated session for the administrative principal. One is properly granted (subject `e7b66ef2-5bc6-4100-92cf-7c27cecdf63e`, carrying a `role_grant` audit row from the documented bootstrap) but **no credential for it exists in the development environment**, and the evaluation harness's own fixture principal must not be substituted — `_ensure_role_row` grants it unaudited and with no `granted_by`, so using it would let the lab authorise its own promotion, which `specs/model-lab` refuses.
 
   **A production defect on the administrative screen was found and fixed on 2026-09-14, and 34.5 is
   now READY FOR PRODUCTION RETEST.** `/admin/model-usage` loaded for an authenticated administrator
@@ -547,16 +574,22 @@ written to fail then.
   both rules) and is deliberately not made here. `tests/test_admin_read_connection.py` asserts the
   split in both directions, with no database, so neither half can drift.
 
+  *Addendum, later the same day:* that design decision was taken under task 34.7 and those three now
+  work — `0018` crosses between people inside administrator-gated `SECURITY DEFINER` functions that
+  return measures and listed columns rather than rows, so no user-owned table gained a policy. None
+  of it is 34.5 evidence: 34.5's surface is the policy, comparison, audit and administrator reads,
+  which `0016` already fixed and which is what the production confirmation above ran against.
+
   **The frontend no longer draws a failed read as an answer.** The KPI row rendered `—` and "Not
   reported" for a backend answering 500, which reads as an estate with no traffic, and the usage
   trend rendered nothing at all. Both now show the backend's own safe message, its request id and a
   working retry, while a 403 still shows "Not permitted" with no invitation to retry.
 
-  **What the retest is for.** This needs a deployment: `0016` must be applied to the production
-  database and the new backend released. After that, an authenticated administrator loading
-  `/admin/model-usage` should see the policy and comparison panels answer with real data, and the
-  three cross-person panels report a readable error rather than an unreachable backend. The
-  promotion half is unchanged and still needs a credential for the administrative principal.
+  **The retest happened, and it is what closed this task.** `0016` was applied to the production
+  database and the backend released; an authenticated administrator (`ritikkgoel@gmail.com`) loaded
+  `/admin/model-usage`, read the policy and comparison-evidence panels answering with real data,
+  reviewed run `c1e8768f`, and took and recorded the decision above. `0017` was what let the write
+  itself run in the request-serving container.
 
   
 - [x] 34.6 Extend the traceability table in `docs/architecture.md` to cover `model-policy`, `model-catalog`, `llm-telemetry`, `usage-limits`, and `model-lab`; verify every requirement in those five specs maps to at least one test.

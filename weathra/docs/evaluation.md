@@ -637,22 +637,43 @@ all with `succeeded = true`, five per candidate, each resolving to its candidate
 row. Usage was attributed `internal` under the `__lab_comparison__` resolution — no plan, no product
 allowance, no user quota.
 
-### Still no promotion
+### The decision taken: keep the current order
 
-**Task 34.5's promotion half remains unexecuted.** No policy candidate list, catalog status or plan
-mapping has been changed by either run. `free_default` is still
-`[economy-free-primary, economy-free-secondary]` as seeded on 2026-09-09, and `admin_audit` holds no
-`policy_candidates` row.
+**Executed in production on 2026-09-14 by the administrative principal**, through the confirmation
+surface task 34.8 built, against the evidence of run `c1e8768f` above.
 
-What is different after this run is *why* it is unexecuted. On the first run's evidence a promotion
-could only have spoken about one of two candidates. On this run's evidence it could speak about
-both. The remaining blocker is no longer the evidence but the actor: the audited write is
-`PUT /api/v1/admin/policies/{policy_id}/candidates`, which needs a session for an administrative
-principal. One is properly granted — subject `e7b66ef2-5bc6-4100-92cf-7c27cecdf63e`, carrying a
-`role_grant` row in `admin_audit` from the documented bootstrap — but no credential for it exists in
-the development environment. The evaluation harness's own fixture principal must not be substituted:
-`_ensure_role_row` grants it unaudited and with no `granted_by`, so using it would let the lab
-authorise its own promotion, which `specs/model-lab` refuses.
+| | |
+|---|---|
+| Decision | **Keep the current order** — `economy-free-primary`, then `economy-free-secondary` |
+| Policy | `free_default` |
+| Evidence cited | `c1e8768f-e2a8-4c32-a065-df1a5ea8f2c4` |
+| Recorded as | `admin_audit`, action `policy_edit`, subject kind `model_policy`, subject `free_default` |
+| Recorded at | 2026-09-14T16:04:47.839Z |
+| Read back | the stored order re-read after a page reload, and the audit entry returned by
+`GET /api/v1/admin/policies/free_default/audit` rather than assumed from the write's own response |
+
+**A decision not to reorder is a decision, and this is the one the evidence supports.** Both
+candidates pass both gating criteria at 1.0, so neither gate separates them; latency favours the
+secondary and latency is not a gate. Promoting the faster model on a tie of the two criteria a
+promotion may rest on would be a reorder the evidence does not require, and this document said as
+much before the decision was taken: *"it does not compel a reorder — the gating criteria tie"*. So
+the ordered list stands as seeded on 2026-09-09, and it now stands *because somebody looked at the
+measurements and said so*, which is the difference between a default and a decision.
+
+**What the write actually was.** `PUT /api/v1/admin/policies/free_default/candidates`, submitting
+the stored order and citing the run — the same separately authorized administrative action a reorder
+would have been, recorded the same way with the acting principal, the change and the cited run
+(`specs/model-lab`). The candidate list is unchanged by it; the record of why is not. An
+unchanged list with a cited decision behind it and an unchanged list nobody has examined are
+indistinguishable in the policy row and distinguishable in the trail, which is what the trail is
+for.
+
+**The blocker this clears.** Until that day the write had no actor: the granted administrative
+principal's credential did not exist in the development environment, and the evaluation harness's
+own fixture principal must not be substituted — `_ensure_role_row` grants it unaudited and with no
+`granted_by`, so using it would let the lab authorise its own promotion, which `specs/model-lab`
+refuses. The action was taken in production by a real administrator instead, which is where it
+belonged.
 
 ## Comparing runs
 
