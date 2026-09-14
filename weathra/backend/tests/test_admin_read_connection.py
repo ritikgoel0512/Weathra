@@ -31,17 +31,17 @@ from weathra.config import Settings
 
 ADMIN_PREFIX = "/api/v1/admin"
 
-# The reads that cross from one person's rows to another's. They keep the privileged connection
-# because an administrative policy on a user-owned table would grant an administrator access to
-# other people's data, which `specs/authentication` forbids. See the test at the bottom of the file.
-CROSS_PERSON_READS = frozenset(
+# The reads that aggregate across people. `0016` left them on the privileged connection — which is
+# to say broken in production — because an administrative *policy* on a user-owned table would
+# grant an administrator other people's rows, which `specs/authentication` forbids. `0018` answers
+# that without a policy: the crossing happens inside administrator-gated `SECURITY DEFINER`
+# functions that return measures and the six columns of a principal listing, so these four now run
+# on the request connection like every other administrative read. See the test at the bottom.
+AGGREGATE_READS = frozenset(
     {
         f"{ADMIN_PREFIX}/usage",
         f"{ADMIN_PREFIX}/usage/series",
         f"{ADMIN_PREFIX}/principals",
-        # Not cross-person exactly, but the same rule: an administrator enumerating the other
-        # administrators is a widening 34.5 does not need, so `admin_roles` keeps its owner policy
-        # alone and this endpoint keeps the privileged connection.
         f"{ADMIN_PREFIX}/principals/administrators",
     }
 )
@@ -103,7 +103,7 @@ def test_every_administrative_read_uses_the_request_connection() -> None:
     offences: list[str] = []
 
     for path, route in _admin_routes():
-        if "GET" not in (route.methods or set()) or path in CROSS_PERSON_READS:
+        if "GET" not in (route.methods or set()):
             continue
         dependencies = _dependency_callables(route)
         if administrative_db in dependencies:
@@ -155,43 +155,36 @@ def test_each_endpoint_the_browser_reported_as_failing(path: str) -> None:
 
     A parametrised list rather than a loop, so a regression names the endpoint it broke. These four
     read operational tables only — the catalog, the policies, the plans and the lab's own records —
-    and `0016` makes all of them reachable behind `weathra_is_administrative()`.
+    and `0016` makes all of them reachable behind `weathra_is_administrative()`. The four that read
+    across people are covered by the test below.
     """
     route = _get_route(path)
     assert administrative_db not in _dependency_callables(route)
     assert administrative_request_db in _dependency_callables(route)
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
-        f"{ADMIN_PREFIX}/usage",
-        f"{ADMIN_PREFIX}/usage/series",
-        f"{ADMIN_PREFIX}/principals",
-        f"{ADMIN_PREFIX}/principals/administrators",
-    ],
-)
-def test_the_three_that_read_across_people_stay_privileged(path: str) -> None:
-    """The other three, and why they are not fixed with the rest.
+@pytest.mark.parametrize("path", sorted(AGGREGATE_READS))
+def test_the_four_that_read_across_people_run_on_the_request_connection(path: str) -> None:
+    """The other four, and the design decision that let them join the rest.
 
     `/admin/usage` and `/admin/usage/series` aggregate `llm_usage_events`; `/admin/principals` joins
-    `profiles` and `user_plans`. All three are user-owned tables, and an administrative read policy
-    on one would let an administrator read other people's rows — which `specs/authentication`
-    forbids and `test_saas_rls.py::test_a_new_user_owned_table_carries_an_owner_policy` refuses
-    outright, rejecting any administrative policy on a user-owned table that does not pin the
-    internal subject.
+    `profiles` and `user_plans`; `/admin/principals/administrators` reads `admin_roles`. All four
+    are user-owned or owner-scoped, and an administrative read *policy* on any of them would let an
+    administrator read other people's rows — which `specs/authentication` forbids and
+    `test_saas_rls.py::test_a_new_user_owned_table_carries_an_owner_policy` refuses outright.
 
-    So they keep the privileged connection, which means they keep failing in the request-serving
-    container. That is a blocker stated honestly rather than a policy that quietly widens what an
-    administrator can see, and the fix for them is a design decision — an aggregate that returns
-    measures and no rows would satisfy both rules, and is not this change.
+    `0016` concluded from that they had to keep the privileged connection, and said plainly that
+    they therefore kept failing in the request-serving container. `0018` answers the question it
+    left open: the crossing happens inside `SECURITY DEFINER` functions that test
+    `weathra_is_administrative()` and return only measures — or, for the listings, only the columns
+    the screens are specified to show. No policy is added to any table, every owner policy stands,
+    and these four run where every other administrative read runs.
 
-    Asserted so the state is deliberate: a later change that moves one of these onto the read
-    session without answering that question fails here.
+    Asserted per path so a regression names the endpoint it broke.
     """
     route = _get_route(path)
-    assert administrative_db in _dependency_callables(route)
-    assert administrative_request_db not in _dependency_callables(route)
+    assert administrative_db not in _dependency_callables(route)
+    assert administrative_request_db in _dependency_callables(route)
 
 
 # The one administrative write that runs on the request connection. Task 34.8 puts the audited

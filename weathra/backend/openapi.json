@@ -10366,7 +10366,7 @@
     },
     "/api/v1/admin/principals": {
       "get": {
-        "description": "**Protected. Administrative.** Lists the principals and the plan each is on. A subject and a tier; Weathra holds no contact detail to list.\n\nEveryone Weathra holds a profile for, with their tier and whether they administer.\n\nPrivileged: `user_plans` grants the request-serving role `SELECT` on its own row only, so this\nlist cannot be assembled from the request path. It carries a subject and a tier \u2014 there is no\ncontact detail in this database to carry.\n\nOrdered by assignment, most recent first, then by subject so the page is stable. A principal\nwith no row in `user_plans` appears with a null plan rather than being left out: somebody who\nhas never been assigned a tier is exactly who an administrator is looking for.",
+        "description": "**Protected. Administrative.** Lists the principals and the plan each is on. A subject and a tier; Weathra holds no contact detail to list.\n\nEveryone Weathra holds a profile for, with their tier and whether they administer.\n\nSix columns, and they are exactly `PrincipalRecord`'s six. It carries a subject and a tier \u2014\nthere is no contact detail in this database to carry.\n\n**Read on the request connection, through `0018`'s `weathra_admin_principals`.** `user_plans`\ngrants the request-serving role `SELECT` on its own row only, so this list cannot be assembled\nfrom the request path by a query \u2014 and the connection that could assemble it is deliberately\nabsent from the container that serves browsers, which is why this endpoint returned 500 in\nproduction. The listing therefore comes from a `SECURITY DEFINER` function that tests\n`weathra_is_administrative()` first and selects only the six columns below; the owner policies\non `profiles` and `user_plans` are untouched, so this session still reads only its own rows\nfrom either table directly.\n\nOrdered by assignment, most recent first, then by subject so the page is stable. A principal\nwith no row in `user_plans` appears with a null plan rather than being left out: somebody who\nhas never been assigned a tier is exactly who an administrator is looking for.",
         "operationId": "list_principals_api_v1_admin_principals_get",
         "parameters": [
           {
@@ -10420,7 +10420,7 @@
     },
     "/api/v1/admin/principals/administrators": {
       "get": {
-        "description": "**Protected. Administrative.** Lists who holds the administrative role and who granted it.\n\nWho holds the administrative role, and who granted it to them.\n\nPrivileged, and only reachable here: the owner policy on `admin_roles` returns a request\nsession exactly its own row, so this list cannot be assembled from the request path however\nthe query is written.",
+        "description": "**Protected. Administrative.** Lists who holds the administrative role and who granted it.\n\nWho holds the administrative role, and who granted it to them.\n\nThe owner policy on `admin_roles` returns a request session exactly its own row, and it stays\nthat way: this list cannot be assembled from the request path by a query, however the query is\nwritten. It is read through `0018`'s administrator-gated function instead, for the reason\n`list_principals` above gives \u2014 the privileged connection does not exist in this container.",
         "operationId": "list_administrators_api_v1_admin_principals_administrators_get",
         "responses": {
           "200": {

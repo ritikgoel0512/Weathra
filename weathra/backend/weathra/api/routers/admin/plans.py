@@ -259,14 +259,22 @@ async def assign_plan(
 async def list_principals(
     request: Request,
     principal: AdministrativePrincipal,
-    session: AdministrativeSession,
+    session: AdministrativeRequestSession,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> PrincipalListResponse:
     """Everyone Weathra holds a profile for, with their tier and whether they administer.
 
-    Privileged: `user_plans` grants the request-serving role `SELECT` on its own row only, so this
-    list cannot be assembled from the request path. It carries a subject and a tier — there is no
-    contact detail in this database to carry.
+    Six columns, and they are exactly `PrincipalRecord`'s six. It carries a subject and a tier —
+    there is no contact detail in this database to carry.
+
+    **Read on the request connection, through `0018`'s `weathra_admin_principals`.** `user_plans`
+    grants the request-serving role `SELECT` on its own row only, so this list cannot be assembled
+    from the request path by a query — and the connection that could assemble it is deliberately
+    absent from the container that serves browsers, which is why this endpoint returned 500 in
+    production. The listing therefore comes from a `SECURITY DEFINER` function that tests
+    `weathra_is_administrative()` first and selects only the six columns below; the owner policies
+    on `profiles` and `user_plans` are untouched, so this session still reads only its own rows
+    from either table directly.
 
     Ordered by assignment, most recent first, then by subject so the page is stable. A principal
     with no row in `user_plans` appears with a null plan rather than being left out: somebody who
@@ -274,24 +282,8 @@ async def list_principals(
     """
     annotate(request, acting_user_id=principal.user_id)
     rows = await session.execute(
-        text(
-            """
-            SELECT p.user_id::text          AS subject_id,
-                   up.plan_code             AS plan_code,
-                   sp.display_name          AS plan_name,
-                   up.assigned_at           AS assigned_at,
-                   up.assigned_by::text     AS assigned_by,
-                   (ar.subject_id IS NOT NULL) AS administrative
-              FROM profiles p
-              LEFT JOIN user_plans up ON up.user_id = p.user_id
-              LEFT JOIN subscription_plans sp ON sp.plan_code = up.plan_code
-              LEFT JOIN admin_roles ar
-                     ON ar.subject_id = p.user_id AND ar.role = :role
-             ORDER BY up.assigned_at DESC NULLS LAST, p.user_id
-             LIMIT :limit
-            """
-        ),
-        {"role": ADMINISTRATOR_ROLE, "limit": limit},
+        text("SELECT * FROM weathra_admin_principals(:limit)"),
+        {"limit": limit},
     )
     principals = tuple(
         PrincipalRecord(
@@ -315,16 +307,17 @@ async def list_principals(
 async def list_administrators(
     request: Request,
     principal: AdministrativePrincipal,
-    session: AdministrativeSession,
+    session: AdministrativeRequestSession,
 ) -> RoleListResponse:
     """Who holds the administrative role, and who granted it to them.
 
-    Privileged, and only reachable here: the owner policy on `admin_roles` returns a request
-    session exactly its own row, so this list cannot be assembled from the request path however
-    the query is written.
+    The owner policy on `admin_roles` returns a request session exactly its own row, and it stays
+    that way: this list cannot be assembled from the request path by a query, however the query is
+    written. It is read through `0018`'s administrator-gated function instead, for the reason
+    `list_principals` above gives — the privileged connection does not exist in this container.
     """
     annotate(request, acting_user_id=principal.user_id)
-    grants = await RoleStore(session).holders(ADMINISTRATOR_ROLE)
+    grants = await RoleStore(session).holders_for_administration(ADMINISTRATOR_ROLE)
     return RoleListResponse(
         count=len(grants),
         grants=tuple(

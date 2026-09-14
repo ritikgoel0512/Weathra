@@ -229,6 +229,12 @@ Security forced on every user-owned one. Two connections exist for one reason: t
 connection runs under a `NOLOGIN NOBYPASSRLS` role so policies apply to the backend's own queries,
 and the privileged connection exists only for migrations, retention, and evaluation provisioning.
 The settings validator refuses to start a request-serving process that has the service-role key.
+The administrative screens read on the request connection like everything else: the operational
+tables through policies gated on `weathra_is_administrative()` (`0016`, `0017`), and the four
+cross-person reads — usage by dimension, usage over time, the principal listing and the role
+holders — through `SECURITY DEFINER` functions that test the same predicate and return aggregate
+measures or the listed columns rather than rows (`0018`). No user-owned table carries an
+administrative policy, so holding the role widens no ordinary query.
 
 ## Errors
 

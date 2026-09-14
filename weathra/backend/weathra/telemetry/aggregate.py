@@ -23,8 +23,10 @@ every token total.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime, timedelta
 from decimal import Decimal
+from typing import cast
 
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
@@ -36,7 +38,9 @@ __all__ = [
     "UsageBucket",
     "UsageWindow",
     "aggregate_usage",
+    "aggregate_usage_across_principals",
     "aggregate_usage_series",
+    "aggregate_usage_series_across_principals",
 ]
 
 # The dimensions `specs/llm-telemetry` requires aggregation by. Named here so a caller cannot ask
@@ -139,20 +143,27 @@ async def aggregate_usage(
         ),
         {"start": window.start if window else None, "end": window.end if window else None},
     )
-    return tuple(
-        UsageAggregate(
-            group=row[0],
-            is_internal=row[1],
-            calls=row[2],
-            failures=row[3],
-            prompt_tokens=row[4],
-            completion_tokens=row[5],
-            total_tokens=row[6],
-            estimated_cost_total=row[7],
-            latency_p50_ms=row[8],
-            latency_p95_ms=row[9],
-        )
-        for row in rows
+    return tuple(_aggregate_of(row) for row in rows)
+
+
+def _aggregate_of(row: Sequence[object]) -> UsageAggregate:
+    """One grouped row, in the column order both the statement above and `0018`'s function return.
+
+    Shared so the two readers of these measures — a person's own session and the administrative
+    one, which reaches the same columns through a function rather than through the table — cannot
+    drift into two slightly different mappings of the same ten columns.
+    """
+    return UsageAggregate(
+        group=cast("str | None", row[0]),
+        is_internal=cast("bool", row[1]),
+        calls=cast("int", row[2]),
+        failures=cast("int", row[3]),
+        prompt_tokens=cast("int | None", row[4]),
+        completion_tokens=cast("int | None", row[5]),
+        total_tokens=cast("int | None", row[6]),
+        estimated_cost_total=cast("Decimal | None", row[7]),
+        latency_p50_ms=cast("float | None", row[8]),
+        latency_p95_ms=cast("float | None", row[9]),
     )
 
 
@@ -237,19 +248,34 @@ async def aggregate_usage_series(
         ),
         {"bucket": bucket, "start": window.start, "end": window.end},
     )
-    observed = {
-        (row[0], row[1]): UsageBucket(
-            start=row[0],
-            is_internal=row[1],
-            calls=row[2],
-            failures=row[3],
-            total_tokens=row[4],
-            estimated_cost_total=row[5],
-            latency_p50_ms=row[6],
-        )
-        for row in rows
-    }
+    return _filled({(row[0], row[1]): _bucket_of(row) for row in rows}, window=window, width=width)
 
+
+def _bucket_of(row: Sequence[object]) -> UsageBucket:
+    """One time-sliced row, in the column order the statement above and `0018`'s function share."""
+    return UsageBucket(
+        start=cast("datetime", row[0]),
+        is_internal=cast("bool", row[1]),
+        calls=cast("int", row[2]),
+        failures=cast("int", row[3]),
+        total_tokens=cast("int | None", row[4]),
+        estimated_cost_total=cast("Decimal | None", row[5]),
+        latency_p50_ms=cast("float | None", row[6]),
+    )
+
+
+def _filled(
+    observed: dict[tuple[datetime, bool], UsageBucket],
+    *,
+    window: UsageWindow,
+    width: timedelta,
+) -> tuple[UsageBucket, ...]:
+    """The observed buckets, dense across the window, both halves of the internal split.
+
+    The gap fill is here rather than in either query because it is the same fill for both: the
+    database is asked what happened, and the window it is asked about is what says an absent
+    bucket is an idle one rather than an unobserved one.
+    """
     return tuple(
         observed.get(
             (start, internal),
@@ -258,6 +284,83 @@ async def aggregate_usage_series(
         for start in _slots(window, width)
         for internal in (False, True)
     )
+
+
+# ============================================== the same measures, across every principal
+
+# `0018`'s functions, which is the whole of how an administrative reader crosses between people.
+#
+# **Why a function and not a policy.** Row Level Security answers "which rows may this session
+# see", and neither question below is about rows: they ask for counts, sums and percentiles over
+# the estate. An administrator-gated `SELECT` policy on `llm_usage_events` would have answered them
+# by handing an administrator every other person's events — which `specs/authentication` forbids and
+# `test_saas_rls.py` refuses outright — so the crossing happens inside a `SECURITY DEFINER` function
+# that can only return measures, and the table keeps the owner policy it has.
+#
+# **The gate is in the database, not here.** Each function opens by testing
+# `weathra_is_administrative()` and raises `insufficient_privilege` otherwise, so these are safe to
+# call on the ordinary request session — which is the point, because the request-serving container
+# is deliberately never given the privileged credential.
+_ESTATE_AGGREGATE = text(
+    "SELECT * FROM weathra_admin_usage_aggregate("
+    "  :by, CAST(:start AS timestamptz), CAST(:end AS timestamptz))"
+)
+
+_ESTATE_SERIES = text(
+    "SELECT * FROM weathra_admin_usage_series("
+    "  :bucket, CAST(:start AS timestamptz), CAST(:end AS timestamptz))"
+)
+
+
+async def aggregate_usage_across_principals(
+    session: AsyncSession,
+    *,
+    by: str = "model",
+    window: UsageWindow | None = None,
+) -> tuple[UsageAggregate, ...]:
+    """`aggregate_usage`, over every principal rather than over the caller's own rows.
+
+    Same measures, same internal split, same rule that a measure leaves and a row never does. The
+    grouping is checked here so an unsupported dimension is a clear refusal in Python, and checked
+    again inside the function against the same list — a caller that reached the database with
+    anything else gets `invalid_parameter_value` rather than a column nobody meant to group by.
+    """
+    if by not in GROUPINGS:
+        raise ValueError(f"{by!r} is not an aggregation dimension. Available: {sorted(GROUPINGS)}.")
+
+    rows = await session.execute(
+        _ESTATE_AGGREGATE,
+        {
+            "by": by,
+            "start": window.start if window else None,
+            "end": window.end if window else None,
+        },
+    )
+    return tuple(_aggregate_of(row) for row in rows)
+
+
+async def aggregate_usage_series_across_principals(
+    session: AsyncSession,
+    *,
+    bucket: str = "day",
+    window: UsageWindow,
+) -> tuple[UsageBucket, ...]:
+    """`aggregate_usage_series`, over every principal. Dense across the window, zeros and all.
+
+    The function returns only the buckets that hold rows; the fill is applied here for the reason
+    it always was — the window is what the caller asked for, and only the caller knows it. An
+    estate with no recorded call in the period is therefore a valid series of zeros rather than an
+    empty response, which is what the trend needs to draw an idle period as idle.
+    """
+    width = BUCKETS.get(bucket)
+    if width is None:
+        raise ValueError(f"{bucket!r} is not a bucket width. Available: {sorted(BUCKETS)}.")
+
+    rows = await session.execute(
+        _ESTATE_SERIES,
+        {"bucket": bucket, "start": window.start, "end": window.end},
+    )
+    return _filled({(row[0], row[1]): _bucket_of(row) for row in rows}, window=window, width=width)
 
 
 def _slots(window: UsageWindow, width: timedelta) -> tuple[datetime, ...]:

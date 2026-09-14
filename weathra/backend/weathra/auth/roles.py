@@ -161,6 +161,31 @@ class RoleStore:
             RoleGrant(str(r[0]), str(r[1]), str(r[2]) if r[2] else None, r[3]) for r in rows
         )
 
+    async def holders_for_administration(
+        self, role: str = ADMINISTRATOR_ROLE
+    ) -> tuple[RoleGrant, ...]:
+        """The same listing, readable on the request connection by an administrator and no one else.
+
+        ``holders`` above reads the table directly, which is why it needs the privileged connection:
+        the owner policy hands a request session its own row and nothing else, on purpose — so that
+        "am I an administrator" cannot be rewritten into "who else is". That policy is untouched.
+
+        This reads `0018`'s ``weathra_admin_administrators``, a ``SECURITY DEFINER`` function that
+        tests ``weathra_is_administrative()`` and raises ``insufficient_privilege`` otherwise. So
+        the listing is reachable from the container that serves browsers — which is never given the
+        privileged credential, and where asking for it returned 500 — and it is reachable only to a
+        principal the database itself confirms holds the role. It discloses nothing
+        ``GET /admin/principals`` does not: that listing already carries the flag per principal,
+        because the plan-management screen shows it.
+        """
+        rows = await self._session.execute(
+            text("SELECT * FROM weathra_admin_administrators(:role)"),
+            {"role": role},
+        )
+        return tuple(
+            RoleGrant(str(r[0]), str(r[1]), str(r[2]) if r[2] else None, r[3]) for r in rows
+        )
+
     # ---------------------------------------------------------------- writes
 
     async def grant(

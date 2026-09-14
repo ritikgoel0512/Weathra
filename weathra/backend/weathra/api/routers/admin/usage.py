@@ -6,10 +6,21 @@ the administrative role grants no access to another user's data. Those two are o
 because a usage event holds no content — no prompt, no completion, no retrieved passage — and
 because this route returns *measures* rather than rows.
 
-**No row ever leaves this route.** `aggregate_usage` runs one grouped statement and returns counts,
-sums and percentiles. There is no parameter here that narrows to a subject, and no shape in the
-response that could carry one, so "an administrator cannot read one person's usage" is a property
-of the query rather than a filter somebody could forget.
+**No row ever leaves this route.** The reader runs one grouped statement and returns counts, sums
+and percentiles. There is no parameter here that narrows to a subject, and no shape in the response
+that could carry one, so "an administrator cannot read one person's usage" is a property of the
+query rather than a filter somebody could forget.
+
+**Where the crossing between people happens, since it cannot happen here.** These two routes run on
+the ordinary request connection — the request-serving container is deliberately never given the
+privileged credential, and asking for it is what made both of them 500 in production. Row Level
+Security therefore scopes this session to the acting principal like any other, and the aggregate
+reaches past it through `0018`'s `SECURITY DEFINER` functions: they test
+`weathra_is_administrative()` before they return anything, they return measures and never a row, and
+the events table keeps exactly the owner policy it had — named nowhere in this package, because
+`test_admin_api.py::test_no_administrative_module_reaches_a_personal_table` requires an
+administrative module not to reach for a personal table, and this one does not. An administrator
+reading their *own* session still sees only their own events.
 
 **Internal usage is separated, not excluded.** `specs/usage-limits` requires it reported apart from
 each product plan's, which is what the generated `is_internal` column on the events table is for:
@@ -26,7 +37,7 @@ from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from weathra.api.middleware import annotate
-from weathra.api.routers.admin.deps import AdministrativeSession
+from weathra.api.routers.admin.deps import AdministrativeRequestSession
 from weathra.auth.deps import AdministrativePrincipal
 from weathra.domain.errors import ValidationFailed
 from weathra.telemetry.aggregate import (
@@ -35,8 +46,8 @@ from weathra.telemetry.aggregate import (
     UsageAggregate,
     UsageBucket,
     UsageWindow,
-    aggregate_usage,
-    aggregate_usage_series,
+    aggregate_usage_across_principals,
+    aggregate_usage_series_across_principals,
 )
 
 __all__ = ["router"]
@@ -68,7 +79,7 @@ class UsageSummaryResponse(BaseModel):
 async def read_usage(
     request: Request,
     principal: AdministrativePrincipal,
-    session: AdministrativeSession,
+    session: AdministrativeRequestSession,
     by: Annotated[
         str,
         Query(
@@ -95,7 +106,7 @@ async def read_usage(
 
     end = datetime.now(UTC)
     window = UsageWindow(start=end - timedelta(days=days), end=end)
-    groups = await aggregate_usage(session, by=by, window=window)
+    groups = await aggregate_usage_across_principals(session, by=by, window=window)
     return UsageSummaryResponse(grouped_by=by, window=window, groups=groups)
 
 
@@ -129,7 +140,7 @@ class UsageSeriesResponse(BaseModel):
 async def read_usage_series(
     request: Request,
     principal: AdministrativePrincipal,
-    session: AdministrativeSession,
+    session: AdministrativeRequestSession,
     days: Annotated[int, Query(ge=1, le=MAX_PERIOD_DAYS)] = DEFAULT_PERIOD_DAYS,
     bucket: Annotated[str, Query(description="hour or day.")] = "day",
 ) -> UsageSeriesResponse:
@@ -162,5 +173,5 @@ async def read_usage_series(
             details={"field": "bucket", "points": points, "maximum": MAX_SERIES_POINTS},
         )
 
-    series = await aggregate_usage_series(session, bucket=bucket, window=window)
+    series = await aggregate_usage_series_across_principals(session, bucket=bucket, window=window)
     return UsageSeriesResponse(bucket=bucket, window=window, points=series)
