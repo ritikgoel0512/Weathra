@@ -28,7 +28,16 @@
 import Link from "next/link";
 import { useCallback, useState, type FormEvent, type ReactNode } from "react";
 
-import { Badge, Button, EmptyState, ErrorState, LoadingState, Select, formatInstant } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  ConfirmAction,
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  Select,
+  formatInstant,
+} from "@/components/ui";
 import { ViewStateSwitch } from "@/components/view-state";
 import type {
   DeletionResponse,
@@ -60,7 +69,6 @@ import {
   type PreferenceDraft,
 } from "@/lib/settings/preferences";
 
-import { ConfirmAction } from "./confirm";
 import styles from "./settings.module.css";
 
 /* ---------------------------------------------------------------------- layout */
@@ -433,9 +441,16 @@ function ThreadRow({
         The destructive control is the smallest thing in the row. It was a full-width red bar under
         every conversation, which made a list of them read as a page of warnings — and the same
         confirmation still stands behind it, unchanged.
+
+        Its *accessible* name is not "Delete" — task 21.8 defect E. Every row offered a control by
+        that name, so a screen-reader or voice user reaching the list got a run of identically named
+        buttons with nothing to tell them apart, and "press Delete" was ambiguous by construction.
+        The visible label stays short because the row beside it already says which conversation it
+        belongs to; the accessible name carries what the visible one gets from its position.
       */}
       <ConfirmAction
         trigger="Delete"
+        triggerName={`Delete conversation: ${name}`}
         title={`Delete the memory of “${name}”?`}
         confirmLabel="Delete this conversation's memory"
         busy={deleting}

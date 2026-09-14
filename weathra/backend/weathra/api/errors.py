@@ -37,6 +37,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from weathra.domain.errors import (
     AgentBudgetExceeded,
@@ -67,6 +68,7 @@ from weathra.domain.errors import (
 __all__ = [
     "ErrorBody",
     "ErrorEnvelope",
+    "UnhandledErrorMiddleware",
     "error_response",
     "install_error_handlers",
     "status_for",
@@ -272,7 +274,14 @@ def install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
-        """The backstop. Logs everything, returns nothing about it.
+        """The backstop behind the backstop.
+
+        ``UnhandledErrorMiddleware`` answers almost every unhandled exception, because it sits
+        where the answer can still be given CORS headers. This handler is what remains: an
+        exception raised *outside* that middleware — in the request-context middleware, or in CORS
+        itself. Those responses cannot carry an origin header whatever we do, and a browser will
+        report them as an unreachable backend; there is no request in flight through the stack to
+        attach one to.
 
         ``exc_info`` puts the traceback in the log where an operator can find it by request id.
         The body says only that something failed, because an internal error message is written for
@@ -285,6 +294,68 @@ def install_error_handlers(app: FastAPI) -> None:
             http_status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             request_id=_request_id(request),
         )
+
+
+class UnhandledErrorMiddleware:
+    """Turns an unhandled exception into the error envelope *inside* the CORS middleware.
+
+    **The defect this exists for.** FastAPI's ``@app.exception_handler(Exception)`` is not an
+    ordinary handler: Starlette hands it to ``ServerErrorMiddleware``, which is the outermost layer
+    of the stack — outside every middleware the application adds, CORS included. So a route that
+    raised produced a 500 with **no** ``access-control-allow-origin`` header, and a browser is
+    obliged to block a cross-origin response that does not carry one. The fetch rejects with a
+    network error, indistinguishable from a backend that is not running, and the screen says the
+    backend could not be reached. It was reached; it failed, and said so to nobody.
+
+    Task 34.5 is where that cost something real: `/admin/policies` and `/admin/lab/comparisons`
+    failed in production and the administrative screen reported both panels as unreachable, which
+    is the one explanation that rules out looking at the backend's logs.
+
+    **The fix is placement, not behaviour.** The envelope is identical to the handler's above —
+    same code, same message, same request id, nothing about the exception in the body. This is
+    registered before ``CORSMiddleware`` so it ends up inside it, which is the only thing that
+    changes: the response now passes back out through CORS and is given its origin header, so the
+    browser delivers the 500 to the caller and the client reports a server error as a server error.
+
+    Written as a pure ASGI middleware rather than a ``BaseHTTPMiddleware``: the agent stream is a
+    long-lived ``text/event-stream`` response, and wrapping it in another request/response cycle is
+    a well-known way to break streaming. This only observes, and only acts when nothing has been
+    sent yet — once the response has started there is no replacing it, and re-raising leaves the
+    outer handler to log it.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        started = False
+
+        async def observe(message: Message) -> None:
+            nonlocal started
+            if message["type"] == "http.response.start":
+                started = True
+            await send(message)
+
+        try:
+            await self.app(scope, receive, observe)
+        except Exception as exc:
+            if started:
+                # The status line is already on the wire. Nothing can be substituted for it, so
+                # this goes to the outer handler, which logs it.
+                raise
+            request = Request(scope, receive)
+            logger.exception("unhandled error on %s", request.url.path, exc_info=exc)
+            response = error_response(
+                code="internal_error",
+                message=INTERNAL_MESSAGE,
+                http_status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                request_id=_request_id(request),
+            )
+            await response(scope, receive, send)
 
 
 def mapped_error_classes() -> dict[type[WeathraError], int]:

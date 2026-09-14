@@ -569,7 +569,9 @@ When a location entry resolves ambiguously, the affected screen SHALL present th
 
 ### Requirement: Accessibility and responsive layout
 
-The frontend SHALL be operable by keyboard alone for every action across authentication and product screens alike, SHALL label every input, SHALL apply accessible names to interactive controls, and SHALL meet a contrast ratio of at least 4.5 to 1 for body text in both light and dark appearance. Layout SHALL remain usable down to a 360-pixel-wide viewport without horizontal page scrolling, with wide content such as tables and charts scrolling within their own containers.
+The frontend SHALL be operable by keyboard alone for every action across authentication and product screens alike, SHALL label every input, SHALL apply accessible names to interactive controls that are unique wherever one screen offers several controls of the same kind, and SHALL meet a contrast ratio of at least 4.5 to 1 for body text in both light and dark appearance. Layout SHALL remain usable down to a 360-pixel-wide viewport without horizontal page scrolling, with wide content such as tables and charts scrolling within their own containers.
+
+Conformance SHALL be established by reproducible automated verification that runs in continuous integration — automated accessibility assertions, semantic DOM and ARIA verification, automated keyboard traversal, visible-focus and keyboard-trap checks, form, dialog, tab and table semantics, accessible-name uniqueness, destructive-action behaviour, and responsive browser checks at 1440, 1024, 768 and 375 pixels. Field testing on physical devices or with assistive technology MAY be performed as additional product quality assurance and SHALL NOT be a condition of conformance.
 
 #### Scenario: Keyboard-only use
 
@@ -590,6 +592,29 @@ The frontend SHALL be operable by keyboard alone for every action across authent
 
 - **WHEN** a table or chart is wider than the viewport
 - **THEN** it scrolls within its own container rather than scrolling the page
+
+#### Scenario: Several controls of the same kind on one screen
+
+- **WHEN** a screen offers a list whose rows each carry a control of the same kind
+- **THEN** each of those controls has an accessible name naming the row it acts on
+
+#### Scenario: A destructive action is confirmed
+
+- **WHEN** a person activates a control that would irreversibly remove something
+- **THEN** nothing is removed until a second, separately labelled control is activated
+- **AND** the confirmation can be dismissed by its own control and by the Escape key
+- **AND** focus moves into the confirmation when it opens and returns to the control that opened it when it is dismissed
+- **AND** a removal the backend refused is reported as a refusal rather than as a removal
+
+#### Scenario: Recorded widths
+
+- **WHEN** any MVP screen is displayed at 1440, 1024, 768 or 375 pixels
+- **THEN** the document does not scroll horizontally and its dialogs and navigation remain usable
+
+#### Scenario: Conformance is reproducible
+
+- **WHEN** conformance with this requirement is asserted
+- **THEN** it rests on automated checks that run in continuous integration rather than on a session a person performed once
 
 ### Requirement: Admin Model & AI Usage screen
 

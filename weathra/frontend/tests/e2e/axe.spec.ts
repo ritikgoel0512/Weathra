@@ -43,7 +43,7 @@ const PRODUCT_SCREENS = [
   { name: "Historical Analytics", path: "/historical", marker: "Recorded observations" },
   { name: "Compare Cities", path: "/compare", marker: "Location 1" },
   { name: "Agent Evidence", path: "/evidence/run-stub", marker: "Execution flow" },
-  { name: "Saved Locations", path: "/locations", marker: "Add a location" },
+  { name: "Saved Locations", path: "/locations", marker: "Monitor the weather across the places" },
   { name: "Settings", path: "/settings", marker: "Weather preferences" },
   // The one Intelligence screen in this list, and it earns the place: it is the densest thing in
   // the product — four counters, two selectable card grids, a chart, a form and a status strip —
@@ -174,7 +174,11 @@ test.describe("axe-core, the interactive states", () => {
 
     // The add form is a disclosure now — `06-saved-locations.png` shows one "Add New Node"
     // control in the header, not a form owning the page. Opening it is the real first step.
-    await page.locator("summary", { hasText: "Add a location" }).click();
+    // The screen was rebuilt in task 34.11's group: the add form is no longer a disclosure sitting
+    // in the page, it is a panel the header's "Add location" control reveals, already open. Opening
+    // it is therefore one press on that control rather than a press on a `<summary>` that is not in
+    // the document until the control has been pressed.
+    await page.getByRole("button", { name: "Add location", exact: true }).click();
     await page.getByLabel("Place").fill("Springfield");
     await page.getByRole("button", { name: "Save location" }).click();
     await expect(
@@ -192,7 +196,7 @@ test.describe("axe-core, the interactive states", () => {
     await page.getByRole("tab", { name: "Account" }).click();
     await page.getByRole("button", { name: "Delete my Weathra data" }).click();
     await expect(
-      page.getByRole("group", { name: "Delete every Weathra record belonging to you?" }),
+      page.getByRole("alertdialog", { name: "Delete every Weathra record belonging to you?" }),
     ).toBeVisible();
 
     const found = await audit(page);

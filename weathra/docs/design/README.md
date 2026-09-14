@@ -11,8 +11,8 @@ to its artifact status and each post-MVP screen to its roadmap entry.
 | [`tokens.md`](tokens.md) | The literal implementation token values, and why each was chosen |
 | [`runtime-fidelity-audit.md`](runtime-fidelity-audit.md) | The eight screens photographed in the states people actually meet — populated, empty, loading, error, unauthenticated — every drift classified, what was fixed, and what was left |
 | [`fidelity-review.md`](fidelity-review.md) | Task 21.9's formal visual-fidelity review — the fifteen MVP screens/states against the eight approved artifacts, the divergences and their reasons, the one defect corrected, and the review's own limitations |
-| [`accessibility.md`](accessibility.md) | Task 21.8's accessibility and responsiveness record — the instruments, what each verified, the defects found and corrected, and the limitations |
-| [`accessibility-manual-pass.md`](accessibility-manual-pass.md) | The worksheet and findings for 21.8's manual pass, which remains incomplete |
+| [`accessibility.md`](accessibility.md) | Task 21.8's accessibility and responsiveness record — the instruments, what each verified, the twelve clauses of the amended acceptance contract, the defects found and corrected, and the limitations |
+| [`accessibility-manual-pass.md`](accessibility-manual-pass.md) | The worksheet for optional physical-device and assistive-technology QA. Not an acceptance criterion since 21.8's contract was amended on 2026-09-14; no screen-reader or handset pass is claimed |
 | [`screens/`](screens/) | The fifteen Visily exports themselves — ten approved implementation references, and five design-roadmap references that are deliberately not approved as any kind of requirement ([`screens.md`](screens.md) §1) |
 
 The design phase for the **MVP** completed on **2026-09-03**, and the two post-MVP model-policy

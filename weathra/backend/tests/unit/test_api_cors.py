@@ -107,3 +107,75 @@ def test_the_allow_list_belongs_to_the_process() -> None:
     after = _client(f"http://localhost:3000,{PRODUCTION_ORIGIN}")
     assert _preflight(before, PRODUCTION_ORIGIN)[1] is None
     assert _preflight(after, PRODUCTION_ORIGIN)[1] == PRODUCTION_ORIGIN
+
+
+"""Task 34.5 — a server error that a browser is allowed to read."""
+
+
+def _app_with_a_failing_route(origins: str = PRODUCTION_ORIGIN) -> TestClient:
+    """The real application, plus one route that raises the way a broken read does."""
+    settings = Settings(supabase_url="https://project.supabase.co", cors_allowed_origins=origins)
+    app = build_app(settings)
+
+    @app.get("/api/v1/_test_raises")
+    async def _raises() -> dict[str, str]:  # pragma: no cover - the body never returns
+        raise RuntimeError("a read that failed, as a broken administrative query would")
+
+    # `raise_server_exceptions=False` makes the client behave like a browser: it wants the response
+    # the application produced, not the exception re-raised into the test.
+    return TestClient(app, raise_server_exceptions=False)
+
+
+def test_an_unhandled_error_still_carries_the_origin_header() -> None:
+    """The defect behind task 34.5's administrative screen, as a test.
+
+    `/admin/policies` and `/admin/lab/comparisons` failed in production, and both panels reported
+    that Weathra's backend could not be reached. It was reached. FastAPI hands an
+    `@app.exception_handler(Exception)` to Starlette's `ServerErrorMiddleware`, which is the
+    outermost layer of the stack — outside CORS — so the 500 went back with no
+    `access-control-allow-origin` header, and a browser must block a cross-origin response that
+    carries none. The `fetch` rejects with a network error indistinguishable from a dead host, so
+    the screen reported the one thing that was not true and the actual failure was invisible.
+
+    A 500 that a browser cannot read is a 500 nobody can diagnose from the client.
+    """
+    response = _app_with_a_failing_route().get(
+        "/api/v1/_test_raises", headers={"Origin": PRODUCTION_ORIGIN}
+    )
+
+    assert response.status_code == 500
+    assert response.headers.get("access-control-allow-origin") == PRODUCTION_ORIGIN
+
+
+def test_the_error_a_browser_now_reads_says_nothing_about_the_exception() -> None:
+    """Readable is not the same as revealing: the envelope is unchanged."""
+    response = _app_with_a_failing_route().get(
+        "/api/v1/_test_raises", headers={"Origin": PRODUCTION_ORIGIN}
+    )
+    body = response.json()["error"]
+
+    assert body["code"] == "internal_error"
+    # The correlation id is what ties the response to the traceback in the log.
+    assert body["request_id"]
+    # And nothing of the exception itself reaches the caller.
+    for leaked in ("RuntimeError", "administrative query", "Traceback", "weathra/api"):
+        assert leaked not in response.text
+
+
+def test_an_unlisted_origin_gets_no_header_on_an_error_either() -> None:
+    """The fix widens what a *permitted* origin can read, and nothing else."""
+    response = _app_with_a_failing_route("http://localhost:3000").get(
+        "/api/v1/_test_raises", headers={"Origin": PRODUCTION_ORIGIN}
+    )
+
+    assert response.status_code == 500
+    assert response.headers.get("access-control-allow-origin") is None
+
+
+def test_a_successful_response_is_unaffected() -> None:
+    """The middleware observes and does not touch anything that did not raise."""
+    client = _app_with_a_failing_route()
+    response = client.get("/api/v1/health", headers={"Origin": PRODUCTION_ORIGIN})
+
+    assert response.status_code == 200
+    assert response.headers.get("access-control-allow-origin") == PRODUCTION_ORIGIN

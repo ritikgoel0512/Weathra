@@ -365,7 +365,9 @@ describe("the workspace", () => {
     const card = (await placeCards())[0]!;
     expect(card).toHaveTextContent("London");
     expect(within(card).getByText(/Weather unavailable/)).toBeInTheDocument();
-    expect(within(card).getByRole("button", { name: "Remove" })).toBeInTheDocument();
+    expect(
+      within(card).getByRole("button", { name: "Remove saved location: London" }),
+    ).toBeInTheDocument();
   });
 
   it("draws the attention strip only when a place genuinely wants attention", async () => {
@@ -507,7 +509,13 @@ describe("removing a location", () => {
     renderScreen();
 
     const cards = await placeCards();
-    await userEvent.click(within(cards[1]!).getByRole("button", { name: "Remove" }));
+    // The removal goes through the confirmation step — one press opens it, the second does it.
+    await userEvent.click(
+      within(cards[1]!).getByRole("button", { name: "Remove saved location: Berlin" }),
+    );
+    await userEvent.click(
+      within(cards[1]!).getByRole("button", { name: "Remove saved location" }),
+    );
 
     await waitFor(() =>
       expect(
@@ -518,5 +526,148 @@ describe("removing a location", () => {
         ),
       ).toBe(true),
     );
+  });
+});
+
+/**
+ * Removing a saved location — task 21.8 defect C.
+ *
+ * Same contract as the Weather Watch rail, for the same reason: the press that starts a permanent
+ * removal must not be the press that performs it. The prompt names the place the way the card does,
+ * and each card's control is named by the place it removes, because every card offers "Remove".
+ */
+describe("removing a location asks first", () => {
+  /** A backend that serves the workspace and accepts the removal, counting the DELETEs. */
+  function acceptingBackend() {
+    return backend({
+      "GET /api/v1/me/locations/overview": () => jsonResponse(200, TWO),
+      "GET /api/v1/me/locations": () => jsonResponse(200, SAVED_TWO),
+      "DELETE /api/v1/me/locations/s-berlin": () => jsonResponse(204, null),
+    });
+  }
+
+  function deletes(): [string, RequestInit?][] {
+    return (fetchMock.mock.calls as [string, RequestInit?][]).filter(
+      ([, init]) => (init?.method ?? "GET").toUpperCase() === "DELETE",
+    );
+  }
+
+  it("names each card's control by the place it removes", async () => {
+    renderScreen();
+    await placeCards();
+
+    expect(
+      screen.getByRole("button", { name: "Remove saved location: London" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Remove saved location: Berlin" }),
+    ).toBeInTheDocument();
+    // The defect this replaces: every card offering one control called "Remove".
+    expect(screen.queryAllByRole("button", { name: "Remove" })).toHaveLength(0);
+  });
+
+  it("asks before it removes anything, naming the place as the card does", async () => {
+    const person = userEvent.setup();
+    fetchMock = acceptingBackend();
+    renderScreen();
+    const cards = await placeCards();
+
+    await person.click(
+      within(cards[1]!).getByRole("button", { name: "Remove saved location: Berlin" }),
+    );
+
+    const confirmation = await screen.findByRole("alertdialog", {
+      name: "Remove Berlin from your saved locations?",
+    });
+    expect(confirmation).toHaveTextContent(/removes Berlin from your saved locations/);
+    // Nothing is sent by asking.
+    expect(deletes()).toHaveLength(0);
+  });
+
+  it("cancels without removing it, and puts focus back on the control that opened it", async () => {
+    const person = userEvent.setup();
+    fetchMock = acceptingBackend();
+    renderScreen();
+    const cards = await placeCards();
+
+    await person.click(
+      within(cards[1]!).getByRole("button", { name: "Remove saved location: Berlin" }),
+    );
+    const confirmation = await screen.findByRole("alertdialog", {
+      name: "Remove Berlin from your saved locations?",
+    });
+    await person.click(within(confirmation).getByRole("button", { name: "Cancel" }));
+
+    expect(deletes()).toHaveLength(0);
+    expect(
+      screen.queryByRole("alertdialog", { name: "Remove Berlin from your saved locations?" }),
+    ).toBeNull();
+    expect(screen.getByRole("button", { name: "Remove saved location: Berlin" })).toHaveFocus();
+  });
+
+  it("closes on Escape without removing it", async () => {
+    const person = userEvent.setup();
+    fetchMock = acceptingBackend();
+    renderScreen();
+    const cards = await placeCards();
+
+    await person.click(
+      within(cards[1]!).getByRole("button", { name: "Remove saved location: Berlin" }),
+    );
+    await screen.findByRole("alertdialog", { name: "Remove Berlin from your saved locations?" });
+    await person.keyboard("{Escape}");
+
+    expect(deletes()).toHaveLength(0);
+    expect(
+      screen.queryByRole("alertdialog", { name: "Remove Berlin from your saved locations?" }),
+    ).toBeNull();
+  });
+
+  it("is operable from the keyboard alone, with focus moved into the confirmation", async () => {
+    const person = userEvent.setup();
+    fetchMock = acceptingBackend();
+    renderScreen();
+    const cards = await placeCards();
+
+    const trigger = within(cards[1]!).getByRole("button", {
+      name: "Remove saved location: Berlin",
+    });
+    trigger.focus();
+    await person.keyboard("{Enter}");
+
+    const confirmation = await screen.findByRole("alertdialog", {
+      name: "Remove Berlin from your saved locations?",
+    });
+    expect(confirmation).toHaveFocus();
+
+    await person.tab();
+    await person.keyboard("{Enter}");
+    await waitFor(() => expect(deletes()).toHaveLength(1));
+  });
+
+  it("does not report a removal the backend refused", async () => {
+    const person = userEvent.setup();
+    fetchMock = backend({
+      "GET /api/v1/me/locations/overview": () => jsonResponse(200, TWO),
+      "GET /api/v1/me/locations": () => jsonResponse(200, SAVED_TWO),
+      "DELETE /api/v1/me/locations/s-berlin": () =>
+        jsonResponse(409, error("location_in_use", "That place is still being watched.")),
+    });
+    renderScreen();
+    const cards = await placeCards();
+
+    await person.click(
+      within(cards[1]!).getByRole("button", { name: "Remove saved location: Berlin" }),
+    );
+    const confirmation = await screen.findByRole("alertdialog", {
+      name: "Remove Berlin from your saved locations?",
+    });
+    await person.click(within(confirmation).getByRole("button", { name: "Remove saved location" }));
+
+    const failure = await screen.findByRole("alert");
+    expect(failure).toHaveTextContent("That location was not removed");
+    expect(failure).toHaveTextContent("That place is still being watched.");
+    // The card is still there, because the place is.
+    expect((await placeCards()).length).toBe(2);
   });
 });

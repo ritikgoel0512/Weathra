@@ -2246,3 +2246,46 @@ describe("a run that retrieved satellite imagery", () => {
     expect(sources.textContent).not.toContain("NASA");
   });
 });
+
+/**
+ * The composer's UNITS and DEPTH are reports, not settings — task 21.8 item H.
+ *
+ * `02-ai-weather-analyst.png` draws a FOCUS / UNITS / DEPTH row of what look like dropdowns. Only
+ * FOCUS is one: the place a conversation is pointed at is something a person changes, and it is a
+ * real control. The other two are not, and making them interactive is the fabrication the product
+ * reconciliation pass exists to remove — units come from stored preferences and the run's own
+ * resolution, and `specs/model-policy` keeps model behaviour out of the caller's hands entirely, so
+ * a depth control would be a dropdown that changed nothing.
+ *
+ * This is a guard rather than a finding: the review that raised it was reading a picture. It fails
+ * if either ever becomes focusable, which is the shape the concern would take if it came true.
+ */
+describe("the composer's units and depth", () => {
+  it("reports them without offering them as controls", async () => {
+    renderAnalyst();
+
+    const units = await screen.findByText("Units");
+    const depth = await screen.findByText("Depth");
+
+    for (const [name, term] of [
+      ["Units", units],
+      ["Depth", depth],
+    ] as const) {
+      const row = term.parentElement as HTMLElement;
+      // Nothing in the pair is a control, and nothing in it can be reached by a keyboard.
+      expect(
+        row.querySelector("button, select, input, a[href], [tabindex], [role='button']"),
+        `${name} is offered as a control`,
+      ).toBeNull();
+    }
+
+    // Depth states the one behaviour there is, rather than implying a choice between several.
+    expect(screen.getByText("Full synthesis")).toBeInTheDocument();
+
+    // And FOCUS, beside them, genuinely is a control — the contrast is the point. Its accessible
+    // name is the place it is pointed at, because the value doubles as the control, so the cell is
+    // what identifies it rather than a fixed label.
+    const focusCell = (await screen.findByText("Focus")).parentElement as HTMLElement;
+    expect(focusCell.querySelector("button"), "Focus is not offered as a control").not.toBeNull();
+  });
+});

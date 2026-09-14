@@ -399,3 +399,85 @@ describe("what the surface never shows", () => {
     expect(Object.keys(api)).not.toContain("accessToken");
   });
 });
+
+/**
+ * A server error is not an unreachable backend — task 34.5.
+ *
+ * In production this screen reported both panels as "Weathra's backend could not be reached" while
+ * the backend was up, routing both reads, and answering every other panel on the page. The cause
+ * was on the backend: FastAPI hands `@app.exception_handler(Exception)` to Starlette's
+ * `ServerErrorMiddleware`, which sits outside every middleware the application adds, CORS included,
+ * so a 500 from `/admin/policies` or `/admin/lab/comparisons` went back with no
+ * `access-control-allow-origin` header. A browser must block a cross-origin response carrying none,
+ * `fetch` rejects with a network error, and the client — correctly, for what the browser saw —
+ * reported an unreachable backend. The one explanation that rules out reading the logs.
+ *
+ * `backend/tests/unit/test_api_cors.py` holds the backend end. This holds the frontend's: the two
+ * failures are different states on this screen, and a 500 that now arrives readable is shown as
+ * what it is. The client's classification was never wrong; it is being given the truth to classify.
+ */
+describe("a backend that answered with an error", () => {
+  /** What the deployed backend's own 500 envelope says. */
+  const INTERNAL = new ApiError(500, {
+    code: "internal_error",
+    message:
+      "Weathra hit an unexpected internal error. The failure has been logged with this request's identifier; nothing about it is included here.",
+    request_id: "req-500-abc",
+  });
+
+  it("reports a failed policy read as a server error, not as an unreachable backend", async () => {
+    mount(client({ adminPolicies: vi.fn().mockRejectedValue(INTERNAL) }));
+
+    expect(
+      await screen.findByText(/unexpected internal error/, {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/could not be reached/i)).toBeNull();
+    // And not mistaken for the one refusal that means the session lacks the role.
+    expect(screen.queryByText(/does not hold the role/)).toBeNull();
+  });
+
+  it("reports a failed comparison read as a server error, not as an unreachable backend", async () => {
+    mount(client({ adminComparisons: vi.fn().mockRejectedValue(INTERNAL) }));
+
+    await screen.findByText(/unexpected internal error/, {}, { timeout: 5000 });
+    const evidence = screen.getByRole("region", { name: "Comparison evidence" });
+    expect(within(evidence).getByText(/unexpected internal error/)).toBeInTheDocument();
+    expect(within(evidence).queryByText(/could not be reached/i)).toBeNull();
+  });
+
+  it("still says unreachable when the backend genuinely could not be reached", async () => {
+    mount(
+      client({
+        adminPolicies: vi
+          .fn()
+          .mockRejectedValue(new BackendUnreachable(new Error("connection refused"))),
+      }),
+    );
+
+    // The distinction is the point: this is the state the production symptom claimed, and it is
+    // reachable only by an actual transport failure.
+    expect(
+      await screen.findByText(/could not be reached/i, {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the not-permitted refusal distinct from both", async () => {
+    mount(
+      client({
+        // `forbidden` is the code the backend sends and the one the panel branches on.
+        adminPolicies: vi.fn().mockRejectedValue(
+          new ApiError(403, {
+            code: "forbidden",
+            message: "This operation requires an administrative principal.",
+          }),
+        ),
+      }),
+    );
+
+    expect(
+      await screen.findByText(/it does not hold the role/, {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/could not be reached/i)).toBeNull();
+    expect(screen.queryByText(/unexpected internal error/)).toBeNull();
+  });
+});

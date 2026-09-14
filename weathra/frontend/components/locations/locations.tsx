@@ -320,9 +320,13 @@ function SavedLocationsWorkspace(): ReactNode {
     isEmpty: (data) => (data.places ?? []).length === 0,
   });
 
+  /** The place whose removal is in flight, so only that card's confirm control reports busy. */
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
   const remove = useApiMutation<string, void>({
     run: (client, savedId) => client.removeSavedLocation(savedId),
     invalidates: [SAVED_LOCATIONS_OVERVIEW_KEY, SAVED_LOCATIONS_KEY, PREFERENCES_KEY],
+    onDone: () => setRemovingId(null),
   });
 
   const overview = state.kind === "ready" ? state.data : null;
@@ -388,6 +392,13 @@ function SavedLocationsWorkspace(): ReactNode {
         )}
         ready={(data) => (
           <>
+            {/*
+              A removal that failed says so. Without this the card simply stayed, which reads as a
+              confirmation that did nothing rather than as a backend that refused.
+            */}
+            {remove.state.kind === "error" ? (
+              <ErrorState failure={remove.state.failure} title="That location was not removed" />
+            ) : null}
             {shown.length === 0 ? (
               <p className={styles.note}>
                 No saved location matches &ldquo;{query}&rdquo;. This searches the places you have
@@ -402,8 +413,11 @@ function SavedLocationsWorkspace(): ReactNode {
                     now={now}
                     onOpen={() => open(card)}
                     onCompare={() => router.push("/compare")}
-                    onRemove={() => remove.submit(card.savedId)}
-                    removing={remove.busy}
+                    onRemove={() => {
+                      setRemovingId(card.savedId);
+                      remove.submit(card.savedId);
+                    }}
+                    removing={remove.busy && removingId === card.savedId}
                   />
                 ))}
               </ul>

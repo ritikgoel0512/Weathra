@@ -27,7 +27,7 @@
 import type { ChangeEvent, FormEvent, ReactNode } from "react";
 
 import { PlaceChooser } from "@/components/locations/place-chooser";
-import { Badge, Button, DataClassBadge, Input, Select } from "@/components/ui";
+import { Badge, Button, ConfirmAction, DataClassBadge, Input, Select } from "@/components/ui";
 import type { Location, WatchRecord, WatchState } from "@/lib/api/schema";
 import { measureLabel } from "@/lib/dashboard/briefing";
 import { friendlyName } from "@/lib/locations/place";
@@ -263,6 +263,7 @@ export function ActiveWatches({
   onSelect,
   onToggle,
   onRemove,
+  removingId,
   expanded,
   onExpand,
   now,
@@ -272,6 +273,8 @@ export function ActiveWatches({
   readonly onSelect: (id: string) => void;
   readonly onToggle: (watch: WatchRecord) => void;
   readonly onRemove: (watch: WatchRecord) => void;
+  /** The watch whose removal is in flight, so only that row's confirm control reports busy. */
+  readonly removingId: string | null;
   /** Whether all of them are shown, or only the first few. */
   readonly expanded: boolean;
   readonly onExpand: () => void;
@@ -307,14 +310,34 @@ export function ActiveWatches({
                 {agoOf(watch.last_evaluated_at, now)}
               </span>
             </button>
-            <span className={styles.watchActions}>
+            {/*
+              Removing a watch is permanent and there is no undo behind it, so it goes through the
+              confirmation step every other destructive action in Weathra goes through — task 21.8
+              defect B. It used to delete on the first press, next to Pause, at the size of Pause.
+
+              The trigger's accessible name says *which* watch. Every row offers "Remove", so the
+              visible label alone gave a screen-reader or voice user a column of controls with one
+              name between them — the same defect the Settings conversation list had.
+            */}
+            <div className={styles.watchActions}>
               <Button size="sm" onClick={() => onToggle(watch)}>
                 {watch.enabled ? "Pause" : "Resume"}
               </Button>
-              <Button size="sm" onClick={() => onRemove(watch)}>
-                Remove
-              </Button>
-            </span>
+              <ConfirmAction
+                trigger="Remove"
+                triggerName={`Remove watch: ${placeOf(watch)}`}
+                title={`Remove the watch on ${placeOf(watch)}?`}
+                confirmLabel="Remove watch"
+                busy={removingId === watch.id}
+                onConfirm={() => onRemove(watch)}
+              >
+                <p>
+                  This permanently removes this weather watch and the readings it has recorded.
+                  Weathra stops evaluating {ruleOf(watch)} for you. Nothing else about{" "}
+                  {placeOf(watch)} is affected, and your saved locations are untouched.
+                </p>
+              </ConfirmAction>
+            </div>
           </li>
         ))}
       </ul>

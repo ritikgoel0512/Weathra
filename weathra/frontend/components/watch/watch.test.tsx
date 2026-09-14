@@ -832,3 +832,149 @@ describe("what the screen refuses to claim", () => {
     expect(screen.getAllByText("open-meteo").length).toBeGreaterThan(0);
   });
 });
+
+/**
+ * Removing a watch — task 21.8 defect B.
+ *
+ * A watch is a standing instruction somebody set up deliberately, and removing one destroys it
+ * along with the readings behind it. There is no undo, so the press that starts it must not be the
+ * press that does it. These cases hold the whole contract: the first press asks, Cancel and Escape
+ * both answer no, only the second control answers yes, and each row's control says which watch it
+ * belongs to so a screen-reader user is not choosing between identical names.
+ */
+describe("removing a watch", () => {
+  // `placeOf` composes the whole friendly name, which is what the row shows and therefore what the
+  // control must be named by — naming it "London" would not match what a person reads on screen.
+  const LONDON_NAME = "London, England, United Kingdom";
+  const REMOVE_LONDON = `Remove watch: ${LONDON_NAME}`;
+  const REMOVE_MUNICH = "Remove watch: Munich, Bavaria, Germany";
+  const ASK_LONDON = `Remove the watch on ${LONDON_NAME}?`;
+
+  /** The rail, where every watch is listed. */
+  async function rail() {
+    return await screen.findByRole("region", { name: /Active watches/ });
+  }
+
+  it("names each row's control by the watch it removes", async () => {
+    mount(client());
+    const list = await rail();
+
+    expect(
+      within(list).getByRole("button", { name: REMOVE_LONDON }),
+    ).toBeInTheDocument();
+    expect(
+      within(list).getByRole("button", { name: REMOVE_MUNICH }),
+    ).toBeInTheDocument();
+    // The defect this replaces: two controls sharing one name, with nothing to tell them apart.
+    expect(within(list).queryAllByRole("button", { name: "Remove" })).toHaveLength(0);
+  });
+
+  it("asks before it removes anything, and sends nothing by asking", async () => {
+    const person = userEvent.setup();
+    const removeWatch = vi.fn().mockResolvedValue(undefined);
+    mount(client({ removeWatch }));
+    const list = await rail();
+
+    await person.click(within(list).getByRole("button", { name: REMOVE_LONDON }));
+
+    const confirmation = await screen.findByRole("alertdialog", {
+      name: ASK_LONDON,
+    });
+    expect(confirmation).toHaveTextContent(/permanently removes this weather watch/);
+    expect(removeWatch).not.toHaveBeenCalled();
+  });
+
+  it("cancels without removing it", async () => {
+    const person = userEvent.setup();
+    const removeWatch = vi.fn().mockResolvedValue(undefined);
+    mount(client({ removeWatch }));
+    const list = await rail();
+
+    await person.click(within(list).getByRole("button", { name: REMOVE_LONDON }));
+    const confirmation = await screen.findByRole("alertdialog", {
+      name: ASK_LONDON,
+    });
+    await person.click(within(confirmation).getByRole("button", { name: "Cancel" }));
+
+    expect(removeWatch).not.toHaveBeenCalled();
+    // The confirmation is gone and the trigger is back, focused, so the keyboard is where it was.
+    expect(
+      screen.queryByRole("alertdialog", { name: ASK_LONDON }),
+    ).toBeNull();
+    const trigger = within(await rail()).getByRole("button", { name: REMOVE_LONDON });
+    expect(trigger).toHaveFocus();
+  });
+
+  it("closes on Escape without removing it", async () => {
+    const person = userEvent.setup();
+    const removeWatch = vi.fn().mockResolvedValue(undefined);
+    mount(client({ removeWatch }));
+    const list = await rail();
+
+    await person.click(within(list).getByRole("button", { name: REMOVE_LONDON }));
+    await screen.findByRole("alertdialog", { name: ASK_LONDON });
+    await person.keyboard("{Escape}");
+
+    expect(removeWatch).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("alertdialog", { name: ASK_LONDON }),
+    ).toBeNull();
+  });
+
+  it("removes it, by its identifier, once the second control is pressed", async () => {
+    const person = userEvent.setup();
+    const removeWatch = vi.fn().mockResolvedValue(undefined);
+    mount(client({ removeWatch }));
+    const list = await rail();
+
+    await person.click(within(list).getByRole("button", { name: REMOVE_LONDON }));
+    const confirmation = await screen.findByRole("alertdialog", {
+      name: ASK_LONDON,
+    });
+    await person.click(within(confirmation).getByRole("button", { name: "Remove watch" }));
+
+    await waitFor(() => expect(removeWatch).toHaveBeenCalledWith("w-london"));
+    expect(removeWatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("is operable from the keyboard alone, with focus moved into the confirmation", async () => {
+    const person = userEvent.setup();
+    const removeWatch = vi.fn().mockResolvedValue(undefined);
+    mount(client({ removeWatch }));
+    const list = await rail();
+
+    const trigger = within(list).getByRole("button", { name: REMOVE_LONDON });
+    trigger.focus();
+    await person.keyboard("{Enter}");
+
+    const confirmation = await screen.findByRole("alertdialog", {
+      name: ASK_LONDON,
+    });
+    // Focus is inside the panel, so the warning is met rather than tabbed past.
+    expect(confirmation).toHaveFocus();
+
+    await person.tab();
+    await person.keyboard("{Enter}");
+    await waitFor(() => expect(removeWatch).toHaveBeenCalledWith("w-london"));
+  });
+
+  it("does not report a removal the backend refused", async () => {
+    const person = userEvent.setup();
+    const removeWatch = vi.fn().mockRejectedValue(new Error("The watch could not be removed."));
+    mount(client({ removeWatch }));
+    const list = await rail();
+
+    await person.click(within(list).getByRole("button", { name: REMOVE_LONDON }));
+    const confirmation = await screen.findByRole("alertdialog", {
+      name: ASK_LONDON,
+    });
+    await person.click(within(confirmation).getByRole("button", { name: "Remove watch" }));
+
+    const failure = await screen.findByRole("alert");
+    expect(failure).toHaveTextContent("That watch was not removed");
+    // The watch is still listed, because it still exists — a refusal is never drawn as a removal.
+    expect(within(await rail()).getByText(LONDON_NAME)).toBeInTheDocument();
+    // And the confirmation stays open rather than closing as though it had worked.
+    expect(screen.getByRole("alertdialog", { name: ASK_LONDON })).toBeInTheDocument();
+  });
+});

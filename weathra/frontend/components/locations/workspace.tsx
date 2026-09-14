@@ -24,7 +24,7 @@
 
 import type { ReactNode } from "react";
 
-import { Badge, Button, Input, WeatherIcon } from "@/components/ui";
+import { Badge, Button, ConfirmAction, Input, WeatherIcon } from "@/components/ui";
 import {
   agoOf,
   type AttentionItem,
@@ -215,14 +215,37 @@ export function PlaceCard({
         <Button size="sm" variant="primary" onClick={onOpen}>
           View analytics →
         </Button>
-        <span className={styles.cardSecondary}>
+        {/*
+          Removing a saved place is permanent and there is no undo behind it, so it goes through the
+          confirmation step every other destructive action in Weathra goes through — task 21.8
+          defect C. It used to delete on the first press, beside Compare, at the size of Compare.
+
+          The prompt names the place the way the card does. `card.name` is the canonical label
+          (`lib/locations/workspace.ts`), which for a place the provider returned no name for reads
+          as an unnamed place rather than as its digits — task 34.11 — so this never asks somebody
+          to confirm the deletion of a pair of coordinates.
+
+          The trigger's accessible name says which place, because every card offers "Remove".
+        */}
+        <div className={styles.cardSecondary}>
           <Button size="sm" onClick={onCompare}>
             Compare
           </Button>
-          <Button size="sm" busy={removing} onClick={onRemove}>
-            Remove
-          </Button>
-        </span>
+          <ConfirmAction
+            trigger="Remove"
+            triggerName={`Remove saved location: ${card.name}`}
+            title={`Remove ${card.name} from your saved locations?`}
+            confirmLabel="Remove saved location"
+            busy={removing}
+            onConfirm={onRemove}
+          >
+            <p>
+              This removes {card.name} from your saved locations. Its weather is not deleted —
+              Weathra keeps no personal copy of it — and you can save the place again at any time.
+              Any weather watches you have on it are not removed by this.
+            </p>
+          </ConfirmAction>
+        </div>
       </div>
     </li>
   );

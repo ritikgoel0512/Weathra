@@ -40,7 +40,7 @@ const PRODUCT_SCREENS = [
   { name: "Historical Analytics", path: "/historical", marker: "Recorded observations" },
   { name: "Compare Cities", path: "/compare", marker: "Location 1" },
   { name: "Agent Evidence", path: "/evidence/run-stub", marker: "Execution flow" },
-  { name: "Saved Locations", path: "/locations", marker: "Add a location" },
+  { name: "Saved Locations", path: "/locations", marker: "Monitor the weather across the places" },
   { name: "Settings", path: "/settings", marker: "Weather preferences" },
 ] as const;
 
@@ -169,7 +169,11 @@ test.describe("no page scrolls sideways, at any recorded width", () => {
 
     // The add form is a disclosure now — `06-saved-locations.png` shows one "Add New Node"
     // control in the header, not a form owning the page. Opening it is the real first step.
-    await page.locator("summary", { hasText: "Add a location" }).click();
+    // The screen was rebuilt in task 34.11's group: the add form is no longer a disclosure sitting
+    // in the page, it is a panel the header's "Add location" control reveals, already open. Opening
+    // it is therefore one press on that control rather than a press on a `<summary>` that is not in
+    // the document until the control has been pressed.
+    await page.getByRole("button", { name: "Add location", exact: true }).click();
     await page.getByLabel("Place").fill("Springfield");
     await page.getByRole("button", { name: "Save location" }).click();
 
@@ -803,7 +807,11 @@ test.describe("keyboard operation and visible focus", () => {
 
     // The add form is a disclosure now — `06-saved-locations.png` shows one "Add New Node"
     // control in the header, not a form owning the page. Opening it is the real first step.
-    await page.locator("summary", { hasText: "Add a location" }).click();
+    // The screen was rebuilt in task 34.11's group: the add form is no longer a disclosure sitting
+    // in the page, it is a panel the header's "Add location" control reveals, already open. Opening
+    // it is therefore one press on that control rather than a press on a `<summary>` that is not in
+    // the document until the control has been pressed.
+    await page.getByRole("button", { name: "Add location", exact: true }).click();
     await page.getByLabel("Place").fill("Springfield");
     await page.getByRole("button", { name: "Save location" }).click();
 
@@ -837,7 +845,7 @@ test.describe("keyboard operation and visible focus", () => {
     await expect(page.getByRole("tab", { name: "Account" })).toHaveAttribute("aria-selected", "true");
 
     await page.getByRole("button", { name: "Delete my Weathra data" }).click();
-    const confirmation = page.getByRole("group", {
+    const confirmation = page.getByRole("alertdialog", {
       name: "Delete every Weathra record belonging to you?",
     });
     await expect(confirmation).toBeVisible();
@@ -990,7 +998,11 @@ test.describe("the candidate chooser's question", () => {
 
     // The add form is a disclosure now — `06-saved-locations.png` shows one "Add New Node"
     // control in the header, not a form owning the page. Opening it is the real first step.
-    await page.locator("summary", { hasText: "Add a location" }).click();
+    // The screen was rebuilt in task 34.11's group: the add form is no longer a disclosure sitting
+    // in the page, it is a panel the header's "Add location" control reveals, already open. Opening
+    // it is therefore one press on that control rather than a press on a `<summary>` that is not in
+    // the document until the control has been pressed.
+    await page.getByRole("button", { name: "Add location", exact: true }).click();
     await page.getByLabel("Place").fill("Springfield");
     await page.getByRole("button", { name: "Save location" }).click();
 

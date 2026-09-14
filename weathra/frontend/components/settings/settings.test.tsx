@@ -683,7 +683,7 @@ describe("deleting a conversation's memory", () => {
     const memory = await screen.findByRole("region", { name: "Conversation memory" });
     expect(within(memory).getByText("Berlin this week")).toBeInTheDocument();
 
-    await person.click(within(memory).getByRole("button", { name: "Delete" }));
+    await person.click(within(memory).getByRole("button", { name: "Delete conversation: Berlin this week" }));
 
     // Nothing is sent by opening the confirmation.
     expect(
@@ -692,7 +692,7 @@ describe("deleting a conversation's memory", () => {
       ),
     ).toHaveLength(0);
 
-    const confirmation = within(memory).getByRole("group", {
+    const confirmation = within(memory).getByRole("alertdialog", {
       name: 'Delete the memory of “Berlin this week”?',
     });
     expect(confirmation).toHaveTextContent(/Your saved locations and preferences are untouched/);
@@ -724,7 +724,7 @@ describe("deleting a conversation's memory", () => {
     await openIntelligenceTab(person);
 
     const memory = await screen.findByRole("region", { name: "Conversation memory" });
-    await person.click(within(memory).getByRole("button", { name: "Delete" }));
+    await person.click(within(memory).getByRole("button", { name: "Delete conversation: Berlin this week" }));
     await person.click(
       within(memory).getByRole("button", { name: "Delete this conversation's memory" }),
     );
@@ -763,7 +763,7 @@ describe("deleting a conversation's memory", () => {
     await openIntelligenceTab(person);
 
     const memory = await screen.findByRole("region", { name: "Conversation memory" });
-    await person.click(within(memory).getByRole("button", { name: "Delete" }));
+    await person.click(within(memory).getByRole("button", { name: "Delete conversation: Berlin this week" }));
     await person.click(
       within(memory).getByRole("button", { name: "Delete this conversation's memory" }),
     );
@@ -785,7 +785,7 @@ describe("deleting the person's Weathra data", () => {
     const panel = await screen.findByRole("region", { name: "Delete your Weathra data" });
     await person.click(within(panel).getByRole("button", { name: "Delete my Weathra data" }));
 
-    const confirmation = within(panel).getByRole("group", {
+    const confirmation = within(panel).getByRole("alertdialog", {
       name: "Delete every Weathra record belonging to you?",
     });
     const confirm = within(confirmation).getByRole("button", {
@@ -882,7 +882,9 @@ describe("deleting the person's Weathra data", () => {
     // so it sits with the rest of what the assistant remembers.
     await openIntelligenceTab(person);
     expect(await screen.findByRole("region", { name: "Conversation memory" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Delete conversation: Berlin this week" }),
+    ).toBeInTheDocument();
     // And the two heavier operations are not on this tab at all.
     expect(screen.queryByRole("button", { name: "Delete my Weathra data" })).not.toBeInTheDocument();
   });
@@ -1254,5 +1256,69 @@ describe("the session and user isolation", () => {
     ]) {
       expect(text).not.toContain(sample);
     }
+  });
+});
+
+/**
+ * Every conversation's Delete says which conversation — task 21.8 defect E.
+ *
+ * The list rendered one control per conversation, each with the accessible name "Delete". A person
+ * reading the page with a screen reader got a run of identically named buttons and no way to tell
+ * which row any of them belonged to; a voice user saying "press Delete" was addressing all of them.
+ * The fix is the accessible name, not the visible label — the visible one is short because the row
+ * around it already says which conversation it is, which is exactly the context a name has to carry
+ * when the row is not what gets announced.
+ */
+describe("the conversation list's delete controls", () => {
+  it("gives each one a name that says which conversation it removes", async () => {
+    const person = userEvent.setup();
+    fetchMock = backend(
+      settingsRoutes({ "GET /api/v1/threads": () => jsonResponse(200, MANY_THREADS) }),
+    );
+    renderSettings();
+    await openIntelligenceTab(person);
+
+    const memory = await screen.findByRole("region", { name: "Conversation memory" });
+    // Open the collapsed remainder, so every conversation's control is on the page at once.
+    await person.click(within(memory).getByRole("button", { name: /View all conversations/ }));
+
+    const deletes = within(memory)
+      .getAllByRole("button")
+      .map((control) => control.getAttribute("aria-label") ?? control.textContent ?? "")
+      .filter((name) => name.startsWith("Delete conversation: "));
+
+    expect(deletes.length).toBe(11);
+    expect(new Set(deletes).size).toBe(deletes.length);
+    expect(deletes).toContain("Delete conversation: Conversation 1");
+    expect(deletes).toContain("Delete conversation: Conversation 11");
+
+    // And none of them is reachable by the bare name that used to be shared between all of them.
+    expect(within(memory).queryAllByRole("button", { name: "Delete" })).toHaveLength(0);
+  });
+
+  it("still keeps its confirmation, and Escape still cancels it", async () => {
+    const person = userEvent.setup();
+    renderSettings();
+    await openIntelligenceTab(person);
+
+    const memory = await screen.findByRole("region", { name: "Conversation memory" });
+    await person.click(
+      within(memory).getByRole("button", { name: "Delete conversation: Berlin this week" }),
+    );
+    await screen.findByRole("alertdialog", {
+      name: "Delete the memory of “Berlin this week”?",
+    });
+    await person.keyboard("{Escape}");
+
+    expect(
+      screen.queryByRole("alertdialog", {
+        name: "Delete the memory of “Berlin this week”?",
+      }),
+    ).toBeNull();
+    expect(
+      (fetchMock.mock.calls as [string, RequestInit][]).filter(
+        ([, init]) => init?.method === "DELETE",
+      ),
+    ).toHaveLength(0);
   });
 });

@@ -1,10 +1,17 @@
 # Accessibility and responsiveness audit — task 21.8
 
-**Status: the automated and browser-level verification is complete on two engines; the human manual
-pass is outstanding.** See §12. Task 21.8 asks for "automated accessibility assertions **plus** a
-recorded manual pass", and the second of those is a human driving the screens — which is not
-something this record can honestly claim on somebody's behalf. Everything else below was
-demonstrated and is reproducible with the commands in §11.
+**Status: ten of the twelve clauses of the acceptance contract as amended on 2026-09-14 are
+established by assertions that run in continuous integration and are reproducible with the commands
+in §11. Two are not yet green**, and both are recorded in §14 rather than glossed: an axe
+`document-title` violation on `/settings` in its destructive-confirmation state (clause 2), and the
+Account tab not taking `aria-selected` when driven from the keyboard (clause 6). Task 21.8 stays
+open on those two.
+
+Task 21.8 previously asked for "automated accessibility assertions **plus** a recorded manual pass",
+and the second of those was read as three human activities — a real screen-reader session, a
+physical handset, and a keyboard traversal performed personally. Those are no longer acceptance
+criteria; §12 records what became of them and §13 records the two measurements the amendment added.
+**No screen-reader or physical-handset pass is claimed here, then or now.**
 
 The pass over every MVP screen, authentication and product alike, against the four things
 [`specs/web-ui`](../../openspec/changes/weathra-mvp/specs/web-ui/spec.md) requires: keyboard
@@ -183,9 +190,11 @@ Audited explicitly, since it is the newest interactive surface:
 
 ## 9. Defects found, and the corrections made
 
-The audit found five real defects across its two passes — three in the first, two in the second.
-All are fixed centrally. Corrections 4, 5, 8 and 9 were not defects in behaviour: two widened what
-was being measured, and two fixed instruments that were measuring the wrong thing.
+The audit found eight real defects across its three passes — three in the first, two in the second,
+three in the third of 2026-09-14. All are fixed centrally. Corrections 4, 5, 8 and 9 were not
+defects in behaviour: two widened what was being measured, and two fixed instruments that were
+measuring the wrong thing. Corrections 10 to 12 are the third pass, and §13 records the four items
+that pass raised which turned out not to be defects at all.
 
 **1. The Dashboard had no `h1`.** Every other MVP screen carried one; the Dashboard's sections had
 headings and the page they belong to did not, so a heading-list navigation of `/` — the way most
@@ -274,6 +283,35 @@ defect once the assertion became "all of them". *Corrected:* a control counts wh
 box, and a radio group contributes the one stop the browser gives it — with the arrow-key behaviour
 that justifies that asserted separately, in §3.
 
+**10. Weather Watch removed a watch on one press.** A watch is a standing instruction somebody set
+up deliberately; removing one destroys it and the readings behind it, and there is no undo. The
+control sat beside Pause, drawn at the size of Pause, and deleted on the first press — so a
+mis-aimed press, or a keyboard `Enter` on the wrong row, was irreversible. Every other destructive
+action in the product already went through a confirmation. *Corrected:* the same confirmation, which
+moved out of `components/settings/` to `components/ui/confirm-action.tsx` so both screens use the
+pattern the product already had rather than a second one invented beside it. Seven cases in
+`components/watch/watch.test.tsx` hold the whole contract: the first press sends nothing, Cancel and
+Escape each send nothing, focus moves into the confirmation and returns to the trigger on dismissal,
+only the second control issues the `DELETE`, and a refusal is drawn as a refusal with the row still
+listed.
+
+**11. Saved Locations removed a saved place on one press.** The same defect in the same shape, next
+to Compare. *Corrected:* the same way, with six cases in `components/locations/locations.test.tsx`.
+The prompt names the place as the card does — `card.name`, which for a place the provider returned
+no name for reads as an unnamed place rather than as its coordinates (task 34.11) — so nobody is
+asked to confirm the deletion of a pair of digits.
+
+**12. Every conversation in Settings offered a control called "Delete".** Eleven rows, eleven
+buttons, one accessible name between them. A screen-reader user reaching the list got a run of
+identically named controls with nothing to say which conversation any of them belonged to, and a
+voice user saying "press Delete" was addressing all of them at once. The visible label was not the
+problem — the row around it says which conversation it is, which is exactly the context that is lost
+when the control is announced on its own. *Corrected:* `ConfirmAction` takes a `triggerName`, and
+each row passes `Delete conversation: <title>`; the visible label stays short. The same treatment
+was applied to the two lists fixed in corrections 10 and 11, which had the defect for the same
+reason. `components/settings/settings.test.tsx` asserts eleven controls, eleven distinct names, and
+none reachable by the bare name they used to share.
+
 ## 10. Genuine limitations of this pass
 
 Recorded rather than glossed, because a pass that overstates itself is worse than no pass.
@@ -288,7 +326,9 @@ Recorded rather than glossed, because a pass that overstates itself is worse tha
   focus or layout difference specific to WebKit would not have been caught.
 - **No screen-reader pass.** The names, roles, relationships and live regions are asserted
   programmatically — now by two instruments rather than one — which is still not the same as having
-  listened to VoiceOver, NVDA or Orca read each screen. Nothing here claims otherwise.
+  listened to VoiceOver, NVDA or Orca read each screen. Nothing here claims otherwise. Since the
+  2026-09-14 amendment this is a limitation of the evidence rather than an outstanding acceptance
+  criterion: it is worth doing as product QA, and it does not gate the change.
 - **A rule engine is not an audit.** axe-core covers a good deal of WCAG automatically and, by its
   own maintainers' estimate, cannot decide most of it: whether an accessible name is *accurate*,
   whether a reading order makes sense, whether an error message says what to do. Those need §12.
@@ -302,7 +342,8 @@ Recorded rather than glossed, because a pass that overstates itself is worse tha
 - **No physical device.** 360 pixels was verified as a viewport size, not on a handset. Touch target
   sizes are now checked by rule — `target-size` is the WCAG 2.2 AA criterion and it is in the enabled
   tag set, and no screen violates it at 360 pixels in either appearance — but a rule measuring a box
-  is not a thumb on glass, and mobile-browser chrome is still unverified.
+  is not a thumb on glass, and mobile-browser chrome is still unverified. As above, this is a
+  limitation of the evidence and not an outstanding acceptance criterion.
 - **The two boundaries beyond Weathra are stood in for** — the identity provider and the FastAPI
   backend — as task 18.10 established. Everything on Weathra's side of them is the real
   production build.
@@ -325,63 +366,76 @@ All commands run from `frontend/`.
 
 WebKit, once its system libraries are installed: `WEATHRA_E2E_WEBKIT=1 npx playwright test`.
 
-## 12. The manual pass — outstanding
+## 12. What became of the manual pass
 
-Task 21.8 asks for automated assertions **plus a recorded manual pass**, and the two are named
-separately because they find different things. The automated half is done; the manual half is not,
-and this section says exactly what it needs rather than recording it as though it had happened.
+The acceptance contract for task 21.8 was amended on 2026-09-14. It had required "automated
+assertions **plus** a recorded manual pass", and the manual pass was read as three human
+activities: a session with a real screen reader, a walkthrough on a physical handset, and a keyboard
+traversal performed personally by a person.
 
-The second pass closed one of the four the first pass listed — the engine — and narrowed a second.
-Three remain, and every one of them needs a person.
+**None of the three had been performed, and none of them is reproducible.** A pass somebody
+performs once cannot be re-run when the code changes, cannot gate a pull request, and cannot be
+checked by a later reader. Holding the change open for them was keeping a task open on evidence
+nobody could produce or verify, while the properties they were meant to establish went unasserted.
 
-**The worksheet for them is [`accessibility-manual-pass.md`](accessibility-manual-pass.md)**: how to
-get the populated production build in front of you, what to judge on each of the three passes —
-deliberately excluding everything the suites already settle — and where to write down what you
-found. Its §5 is what this section becomes once it is filled in.
+So they were replaced by twelve clauses of verification that CI runs on every push — automated
+accessibility assertions, semantic DOM and ARIA verification, automated keyboard traversal, visible
+focus, no keyboard traps, form/dialog/tab/table semantics, accessible-name uniqueness, safe
+destructive-action behaviour, responsive checks at 1440, 1024, 768 and 375 pixels, no page-level
+horizontal overflow, usable dialogs and navigation at every width, and text or semantic equivalents
+for provenance and data visualisations. The contract is written out in full at task 21.8 in
+`openspec/changes/weathra-mvp/tasks.md`, and each clause's instrument is in §11 and §13.
 
-**A retraction.** On 2026-09-04 this section and the worksheet's §5 briefly recorded a screen-reader
-pass over six surfaces as complete, itemised and attributed to NVDA 2024.4. The operator has since
-stated they had not installed or used NVDA, and all of it has been removed; the worksheet's §5 and §7
-record what was withdrawn and why. **No screen-reader pass has been performed.** Nothing in §1–§11
-above was affected — every claim there is produced by a command and reproducible — which is the
-reason this record keeps its instruments and its attestations in separate sections.
+**Physical-device and assistive-technology field testing may still be performed as additional
+product QA, and it is worth doing.** It is not a blocking acceptance criterion for this change.
+[`accessibility-manual-pass.md`](accessibility-manual-pass.md) is kept as the worksheet for anyone
+who does it, reframed as optional QA rather than as outstanding work.
 
-**And an environment limitation, established by observation.** Cloud Shell's Web Preview is an
-authenticated proxy, and it redirects the application's `fetch` calls (HTTP 302 to a Google sign-in,
-then a CORS failure on the cross-origin redirect) while letting page navigations through. So no
-authenticated screen is reachable from that environment: the identity call is redirected, and every
-data call sets `credentials: "omit"` by design and therefore can never carry the proxy's cookie. The
-manual pass cannot be completed for the product screens from Cloud Shell's preview, and task 21.8
-stays open on that basis. The worksheet's §8 has the evidence and §9 the ways out.
+**Historical honesty.** An earlier review proposed physical assistive-technology and handset
+validation. The MVP acceptance contract was later amended to use reproducible automated
+accessibility, semantic, keyboard and responsive-browser verification. No claim is made that a
+physical screen-reader or handset pass was performed. Separately and earlier, a claim that a
+screen-reader pass *had* been performed was retracted and its results removed; that retraction
+stands on its own and is not what the amendment was for.
 
-One defect *was* found in that exchange, by reading the source rather than by listening: the
-candidate chooser's question was a styled paragraph and not a heading, so it appeared in no heading
-list. It is fixed, pinned by tests in both engines, and written up in the worksheet's §6 — including
-why it is a genuine WCAG 1.3.1 defect and why it is nonetheless **not** one of this task's written
-acceptance criteria.
+## 13. The four items the amendment settled
 
-1. **A screen-reader pass over all twelve screens.** With VoiceOver, NVDA or Orca: does each screen
-   read in an order that makes sense, does the heading list describe it, are the live regions
-   announced when the Analyst streams and when a preference saves, and is the candidate chooser
-   understandable without seeing it? Two instruments now assert the names, roles, relationships and
-   live regions programmatically; nobody has listened to them. This is also where the accessible
-   *names* get judged rather than merely counted — `ScrollRegion` announces "Grounded data sources
-   table" and the charts announce their titles, and whether those are the right words to hear on
-   landing is not something either instrument can tell you.
-2. **A keyboard pass driven by a person.** The browser suite presses the keys and reads the computed
-   styles, which settles reachability, trapping and whether a ring is painted — and now settles that
-   *every* control is reached, on two engines, rather than that the walk moved at all. What it
-   cannot judge is whether the ring is *findable* on a busy screen, whether the order feels right
-   rather than merely being document order, or whether the new scroll-region stop is a help or a
-   surprise when you meet it with no warning.
-3. **A 360-pixel pass on a physical handset**, in a mobile browser with its own chrome. The viewport
-   size is verified and target sizes now pass WCAG 2.2's `target-size` by rule; real-device
-   behaviour and an actual thumb are not.
+The review that prompted the amendment also listed defects. Four of them needed measurement rather
+than reading, and this is what the measurement returned. The two code defects it confirmed are in
+§9's list of corrections; these four are the ones that turned out to need a browser to decide.
 
-**Closed since the first pass:** a second browser engine. Gecko runs the whole suite alongside
-Blink, and it paid for itself on the first run — correction 8 is an assertion that passed on Blink
-for a reason Gecko does not share. WebKit remains outstanding as a *limitation* (§10) rather than as
-work: the project is written and opt-in, and needs only its system libraries.
+Measured on the production build, both engines, by
+[`tests/e2e/disabled-and-date-focus.spec.ts`](../../frontend/tests/e2e/disabled-and-date-focus.spec.ts)
+and by `components/analyst/analyst.test.tsx`.
 
-Until the three above are done and recorded here with their date, their operator and their findings,
-task 21.8 stays open. Nothing above should be read as covering them.
+| Item | Verdict | What was measured |
+|---|---|---|
+| Travel Intelligence Departure and Return date fields have no visible focus | **Not a defect** | Reached by `Tab` on both engines, the browser reports `:focus-visible`, and the global rule paints `outline: solid 2px rgb(34, 211, 238)` at `2px` offset on the host element. No screen-level override suppresses it. |
+| Dashboard's disabled "Show briefing" is not distinct, or is wrong semantically | **Not a defect** | Natively `disabled`, with no `aria-disabled` beside it — the duplication is the anti-pattern, not the fix. `Tab` from the field before it does not reach it. Painted fill `#1b8094` against the enabled `#22d3ee`, a separation of **2.55:1**; label `#0e4451` on that fill, **2.32:1**, against an enabled **10.5:1**. The disabled label is below the 3:1 mark, which WCAG 1.4.3 does not apply to inactive components; it is recorded here rather than asserted, because asserting a threshold the standard does not set would be inventing a requirement. Worth revisiting as product QA. |
+| The composer's UNITS and DEPTH read as controls that do nothing | **Not a defect — intentional** | Both are `<span>` pairs containing no focusable element. Units reports the run's resolution or the stored preference; DEPTH states "Full synthesis", the one behaviour there is, because `specs/model-policy` keeps model behaviour out of the caller's hands. FOCUS beside them genuinely is a control, which is the contrast the artifact's row obscures. Guarded by a test that fails if either becomes focusable. |
+| An invisible but focusable "Stop Claude" control | **Not Weathra** | Searched for as a literal string across the whole repository, as any Claude or Anthropic string in shipped frontend source, and as any hidden cancellation control: no match on any of the three. The frontend contains no vendor name at all, which is an architecture rule (`design.md` decision 1) with its own test. The single `AbortController` in shipped source cancels an image fetch on unmount and is not a control. The observation could not be reproduced or located in Weathra source and appears attributable to the browser or AI testing environment; it is excluded from Weathra's 21.8 defect set, and no product code was changed for it. |
+
+## 14. The two clauses that are not green
+
+Fixing the browser suite's stale Saved Locations locators is what made these visible. The suite had
+been looking for a `<summary>` disclosure headed "Add a location"; the screen was rebuilt on
+2026-09-13 so that the add form is a panel the header's "Add location" control reveals, and the
+`<summary>` is not in the document until that control has been pressed. Every browser test that
+loaded Saved Locations, and every one that used it as a marker, had been failing since — 51 of them
+— and two real failures were sitting behind that wall.
+
+| Clause | Failure | Where |
+|---|---|---|
+| 2 — semantic DOM and ARIA verification | axe `document-title` (serious): "Documents must have `<title>` element to aid in navigation", reported against `html` while `/settings` shows its destructive confirmation. `app/(app)/settings/page.tsx` does export `metadata: { title: "Settings" }`, so what empties it in this state is the thing to find. | `tests/e2e/axe.spec.ts` — "the destructive confirmation has no violations" |
+| 6 — correct form, dialog, tab and table semantics | The Account tab does not take `aria-selected="true"` when the tab list is driven from the keyboard; it stays `false` with `tabindex="-1"`. | `tests/e2e/accessibility.spec.ts` — "operates the destructive confirmation in Settings from the keyboard" |
+
+Neither is in the confirmation component the 2026-09-14 pass added, and neither is in a surface that
+pass modified — the first is the document's own title and the second is the shared `Tabs` primitive.
+They are recorded here as open, and task 21.8 is open on them.
+
+One further note, because it cost a re-run: the Dashboard's 360-pixel overflow check failed once
+with a 4-pixel document overflow naming `LocationImage`'s own boxes at 920 pixels, and passed on
+the next run with no change to the page. A 920-pixel box inside a 360-pixel viewport is not a
+layout Weathra ever renders; it is the hero image mid-load. The check is sound and the screen fits,
+but the assertion can observe a transient state, which is worth knowing before trusting a single
+red run of it.

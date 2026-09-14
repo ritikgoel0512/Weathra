@@ -22,6 +22,9 @@ export type { BadgeProps, BadgeTone, DataClassBadgeProps, StoredClassBadgeProps 
 export { Button } from "./button";
 export type { ButtonProps, ButtonSize, ButtonVariant } from "./button";
 
+export { ConfirmAction } from "./confirm-action";
+export type { ConfirmActionProps } from "./confirm-action";
+
 export { Field } from "./field";
 export type { FieldControl, FieldProps } from "./field";
 

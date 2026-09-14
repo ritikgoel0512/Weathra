@@ -538,7 +538,17 @@
 
 .watchActions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+/*
+ * The removal confirmation is a panel, not a control, so it takes the row rather than squeezing in
+ * beside Pause. Selected by role because `ConfirmAction` owns its own class names — the alternative
+ * is a wrapper element that exists only to be styled.
+ */
+.watchActions > [role="alertdialog"] {
+  flex: 1 1 100%;
 }
 
 /* ----------------------------------------------------------------- the plot */

@@ -1,8 +1,25 @@
-# Manual accessibility pass — worksheet for task 21.8
+# Manual accessibility pass — optional product QA worksheet
 
-The automated half of task 21.8 is done and recorded in [`accessibility.md`](accessibility.md). This
-is the other half: the worksheet for the three passes a person has to drive, and the place to write
-down what they found.
+> **This is no longer an acceptance criterion.** Task 21.8's contract was amended on 2026-09-14:
+> the three human passes below were replaced by twelve clauses of reproducible automated
+> accessibility, semantic, keyboard, destructive-action and responsive-browser verification, all of
+> which run in CI. See [`accessibility.md`](accessibility.md) §12 for why, and task 21.8 in
+> `openspec/changes/weathra-mvp/tasks.md` for the contract itself.
+>
+> **Physical-device and assistive-technology field testing may be performed as additional product
+> QA, but is not a blocking MVP acceptance criterion for this OpenSpec change.** This worksheet is
+> kept, unchanged in substance, for anyone who chooses to do it — it is a good use of an afternoon
+> and it will find things no instrument can. Nothing is waiting on it.
+>
+> **Historical honesty.** An earlier review proposed physical assistive-technology and handset
+> validation. The MVP acceptance contract was later amended to use reproducible automated
+> accessibility, semantic, keyboard and responsive-browser verification. **No claim is made that a
+> physical screen-reader or handset pass was performed** — §5 below still records, accurately, that
+> none of the three was carried out.
+
+The automated verification for task 21.8 is recorded in [`accessibility.md`](accessibility.md). This
+is the worksheet for the three passes a person would have to drive, and the place to write down what
+they found.
 
 **It deliberately does not re-check what the suites already settle.** Reachability, tab order as
 document order, no traps, whether a focus ring is painted, contrast ratios, 360-pixel fit, no
@@ -10,8 +27,8 @@ horizontal page scroll, WCAG 2.0/2.1 A and AA and 2.2 AA by rule — all of that
 engines and re-asserted on every run. Checking it again by hand costs an afternoon and finds
 nothing. What follows is only the things no instrument can judge.
 
-Fill in §5 as you go. When all three passes are recorded there with a date and an operator,
-[`accessibility.md`](accessibility.md) §12 gets that content and task 21.8 closes.
+Fill in §5 as you go, if you do it. Task 21.8 no longer waits on it; a completed pass here is
+additional evidence, not the missing piece.
 
 ---
 
@@ -200,9 +217,10 @@ A real phone, in a mobile browser, using the LAN setup in §1. Target sizes now 
 > action, focus order, landmarks and accessible names, contrast on the token palette, and
 > `scrollWidth - clientWidth` at 1440, 1024, 768 and 360 on all eight screens — recorded in
 > [`accessibility.md`](accessibility.md) and enforced by `frontend/tests/accessibility.test.tsx`
-> and `frontend/tests/e2e/accessibility.spec.ts`. What remains is the three passes below, which
-> need a person: a screen reader, a keyboard-only run by hand, and a zoom pass. 21.8 stays open
-> until §5 records them with a date and an operator, and nothing else in the MVP is waiting on it.
+> and `frontend/tests/e2e/accessibility.spec.ts`. The three passes below need a person: a screen
+> reader, a keyboard-only run by hand, and a zoom pass. **Since the amendment of 2026-09-14 they are
+> optional product QA and 21.8 does not wait on them** — the properties they were meant to establish
+> are now asserted by the twelve clauses of the amended contract, which CI runs on every push.
 
 ## 5. Findings
 

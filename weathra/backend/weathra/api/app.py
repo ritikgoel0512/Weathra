@@ -47,7 +47,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from weathra import __version__
 from weathra.agents.llm.registry import LLMProvider
-from weathra.api.errors import install_error_handlers
+from weathra.api.errors import UnhandledErrorMiddleware, install_error_handlers
 from weathra.api.middleware import REQUEST_ID_HEADER, RequestContextMiddleware, RequestIdFilter
 from weathra.api.openapi import apply_security_metadata
 from weathra.api.routers import (
@@ -241,7 +241,13 @@ def build_app(settings: Settings | None = None) -> FastAPI:
 
     install_error_handlers(app)
 
-    # CORS first so it wraps the routers, then the request context, which therefore runs outermost
+    # Added first, so it ends up *innermost* of the three: Starlette builds the stack in reverse,
+    # and an unhandled exception has to become a response on the router's side of CORS if that
+    # response is ever to carry an origin header. See `UnhandledErrorMiddleware` for why it exists
+    # at all — FastAPI's own `Exception` handler runs outside every middleware here.
+    app.add_middleware(UnhandledErrorMiddleware)
+
+    # CORS next so it wraps the routers, then the request context, which therefore runs outermost
     # and gives *every* response an id — including one CORS rejects.
     app.add_middleware(
         CORSMiddleware,

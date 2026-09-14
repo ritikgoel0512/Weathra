@@ -215,7 +215,11 @@ test.describe("flow 3 — save a location then see the unit preference applied",
 
     // The add form is a disclosure now — `06-saved-locations.png` shows one "Add New Node"
     // control in the header, not a form owning the page. Opening it is the real first step.
-    await page.locator("summary", { hasText: "Add a location" }).click();
+    // The screen was rebuilt in task 34.11's group: the add form is no longer a disclosure sitting
+    // in the page, it is a panel the header's "Add location" control reveals, already open. Opening
+    // it is therefore one press on that control rather than a press on a `<summary>` that is not in
+    // the document until the control has been pressed.
+    await page.getByRole("button", { name: "Add location", exact: true }).click();
     await page.getByLabel("Place").fill("Hamburg");
     await page.getByRole("button", { name: "Save location" }).click();
 

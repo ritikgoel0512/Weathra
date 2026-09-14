@@ -373,8 +373,10 @@ describe("Settings", () => {
     expectAccessible(container);
 
     await person.click(screen.getByRole("button", { name: "Delete my Weathra data" }));
+    // An `alertdialog` since task 21.8: the panel is a dialog waiting for an answer about a
+    // consequential action, named by its question and described by the text under it.
     expect(
-      screen.getByRole("group", { name: "Delete every Weathra record belonging to you?" }),
+      screen.getByRole("alertdialog", { name: "Delete every Weathra record belonging to you?" }),
     ).toBeInTheDocument();
     expectAccessible(container);
   });
@@ -391,7 +393,10 @@ describe("Settings", () => {
     await screen.findByRole("region", { name: "Conversation memory" });
     expectAccessible(container);
 
-    await person.click(screen.getByRole("button", { name: "Delete" }));
+    // Each conversation's control is named by the conversation it removes — task 21.8 defect E.
+    await person.click(
+      screen.getByRole("button", { name: "Delete conversation: Berlin this week" }),
+    );
     expectAccessible(container);
   });
 

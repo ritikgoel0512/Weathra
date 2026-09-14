@@ -90,6 +90,8 @@ const EMPTY_DRAFT: DraftWatch = {
 export function WeatherWatch(): ReactNode {
   /** Which watch the detail panels are about. Null means "let the backend choose". */
   const [selected, setSelected] = useState<string | null>(null);
+  /** The watch whose removal is in flight, so only that row's confirm control reports busy. */
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftWatch>(EMPTY_DRAFT);
   const [expanded, setExpanded] = useState(false);
 
@@ -184,7 +186,10 @@ export function WeatherWatch(): ReactNode {
   const remove = useApiMutation<string, void>({
     run: (client, id) => client.removeWatch(id),
     invalidates: [[...DASHBOARD_KEY]],
-    onDone: () => setSelected(null),
+    onDone: () => {
+      setSelected(null);
+      setRemovingId(null);
+    },
   });
 
   if (dashboard.state.kind === "loading") {
@@ -370,11 +375,23 @@ export function WeatherWatch(): ReactNode {
               selectedId={detail?.watch.id ?? null}
               onSelect={setSelected}
               onToggle={(watch) => edit.submit({ id: watch.id, enabled: !watch.enabled })}
-              onRemove={(watch) => remove.submit(watch.id)}
+              onRemove={(watch) => {
+                setRemovingId(watch.id);
+                remove.submit(watch.id);
+              }}
+              removingId={removingId}
               expanded={expanded}
               onExpand={() => setExpanded(true)}
               now={now}
             />
+            {/*
+              A removal that failed says so. Without this the row simply stayed — which reads as a
+              confirmation that did nothing rather than as a backend that refused, and a person who
+              believes the watch is gone when it is not will keep being evaluated against it.
+            */}
+            {remove.state.kind === "error" ? (
+              <ErrorState failure={remove.state.failure} title="That watch was not removed" />
+            ) : null}
           </Region>
 
           <Region id="watch-changed" title="What changed?" icon="activity">

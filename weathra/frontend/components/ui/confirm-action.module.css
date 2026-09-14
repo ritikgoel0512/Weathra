@@ -1,0 +1,69 @@
+/*
+ * The confirmation step a destructive action goes through.
+ *
+ * Promoted out of `components/settings/` in task 21.8: Weather Watch and Saved Locations removed
+ * their records on a single press, and the fix is the pattern Settings already had rather than a
+ * second one invented beside it. The rules below are the ones `settings.module.css` carried, moved
+ * verbatim so the panel looks exactly as it did on the screen that already used it.
+ */
+
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-status-error-surface);
+  border: 1px solid var(--color-status-error);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.confirmTitle {
+  font-size: var(--type-card-size);
+  line-height: var(--type-card-line);
+  font-weight: var(--type-card-weight);
+  color: var(--color-text-primary);
+}
+
+.body {
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  color: var(--color-text-secondary);
+  max-width: 72ch;
+}
+
+.typed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.typedLabel {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-meta-line);
+  font-weight: var(--type-ui-weight);
+  color: var(--color-text-secondary);
+}
+
+.field {
+  max-width: 24rem;
+  min-width: 0;
+  font-family: var(--family-body);
+  font-size: var(--type-ui-size);
+  line-height: var(--type-ui-line);
+  color: var(--color-text-primary);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  min-height: 40px;
+  width: 100%;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}

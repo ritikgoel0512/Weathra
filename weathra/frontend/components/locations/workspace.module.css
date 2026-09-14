@@ -387,6 +387,20 @@
   opacity: 0.82;
 }
 
+/*
+ * The removal confirmation is a panel, not a control: it takes the footer's width rather than
+ * squeezing in beside Compare, and the group holding it stops being a lightly de-emphasised pair
+ * while it is open. Selected by role because `ConfirmAction` owns its own class names.
+ */
+.cardSecondary:has([role="alertdialog"]) {
+  flex: 1 1 100%;
+  opacity: 1;
+}
+
+.cardSecondary > [role="alertdialog"] {
+  flex: 1 1 100%;
+}
+
 .card:hover .cardSecondary,
 .card:focus-within .cardSecondary {
   opacity: 1;

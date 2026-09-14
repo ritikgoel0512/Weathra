@@ -384,24 +384,6 @@
 
 /* --------------------------------------------------------------- confirmation */
 
-.confirm {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  background: var(--color-status-error-surface);
-  border: 1px solid var(--color-status-error);
-  border-radius: var(--radius-md);
-  min-width: 0;
-}
-
-.confirmTitle {
-  font-size: var(--type-card-size);
-  line-height: var(--type-card-line);
-  font-weight: var(--type-card-weight);
-  color: var(--color-text-primary);
-}
-
 /* ================================================ AI Intelligence and Transparency */
 
 /*

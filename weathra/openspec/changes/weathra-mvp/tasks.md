@@ -5,9 +5,14 @@
 >
 > 308 numbered tasks: **305 complete, 3 partially complete** (21.8, 34.5, 34.7), none unstarted.
 > Each of the three carries a dated note under its own line stating exactly what is done, what is
-> not, and what the remaining prerequisite is. All three need something this development environment
-> cannot supply — a person with real assistive technology and a physical handset, or credentials for
-> a deployed administrative account. None of them is blocked on code.
+> not, and what the remaining prerequisite is.
+>
+> 21.8's acceptance contract was **amended** on 2026-09-14: its three unreproducible human
+> activities were replaced by twelve clauses of automated accessibility, semantic, keyboard,
+> destructive-action and responsive-browser verification. No screen-reader or physical-handset pass
+> is claimed, then or now. It stays open because two of those clauses do not currently pass — see
+> its note. 34.5 and 34.7 need credentials for a deployed administrative account, and neither is
+> blocked on code.
 >
 > This note does not relax any requirement. A task is checked only when its stated requirement is
 > genuinely satisfied.
@@ -250,9 +255,46 @@ Completes before substantial frontend implementation in groups 20 and 21. Visily
 - [x] 21.5 Implement Agent Evidence / Activity — the run record showing agents, tool calls and results, analytics methods, cited knowledge, and timings, reachable from an answer and limited to the signed-in person's own runs; verify component tests cover a populated record, an unknown run identifier, and another user's identifier producing the same not-found treatment.
 - [x] 21.6 Implement Saved Locations and Settings — list, add, and remove saved locations; unit system, default horizon, default location, sign-out, session-memory deletion, and account data deletion with confirmation; verify component tests cover saving and removing a location, changing units and seeing later screens reflect it, deleting thread memory with confirmation, and account data deletion with an explicit confirmation step.
 - [x] 21.7 Implement ambiguous-location handling across every location-entry surface, presenting candidates and showing data only after a choice; verify component tests cover an ambiguous entry on the Dashboard and on Compare Cities.
-- [ ] 21.8 Verify accessibility and responsiveness across all MVP screens, authentication and product alike — keyboard-only operation of every action, labelled inputs, accessible control names, 4.5:1 body-text contrast in both appearances, usability at a 360-pixel viewport with no horizontal page scroll, and wide content scrolling in its own container; verify with automated accessibility assertions plus a recorded manual pass.
+- [ ] 21.8 Verify accessibility and responsiveness across all MVP screens, authentication and product alike, by reproducible automated verification: (1) automated accessibility assertions; (2) semantic DOM and ARIA verification; (3) automated keyboard traversal of every interactive control; (4) visible keyboard focus; (5) no keyboard traps; (6) correct form, dialog, tab and table semantics; (7) an accessible name on every actionable control, unique wherever one screen offers several of the same kind; (8) safe destructive-action behaviour — a confirmation step before any irreversible write, cancellable by control and by Escape, with focus moved into the confirmation and restored on dismissal; (9) responsive browser verification at 1440, 1024, 768 and 375 pixels; (10) no unintended page-level horizontal overflow at any of those widths; (11) usable dialogs and navigation at every supported width; and (12) a text or semantic equivalent for provenance and for every data visualisation that carries meaning; verify every one of the twelve by an assertion that runs in CI, and record the results with the instrument that produced each.
 
-  **PARTIALLY COMPLETE (2026-09-14).** The automated half is done and green on two engines — reachability, tab order as document order, no traps, focus rings, 4.5:1 contrast in both appearances, 360-pixel fit with no horizontal page scroll, and WCAG 2.0/2.1 A and AA and 2.2 AA by rule — recorded in `docs/design/accessibility.md`, with 59 assertions in the Vitest suites plus 25 Playwright cases re-run on every push. What remains is the half no instrument can judge, and it is recorded openly in `docs/design/accessibility-manual-pass.md` §5: **the screen-reader pass has not been performed** (an earlier claim that it had was retracted and the false results removed), **the keyboard walkthrough covers the authentication screens only**, and **no physical handset pass has been done**. These need a person at a real device with real assistive technology. Browser emulation does not satisfy the handset requirement and is not offered as though it does.
+  **The acceptance contract above was amended on 2026-09-14.** It previously required "automated
+  accessibility assertions plus a recorded manual pass", and the manual pass was read as three
+  human activities: a session with a real screen reader (Narrator, NVDA, JAWS or VoiceOver), a
+  walkthrough on a physical handset, and a keyboard traversal performed personally by a person.
+  None of the three is reproducible, none can be re-run on a change, and none of them had been
+  performed — so the task could not close and nothing was gaining from it staying open. The twelve
+  clauses above replace them with verification an engineer can run, CI can gate on, and a reader can
+  reproduce from the repository.
+
+  **Physical-device and assistive-technology field testing may be performed as additional product
+  QA, but is not a blocking MVP acceptance criterion for this OpenSpec change.**
+
+  **Historical honesty.** An earlier review proposed physical assistive-technology and handset
+  validation. The MVP acceptance contract was later amended to use reproducible automated
+  accessibility, semantic, keyboard and responsive-browser verification. No claim is made that a
+  physical screen-reader or handset pass was performed. An earlier claim that a screen-reader pass
+  *had* been performed was retracted before this amendment and its results removed; that retraction
+  stands and is not what this amendment is about.
+
+  **PARTIALLY COMPLETE (2026-09-14) against the amended contract.** Ten of the twelve clauses are
+  green. Three defects the amendment's own review found were fixed and are held by new tests — the
+  Weather Watch and Saved Locations removals now go through a confirmation (clause 8), and every
+  conversation, watch and saved place names its own destructive control (clause 7). Four further
+  reported items were measured in the browser and are **not** defects: the Travel Intelligence date
+  fields do show the global focus ring, the Dashboard's disabled Show briefing is natively disabled
+  and visually distinct, the composer's UNITS and DEPTH are intentionally read-only, and no "Stop
+  Claude" control exists anywhere in Weathra's source. All of that is recorded in
+  `docs/design/accessibility.md` §9 and §13.
+
+  **What is not green, and it is not this change's doing.** Fixing the browser suite's stale Saved
+  Locations locators — it looked for a `<summary>` disclosure the screen stopped having when it was
+  rebuilt on 2026-09-13, which had been failing every browser test since — unmasked two failures
+  that were behind it: `/settings` reports an axe `document-title` violation in the destructive
+  confirmation state, and the Account tab does not take `aria-selected` when driven from the
+  keyboard. The first is clause 2 and the second is clause 6. Neither touches the confirmation
+  component this change added; both are in surfaces this change did not modify. They are the
+  remaining blockers, and 21.8 stays open until they are fixed and the browser suite is green on
+  both engines.
 - [x] 21.9 Verify every implemented screen against its approved Visily artifact and record any deliberate divergence with its reason; verify the review covers all fifteen MVP screens and is recorded in `docs/design/`.
 - [x] 21.10 Implement the Playwright flows — sign up through verification into the product; ask a question then open its evidence; save a location then see the unit preference applied; and an expired session routed to sign-in; verify all four pass against a backend running with a fake inference provider.
 - [x] 21.11 Audit all eight approved screens against the running application in the states people actually meet — populated, empty, loading, error and unauthenticated — classifying every difference, correcting the mechanical ones and redesigning the surfaces whose character had drifted without losing grounding, provenance, uncertainty or evidence; verify the audit, its fixes and what it deliberately left are recorded in `docs/design/runtime-fidelity-audit.md`.
@@ -424,6 +466,34 @@ written to fail then.
 - [ ] 34.5 Execute the first model comparison across the seeded catalog candidates, record its results, and seed or reorder the policy candidate lists from the recorded evidence with the promotion audited against the cited runs; verify the comparison record exists with all five criteria per candidate, the resulting policy state cites it, and `docs/evaluation.md` records the outcome honestly including any candidate that failed a criterion.
 
   **PARTIALLY COMPLETE (2026-09-14).** The comparison half is **done, twice, and now leaves no candidate unmeasured.** Run `9b5849dd-b798-4dc8-b04f-a8e6c0874e1a` (2026-09-10) evidenced `economy-free-primary` 5/5 with both gates passed, while `economy-free-secondary` was refused HTTP 429 at the pre-flight on all three retries and recorded `unevidenced: no_case_scored`. Run `c1e8768f-e2a8-4c32-a065-df1a5ea8f2c4` (2026-09-14, status `completed`) re-ran the same five cases of dataset `1.0.0` under the same pinned conditions and **both** candidates scored 5/5 and passed both gating criteria, with an empty `unevidenced` map. Both runs and all five criteria per candidate are recorded in `docs/evaluation.md`, including the finding that the two gating criteria tie at 1.0 and latency — not a gate — is the only discriminator, favouring the secondary. **What remains is the promotion half**: seeding or reordering the policy candidate lists from that evidence through `PUT /api/v1/admin/policies/{policy_id}/candidates`, with the `admin_audit` row citing run `c1e8768f`. That needs an authenticated session for the administrative principal. One is properly granted (subject `e7b66ef2-5bc6-4100-92cf-7c27cecdf63e`, carrying a `role_grant` audit row from the documented bootstrap) but **no credential for it exists in the development environment**, and the evaluation harness's own fixture principal must not be substituted — `_ensure_role_row` grants it unaudited and with no `granted_by`, so using it would let the lab authorise its own promotion, which `specs/model-lab` refuses.
+
+  **A production defect on the administrative screen was found and fixed on 2026-09-14, and 34.5 is
+  now READY FOR PRODUCTION RETEST.** `/admin/model-usage` loaded for an authenticated administrator
+  but its Model policy and Comparison evidence panels both reported *"Weathra's backend could not be
+  reached"*, while every other panel on the page answered. The backend was reached. The cause was
+  where an unhandled exception becomes a response: FastAPI hands `@app.exception_handler(Exception)`
+  to Starlette's `ServerErrorMiddleware`, which is the outermost layer of the stack — outside every
+  middleware the application adds, `CORSMiddleware` included — so a 500 from `/admin/policies` or
+  `/admin/lab/comparisons` went back with no `access-control-allow-origin` header. A browser must
+  block a cross-origin response carrying none, so `fetch` rejected with a network error and the
+  client reported, correctly for what the browser saw, an unreachable backend. The one explanation
+  that rules out reading the logs. Measured on the real application: a 200 and a handled 503 both
+  carry the origin header; a raised 500 carried none. *Fixed* by `UnhandledErrorMiddleware`
+  (`api/errors.py`), registered before `CORSMiddleware` so it sits inside it and its response is
+  given the origin header on the way out; the envelope, the code, the message and the request id are
+  unchanged, and nothing about the exception reaches the caller. Four cases in
+  `tests/unit/test_api_cors.py` and four in `frontend/components/admin/model-policy.test.tsx` hold
+  both ends, including that an unlisted origin still gets no header and that a genuine transport
+  failure still reads as unreachable. **No authorization boundary moved**: anonymous is still 401,
+  a principal without the role is still 403, and every administrative read and write still takes
+  `AdministrativePrincipal` and the privileged session behind it.
+
+  **What the retest is for.** *Why* those two reads raise a 500 in production is **not established**
+  — it needs the failure's own request id against the deployed logs, or an authenticated
+  administrative session, and neither exists here. The fix is what makes that diagnosable: the panel
+  will now show the backend's own `internal_error` envelope and its request id instead of a network
+  error. So the deployed pair must be redeployed and retested by a real administrator before this
+  task can close, and the promotion half above still needs the same credential it always did.
 - [x] 34.6 Extend the traceability table in `docs/architecture.md` to cover `model-policy`, `model-catalog`, `llm-telemetry`, `usage-limits`, and `model-lab`; verify every requirement in those five specs maps to at least one test.
 - [x] 34.8 Implement the administrative model policy confirmation surface `specs/web-ui` requires — on the administrative route, reachable only by a principal the backend confirms holds the role, presenting each policy's ordered candidate list with the evaluation the backend recorded per candidate, an unevidenced candidate marked unevidenced rather than failed, the comparison runs available as evidence, and one audited write that submits the candidate list citing the runs relied upon, with the recorded result read back from the audit trail rather than assumed; add the smallest backend read that exposes one policy's audit trail, and keep the screen's unbuilt panels stating that they are unbuilt and fetching nothing; verify a non-administrator is shown a not-permitted state with nothing behind it, that the write sends the stored order and the selected run and nothing else, that a promotion-gate refusal is shown as itself, and that no credential is displayed or read outside the API client.
 - [x] 34.9 Report the acting principal's administrative capability on the authenticated account contract, read from the same `admin_roles` state every administrative capability checks and answering only for the validated token subject, and offer an Admin section in the navigation to a principal the backend confirms holds the role — naming only administrative surfaces that are implemented, defaulting to offering nothing where the capability is unknown, and never inferring it from an address, an identifier list, a configuration value or a stored flag; verify an ordinary person is offered nothing, an administrator is offered a real link to the route, a token asserting the role changes nothing, and the route still refuses a principal without it.

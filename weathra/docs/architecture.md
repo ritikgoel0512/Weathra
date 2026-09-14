@@ -283,8 +283,11 @@ tests. Both directions stay honest without anyone maintaining a list of which sp
 
 Of **230** requirements across twenty-one specs, **229** are implemented and tested, **1** is
 manual-pending, and **0** are open. Exactly **0** requirements have no test. The one that remains
-manual-pending is `web-ui`'s accessibility and responsive layout, which is automatically tested as
-far as automation reaches and still owes a human pass (task 21.8).
+is `web-ui`'s accessibility and responsive layout (task 21.8). Its acceptance contract was amended
+on 2026-09-14 to rest on reproducible automated verification instead of on three human passes
+nobody could re-run — no screen-reader or physical-handset pass is claimed — and ten of its twelve
+clauses are green. Two are not: an axe `document-title` violation on `/settings` in its destructive
+confirmation state, and the Account tab not taking `aria-selected` from the keyboard.
 
 Four rows closed with group 33, and what each of them claims is worth reading precisely, because
 two of the four are requirements the spec itself defers. **Admin Model & AI Usage screen** and
@@ -583,7 +586,7 @@ model access or an allowance** and **the Visily design gate** are closed outrigh
 | Loading, empty, and error states | 20.9 | frontend/components/view-state.tsx | frontend/components/ui/primitives.test.tsx, frontend/lib/query/query-layer.test.tsx | IMPLEMENTED |
 | Agent unavailability handled gracefully | 21.2 | frontend/components/analyst/, frontend/hooks/use-agent-stream.ts | frontend/components/analyst/analyst.test.tsx, frontend/hooks/use-agent-stream.test.tsx | IMPLEMENTED |
 | Ambiguous location handling in the UI | 21.5 | frontend/components/locations/candidate-choice.tsx | frontend/components/locations/candidate-choice.test.tsx | IMPLEMENTED |
-| Accessibility and responsive layout | 21.8, 34.19, 34.20, 34.25 | frontend/components/shell/, frontend/app/globals.css, frontend/components/admin/admin.module.css, docs/design/design-system.md | frontend/tests/accessibility.test.tsx, frontend/tests/e2e/accessibility.spec.ts, frontend/tests/e2e/axe.spec.ts, frontend/lib/design/contrast.test.ts, frontend/tests/e2e/capture.spec.ts | MANUAL |
+| Accessibility and responsive layout | 21.8, 34.19, 34.20, 34.25 | frontend/components/shell/, frontend/app/globals.css, frontend/components/ui/confirm-action.tsx, frontend/components/admin/admin.module.css, docs/design/design-system.md | frontend/tests/accessibility.test.tsx, frontend/tests/e2e/accessibility.spec.ts, frontend/tests/e2e/axe.spec.ts, frontend/tests/e2e/disabled-and-date-focus.spec.ts, frontend/lib/design/contrast.test.ts, frontend/tests/e2e/capture.spec.ts | MANUAL |
 | Admin Model & AI Usage screen | 33.1, 33.4, 34.18 | docs/design/screens/09-admin-model-ai-usage.png, frontend/app/(app)/admin/model-usage/page.tsx, frontend/components/admin/overview.tsx, frontend/lib/admin/usage.ts | frontend/app/(app)/unlisted-routes.test.tsx, frontend/components/admin/overview.test.tsx, frontend/lib/admin/usage.test.ts, test_documentation.py | IMPLEMENTED |
 | Administrative model policy confirmation | 34.8, 34.9 | frontend/components/admin/model-policy.tsx, frontend/lib/admin/policy-evidence.ts, frontend/lib/api/client.ts, frontend/lib/navigation.ts, frontend/components/shell/navigation.tsx, api/routers/admin/models.py | frontend/components/admin/model-policy.test.tsx, frontend/lib/admin/policy-evidence.test.ts, frontend/components/shell/shell.test.tsx, frontend/app/(app)/unlisted-routes.test.tsx, integration/test_admin_api.py | IMPLEMENTED |
 | The UI never authorizes model access or an allowance | 33.4–33.6 | frontend/lib/api/quota.ts, frontend/lib/inference/served.ts, frontend/components/ui/states.tsx, frontend/components/analyst/, frontend/components/dashboard/, frontend/components/evidence/ | frontend/lib/api/quota.test.ts, frontend/lib/inference/served.test.ts, frontend/components/analyst/analyst.test.tsx, frontend/components/dashboard/dashboard.test.tsx, frontend/components/evidence/evidence.test.tsx, frontend/components/ui/primitives.test.tsx, test_frontend_error_codes.py | IMPLEMENTED |
@@ -685,9 +688,11 @@ the resolution existed and nothing called it, so a live run reached its model th
 walk; group 34's wiring is what made the requirement true, and the row cites it. A status
 following the checkbox is now asserted in both directions, which is what would have caught both.
 
-**Two requirements are outstanding, and neither is a gap in the mapping.** `web-ui`'s
-accessibility and responsive layout is `MANUAL` — its automated half passes in two browser
-engines, and Task 21.8's recorded human pass is still owed. The four `OPEN` rows are `web-ui`'s
+**One requirement is outstanding, and it is not a gap in the mapping.** `web-ui`'s accessibility
+and responsive layout is `MANUAL`. Task 21.8's amended contract replaced its three unreproducible
+human passes with twelve clauses of automated accessibility, semantic, keyboard, destructive-action
+and responsive-browser verification; ten pass and two do not, both in surfaces the amendment did not
+change. The four `OPEN` rows are `web-ui`'s
 Admin Model & AI Usage and Plan & Usage screens, which group 33 may not begin until the Visily
 designs exist (33.1, 33.2) — they are **DESIGN-GATED**, not merely unwritten, and no route
 advertises either screen as working. They name no test on purpose: writing tests for screens

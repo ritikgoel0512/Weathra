@@ -16,7 +16,7 @@
  * divergence is recorded in `docs/design/screens.md` §8.
  */
 
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 
 import styles from "./primitives.module.css";
 
@@ -29,6 +29,14 @@ export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
   readonly fullWidth?: boolean;
   /** A request this control started is in flight: it is disabled and announced as busy. */
   readonly busy?: boolean;
+  /**
+   * The underlying `<button>`, where a caller needs to move focus to it.
+   *
+   * React 19 passes `ref` as an ordinary prop, so it travels in `...rest` onto the element; the
+   * declaration is here because `ButtonHTMLAttributes` does not carry it. `ConfirmAction` is the
+   * caller that needs it: dismissing a confirmation puts focus back on the trigger that opened it.
+   */
+  readonly ref?: Ref<HTMLButtonElement>;
   readonly children?: ReactNode;
 }
 
