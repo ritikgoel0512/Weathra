@@ -1,6 +1,6 @@
 # Weathra
 
-**An agentic weather intelligence and analytics platform.**
+**An agentic weather intelligence and analytics platform**
 
 Weathra answers weather questions in prose and can show you where every figure in the answer came
 from. Ask *"is next week warmer than last week in Berlin?"* and it plans the work, retrieves the
